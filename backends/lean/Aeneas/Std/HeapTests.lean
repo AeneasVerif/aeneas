@@ -1,133 +1,109 @@
 module
 import Aeneas.Std.HeapLemmas
 
-/-! Heap tests: allocation ids are never reused, `dealloc` only accepts a whole allocation of the
-right kind, once, and `freed` slots can never be used again. -/
+/-! Heap tests: allocation ids are never reused, `dealloc` only accepts a whole block of the right
+kind, once, and freed blocks can never be used again. -/
 
 namespace Aeneas.Std.HeapTests
 
 open Heap
 
 -- The start of the first allocation in the empty heap.
-local notation "p₀" => (RawPtr.mk (freshLoc ∅) : MutRawPtr Nat)
+local notation "p₀" => (RawPtr.mk (freshAllocId ∅) 0 : MutRawPtr Nat)
 
-/-- A fresh global allocation can be deallocated, but only once. -/
+/-- A fresh heap allocation can be deallocated, but only once. -/
 example (value : Nat) :
-    ∃ hDealloc : CanDealloc (alloc [value] .global ∅).2 p₀ 1 .global,
-      ¬ CanDealloc ((alloc [value] .global ∅).2.dealloc p₀ 1 .global hDealloc).2 p₀ 1 .global :=
-  ⟨canDealloc_iff.mpr ⟨freshLoc_offset ∅, fun _ hi => isLive_alloc hi,
-    (isEndMarker_alloc_end_iff ∅ [value] .global .global).mpr rfl⟩,
-   fun hAgain => not_isEndMarker_dealloc _ (canDealloc_iff.mp hAgain).2.2⟩
+    ∃ hDealloc : CanDealloc (alloc [value] .heap ∅).2 p₀ 1 .heap,
+      ¬ CanDealloc ((alloc [value] .heap ∅).2.dealloc p₀ 1 .heap hDealloc).2 p₀ 1 .heap :=
+  ⟨(canDealloc_alloc_iff ∅ [value] 1 .heap .heap).mpr ⟨rfl, rfl⟩, not_canDealloc_dealloc _ rfl⟩
 
-/-- A two-slot allocation is deallocated whole. -/
-example (a b : Nat) : CanDealloc (alloc [a, b] .global ∅).2 p₀ 2 .global :=
-  canDealloc_iff.mpr ⟨freshLoc_offset ∅, fun _ hi => isLive_alloc hi,
-    (isEndMarker_alloc_end_iff ∅ [a, b] .global .global).mpr rfl⟩
+/-- A two-cell allocation is deallocated whole. -/
+example (a b : Nat) : CanDealloc (alloc [a, b] .heap ∅).2 p₀ 2 .heap :=
+  (canDealloc_alloc_iff ∅ [a, b] 2 .heap .heap).mpr ⟨rfl, rfl⟩
 
 /-- An empty allocation can also be deallocated only once. -/
 example :
-    ∃ hDealloc : CanDealloc (alloc ([] : List Nat) .global ∅).2 p₀ 0 .global,
-      ¬ CanDealloc ((alloc ([] : List Nat) .global ∅).2.dealloc p₀ 0 .global hDealloc).2 p₀ 0
-        .global :=
-  ⟨canDealloc_iff.mpr ⟨freshLoc_offset ∅, fun _ hi => absurd hi (Nat.not_lt_zero _),
-    (isEndMarker_alloc_end_iff ∅ ([] : List Nat) .global .global).mpr rfl⟩,
-   fun hAgain => not_isEndMarker_dealloc _ (canDealloc_iff.mp hAgain).2.2⟩
+    ∃ hDealloc : CanDealloc (alloc ([] : List Nat) .heap ∅).2 p₀ 0 .heap,
+      ¬ CanDealloc ((alloc ([] : List Nat) .heap ∅).2.dealloc p₀ 0 .heap hDealloc).2 p₀ 0 .heap :=
+  ⟨(canDealloc_alloc_iff ∅ ([] : List Nat) 0 .heap .heap).mpr ⟨rfl, rfl⟩,
+    not_canDealloc_dealloc _ rfl⟩
 
-/-- Allocating after a deallocation gets a new id, and the deallocated slot stays dead. -/
+/-- Allocating after a deallocation gets a new id, and the freed block stays dead. -/
 example {α : Type} (h : Heap) (q : MutRawPtr Nat) (kind : AllocKind)
     (hDealloc : CanDealloc h q 1 kind) (value : α) :
-    (freshLoc (h.dealloc q 1 kind hDealloc).2).allocId ≠ q.loc.allocId ∧
-      ¬ IsLive ((h.dealloc q 1 kind hDealloc).2.alloc [value] .view).2 q.loc := by
-  have hMem : q.loc ∈ (h.dealloc q 1 kind hDealloc).2 := by
-    simpa using mem_dealloc hDealloc (Nat.zero_le 1)
-  refine ⟨fun hEq => notMem_freshAllocId (by simpa using hEq.symm) hMem, fun hLive => ?_⟩
-  exact not_isLive_dealloc hDealloc (Nat.zero_le 1)
-    (by simpa using (isLive_alloc_of_mem hMem).mp hLive)
+    freshAllocId (h.dealloc q 1 kind hDealloc).2 ≠ q.allocId ∧
+      ¬ IsLive ((h.dealloc q 1 kind hDealloc).2.alloc [value] .view).2 q := by
+  have hMem := mem_dealloc hDealloc
+  refine ⟨fun hEq => notMem_freshAllocId hEq.symm hMem, fun hLive => ?_⟩
+  exact not_isLive_dealloc hDealloc rfl ((isLive_alloc_of_mem hMem).mp hLive)
 
 /-- An empty allocation reserves its id, and its pointer stays dead after the next allocation. -/
 example {α β : Type} (h : Heap) (value : β) :
-    (freshLoc (h.alloc ([] : List α) .view).2).allocId ≠ (freshLoc h).allocId ∧
-      ¬ IsLive ((h.alloc ([] : List α) .view).2.alloc [value] .view).2 (freshLoc h) := by
-  have hMem : freshLoc h ∈ (h.alloc ([] : List α) .view).2 := by
-    simpa using mem_alloc_end (kind := .view) h ([] : List α)
-  refine ⟨fun hEq => notMem_freshAllocId (by simpa using hEq.symm) hMem, fun hLive => ?_⟩
-  exact not_isLive_alloc_end (kind := .view) h ([] : List α)
-    (by simpa using (isLive_alloc_of_mem hMem).mp hLive)
+    freshAllocId (h.alloc ([] : List α) .view).2 ≠ freshAllocId h ∧
+      ¬ IsLive ((h.alloc ([] : List α) .view).2.alloc [value] .view).2
+        (⟨freshAllocId h, 0⟩ : MutRawPtr α) := by
+  have hMem := mem_alloc (kind := .view) h ([] : List α)
+  refine ⟨fun hEq => notMem_freshAllocId hEq.symm hMem, fun hLive => ?_⟩
+  exact not_isLive_alloc_of_le (values := ([] : List α)) (kind := .view) (i := 0) (by simp)
+    ((isLive_alloc_of_mem hMem).mp hLive)
 
-/-- An allocation not from the global allocator (e.g. a copy behind a reference) cannot be
-deallocated through the allocator. -/
-example (value : Nat) : ¬ CanDealloc (alloc [value] .view ∅).2 p₀ 1 .global :=
-  fun hDealloc => by
-    simpa using
-      (isEndMarker_alloc_end_iff ∅ [value] .view .global).mp (canDealloc_iff.mp hDealloc).2.2
+/-- A view (e.g. a copy behind a reference) cannot be deallocated through the allocator. -/
+example (value : Nat) : ¬ CanDealloc (alloc [value] .view ∅).2 p₀ 1 .heap :=
+  fun hDealloc => nomatch ((canDealloc_alloc_iff ∅ [value] 1 .view .heap).mp hDealloc).1
 
 /-- Conversely, memory from the global allocator cannot be released as a view. -/
-example (value : Nat) : ¬ CanDealloc (alloc [value] .global ∅).2 p₀ 1 .view :=
-  fun hDealloc => by
-    simpa using
-      (isEndMarker_alloc_end_iff ∅ [value] .global .view).mp (canDealloc_iff.mp hDealloc).2.2
+example (value : Nat) : ¬ CanDealloc (alloc [value] .heap ∅).2 p₀ 1 .view :=
+  fun hDealloc => nomatch ((canDealloc_alloc_iff ∅ [value] 1 .heap .view).mp hDealloc).1
 
-/-- `endBorrow` never applies to a deallocated slot. -/
+/-- `endBorrow` never applies to a freed block. -/
 example (h : Heap) (q : MutRawPtr Nat) (kind : AllocKind) (hDealloc : CanDealloc h q 1 kind) :
-    ¬ IsBorrowed (h.dealloc q 1 kind hDealloc).2 q.loc := by
-  simpa using not_isBorrowed_dealloc hDealloc (Nat.zero_le 1)
+    ¬ IsBorrowed (h.dealloc q 1 kind hDealloc).2 q :=
+  not_isBorrowed_dealloc hDealloc rfl
 
-/-- While a slot is borrowed, its allocation cannot be deallocated. -/
+/-- While a cell is borrowed, its block cannot be deallocated. -/
 example (h : Heap) (q : MutRawPtr Nat) (hValid : IsValid h q) (kind : AllocKind) :
     ¬ CanDealloc (h.borrow q hValid).2 q 1 kind :=
-  fun hDealloc =>
-    not_isLive_borrow hValid (by simpa using (canDealloc_iff.mp hDealloc).2.1 0 one_pos)
+  fun hDealloc => not_isLive_borrow hValid (by simpa using isLive_of_canDealloc hDealloc one_pos)
 
 /-- An interior pointer cannot be deallocated. -/
-example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .global ∅).2 (RawPtr.shift p₀ 1) 1 .global :=
-  fun hDealloc => by simpa using (canDealloc_iff.mp hDealloc).1
+example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .heap ∅).2 (RawPtr.shift p₀ 1) 1 .heap :=
+  fun hDealloc => by simpa using offset_eq_zero_of_canDealloc hDealloc
 
-/-- A size smaller than the allocation's is rejected. -/
-example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .global ∅).2 p₀ 1 .global :=
-  fun hDealloc =>
-    not_isLive_of_isEndMarker (canDealloc_iff.mp hDealloc).2.2 (isLive_alloc (i := 1) (by simp))
+/-- A size smaller than the block's is rejected. -/
+example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .heap ∅).2 p₀ 1 .heap :=
+  fun hDealloc => nomatch ((canDealloc_alloc_iff ∅ [a, b] 1 .heap .heap).mp hDealloc).2
 
-/-- A size larger than the allocation's is rejected. -/
-example (value : Nat) : ¬ CanDealloc (alloc [value] .global ∅).2 p₀ 2 .global :=
-  fun hDealloc => by
-    exact not_isLive_alloc_end (h := ∅) [value] ((canDealloc_iff.mp hDealloc).2.1 1 (by omega))
+/-- A size larger than the block's is rejected. -/
+example (value : Nat) : ¬ CanDealloc (alloc [value] .heap ∅).2 p₀ 2 .heap :=
+  fun hDealloc => nomatch ((canDealloc_alloc_iff ∅ [value] 2 .heap .heap).mp hDealloc).2
 
-/-! Reasoning about new cells from outside the heap module: `alloc_eq` and `allocation_eq` expose
-how `alloc` builds its result, and `RawPtr.loc_shift` says where a shifted pointer points. -/
+/-! Reasoning about new cells from outside the heap module: `alloc_eq` exposes how `alloc` builds
+its result, and `Subheap.singleton_allocation` splits a fresh block into one cell per value. -/
 
 /-- A shifted pointer moves within its allocation. -/
-example (q : MutRawPtr Nat) : ((q.shift 1).shift 2).loc = q.loc.shift 3 := by
-  simp [Loc.shift_shift]
+example (q : MutRawPtr Nat) : (q.shift 1).shift 2 = q.shift 3 := by
+  simp [RawPtr.shift_shift]
 
-/-- The second cell of a fresh allocation is reachable through a pointer shifted from its start,
-and holds the second value. -/
+/-- The second cell of a fresh allocation holds the second value. -/
 example (h : Heap) (a b : Nat) :
-    ∃ hValid : IsValid (h.alloc [a, b] .global).2 ((⟨freshLoc h⟩ : MutRawPtr Nat).shift 1),
-      ((h.alloc [a, b] .global).2.read _ hValid).1 = b := by
-  have hq : (⟨freshLoc h⟩ : MutRawPtr Nat).shift 1 = ⟨(freshLoc h).shift 1⟩ :=
-    RawPtr.ext (by simp)
-  have hCells : Subheap (singleton ((⟨freshLoc h⟩ : MutRawPtr Nat).shift 1) b)
-      (array (freshLoc h) [a, b]) := by
-    have hCompatible := compatible_array_append (freshLoc h) [a] [b]
-    rw [hq, show [a, b] = [a] ++ [b] from rfl, array_append]
-    simpa using Subheap.union_right hCompatible
-  have hSub : Subheap (singleton ((⟨freshLoc h⟩ : MutRawPtr Nat).shift 1) b)
-      (h.alloc [a, b] .global).2 := by
-    rw [alloc_eq, allocation_eq]
-    refine hCells.trans ((Subheap.union_left ?_).trans (Subheap.union_left ?_))
-    · exact compatible_array_endMarker _ _ _
-    · rw [← allocation_eq]
-      exact compatible_freshLoc _ _ _
-  exact ⟨hSub.isValid (isValid_singleton _ b), read_of_subheap hSub _⟩
+    ∃ hValid : IsValid (h.alloc [a, b] .heap).2 (⟨freshAllocId h, 1⟩ : MutRawPtr Nat),
+      ((h.alloc [a, b] .heap).2.read _ hValid).1 = b := by
+  have hSub : Subheap (singleton (⟨freshAllocId h, 1⟩ : MutRawPtr Nat) b .heap 2)
+      (h.alloc [a, b] .heap).2 := by
+    rw [alloc_eq]
+    exact (Subheap.singleton_allocation (freshAllocId h) [a, b] .heap (i := 1) (by simp)).trans
+      (Subheap.union_left (compatible_freshAllocId _ _ _))
+  exact ⟨hSub.isValid (isValid_singleton _ b .heap (by simp)), read_of_subheap hSub (by simp) _⟩
 
 /-- Allocation frames the existing heap: a cell already there keeps its value. -/
-example (h : Heap) (q : MutRawPtr Nat) (value : Nat) (hCell : Subheap (singleton q value) h)
+example (h : Heap) (q : MutRawPtr Nat) (value : Nat) (kind : AllocKind) (len : Nat)
+    (hOffset : q.offset < len) (hCell : Subheap (singleton q value kind len) h)
     (values : List Nat) :
-    ∃ hValid : IsValid (h.alloc values .global).2 q,
-      ((h.alloc values .global).2.read q hValid).1 = value := by
-  have hSub : Subheap (singleton q value) (h.alloc values .global).2 := by
+    ∃ hValid : IsValid (h.alloc values .heap).2 q,
+      ((h.alloc values .heap).2.read q hValid).1 = value := by
+  have hSub : Subheap (singleton q value kind len) (h.alloc values .heap).2 := by
     rw [alloc_eq]
-    exact hCell.trans (Subheap.union_right (compatible_freshLoc _ _ _))
-  exact ⟨hSub.isValid (isValid_singleton q value), read_of_subheap hSub _⟩
+    exact hCell.trans (Subheap.union_right (compatible_freshAllocId _ _ _))
+  exact ⟨hSub.isValid (isValid_singleton q value kind hOffset), read_of_subheap hSub hOffset _⟩
 
 end Aeneas.Std.HeapTests

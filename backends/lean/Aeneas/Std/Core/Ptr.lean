@@ -93,9 +93,9 @@ def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsSca
     (_ : RawPtr T M) : Result (RawPtr T' M') :=
   .fail .undef
 
-/-- `add` stays in bounds: the slots it steps over hold values. -/
+/-- `add` stays in bounds: the heap owns every cell it steps over. -/
 def RawPtr.InBounds (q : RawPtr T M) (count : Nat) (h : Heap) : Prop :=
-  ∀ i < count, Heap.IsLive h (q.loc.shift i)
+  ∀ i < count, Heap.IsLive h (q.shift i)
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
 def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
@@ -103,9 +103,11 @@ def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
+-- TODO: can a const pointer be cast back to a mutable pointer? If not,
+-- then maybe we should go for a design that is more strict
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
 def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
-  ⟨q.loc⟩
+  ⟨q.allocId, q.offset⟩
 
 namespace RawPtr
 
@@ -129,7 +131,7 @@ Aeneas builds its models of Rust's raw-pointer functions (`from_mut`, `as_ptr`, 
 `from_raw_parts`, `from_raw_parts_mut`) from the operations below, which act on the model's heap
 directly. -/
 
-/-- Dereferences `q` and marks its slot as borrowed, so that every access to the slot through a raw
+/-- Dereferences `q` and gives its cell away, so that every access to the cell through a raw
 pointer fails until the borrow is ended with `endBorrow`. -/
 def RawPtr.borrow (q : RawPtr T M) : Result T :=
   Result.guardedModify _ (Heap.borrow q)
@@ -144,14 +146,14 @@ def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
     let values ← (q.shift 1).borrowRange n
     .ok (value :: values)
 
-/-- `endBorrow` on the `values.length` slots from `q` on. -/
+/-- `endBorrow` on the `values.length` cells from `q` on. -/
 def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
   | [] => .ok ()
   | value :: values => do
     q.endBorrow value
     (q.shift 1).endBorrowRange values
 
-/-- `read` on the `n` slots from `q` on. -/
+/-- `read` on the `n` cells from `q` on. -/
 def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do

@@ -27,295 +27,530 @@ end Aeneas
 
 namespace Aeneas.Std
 
-namespace Loc
-
-@[simp] theorem allocId_shift (l : Loc) (i : Nat) : (l.shift i).allocId = l.allocId := by
-  simp [Loc.shift]
-
-@[simp] theorem offset_shift (l : Loc) (i : Nat) : (l.shift i).offset = l.offset + i := by
-  simp [Loc.shift]
-
-@[simp] theorem shift_zero (l : Loc) : l.shift 0 = l := by
-  simp [Loc.shift]
-
-theorem shift_shift (l : Loc) (i j : Nat) :
-    (l.shift i).shift j = l.shift (i + j) := by
-  simp [Loc.shift, Nat.add_assoc]
-
-end Loc
-
 namespace RawPtr
 
-@[simp] theorem loc_shift (q : RawPtr T M) (i : Nat) : (q.shift i).loc = q.loc.shift i := by
+@[simp] theorem allocId_shift (q : RawPtr T M) (i : Nat) : (q.shift i).allocId = q.allocId := by
   simp [RawPtr.shift]
+
+@[simp] theorem offset_shift (q : RawPtr T M) (i : Nat) : (q.shift i).offset = q.offset + i := by
+  simp [RawPtr.shift]
+
+@[simp] theorem shift_zero (q : RawPtr T M) : q.shift 0 = q := by
+  simp [RawPtr.shift]
+
+theorem shift_shift (q : RawPtr T M) (i j : Nat) :
+    (q.shift i).shift j = q.shift (i + j) := by
+  simp [RawPtr.shift, Nat.add_assoc]
 
 end RawPtr
 
+/-! ### Cells -/
+
+namespace Cell
+
+private theorem compatible_symm {x y : Cell α} (h : Compatible x y) : Compatible y x := by
+  cases x <;> cases y <;> simp_all [Compatible]
+
+private theorem join_comm {x y : Cell α} (h : Compatible x y) : join x y = join y x := by
+  cases x <;> cases y <;> simp_all [Compatible, join]
+
+private theorem join_assoc (x y z : Cell α) : join (join x y) z = join x (join y z) := by
+  cases x <;> cases y <;> rfl
+
+private theorem compatible_assoc' (x y z : Cell α) :
+    Compatible x y ∧ Compatible (join x y) z ↔ Compatible y z ∧ Compatible x (join y z) := by
+  cases x <;> cases y <;> cases z <;> simp [Compatible, join]
+
+private theorem forall₂_symm {l₁ l₂ : List (Cell α)} (h : List.Forall₂ Compatible l₁ l₂) :
+    List.Forall₂ Compatible l₂ l₁ := by
+  induction h with
+  | nil => exact .nil
+  | cons hxy _ ih => exact .cons (compatible_symm hxy) ih
+
+private theorem zipWith_join_comm {l₁ l₂ : List (Cell α)} (h : List.Forall₂ Compatible l₁ l₂) :
+    List.zipWith join l₁ l₂ = List.zipWith join l₂ l₁ := by
+  induction h with
+  | nil => rfl
+  | cons hxy _ ih => rw [List.zipWith_cons_cons, List.zipWith_cons_cons, join_comm hxy, ih]
+
+private theorem zipWith_join_assoc :
+    ∀ l₁ l₂ l₃ : List (Cell α),
+      List.zipWith join (List.zipWith join l₁ l₂) l₃ =
+        List.zipWith join l₁ (List.zipWith join l₂ l₃)
+  | x :: l₁, y :: l₂, z :: l₃ => by
+    simp only [List.zipWith_cons_cons, join_assoc, zipWith_join_assoc l₁ l₂ l₃]
+  | [], _, _ => rfl
+  | _ :: _, [], _ => rfl
+  | _ :: _, _ :: _, [] => rfl
+
+private theorem forall₂_zipWith_assoc :
+    ∀ l₁ l₂ l₃ : List (Cell α),
+      (List.Forall₂ Compatible l₁ l₂ ∧ List.Forall₂ Compatible (List.zipWith join l₁ l₂) l₃) ↔
+        (List.Forall₂ Compatible l₂ l₃ ∧ List.Forall₂ Compatible l₁ (List.zipWith join l₂ l₃))
+  | x :: l₁, y :: l₂, z :: l₃ => by
+    have hCell := compatible_assoc' x y z
+    have hRest := forall₂_zipWith_assoc l₁ l₂ l₃
+    simp only [List.zipWith_cons_cons, List.forall₂_cons]
+    constructor
+    · rintro ⟨⟨hxy, h₁₂⟩, hxyz, h₁₂₃⟩
+      obtain ⟨hyz, hx⟩ := hCell.mp ⟨hxy, hxyz⟩
+      obtain ⟨h₂₃, h₁⟩ := hRest.mp ⟨h₁₂, h₁₂₃⟩
+      exact ⟨⟨hyz, h₂₃⟩, hx, h₁⟩
+    · rintro ⟨⟨hyz, h₂₃⟩, hx, h₁⟩
+      obtain ⟨hxy, hxyz⟩ := hCell.mpr ⟨hyz, hx⟩
+      obtain ⟨h₁₂, h₁₂₃⟩ := hRest.mpr ⟨h₂₃, h₁⟩
+      exact ⟨⟨hxy, h₁₂⟩, hxyz, h₁₂₃⟩
+  | [], [], [] => by simp
+  | [], [], _ :: _ => by simp
+  | [], _ :: _, [] => by simp
+  | [], _ :: _, _ :: _ => by simp
+  | _ :: _, [], _ => by simp
+  | _ :: _, _ :: _, [] => by simp
+
+private theorem joinList_of_forall₂ {l₁ l₂ : List (Cell α)} (h : List.Forall₂ Compatible l₁ l₂) :
+    joinList l₁ l₂ = List.zipWith join l₁ l₂ :=
+  ite_eq_left h.length_eq
+
+private theorem joinList_comm {l₁ l₂ : List (Cell α)} (h : List.Forall₂ Compatible l₁ l₂) :
+    joinList l₁ l₂ = joinList l₂ l₁ := by
+  rw [joinList_of_forall₂ h, joinList_of_forall₂ (forall₂_symm h), zipWith_join_comm h]
+
+private theorem forall₂_joinList_assoc (l₁ l₂ l₃ : List (Cell α)) :
+    (List.Forall₂ Compatible l₁ l₂ ∧ List.Forall₂ Compatible (joinList l₁ l₂) l₃) ↔
+      (List.Forall₂ Compatible l₂ l₃ ∧ List.Forall₂ Compatible l₁ (joinList l₂ l₃)) := by
+  constructor
+  · rintro ⟨h₁₂, h₁₂₃⟩
+    rw [joinList_of_forall₂ h₁₂] at h₁₂₃
+    have ⟨h₂₃, h₁⟩ := (forall₂_zipWith_assoc l₁ l₂ l₃).mp ⟨h₁₂, h₁₂₃⟩
+    exact ⟨h₂₃, joinList_of_forall₂ h₂₃ ▸ h₁⟩
+  · rintro ⟨h₂₃, h₁⟩
+    rw [joinList_of_forall₂ h₂₃] at h₁
+    have ⟨h₁₂, h₁₂₃⟩ := (forall₂_zipWith_assoc l₁ l₂ l₃).mpr ⟨h₂₃, h₁⟩
+    exact ⟨h₁₂, joinList_of_forall₂ h₁₂ ▸ h₁₂₃⟩
+
+private theorem joinList_assoc {l₁ l₂ l₃ : List (Cell α)} (h₁₂ : List.Forall₂ Compatible l₁ l₂)
+    (h₁₂₃ : List.Forall₂ Compatible (joinList l₁ l₂) l₃) :
+    joinList (joinList l₁ l₂) l₃ = joinList l₁ (joinList l₂ l₃) := by
+  have ⟨h₂₃, h₁⟩ := (forall₂_joinList_assoc l₁ l₂ l₃).mp ⟨h₁₂, h₁₂₃⟩
+  rw [joinList_of_forall₂ h₁₂₃, joinList_of_forall₂ h₁, joinList_of_forall₂ h₁₂,
+    joinList_of_forall₂ h₂₃, zipWith_join_assoc]
+
+private theorem joinList_nil_right (l : List (Cell α)) : joinList l [] = l := by
+  unfold joinList
+  split
+  · rename_i hLen
+    rw [List.length_eq_zero_iff.mp hLen]
+    rfl
+  · rfl
+
+private theorem length_joinList (l₁ l₂ : List (Cell α)) : (joinList l₁ l₂).length = l₁.length := by
+  unfold joinList
+  split <;> simp_all
+
+private theorem getElem?_joinList (l₁ l₂ : List (Cell α)) (i : Nat) :
+    (joinList l₁ l₂)[i]? =
+      if l₁.length = l₂.length then (l₁[i]?.map join).bind fun f => l₂[i]?.map f else l₁[i]? := by
+  unfold joinList
+  split
+  · exact List.getElem?_zipWith'
+  · rfl
+
+/-- An owned cell stays owned, whatever the other fragment holds. -/
+private theorem getElem?_joinList_owned {l₁ l₂ : List (Cell α)} {i : Nat} {x : α}
+    (h : l₁[i]? = some (.owned x)) : (joinList l₁ l₂)[i]? = some (.owned x) := by
+  rw [getElem?_joinList]
+  split
+  · rename_i hLen
+    have hi : i < l₂.length := hLen ▸ (List.getElem?_eq_some_iff.mp h).1
+    simp [h, List.getElem?_eq_getElem hi, join]
+  · exact h
+
+private theorem joinList_set_owned (l₁ l₂ : List (Cell α)) (i : Nat) (x : α) :
+    joinList (l₁.set i (.owned x)) l₂ = (joinList l₁ l₂).set i (.owned x) := by
+  apply List.ext_getElem?
+  intro j
+  rw [getElem?_joinList, List.length_set, List.getElem?_set, List.getElem?_set,
+    getElem?_joinList, length_joinList]
+  by_cases hLen : l₁.length = l₂.length
+  · simp only [hLen, ite_true]
+    by_cases hij : i = j
+    · subst hij
+      by_cases hi : i < l₂.length
+      · simp [hi, join]
+      · simp [hi]
+    · simp [hij]
+  · simp [hLen]
+
+/-- Giving a cell away: the other fragment must not own it. -/
+private theorem joinList_set_notOwned (l₁ l₂ : List (Cell α)) (i : Nat)
+    (h : ∀ x, l₂[i]? ≠ some (.owned x)) :
+    joinList (l₁.set i .notOwned) l₂ = (joinList l₁ l₂).set i .notOwned := by
+  apply List.ext_getElem?
+  intro j
+  rw [getElem?_joinList, List.length_set, List.getElem?_set, List.getElem?_set,
+    getElem?_joinList, length_joinList]
+  split
+  · rename_i hLen
+    split
+    · rename_i hij
+      subst hij
+      split
+      · rename_i hi
+        have hi₂ : i < l₂.length := hLen ▸ hi
+        have hCell := h
+        rw [List.getElem?_eq_getElem hi₂] at hCell ⊢
+        cases hc : l₂[i] with
+        | owned x => exact absurd (by rw [hc]) (hCell x)
+        | notOwned => simp [join]
+      · simp
+    · rfl
+  · rfl
+
+private theorem forall₂_iff_getElem? {l₁ l₂ : List (Cell α)} :
+    List.Forall₂ Compatible l₁ l₂ ↔
+      l₁.length = l₂.length ∧
+        ∀ (i : Nat) (x y : Cell α), l₁[i]? = some x → l₂[i]? = some y → Compatible x y := by
+  rw [List.forall₂_iff_get]
+  constructor
+  · rintro ⟨hLen, h⟩
+    refine ⟨hLen, fun i x y hx hy => ?_⟩
+    obtain ⟨hi₁, rfl⟩ := List.getElem?_eq_some_iff.mp hx
+    obtain ⟨hi₂, rfl⟩ := List.getElem?_eq_some_iff.mp hy
+    exact h i hi₁ hi₂
+  · rintro ⟨hLen, h⟩
+    exact ⟨hLen, fun i hi₁ hi₂ =>
+      h i _ _ (List.getElem?_eq_getElem hi₁) (List.getElem?_eq_getElem hi₂)⟩
+
+end Cell
+
+/-! ### Blocks and slots -/
+
+namespace Block
+
+@[simp] private theorem cellsAs_mk (k : AllocKind) (t : Type) (c : List (Cell t)) :
+    (⟨k, t, c⟩ : Block).cellsAs t = c := by
+  simp [cellsAs]
+
+private theorem compatible_mk_iff (k₁ k₂ : AllocKind) (t : Type) (c₁ c₂ : List (Cell t)) :
+    Compatible ⟨k₁, t, c₁⟩ ⟨k₂, t, c₂⟩ ↔ k₁ = k₂ ∧ List.Forall₂ Cell.Compatible c₁ c₂ := by
+  simp [Compatible]
+
+@[simp] private theorem join_mk (k₁ k₂ : AllocKind) (t : Type) (c₁ c₂ : List (Cell t)) :
+    join ⟨k₁, t, c₁⟩ ⟨k₂, t, c₂⟩ = ⟨k₁, t, Cell.joinList c₁ c₂⟩ := by
+  simp [join]
+
+/-- Compatible blocks have the same type. -/
+private theorem eq_mk_of_compatible {b₁ b₂ : Block} (h : Compatible b₁ b₂) :
+    ∃ k₂ c₂, b₂ = ⟨k₂, b₁.ty, c₂⟩ := by
+  obtain ⟨k₂, t₂, c₂⟩ := b₂
+  obtain ⟨-, hTy, -⟩ := h
+  dsimp only at hTy
+  subst hTy
+  exact ⟨k₂, c₂, rfl⟩
+
+private theorem compatible_symm {b₁ b₂ : Block} (h : Compatible b₁ b₂) : Compatible b₂ b₁ := by
+  obtain ⟨k₁, t, c₁⟩ := b₁
+  obtain ⟨k₂, c₂, rfl⟩ := eq_mk_of_compatible h
+  dsimp only at h ⊢
+  rw [compatible_mk_iff] at h ⊢
+  exact ⟨h.1.symm, Cell.forall₂_symm h.2⟩
+
+private theorem join_comm {b₁ b₂ : Block} (h : Compatible b₁ b₂) : join b₁ b₂ = join b₂ b₁ := by
+  obtain ⟨k₁, t, c₁⟩ := b₁
+  obtain ⟨k₂, c₂, rfl⟩ := eq_mk_of_compatible h
+  dsimp only at h ⊢
+  rw [compatible_mk_iff] at h
+  rw [join_mk, join_mk, h.1, Cell.joinList_comm h.2]
+
+private theorem compatible_assoc' (a b c : Block) :
+    Compatible a b ∧ Compatible (join a b) c ↔ Compatible b c ∧ Compatible a (join b c) := by
+  obtain ⟨ka, t, ca⟩ := a
+  constructor
+  · rintro ⟨hab, habc⟩
+    obtain ⟨kb, cb, rfl⟩ := eq_mk_of_compatible hab
+    dsimp only at hab habc ⊢
+    rw [join_mk] at habc
+    obtain ⟨kc, cc, rfl⟩ := eq_mk_of_compatible habc
+    dsimp only at habc ⊢
+    rw [join_mk]
+    simp only [compatible_mk_iff] at hab habc ⊢
+    have ⟨hbc, ha⟩ := (Cell.forall₂_joinList_assoc _ _ _).mp ⟨hab.2, habc.2⟩
+    exact ⟨⟨hab.1.symm.trans habc.1, hbc⟩, hab.1, ha⟩
+  · rintro ⟨hbc, habc⟩
+    obtain ⟨kb, tb, cb⟩ := b
+    obtain ⟨kc, cc, rfl⟩ := eq_mk_of_compatible hbc
+    dsimp only at hbc habc ⊢
+    rw [join_mk] at habc
+    have hTy : tb = t := habc.2.1
+    subst hTy
+    rw [join_mk]
+    simp only [compatible_mk_iff] at hbc habc ⊢
+    have ⟨hab, ha⟩ := (Cell.forall₂_joinList_assoc _ _ _).mpr ⟨hbc.2, habc.2⟩
+    exact ⟨⟨habc.1, hab⟩, habc.1.trans hbc.1, ha⟩
+
+private theorem join_assoc {a b c : Block} (hab : Compatible a b)
+    (habc : Compatible (join a b) c) : join (join a b) c = join a (join b c) := by
+  obtain ⟨ka, t, ca⟩ := a
+  obtain ⟨kb, cb, rfl⟩ := eq_mk_of_compatible hab
+  dsimp only at hab habc ⊢
+  rw [join_mk] at habc
+  obtain ⟨kc, cc, rfl⟩ := eq_mk_of_compatible habc
+  dsimp only at habc ⊢
+  simp only [compatible_mk_iff] at hab habc
+  simp only [join_mk, Cell.joinList_assoc hab.2 habc.2]
+
+end Block
+
+namespace BlockSlot
+
+private theorem compatible_symm {s₁ s₂ : BlockSlot} (h : Compatible s₁ s₂) : Compatible s₂ s₁ := by
+  cases s₁ <;> cases s₂ <;> simp_all [Compatible, Block.compatible_symm]
+
+private theorem join_comm {s₁ s₂ : BlockSlot} (h : Compatible s₁ s₂) : join s₁ s₂ = join s₂ s₁ := by
+  match s₁, s₂, h with
+  | .live _, .live _, h => exact congrArg BlockSlot.live (Block.join_comm h)
+  | .live _, .freed, h => exact False.elim h
+  | .freed, _, h => exact False.elim h
+
+private theorem compatible_assoc' (a b c : BlockSlot) :
+    Compatible a b ∧ Compatible (join a b) c ↔ Compatible b c ∧ Compatible a (join b c) := by
+  cases a <;> cases b <;> cases c <;> simp [Compatible, join, Block.compatible_assoc']
+
+private theorem join_assoc {a b c : BlockSlot} (hab : Compatible a b)
+    (habc : Compatible (join a b) c) : join (join a b) c = join a (join b c) := by
+  cases a <;> cases b <;> cases c <;> simp_all [Compatible, join, Block.join_assoc]
+
+end BlockSlot
+
+private theorem optCompatible_symm {o₁ o₂ : Option BlockSlot} (h : OptCompatible o₁ o₂) :
+    OptCompatible o₂ o₁ := by
+  cases o₁ <;> cases o₂ <;> simp_all [OptCompatible, BlockSlot.compatible_symm]
+
+private theorem merge_join_comm {o₁ o₂ : Option BlockSlot} (h : OptCompatible o₁ o₂) :
+    Option.merge BlockSlot.join o₁ o₂ = Option.merge BlockSlot.join o₂ o₁ := by
+  match o₁, o₂, h with
+  | some _, some _, h => exact congrArg some (BlockSlot.join_comm h)
+  | some _, none, _ => rfl
+  | none, some _, _ => rfl
+  | none, none, _ => rfl
+
+private theorem optCompatible_assoc (a b c : Option BlockSlot) :
+    OptCompatible a b ∧ OptCompatible (Option.merge BlockSlot.join a b) c ↔
+      OptCompatible b c ∧ OptCompatible a (Option.merge BlockSlot.join b c) := by
+  cases a <;> cases b <;> cases c <;> simp [OptCompatible, Option.merge, BlockSlot.compatible_assoc']
+
+private theorem merge_join_assoc {a b c : Option BlockSlot} (hab : OptCompatible a b)
+    (habc : OptCompatible (Option.merge BlockSlot.join a b) c) :
+    Option.merge BlockSlot.join (Option.merge BlockSlot.join a b) c =
+      Option.merge BlockSlot.join a (Option.merge BlockSlot.join b c) := by
+  cases a <;> cases b <;> cases c <;> simp_all [OptCompatible, Option.merge, BlockSlot.join_assoc]
+
+/-! ### Heaps -/
+
 namespace Heap
 
-private theorem ext_impl {h₁ h₂ : Heap}
-    (hEq : h₁.impl = h₂.impl) : h₁ = h₂ := by
-  cases h₁
-  cases h₂
-  cases hEq
-  rfl
+private theorem ext {h₁ h₂ : Heap} (hEq : ∀ a, h₁.lookup a = h₂.lookup a) : h₁ = h₂ := by
+  obtain ⟨m₁⟩ := h₁
+  obtain ⟨m₂⟩ := h₂
+  congr 1
+  exact Finmap.ext_lookup hEq
 
-private theorem mem_union {address : Loc} {h₁ h₂ : Heap} :
-    address ∈ h₁ ∪ h₂ ↔ address ∈ h₁ ∨ address ∈ h₂ :=
-  Finmap.mem_union
+private theorem lookup_foldr (h₁ h₂ : Heap) (a : AllocId) (m : Finmap fun _ : AllocId => BlockSlot)
+    (s : Multiset AllocId) :
+    (@Multiset.foldr _ _ (insertJoin h₁ h₂) (insertJoin_leftComm h₁ h₂) m s).lookup a =
+      if a ∈ s then some (joinAt h₁ h₂ a) else m.lookup a := by
+  induction s using Multiset.induction_on with
+  | empty => simp
+  | cons b s ih =>
+    rw [Multiset.foldr_cons]
+    show Finmap.lookup a (Finmap.insert b _ _) = _
+    by_cases hab : a = b
+    · subst hab
+      simp [Finmap.lookup_insert]
+    · rw [Finmap.lookup_insert_of_ne _ hab, ih]
+      simp [Multiset.mem_cons, hab]
 
-private theorem lookup_union_left {address : Loc}
-    {h₁ h₂ : Heap} (hMem : address ∈ h₁) :
-    (h₁ ∪ h₂).lookup address = h₁.lookup address :=
-  congrArg (Option.bind · Slot.cell?) (Finmap.lookup_union_left hMem)
+private theorem lookup_union (h₁ h₂ : Heap) (a : AllocId) :
+    (h₁ ∪ h₂).lookup a = Option.merge BlockSlot.join (h₁.lookup a) (h₂.lookup a) := by
+  show (Heap.union h₁ h₂).allocs.lookup a = _
+  unfold Heap.union
+  rw [lookup_foldr]
+  split
+  · rename_i ha
+    have hMem : a ∈ h₂.allocs := Finmap.mem_keys.mp (Finset.mem_val.mp ha)
+    obtain ⟨s₂, hs₂⟩ := Finmap.mem_iff.mp hMem
+    unfold joinAt
+    simp only [lookup, hs₂]
+    cases h₁.allocs.lookup a <;> rfl
+  · rename_i ha
+    have hNone : h₂.allocs.lookup a = none :=
+      Finmap.lookup_eq_none.mpr fun hMem => ha (Finset.mem_val.mpr (Finmap.mem_keys.mpr hMem))
+    simp only [lookup, hNone]
+    cases h₁.allocs.lookup a <;> rfl
 
-private theorem mem_of_lookup_eq_some {address : Loc} {h : Heap} {cell : HeapCell}
-    (hLookup : h.lookup address = some cell) : address ∈ h := by
-  obtain ⟨slot, hSlot, -⟩ := Option.bind_eq_some_iff.mp hLookup
-  exact Finmap.mem_of_lookup_eq_some hSlot
+@[simp] private theorem lookup_empty (a : AllocId) : (∅ : Heap).lookup a = none :=
+  Finmap.lookup_empty a
 
-private theorem mem_insert {address insertedAddress : Loc}
-    {cell : Slot} {h : Heap} :
-    address ∈ h.insert insertedAddress cell ↔
-      address = insertedAddress ∨ address ∈ h :=
-  Finmap.mem_insert
+private theorem lookup_insert (h : Heap) (a : AllocId) (s : BlockSlot) :
+    (h.insert a s).lookup a = some s :=
+  Finmap.lookup_insert _
 
-private theorem insert_union {address : Loc}
-    {cell : Slot} {h₁ h₂ : Heap} :
-    (h₁ ∪ h₂).insert address cell =
-      h₁.insert address cell ∪ h₂ := by
-  apply Heap.ext_impl
-  exact Finmap.insert_union
+private theorem lookup_insert_ne (h : Heap) {a b : AllocId} (s : BlockSlot) (hNe : b ≠ a) :
+    (h.insert a s).lookup b = h.lookup b :=
+  Finmap.lookup_insert_of_ne _ hNe
 
-private theorem union_assoc' (h₁ h₂ h₃ : Heap) :
-    (h₁ ∪ h₂) ∪ h₃ = h₁ ∪ (h₂ ∪ h₃) := by
-  apply Heap.ext_impl
-  exact Finmap.union_assoc
+private theorem mem_iff_lookup {a : AllocId} {h : Heap} : a ∈ h ↔ (h.lookup a).isSome :=
+  Finmap.lookup_isSome.symm
+
+private theorem lookup_eq_none {a : AllocId} {h : Heap} : h.lookup a = none ↔ a ∉ h :=
+  Finmap.lookup_eq_none
 
 @[simp]
-theorem empty_union (h : Heap) : ∅ ∪ h = h := by
-  apply Heap.ext_impl
-  exact Finmap.empty_union
+theorem empty_union (h : Heap) : ∅ ∪ h = h :=
+  ext fun a => by rw [lookup_union, lookup_empty, Option.merge_none_left]
 
 @[simp]
-theorem union_empty (h : Heap) : h ∪ ∅ = h := by
-  apply Heap.ext_impl
-  exact Finmap.union_empty
+theorem union_empty (h : Heap) : h ∪ ∅ = h :=
+  ext fun a => by rw [lookup_union, lookup_empty, Option.merge_none_right]
 
-instance instPartialCommMonoid : PartialCommMonoid Heap where
+private theorem compatible_symm {h₁ h₂ : Heap} (hCompatible : Heap.Compatible h₁ h₂) :
+    Heap.Compatible h₂ h₁ :=
+  fun a => optCompatible_symm (hCompatible a)
+
+private theorem compatible_empty_left (h : Heap) : Heap.Compatible ∅ h := fun a => by
+  show OptCompatible ((∅ : Heap).lookup a) _
+  rw [lookup_empty]
+  trivial
+
+private theorem compatible_assoc (a b c : Heap) :
+    Heap.Compatible a b ∧ Heap.Compatible (a ∪ b) c ↔
+      Heap.Compatible b c ∧ Heap.Compatible a (b ∪ c) := by
+  simp only [Heap.Compatible, lookup_union]
+  constructor
+  · rintro ⟨hab, habc⟩
+    exact ⟨fun x => ((optCompatible_assoc _ _ _).mp ⟨hab x, habc x⟩).1,
+      fun x => ((optCompatible_assoc _ _ _).mp ⟨hab x, habc x⟩).2⟩
+  · rintro ⟨hbc, habc⟩
+    exact ⟨fun x => ((optCompatible_assoc _ _ _).mpr ⟨hbc x, habc x⟩).1,
+      fun x => ((optCompatible_assoc _ _ _).mpr ⟨hbc x, habc x⟩).2⟩
+
+private theorem union_assoc {a b c : Heap} (hab : Heap.Compatible a b)
+    (habc : Heap.Compatible (a ∪ b) c) : a ∪ b ∪ c = a ∪ (b ∪ c) := ext fun x => by
+  have habc' := habc x
+  rw [lookup_union] at habc'
+  simp only [lookup_union, merge_join_assoc (hab x) habc']
+
+private theorem union_comm_of_compatible {a b : Heap} (hCompatible : Heap.Compatible a b) :
+    a ∪ b = b ∪ a := ext fun x => by
+  simp only [lookup_union, merge_join_comm (hCompatible x)]
+
+@[no_expose] instance instPartialCommMonoid : PartialCommMonoid Heap where
   Compatible := Heap.Compatible
-  compatible_comm hCompatible := by
-    exact Finmap.Disjoint.symm _ _ hCompatible
-  compatible_empty_left h := by
-    exact Finmap.disjoint_empty h.impl
-  compatible_assoc a b c := by
-    change
-      Finmap.Disjoint a.impl b.impl ∧
-          Finmap.Disjoint (a.impl ∪ b.impl) c.impl ↔
-        Finmap.Disjoint b.impl c.impl ∧
-          Finmap.Disjoint a.impl (b.impl ∪ c.impl)
-    rw [Finmap.disjoint_union_left, Finmap.disjoint_union_right]
-    constructor
-    · rintro ⟨hab, hac, hbc⟩
-      exact ⟨hbc, hab, hac⟩
-    · rintro ⟨hbc, hab, hac⟩
-      exact ⟨hab, hac, hbc⟩
-  union_assoc _ _ := by
-    apply Heap.ext_impl
-    exact Finmap.union_assoc
-  empty_union _ := by
-    apply Heap.ext_impl
-    exact Finmap.empty_union
-  union_empty _ := by
-    apply Heap.ext_impl
-    exact Finmap.union_empty
-  union_comm_of_compatible hCompatible := by
-    apply Heap.ext_impl
-    exact Finmap.union_comm_of_disjoint hCompatible
+  compatible_comm := compatible_symm
+  compatible_empty_left := compatible_empty_left
+  compatible_assoc := compatible_assoc
+  union_assoc := union_assoc
+  empty_union := empty_union
+  union_empty := union_empty
+  union_comm_of_compatible := union_comm_of_compatible
 
-theorem union_right_cancel {h₁ h₂ frame : Heap}
-    (hCompatible₁ : PartialCommMonoid.Compatible h₁ frame)
-    (hCompatible₂ : PartialCommMonoid.Compatible h₂ frame)
-    (hEq : h₁ ∪ frame = h₂ ∪ frame) : h₁ = h₂ := by
-  apply Heap.ext_impl
-  exact (Finmap.union_cancel hCompatible₁ hCompatible₂).mp (congrArg Heap.impl hEq)
+theorem mem_union {a : AllocId} {h₁ h₂ : Heap} : a ∈ h₁ ∪ h₂ ↔ a ∈ h₁ ∨ a ∈ h₂ := by
+  simp only [mem_iff_lookup, lookup_union]
+  cases h₁.lookup a <;> cases h₂.lookup a <;> simp [Option.merge]
 
-theorem mem_singleton {α : Type} {q : RawPtr α M} {value : α} {address : Loc} :
-    address ∈ singleton q value ↔ address = q.loc := by
-  show address ∈ (Finmap.singleton q.loc (Slot.live ⟨α, value⟩) : HeapImpl) ↔ _
-  exact Finmap.mem_singleton _ _ _
+/-- The cells of the block `a` of `h`, as cells of type `t`. -/
+private noncomputable def cellsAt (h : Heap) (a : AllocId) (t : Type) : List (Cell t) :=
+  match h.lookup a with
+  | some (.live b) => b.cellsAs t
+  | _ => []
 
-theorem mem_endMarker {l address : Loc} {kind : AllocKind} :
-    address ∈ endMarker l kind ↔ address = l := by
-  show address ∈ (Finmap.singleton l (Slot.endMarker kind) : HeapImpl) ↔ _
-  exact Finmap.mem_singleton _ _ _
+/-- A live block of `h₁` stays live in `h₁ ∪ h₂`, with the same header: the cells of `h₂` are
+joined into it. -/
+private theorem lookup_union_live {h₁ h₂ : Heap} {a : AllocId} {b : Block}
+    (hLookup : h₁.lookup a = some (.live b)) :
+    (h₁ ∪ h₂).lookup a = some (.live ⟨b.kind, b.ty, Cell.joinList b.cells (h₂.cellsAt a b.ty)⟩) := by
+  rw [lookup_union, hLookup]
+  unfold cellsAt
+  rcases hs : h₂.lookup a with _ | _ | _
+  · simp [Option.merge, Cell.joinList_nil_right]
+  · rfl
+  · simp [Option.merge, BlockSlot.join, Cell.joinList_nil_right]
 
-private theorem lookup_singleton {α : Type} (q : RawPtr α M) (value : α) :
-    (singleton q value).lookup q.loc = some ⟨α, value⟩ := by
-  simp [singleton, Heap.lookup, Slot.cell?]
+private theorem cell?_union_left {h₁ h₂ : Heap} {l : RawPtr T M} {c : Σ α : Type, α}
+    (hCell : h₁.cell? l = some c) : (h₁ ∪ h₂).cell? l = some c := by
+  unfold cell? at hCell ⊢
+  split at hCell
+  · rename_i b hLookup
+    rw [lookup_union_live hLookup]
+    dsimp only
+    split at hCell
+    · rename_i x hx
+      rw [Cell.getElem?_joinList_owned hx]
+      exact hCell
+    · simp at hCell
+  · simp at hCell
+
+theorem mem_singleton {α : Type} {q : RawPtr α M} {value : α} {kind : AllocKind} {len : Nat}
+    {a : AllocId} : a ∈ singleton q value kind len ↔ a = q.allocId :=
+  Finmap.mem_singleton _ _ _
 
 /-- The cell does not depend on the pointer's mutability. -/
-theorem singleton_eq_of_loc {α : Type} {q : RawPtr α M} {r : RawPtr α M'}
-    (hAddr : q.loc = r.loc) (value : α) : singleton q value = singleton r value := by
+theorem singleton_eq_of_addr {α : Type} {q : RawPtr α M} {r : RawPtr α M'}
+    (hId : q.allocId = r.allocId) (hOffset : q.offset = r.offset) (value : α) (kind : AllocKind)
+    (len : Nat) : singleton q value kind len = singleton r value kind len := by
   unfold singleton
-  rw [hAddr]
+  rw [hId, hOffset]
+
+private theorem lookup_singleton {α : Type} (q : RawPtr α M) (value : α) (kind : AllocKind)
+    (len : Nat) : (singleton q value kind len).lookup q.allocId =
+      some (.live ⟨kind, α, (List.replicate len .notOwned).set q.offset (.owned value)⟩) :=
+  Finmap.lookup_singleton_eq
+
+private theorem lookup_singleton_ne {α : Type} {q : RawPtr α M} {value : α} {kind : AllocKind}
+    {len : Nat} {a : AllocId} (hNe : a ≠ q.allocId) :
+    (singleton q value kind len).lookup a = none :=
+  lookup_eq_none.mpr fun hMem => hNe (mem_singleton.mp hMem)
 
 @[simp]
 theorem not_isValid_empty {α : Type} (q : RawPtr α M) :
     ¬ IsValid (∅ : Heap) q := by
-  change ¬ match (Finmap.lookup q.loc (∅ : HeapImpl)).bind Slot.cell? with
-    | none => False
-    | some ⟨β, _⟩ => β = α
-  simp
+  simp [IsValid, cell?]
 
-@[simp] theorem array_nil {α : Type} (l : Loc) :
-    array l ([] : List α) = ∅ := by
-  rw [array]
-  rfl
-
-@[simp] theorem array_cons {α : Type} (l : Loc) (value : α) (rest : List α) :
-    array l (value :: rest) = singleton (⟨l⟩ : MutRawPtr α) value ∪ array (l.shift 1) rest := by
-  rw [array]
-
-@[simp] theorem array_singleton {α : Type} (l : Loc) (value : α) :
-    array l [value] = singleton (⟨l⟩ : MutRawPtr α) value := by
-  rw [array_cons, array_nil, Heap.union_empty]
-
-theorem mem_array {α : Type} {l : Loc} {values : List α} {address : Loc} :
-    address ∈ array l values ↔
-      ∃ i, i < values.length ∧ address = l.shift i := by
-  induction values generalizing l with
-  | nil =>
-      simp only [array_nil, List.length_nil, Nat.not_lt_zero, false_and,
-        exists_false, iff_false]
-      intro hMem
-      exact (Finmap.notMem_empty (a := address)) hMem
-  | cons value rest ih =>
-      have hShift : ∀ i : Nat, (l.shift 1).shift i = l.shift (i + 1) := by
-        intro i; rw [Loc.shift_shift, Nat.add_comm]
-      rw [array_cons, Heap.mem_union, mem_singleton, ih]
-      constructor
-      · rintro (rfl | ⟨i, hi, rfl⟩)
-        · exact ⟨0, by simp, rfl⟩
-        · exact ⟨i + 1, by simpa using hi, by rw [hShift]⟩
-      · rintro ⟨i, hi, rfl⟩
-        cases i with
-        | zero => exact Or.inl rfl
-        | succ j => exact Or.inr ⟨j, by simpa using hi, by rw [hShift]⟩
-
-private theorem mem_freedRange {l address : Loc} {n : Nat} :
-    address ∈ freedRange l n ↔ ∃ i, i < n ∧ address = l.shift i := by
-  induction n generalizing l with
-  | zero =>
-      simp only [Nat.not_lt_zero, false_and, exists_false, iff_false]
-      intro hMem
-      exact (Finmap.notMem_empty (a := address)) hMem
-  | succ n ih =>
-      have hShift : ∀ i : Nat, (l.shift 1).shift i = l.shift (i + 1) := by
-        intro i; rw [Loc.shift_shift, Nat.add_comm]
-      have hSingle : address ∈ (⟨Finmap.singleton l Slot.freed⟩ : Heap) ↔ address = l :=
-        Finmap.mem_singleton _ _ _
-      show address ∈ (⟨Finmap.singleton l Slot.freed⟩ : Heap) ∪ freedRange (l.shift 1) n ↔ _
-      rw [Heap.mem_union, hSingle, ih]
-      constructor
-      · rintro (rfl | ⟨i, hi, rfl⟩)
-        · exact ⟨0, by omega, rfl⟩
-        · exact ⟨i + 1, by omega, by rw [hShift]⟩
-      · rintro ⟨i, hi, rfl⟩
-        cases i with
-        | zero => exact Or.inl rfl
-        | succ j => exact Or.inr ⟨j, by omega, by rw [hShift]⟩
-
-private theorem lookup_freedRange {l : Loc} {n i : Nat} (hi : i < n) :
-    (freedRange l n).impl.lookup (l.shift i) = some .freed := by
-  induction n generalizing l i with
-  | zero => omega
-  | succ n ih =>
-      show Finmap.lookup (l.shift i)
-        ((Finmap.singleton l Slot.freed : HeapImpl) ∪ (freedRange (l.shift 1) n).impl) = _
-      cases i with
-      | zero =>
-          show Finmap.lookup l ((Finmap.singleton l Slot.freed : HeapImpl) ∪ _) = _
-          rw [Finmap.lookup_union_left ((Finmap.mem_singleton _ _ _).mpr rfl)]
-          exact Finmap.lookup_singleton_eq
-      | succ j =>
-          have hNotMem : l.shift (j + 1) ∉ (Finmap.singleton l Slot.freed : HeapImpl) := by
-            rw [Finmap.mem_singleton]
-            intro hEq
-            have hOffset := congrArg Loc.offset hEq
-            simp only [Loc.offset_shift] at hOffset
-            omega
-          rw [Finmap.lookup_union_right hNotMem,
-            show l.shift (j + 1) = (l.shift 1).shift j by rw [Loc.shift_shift, Nat.add_comm]]
-          exact ih (by omega)
-
-theorem array_append {α : Type} (l : Loc) (xs ys : List α) :
-    array l (xs ++ ys) =
-      array l xs ∪ array (l.shift xs.length) ys := by
-  induction xs generalizing l with
-  | nil => simp
-  | cons value rest ih =>
-      have hShift : (l.shift 1).shift rest.length = l.shift (rest.length + 1) := by
-        rw [Loc.shift_shift, Nat.add_comm]
-      rw [List.cons_append, array_cons, array_cons, ih, List.length_cons,
-        hShift, Heap.union_assoc']
-
-theorem compatible_array_append {α : Type} (l : Loc) (xs ys : List α) :
-    PartialCommMonoid.Compatible (array l xs)
-      (array (l.shift xs.length) ys) := by
-  intro address hLeft hRight
-  obtain ⟨i, hi, hL⟩ := mem_array.mp hLeft
-  obtain ⟨j, -, hR⟩ := mem_array.mp hRight
-  rw [Loc.shift_shift] at hR
-  have hOffset : l.offset + i = l.offset + (xs.length + j) :=
-    (congrArg Loc.offset hL).symm.trans (congrArg Loc.offset hR)
-  omega
-
-theorem notMem_freshAllocId {h : Heap} {address : Loc}
-    (hBase : address.allocId = freshAllocId h) : address ∉ h := by
+theorem notMem_freshAllocId {h : Heap} {a : AllocId}
+    (hBase : a = freshAllocId h) : a ∉ h := by
   intro hMem
-  have hMemKeys : address ∈ h.keys := Finmap.mem_keys.mpr hMem
-  have hImage : freshAllocId h ∈ h.keys.image Loc.allocId :=
-    Finset.mem_image.mpr ⟨_, hMemKeys, hBase⟩
-  have hLe : freshAllocId h ≤ (h.keys.image Loc.allocId).sup id :=
-    Finset.le_sup (f := fun a : AllocId => a) hImage
-  have hSucc : (h.keys.image Loc.allocId).sup id + 1 ≤
-      (h.keys.image Loc.allocId).sup id := hLe
-  exact Nat.not_succ_le_self _ hSucc
+  have hLe : a ≤ h.allocs.keys.sup id := Finset.le_sup (f := id) (Finmap.mem_keys.mpr hMem)
+  rw [hBase, freshAllocId] at hLe
+  exact Nat.not_succ_le_self _ hLe
 
-@[simp] theorem freshLoc_allocId (h : Heap) : (freshLoc h).allocId = freshAllocId h := by
-  rw [freshLoc]
+private theorem lookup_allocation {α : Type} (a : AllocId) (values : List α) (kind : AllocKind) :
+    (allocation a values kind).lookup a = some (.live ⟨kind, α, values.map .owned⟩) :=
+  Finmap.lookup_singleton_eq
 
-@[simp] theorem freshLoc_offset (h : Heap) : (freshLoc h).offset = 0 := by
-  rw [freshLoc]
+private theorem lookup_allocation_ne {α : Type} {a b : AllocId} {values : List α}
+    {kind : AllocKind} (hNe : b ≠ a) : (allocation a values kind).lookup b = none :=
+  lookup_eq_none.mpr fun hMem => hNe ((Finmap.mem_singleton _ _ _).mp hMem)
 
 /-- A fresh allocation sits next to the heap it was allocated in. -/
 theorem alloc_eq {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
-    h.alloc values kind = (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h) := by
-  rw [alloc]
-
-/-- An allocation is its cells followed by its end marker. -/
-theorem allocation_eq {α : Type} (l : Loc) (values : List α) (kind : AllocKind) :
-    allocation l values kind = array l values ∪ endMarker (l.shift values.length) kind := by
-  rw [allocation]
-
-theorem compatible_freshLoc {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
-    PartialCommMonoid.Compatible (allocation (freshLoc h) values kind) h := by
-  intro address hFresh hMem
-  apply notMem_freshAllocId (h := h) _ hMem
-  rcases Heap.mem_union.mp hFresh with hRange | hEnd
-  · obtain ⟨i, -, rfl⟩ := mem_array.mp hRange
+    h.alloc values kind = (⟨freshAllocId h, 0⟩, allocation (freshAllocId h) values kind ∪ h) := by
+  refine Prod.ext rfl (ext fun a => ?_)
+  rw [lookup_union]
+  by_cases ha : a = freshAllocId h
+  · subst ha
+    have hNone := lookup_eq_none.mpr (notMem_freshAllocId (h := h) rfl)
+    simp only [alloc, lookup_insert, hNone, lookup_allocation]
     rfl
-  · rw [mem_endMarker.mp hEnd]
-    rfl
+  · simp only [alloc, lookup_insert_ne _ _ ha, lookup_allocation_ne ha, Option.merge_none_left]
 
-theorem compatible_array_endMarker {α : Type} (l : Loc) (values : List α) (kind : AllocKind) :
-    PartialCommMonoid.Compatible (array l values) (endMarker (l.shift values.length) kind) := by
-  intro address hRange hEnd
-  obtain ⟨i, hi, rfl⟩ := mem_array.mp hRange
-  have hOffset := congrArg Loc.offset (mem_endMarker.mp hEnd)
-  simp only [Loc.offset_shift] at hOffset
-  omega
+theorem compatible_freshAllocId {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
+    PartialCommMonoid.Compatible (allocation (freshAllocId h) values kind) h := by
+  intro a
+  by_cases ha : a = freshAllocId h
+  · rw [lookup_eq_none.mpr (notMem_freshAllocId ha)]
+    cases (allocation (freshAllocId h) values kind).lookup a <;> trivial
+  · rw [lookup_allocation_ne ha]
+    trivial
 
 theorem subheap_iff {h h' : Heap} :
     Heap.Subheap h h' ↔ ∃ rest, PartialCommMonoid.Compatible h rest ∧ h' = h ∪ rest :=
@@ -426,353 +661,697 @@ theorem union_mono {A B h₁ h₂ : Heap}
 
 end Subheap
 
-theorem mem_of_isLive {h : Heap} {l : Loc} (hLive : IsLive h l) : l ∈ h := by
-  obtain ⟨cell, hLookup⟩ := Option.isSome_iff_exists.mp hLive
-  exact Heap.mem_of_lookup_eq_some hLookup
+/-! ### Reads and writes -/
 
-theorem isLive_of_isValid {α : Type} {h : Heap} {q : RawPtr α M}
-    (hValid : IsValid h q) : IsLive h q.loc := by
+private theorem lookup_of_cell? {h : Heap} {l : RawPtr T M} {c : Σ α : Type, α}
+    (hCell : h.cell? l = some c) :
+    ∃ b : Block, h.lookup l.allocId = some (.live b) ∧
+      ∃ x, b.cells[l.offset]? = some (.owned x) ∧ c = ⟨b.ty, x⟩ := by
+  unfold cell? at hCell
+  split at hCell
+  · rename_i b hLookup
+    split at hCell
+    · rename_i x hx
+      exact ⟨b, hLookup, x, hx, (Option.some.inj hCell).symm⟩
+    · simp at hCell
+  · simp at hCell
+
+private theorem cell?_of_isValid {α : Type} {h : Heap} {q : RawPtr α M}
+    (hValid : IsValid h q) : ∃ x : α, h.cell? q = some ⟨α, x⟩ := by
   unfold IsValid at hValid
-  unfold IsLive
   split at hValid
   · contradiction
-  · rename_i cell hLookup
-    simp [hLookup]
+  · rename_i β x hCell
+    subst hValid
+    exact ⟨x, hCell⟩
+
+private theorem lookup_of_isValid {α : Type} {h : Heap} {q : RawPtr α M}
+    (hValid : IsValid h q) :
+    ∃ b : Block, h.lookup q.allocId = some (.live b) ∧ b.ty = α ∧
+      ∃ x, b.cells[q.offset]? = some (.owned x) := by
+  obtain ⟨_, hCell⟩ := cell?_of_isValid hValid
+  obtain ⟨b, hLookup, x, hx, hEq⟩ := lookup_of_cell? hCell
+  exact ⟨b, hLookup, (congrArg Sigma.fst hEq).symm, x, hx⟩
+
+theorem mem_of_isLive {h : Heap} {l : RawPtr T M} (hLive : IsLive h l) : l.allocId ∈ h := by
+  obtain ⟨c, hCell⟩ := Option.isSome_iff_exists.mp hLive
+  obtain ⟨b, hLookup, -⟩ := lookup_of_cell? hCell
+  exact mem_iff_lookup.mpr (by simp [hLookup])
+
+theorem isLive_of_isValid {α : Type} {h : Heap} {q : RawPtr α M}
+    (hValid : IsValid h q) : IsLive h q := by
+  obtain ⟨x, hCell⟩ := cell?_of_isValid hValid
+  simp [IsLive, hCell]
 
 theorem mem_of_isValid {α : Type} {h : Heap} {q : RawPtr α M}
-    (hValid : IsValid h q) : q.loc ∈ h :=
+    (hValid : IsValid h q) : q.allocId ∈ h :=
   mem_of_isLive (isLive_of_isValid hValid)
 
 theorem not_compatible_of_isValid {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     (hValid₁ : IsValid h₁ q) (hValid₂ : IsValid h₂ q) :
-    ¬ PartialCommMonoid.Compatible h₁ h₂ :=
-  fun hCompatible => hCompatible q.loc (mem_of_isValid hValid₁) (mem_of_isValid hValid₂)
+    ¬ PartialCommMonoid.Compatible h₁ h₂ := by
+  intro hCompatible
+  obtain ⟨b₁, hLookup₁, -, x₁, hx₁⟩ := lookup_of_isValid hValid₁
+  obtain ⟨b₂, hLookup₂, -, x₂, hx₂⟩ := lookup_of_isValid hValid₂
+  have hBlock := hCompatible q.allocId
+  simp only [hLookup₁, hLookup₂, OptCompatible, BlockSlot.Compatible] at hBlock
+  obtain ⟨k₁, t, c₁⟩ := b₁
+  obtain ⟨k₂, c₂, rfl⟩ := Block.eq_mk_of_compatible hBlock
+  dsimp only at hBlock hx₂
+  rw [Block.compatible_mk_iff] at hBlock
+  have := (Cell.forall₂_iff_getElem?.mp hBlock.2).2 _ _ _ hx₁ hx₂
+  simp [Cell.Compatible] at this
 
 theorem isValid_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     (hValid : IsValid h₁ q) : IsValid (h₁ ∪ h₂) q := by
-  have hMem : q.loc ∈ h₁ := mem_of_isValid hValid
-  unfold IsValid at hValid ⊢
-  rw [Heap.lookup_union_left hMem]
-  exact hValid
+  obtain ⟨x, hCell⟩ := cell?_of_isValid hValid
+  simp [IsValid, cell?_union_left hCell]
 
-theorem isLive_union_left {h₁ h₂ : Heap} {l : Loc}
+theorem isLive_union_left {h₁ h₂ : Heap} {l : RawPtr T M}
     (hLive : IsLive h₁ l) : IsLive (h₁ ∪ h₂) l := by
-  have hMem : l ∈ h₁ := mem_of_isLive hLive
-  unfold IsLive at hLive ⊢
-  rw [Heap.lookup_union_left hMem]
-  exact hLive
+  obtain ⟨c, hCell⟩ := Option.isSome_iff_exists.mp hLive
+  simp [IsLive, cell?_union_left hCell]
 
 /-- Framing: `read` on a bigger heap reads the same value and leaves the frame alone. -/
 theorem read_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     (hValid : IsValid h₁ q) :
     (h₁ ∪ h₂).read q (isValid_union_left hValid) = Prod.map id (· ∪ h₂) (h₁.read q hValid) := by
-  have hMem : q.loc ∈ h₁ := mem_of_isValid hValid
   unfold Heap.read
   split
-  · rename_i hLookup
+  · rename_i hCell
     have hValidUnion := isValid_union_left (h₂ := h₂) hValid
-    simp [IsValid, hLookup] at hValidUnion
-  · rename_i β value hLookup
+    simp [IsValid, hCell] at hValidUnion
+  · rename_i β value hCell
     split
-    · rename_i hLookup₁
-      simp [IsValid, hLookup₁] at hValid
-    · rename_i β₁ value₁ hLookup₁
-      have hCells :
-          (⟨β, value⟩ : HeapCell) = ⟨β₁, value₁⟩ := by
-        apply Option.some.inj
-        exact hLookup.symm.trans
-          ((Heap.lookup_union_left hMem).trans hLookup₁)
+    · rename_i hCell₁
+      simp [IsValid, hCell₁] at hValid
+    · rename_i β₁ value₁ hCell₁
+      have hCells : (⟨β, value⟩ : Σ α : Type, α) = ⟨β₁, value₁⟩ :=
+        Option.some.inj (hCell.symm.trans (cell?_union_left hCell₁))
       cases hCells
       rfl
+
+/-- `setOwned` on a heap whose block at `q` is `b`. -/
+private theorem setOwned_of_lookup {α : Type} {h : Heap} {q : RawPtr α M} {value : α}
+    {hTy : ∀ b, h.lookup q.allocId = some (.live b) → b.ty = α} {b : Block}
+    (hLookup : h.lookup q.allocId = some (.live b)) :
+    h.setOwned q value hTy =
+      h.insert q.allocId
+        (.live ⟨b.kind, b.ty, b.cells.set q.offset (.owned (cast (hTy b hLookup).symm value))⟩) := by
+  unfold setOwned
+  split
+  · rename_i b' hLookup'
+    have hEq : b' = b := by
+      rw [hLookup] at hLookup'
+      cases hLookup'
+      rfl
+    subst hEq
+    rfl
+  · rename_i hNe
+    exact absurd hLookup (hNe b)
+
+/-- Framing for `setOwned`: owning a cell of `h₁` in `h₁ ∪ h₂` is owning it in `h₁`. -/
+private theorem setOwned_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M} {value : α}
+    {b : Block} (hLookup : h₁.lookup q.allocId = some (.live b)) (hTy : b.ty = α)
+    (hTy₁ : ∀ b, h₁.lookup q.allocId = some (.live b) → b.ty = α)
+    (hTyUnion : ∀ b, (h₁ ∪ h₂).lookup q.allocId = some (.live b) → b.ty = α) :
+    (h₁ ∪ h₂).setOwned q value hTyUnion = h₁.setOwned q value hTy₁ ∪ h₂ := by
+  rw [setOwned_of_lookup (lookup_union_live hLookup), setOwned_of_lookup hLookup]
+  apply ext
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_insert, lookup_union, lookup_insert]
+    obtain ⟨k, t, c⟩ := b
+    dsimp only at hTy ⊢
+    subst hTy
+    simp only [cast_eq]
+    unfold cellsAt
+    rcases hs : h₂.lookup q.allocId with _ | _ | _
+    · simp [Option.merge, Cell.joinList_nil_right]
+    · simp [Option.merge, BlockSlot.join, Block.join, Cell.joinList_set_owned]
+    · simp [Option.merge, BlockSlot.join, Cell.joinList_nil_right]
+  · rw [lookup_insert_ne _ _ ha, lookup_union, lookup_union, lookup_insert_ne _ _ ha]
 
 theorem write_union_left {α : Type} {h₁ h₂ : Heap}
     (q : RawPtr α M) (value : α) (hValid : IsValid h₁ q) :
     (h₁ ∪ h₂).write q value (isValid_union_left hValid) =
-      Prod.map id (· ∪ h₂) (h₁.write q value hValid) :=
-  congrArg (Prod.mk ()) Heap.insert_union
+      Prod.map id (· ∪ h₂) (h₁.write q value hValid) := by
+  obtain ⟨b, hLookup, hTy, -⟩ := lookup_of_isValid hValid
+  exact congrArg (Prod.mk ()) (setOwned_union_left hLookup hTy _ _)
 
-private theorem compatible_insert_left {l : Loc} {cell : Slot}
-    {h₁ h₂ : Heap}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hMem : l ∈ h₁) :
-    PartialCommMonoid.Compatible (h₁.insert l cell) h₂ := by
-  intro address hMem₁ hMem₂
-  rcases Heap.mem_insert.mp hMem₁ with rfl | hMem₁
-  · exact hCompatible _ hMem hMem₂
-  · exact hCompatible address hMem₁ hMem₂
+/-- After `setOwned` at `q`, the block of `q` owns the cell of `q` and keeps its header. -/
+private theorem lookup_setOwned {α : Type} {h : Heap} {q : RawPtr α M} {value : α}
+    {hTy : ∀ b, h.lookup q.allocId = some (.live b) → b.ty = α} {b : Block}
+    (hLookup : h.lookup q.allocId = some (.live b)) :
+    ∃ x, (h.setOwned q value hTy).lookup q.allocId =
+      some (.live ⟨b.kind, b.ty, b.cells.set q.offset (.owned x)⟩) :=
+  ⟨_, by rw [setOwned_of_lookup hLookup, lookup_insert]⟩
+
+private theorem lookup_setOwned_ne {α : Type} {h : Heap} {q : RawPtr α M} {value : α}
+    {hTy : ∀ b, h.lookup q.allocId = some (.live b) → b.ty = α} {a : AllocId}
+    (ha : a ≠ q.allocId) : (h.setOwned q value hTy).lookup a = h.lookup a := by
+  unfold setOwned
+  split
+  · exact lookup_insert_ne _ _ ha
+  · rfl
+
+/-- Owning a cell keeps compatibility with a frame that does not own it. -/
+private theorem compatible_setOwned_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
+    {value : α} {hTy : ∀ b, h₁.lookup q.allocId = some (.live b) → b.ty = α}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hNotLive : ¬ IsLive h₂ q) :
+    PartialCommMonoid.Compatible (h₁.setOwned q value hTy) h₂ := by
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    have hBlock := hCompatible q.allocId
+    rcases hs₁ : h₁.lookup q.allocId with _ | (b₁ | _)
+    · unfold setOwned
+      split
+      · rename_i b hLookup; simp [hs₁] at hLookup
+      · show OptCompatible (h₁.lookup _) _
+        rw [hs₁]; trivial
+    · obtain ⟨x, hx⟩ := lookup_setOwned (value := value) (hTy := hTy) hs₁
+      show OptCompatible _ _
+      rw [hx]
+      rw [hs₁] at hBlock
+      rcases hs₂ : h₂.lookup q.allocId with _ | (b₂ | _)
+      · trivial
+      · rw [hs₂] at hBlock
+        simp only [OptCompatible, BlockSlot.Compatible] at hBlock ⊢
+        obtain ⟨k₁, t, c₁⟩ := b₁
+        obtain ⟨k₂, c₂, rfl⟩ := Block.eq_mk_of_compatible hBlock
+        dsimp only at hBlock hs₂ ⊢
+        rw [Block.compatible_mk_iff] at hBlock ⊢
+        refine ⟨hBlock.1, Cell.forall₂_iff_getElem?.mpr ⟨by simp [hBlock.2.length_eq], ?_⟩⟩
+        intro i y z hy hz
+        rw [List.getElem?_set] at hy
+        split at hy
+        · rename_i hi
+          subst hi
+          cases z with
+          | notOwned => cases y <;> trivial
+          | owned w =>
+            exfalso
+            apply hNotLive
+            simp [IsLive, cell?, hs₂, hz]
+        · exact (Cell.forall₂_iff_getElem?.mp hBlock.2).2 i y z hy hz
+      · rw [hs₂] at hBlock; exact hBlock
+    · unfold setOwned
+      split
+      · rename_i b hLookup; simp [hs₁] at hLookup
+      · show OptCompatible (h₁.lookup _) _
+        rw [hs₁] at hBlock ⊢; exact hBlock
+  · show OptCompatible ((h₁.setOwned q value hTy).lookup a) _
+    rw [lookup_setOwned_ne ha]
+    exact hCompatible a
 
 theorem compatible_write_left {α : Type} {q : RawPtr α M} {value : α}
     {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hValid : IsValid h₁ q) :
     PartialCommMonoid.Compatible (h₁.write q value hValid).2 h₂ :=
-  compatible_insert_left hCompatible (mem_of_isValid hValid)
+  compatible_setOwned_left (hTy := ty_of_isValid hValid) hCompatible fun hLive =>
+    not_compatible_of_isValid hValid (by
+      obtain ⟨c, hCell⟩ := Option.isSome_iff_exists.mp hLive
+      obtain ⟨b, hLookup, x, hx, rfl⟩ := lookup_of_cell? hCell
+      obtain ⟨b₁, hLookup₁, hTy₁, -⟩ := lookup_of_isValid hValid
+      have hBlock := hCompatible q.allocId
+      rw [hLookup₁, hLookup] at hBlock
+      have hTy : b.ty = α := hBlock.2.1.trans hTy₁
+      simp only [IsValid, hCell, hTy]) hCompatible
 
-theorem isEndMarker_union_left {h₁ h₂ : Heap} {l : Loc} {kind : AllocKind}
-    (hEnd : IsEndMarker h₁ l kind) : IsEndMarker (h₁ ∪ h₂) l kind := by
-  show Finmap.lookup l (h₁.impl ∪ h₂.impl) = _
-  rw [Finmap.lookup_union_left (Finmap.mem_of_lookup_eq_some hEnd)]
-  exact hEnd
+/-! ### Deallocation -/
 
-/-- An end marker holds no value. -/
-theorem not_isLive_of_isEndMarker {h : Heap} {l : Loc} {kind : AllocKind}
-    (hEnd : IsEndMarker h l kind) : ¬ IsLive h l := by
-  unfold IsEndMarker at hEnd
-  simp [IsLive, Heap.lookup, hEnd, Slot.cell?]
-
-theorem canDealloc_iff {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind} :
+private theorem canDealloc_iff' {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind} :
     CanDealloc h q n kind ↔
-      q.loc.offset = 0 ∧ (∀ i < n, IsLive h (q.loc.shift i)) ∧
-        IsEndMarker h (q.loc.shift n) kind := by
-  rw [CanDealloc]
+      q.offset = 0 ∧ ∃ b, h.lookup q.allocId = some (.live b) ∧ b.kind = kind ∧
+        b.cells.length = n ∧ ∀ i < n, IsLive h (q.shift i) := by
+  unfold CanDealloc
+  constructor
+  · rintro ⟨hOffset, hBlock⟩
+    refine ⟨hOffset, ?_⟩
+    split at hBlock
+    · rename_i b hLookup
+      exact ⟨b, hLookup, hBlock⟩
+    · contradiction
+  · rintro ⟨hOffset, b, hLookup, hBlock⟩
+    refine ⟨hOffset, ?_⟩
+    rw [hLookup]
+    exact hBlock
+
+/-- Only the start of a block can be deallocated. -/
+theorem offset_eq_zero_of_canDealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) : q.offset = 0 :=
+  (canDealloc_iff'.mp hDealloc).1
+
+/-- Every cell of a deallocated block must be owned. -/
+theorem isLive_of_canDealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) {i : Nat} (hi : i < n) : IsLive h (q.shift i) := by
+  obtain ⟨-, -, -, -, -, hLive⟩ := canDealloc_iff'.mp hDealloc
+  exact hLive i hi
 
 theorem canDealloc_union_left {h₁ h₂ : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h₁ q n kind) : CanDealloc (h₁ ∪ h₂) q n kind :=
-  ⟨hDealloc.1, fun i hi => isLive_union_left (hDealloc.2.1 i hi),
-    isEndMarker_union_left hDealloc.2.2⟩
-
-/-- The slots that `dealloc` kills are already in the heap. -/
-private theorem mem_of_canDealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h q n kind)
-    (hi : i < n + 1) : q.loc.shift i ∈ h := by
-  rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hi | rfl
-  · exact mem_of_isLive (hDealloc.2.1 i hi)
-  · exact Finmap.mem_of_lookup_eq_some hDealloc.2.2
+    (hDealloc : CanDealloc h₁ q n kind) : CanDealloc (h₁ ∪ h₂) q n kind := by
+  obtain ⟨hOffset, b, hLookup, hKind, hLen, hLive⟩ := canDealloc_iff'.mp hDealloc
+  exact canDealloc_iff'.mpr ⟨hOffset, _, lookup_union_live hLookup, hKind,
+    by rw [Cell.length_joinList, hLen], fun i hi => isLive_union_left (hLive i hi)⟩
 
 theorem compatible_dealloc_left {h₁ h₂ : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ q n kind) :
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ q n kind)
+    (hNotMem : q.allocId ∉ h₂) :
     PartialCommMonoid.Compatible (h₁.dealloc q n kind hDealloc).2 h₂ := by
-  intro address hMem hMem₂
-  change address ∈ freedRange q.loc (n + 1) ∪ h₁ at hMem
-  rcases Heap.mem_union.mp hMem with hFreed | hMem₁
-  · obtain ⟨i, hi, rfl⟩ := mem_freedRange.mp hFreed
-    exact hCompatible _ (mem_of_canDealloc hDealloc hi) hMem₂
-  · exact hCompatible _ hMem₁ hMem₂
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    show OptCompatible _ _
+    rw [lookup_eq_none.mpr hNotMem]
+    cases (h₁.dealloc q n kind hDealloc).2.lookup q.allocId <;> trivial
+  · show OptCompatible ((h₁.insert _ _).lookup a) _
+    rw [lookup_insert_ne _ _ ha]
+    exact hCompatible a
 
 theorem dealloc_union_left {h₁ h₂ : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
     (hDealloc : CanDealloc h₁ q n kind) :
     (h₁ ∪ h₂).dealloc q n kind (canDealloc_union_left hDealloc) =
-      Prod.map id (· ∪ h₂) (h₁.dealloc q n kind hDealloc) :=
-  congrArg (Prod.mk ()) (Heap.union_assoc' _ _ _).symm
+      Prod.map id (· ∪ h₂) (h₁.dealloc q n kind hDealloc) := by
+  refine Prod.ext rfl (ext fun a => ?_)
+  show ((h₁ ∪ h₂).insert _ _).lookup a = ((h₁.insert _ _) ∪ h₂).lookup a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_insert, lookup_union, lookup_insert]
+    cases h₂.lookup q.allocId <;> rfl
+  · rw [lookup_insert_ne _ _ ha, lookup_union, lookup_union, lookup_insert_ne _ _ ha]
 
-/-- Deallocated slots stay in the heap, so their allocation id is never handed out again. -/
-theorem mem_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
-    q.loc.shift i ∈ (h.dealloc q n kind hDealloc).2 :=
-  Heap.mem_union.mpr (Or.inl (mem_freedRange.mpr ⟨i, by omega, rfl⟩))
-
-private theorem lookup_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
-    (h.dealloc q n kind hDealloc).2.impl.lookup (q.loc.shift i) = some .freed := by
-  show Finmap.lookup (q.loc.shift i) ((freedRange q.loc (n + 1)).impl ∪ h.impl) = _
-  rw [Finmap.lookup_union_left (mem_freedRange.mpr ⟨i, by omega, rfl⟩)]
-  exact lookup_freedRange (by omega)
-
-/-- A deallocated slot cannot be read or written. -/
-theorem not_isLive_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
-    ¬ IsLive (h.dealloc q n kind hDealloc).2 (q.loc.shift i) := by
-  simp [IsLive, Heap.lookup, lookup_dealloc hDealloc hi, Slot.cell?]
-
-/-- After `dealloc`, the allocation end is freed, so the allocation cannot be deallocated again. -/
-theorem not_isEndMarker_dealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind kind' : AllocKind}
+private theorem lookup_dealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
     (hDealloc : CanDealloc h q n kind) :
-    ¬ IsEndMarker (h.dealloc q n kind hDealloc).2 (q.loc.shift n) kind' := by
-  simp [IsEndMarker, lookup_dealloc hDealloc (Nat.le_refl n)]
+    (h.dealloc q n kind hDealloc).2.lookup q.allocId = some .freed :=
+  lookup_insert _ _ _
 
-/-- A deallocated slot cannot be borrowed back to life. -/
-theorem not_isBorrowed_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
-    ¬ IsBorrowed (h.dealloc q n kind hDealloc).2 (q.loc.shift i) := by
-  simp [IsBorrowed, lookup_dealloc hDealloc hi]
+/-- Deallocated blocks stay in the heap, so their allocation id is never handed out again. -/
+theorem mem_dealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) : q.allocId ∈ (h.dealloc q n kind hDealloc).2 :=
+  mem_iff_lookup.mpr (by simp [lookup_dealloc hDealloc])
 
-/-- Allocation leaves the slots already in the heap untouched. -/
+/-- No cell of a deallocated block can be read or written. -/
+theorem not_isLive_dealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    {l : RawPtr T M'}
+    (hDealloc : CanDealloc h q n kind) (hId : l.allocId = q.allocId) :
+    ¬ IsLive (h.dealloc q n kind hDealloc).2 l := by
+  simp [IsLive, cell?, hId, lookup_dealloc hDealloc]
+
+/-- A deallocated block cannot be deallocated again. -/
+theorem not_canDealloc_dealloc {h : Heap} {q : RawPtr α M} {r : RawPtr β M'} {n n' : Nat}
+    {kind kind' : AllocKind} (hDealloc : CanDealloc h q n kind)
+    (hId : r.allocId = q.allocId) :
+    ¬ CanDealloc (h.dealloc q n kind hDealloc).2 r n' kind' := by
+  rw [canDealloc_iff']
+  rintro ⟨-, b, hLookup, -⟩
+  rw [hId, lookup_dealloc hDealloc] at hLookup
+  cases hLookup
+
+/-- A cell of a deallocated block cannot be borrowed back to life. -/
+theorem not_isBorrowed_dealloc {h : Heap} {q : RawPtr α M} {r : RawPtr β M'} {n : Nat}
+    {kind : AllocKind} (hDealloc : CanDealloc h q n kind)
+    (hId : r.allocId = q.allocId) :
+    ¬ IsBorrowed (h.dealloc q n kind hDealloc).2 r := by
+  simp [IsBorrowed, hId, lookup_dealloc hDealloc]
+
+/-! ### Allocation -/
+
+private theorem lookup_alloc {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
+    (h.alloc values kind).2.lookup (freshAllocId h) =
+      some (.live ⟨kind, α, values.map .owned⟩) :=
+  lookup_insert _ _ _
+
+/-- Allocation leaves the blocks already in the heap untouched. -/
 theorem isLive_alloc_of_mem {β : Type} {h : Heap} {values : List β} {kind : AllocKind}
-    {l : Loc} (hMem : l ∈ h) : IsLive (h.alloc values kind).2 l ↔ IsLive h l := by
-  have hNotMem : l ∉ allocation (freshLoc h) values kind :=
-    fun hFresh => compatible_freshLoc h values kind l hFresh hMem
-  unfold IsLive
-  rw [show (h.alloc values kind).2.lookup l = h.lookup l from
-    congrArg (Option.bind · Slot.cell?) (Finmap.lookup_union_right hNotMem)]
+    {l : RawPtr T M} (hMem : l.allocId ∈ h) : IsLive (h.alloc values kind).2 l ↔ IsLive h l := by
+  have hNe : l.allocId ≠ freshAllocId h := fun hEq => notMem_freshAllocId hEq hMem
+  simp only [IsLive, cell?, alloc, lookup_insert_ne _ _ hNe]
 
-/-- The end marker of an allocation is in the heap, so even an empty allocation reserves its id. -/
-theorem mem_alloc_end {α : Type} {kind : AllocKind} (h : Heap) (values : List α) :
-    (freshLoc h).shift values.length ∈ (h.alloc values kind).2 :=
-  Heap.mem_union.mpr (Or.inl (Heap.mem_union.mpr (Or.inr (mem_endMarker.mpr rfl))))
+/-- Even an empty allocation reserves its id. -/
+theorem mem_alloc {α : Type} {kind : AllocKind} (h : Heap) (values : List α) :
+    freshAllocId h ∈ (h.alloc values kind).2 :=
+  mem_iff_lookup.mpr (by simp [lookup_alloc])
 
-private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
-    (h.alloc values kind).2.impl.lookup ((freshLoc h).shift values.length) =
-      some (.endMarker kind) := by
-  have hNotRange :
-      (freshLoc h).shift values.length ∉ (array (freshLoc h) values).impl := by
-    intro hRange
-    obtain ⟨i, hi, hEq⟩ := mem_array.mp hRange
-    have hOffset := congrArg Loc.offset hEq
-    simp only [Loc.offset_shift] at hOffset
-    omega
-  have hEnd : (freshLoc h).shift values.length ∈
-      (endMarker ((freshLoc h).shift values.length) kind).impl :=
-    mem_endMarker.mpr rfl
-  show Finmap.lookup _ (((array (freshLoc h) values).impl ∪
-    (endMarker ((freshLoc h).shift values.length) kind).impl) ∪ h.impl) = _
-  rw [Finmap.lookup_union_left (Finmap.mem_union.mpr (Or.inr hEnd)),
-    Finmap.lookup_union_right hNotRange]
-  simp [endMarker]
+/-- The values of a fresh allocation are live, whatever the type of the pointer. -/
+theorem isLive_alloc {α : Type} {h : Heap} {values : List α} {kind : AllocKind} {i : Nat}
+    (hIndex : i < values.length) :
+    IsLive (h.alloc values kind).2 (⟨freshAllocId h, i⟩ : RawPtr T M) := by
+  simp [IsLive, cell?, lookup_alloc, hIndex]
 
-/-- The end marker of a fresh allocation holds no value. -/
-theorem not_isLive_alloc_end {β : Type} {kind : AllocKind} (h : Heap) (values : List β) :
-    ¬ IsLive (h.alloc values kind).2 ((freshLoc h).shift values.length) := by
-  simp [IsLive, Heap.lookup, lookup_alloc_end, Slot.cell?]
+/-- A fresh allocation has no cell past its values. -/
+theorem not_isLive_alloc_of_le {α : Type} {h : Heap} {values : List α} {kind : AllocKind}
+    {i : Nat} (hIndex : values.length ≤ i) :
+    ¬ IsLive (h.alloc values kind).2 (⟨freshAllocId h, i⟩ : RawPtr T M) := by
+  simp [IsLive, cell?, lookup_alloc, List.getElem?_eq_none hIndex]
 
-/-- The end marker of a fresh allocation records the kind of the allocation. -/
-theorem isEndMarker_alloc_end_iff {α : Type} (h : Heap) (values : List α)
+/-- A fresh allocation can be deallocated whole, and only for its kind. -/
+theorem canDealloc_alloc_iff {α : Type} {β : Type u} (h : Heap) (values : List α) (n : Nat)
     (kind kind' : AllocKind) :
-    IsEndMarker (h.alloc values kind).2 ((freshLoc h).shift values.length) kind' ↔
-      kind = kind' := by
-  simp [IsEndMarker, lookup_alloc_end]
+    CanDealloc (h.alloc values kind).2 (⟨freshAllocId h, 0⟩ : MutRawPtr β) n kind' ↔
+      kind = kind' ∧ values.length = n := by
+  rw [canDealloc_iff']
+  constructor
+  · rintro ⟨-, b, hLookup, hKind, hLen, -⟩
+    rw [lookup_alloc] at hLookup
+    cases hLookup
+    exact ⟨hKind, by simpa using hLen⟩
+  · rintro ⟨rfl, rfl⟩
+    exact ⟨rfl, _, by rw [lookup_alloc], rfl, by simp,
+      fun i hi => by simpa [RawPtr.shift] using isLive_alloc hi⟩
 
-theorem compatible_singleton {α : Type} {q : RawPtr α M} {r : RawPtr α M'} {value₁ value₂ : α}
-    (hNe : q.loc ≠ r.loc) :
+/-! ### Singletons -/
+
+/-- Singletons of different blocks are always compatible. -/
+theorem compatible_singleton_of_allocId_ne {α β : Type} {q : RawPtr α M} {r : RawPtr β M'}
+    {value₁ : α} {value₂ : β} {kind₁ kind₂ : AllocKind} {len₁ len₂ : Nat}
+    (hNe : q.allocId ≠ r.allocId) :
     PartialCommMonoid.Compatible
-      (singleton q value₁) (singleton r value₂) := by
-  intro address hMem₁ hMem₂
-  exact hNe ((mem_singleton.mp hMem₁).symm.trans (mem_singleton.mp hMem₂))
+      (singleton q value₁ kind₁ len₁) (singleton r value₂ kind₂ len₂) := by
+  intro a
+  show OptCompatible _ _
+  by_cases ha : a = r.allocId
+  · rw [lookup_singleton_ne fun hq => hNe (hq.symm.trans ha)]
+    trivial
+  · rw [lookup_singleton_ne ha]
+    cases (singleton q value₁ kind₁ len₁).lookup a <;> trivial
 
-theorem isValid_singleton {α : Type} (q : RawPtr α M) (value : α) :
-    IsValid (singleton q value) q := by
-  simp [IsValid, singleton, Heap.lookup, Slot.cell?]
+/-- Singletons at different offsets are compatible. In the same block they must agree on the
+type, the kind and the length. -/
+theorem compatible_singleton {α : Type} {q : RawPtr α M} {r : RawPtr α M'} {value₁ value₂ : α}
+    {kind : AllocKind} {len : Nat} (hOffset : q.offset ≠ r.offset) :
+    PartialCommMonoid.Compatible
+      (singleton q value₁ kind len) (singleton r value₂ kind len) := by
+  by_cases hb : q.allocId = r.allocId
+  swap
+  · exact compatible_singleton_of_allocId_ne hb
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    show OptCompatible _ _
+    rw [lookup_singleton, hb, lookup_singleton]
+    simp only [OptCompatible, BlockSlot.Compatible, Block.compatible_mk_iff, true_and]
+    refine Cell.forall₂_iff_getElem?.mpr ⟨by simp, fun i x y hx hy => ?_⟩
+    simp only [List.getElem?_set, List.length_replicate, List.getElem?_replicate] at hx hy
+    split at hx <;> split at hy <;> simp_all
+    all_goals (try obtain ⟨-, rfl⟩ := hx); all_goals (try obtain ⟨-, rfl⟩ := hy)
+    all_goals trivial
+  · show OptCompatible _ _
+    rw [lookup_singleton_ne ha]
+    trivial
 
-theorem read_singleton {α : Type} (q : RawPtr α M) (value : α)
-    (hValid : IsValid (singleton q value) q) :
-    (singleton q value).read q hValid = (value, singleton q value) := by
+theorem isValid_singleton {α : Type} (q : RawPtr α M) (value : α) (kind : AllocKind) {len : Nat}
+    (hOffset : q.offset < len) : IsValid (singleton q value kind len) q := by
+  simp [IsValid, cell?, lookup_singleton, hOffset]
+
+theorem read_singleton {α : Type} (q : RawPtr α M) (value : α) (kind : AllocKind) (len : Nat)
+    (hValid : IsValid (singleton q value kind len) q) :
+    (singleton q value kind len).read q hValid = (value, singleton q value kind len) := by
   unfold Heap.read
   split
-  · rename_i hLookup
-    rw [lookup_singleton] at hLookup
-    contradiction
-  · rename_i β stored hLookup
-    rw [lookup_singleton] at hLookup
-    cases hLookup
+  · rename_i hCell
+    simp [IsValid, hCell] at hValid
+  · rename_i β stored hCell
+    have hOffset : q.offset < len := by
+      by_contra hLe
+      simp [cell?, lookup_singleton, hLe] at hCell
+    simp [cell?, lookup_singleton, hOffset] at hCell
+    obtain ⟨rfl, hStored⟩ := hCell
+    cases hStored
     rfl
 
-theorem write_singleton {α : Type} (q : RawPtr α M)
-    (oldValue newValue : α)
-    (hValid : IsValid (singleton q oldValue) q) :
-    (singleton q oldValue).write q newValue hValid =
-      ((), singleton q newValue) :=
-  congrArg (Prod.mk ()) (Heap.ext_impl (by simp [singleton, Heap.insert]))
+theorem write_singleton {α : Type} (q : RawPtr α M) (oldValue newValue : α) (kind : AllocKind)
+    (len : Nat) (hValid : IsValid (singleton q oldValue kind len) q) :
+    (singleton q oldValue kind len).write q newValue hValid =
+      ((), singleton q newValue kind len) := by
+  refine congrArg (Prod.mk ()) ?_
+  show setOwned _ _ _ _ = _
+  rw [setOwned_of_lookup (lookup_singleton q oldValue kind len)]
+  apply ext
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_insert, lookup_singleton]
+    simp [List.set_set]
+  · rw [lookup_insert_ne _ _ ha, lookup_singleton_ne ha, lookup_singleton_ne ha]
 
 theorem Subheap.isValid {α : Type} {A h : Heap} {q : RawPtr α M} (hSub : Heap.Subheap A h)
     (hValid : IsValid A q) : IsValid h q := by
   obtain ⟨rest, -, rfl⟩ := hSub
   exact isValid_union_left hValid
 
-theorem Subheap.isLive {A h : Heap} {l : Loc} (hSub : Heap.Subheap A h)
+theorem Subheap.isLive {A h : Heap} {l : RawPtr T M} (hSub : Heap.Subheap A h)
     (hLive : IsLive A l) : IsLive h l := by
   obtain ⟨rest, -, rfl⟩ := hSub
   exact isLive_union_left hLive
 
-theorem Subheap.isEndMarker {l : Loc} {h : Heap} {kind : AllocKind}
-    (hSub : Heap.Subheap (endMarker l kind) h) : IsEndMarker h l kind := by
-  obtain ⟨rest, -, rfl⟩ := hSub
-  have hMem : l ∈ endMarker l kind := mem_endMarker.mpr rfl
-  show Finmap.lookup l ((endMarker l kind).impl ∪ rest.impl) = _
-  rw [Finmap.lookup_union_left hMem]
-  simp [endMarker]
-
-/-- The empty heap has no allocation. -/
-@[simp] theorem not_isEndMarker_empty (l : Loc) (kind : AllocKind) :
-    ¬ IsEndMarker (∅ : Heap) l kind := by
-  change ¬ Finmap.lookup l (∅ : HeapImpl) = some (Slot.endMarker kind)
-  simp
-
-theorem isLive_array {α : Type} {l : Loc} {values : List α} {i : Nat}
-    (hIndex : i < values.length) : IsLive (array l values) (l.shift i) := by
-  induction values generalizing l i with
-  | nil => simp at hIndex
-  | cons value rest ih =>
-    rw [array_cons]
-    cases i with
-    | zero => exact isLive_union_left (isLive_of_isValid (isValid_singleton _ value))
-    | succ j =>
-      have hCompatible : PartialCommMonoid.Compatible (singleton (⟨l⟩ : MutRawPtr α) value)
-          (array (l.shift 1) rest) := by
-        have hAppend := compatible_array_append l [value] rest
-        rwa [array_singleton] at hAppend
-      rw [PartialCommMonoid.union_comm_of_compatible hCompatible,
-        show l.shift (j + 1) = (l.shift 1).shift j by rw [Loc.shift_shift, Nat.add_comm]]
-      exact isLive_union_left (ih (by simpa using hIndex))
-
-/-- The values of a fresh allocation are live. -/
-theorem isLive_alloc {α : Type} {h : Heap} {values : List α} {kind : AllocKind} {i : Nat}
-    (hIndex : i < values.length) :
-    IsLive (h.alloc values kind).2 ((freshLoc h).shift i) :=
-  Subheap.isLive ((Subheap.union_left (compatible_array_endMarker _ _ _)).trans
-    (Subheap.union_left (compatible_freshLoc _ _ _))) (isLive_array hIndex)
-
-theorem read_of_subheap {α : Type} {q : RawPtr α M} {value : α} {h : Heap}
-    (hSub : Heap.Subheap (singleton q value) h)
-    (hValid : IsValid h q) : (h.read q hValid).1 = value := by
+theorem read_of_subheap {α : Type} {q : RawPtr α M} {value : α} {kind : AllocKind} {len : Nat}
+    {h : Heap} (hSub : Heap.Subheap (singleton q value kind len) h)
+    (hOffset : q.offset < len) (hValid : IsValid h q) : (h.read q hValid).1 = value := by
   obtain ⟨rest, hCompatible, rfl⟩ := hSub
-  have hValidSingleton := isValid_singleton q value
+  have hValidSingleton := isValid_singleton q value kind hOffset
   rw [show hValid = isValid_union_left hValidSingleton from
       Subsingleton.elim _ _,
     read_union_left hValidSingleton, read_singleton]
   rfl
 
-theorem isBorrowed_union_left {h₁ h₂ : Heap} {l : Loc} (hBorrowed : IsBorrowed h₁ l) :
-    IsBorrowed (h₁ ∪ h₂) l := by
-  show Finmap.lookup l (h₁.impl ∪ h₂.impl) = _
-  rw [Finmap.lookup_union_left (Finmap.mem_of_lookup_eq_some hBorrowed)]
-  exact hBorrowed
+/-- The block of a fresh allocation is the union of one singleton per value. -/
+theorem Subheap.singleton_allocation {α : Type} (a : AllocId) (values : List α)
+    (kind : AllocKind) {i : Nat} (hIndex : i < values.length) :
+    Heap.Subheap (singleton (⟨a, i⟩ : MutRawPtr α) values[i] kind values.length)
+      (allocation a values kind) := by
+  let rest : Heap := ⟨Finmap.singleton a
+    (.live ⟨kind, α, (values.map Cell.owned).set i .notOwned⟩)⟩
+  have hRest : ∀ b, rest.lookup b = if b = a then
+      some (.live ⟨kind, α, (values.map Cell.owned).set i .notOwned⟩) else none := by
+    intro b
+    split
+    · subst_vars; exact Finmap.lookup_singleton_eq
+    · rename_i hNe
+      exact lookup_eq_none.mpr fun hMem => hNe ((Finmap.mem_singleton _ _ _).mp hMem)
+  have hCells : List.Forall₂ Cell.Compatible
+      ((List.replicate values.length Cell.notOwned).set i (Cell.owned values[i]))
+      ((values.map Cell.owned).set i .notOwned) := by
+    refine Cell.forall₂_iff_getElem?.mpr ⟨by simp, fun j x y hx hy => ?_⟩
+    simp only [List.getElem?_set, List.length_replicate, List.getElem?_replicate,
+      List.length_map, List.getElem?_map] at hx hy
+    split at hx <;> split at hy <;> simp_all
+    all_goals (try obtain ⟨-, rfl⟩ := hx); all_goals (try obtain ⟨-, rfl⟩ := hy)
+    all_goals trivial
+  refine ⟨rest, fun b => ?_, ext fun b => ?_⟩
+  · by_cases hb : b = a
+    · subst hb
+      show OptCompatible ((singleton _ _ _ _).lookup _) _
+      rw [lookup_singleton, hRest, ite_eq_left rfl]
+      exact (Block.compatible_mk_iff _ _ _ _ _).mpr ⟨rfl, hCells⟩
+    · show OptCompatible ((singleton _ _ _ _).lookup _) _
+      rw [lookup_singleton_ne hb]
+      trivial
+  · rw [lookup_union]
+    by_cases hb : b = a
+    · subst hb
+      rw [lookup_singleton, hRest, ite_eq_left rfl]
+      rw [lookup_allocation]
+      dsimp only
+      simp only [Option.merge, BlockSlot.join, Block.join_mk, Cell.joinList_of_forall₂ hCells]
+      congr 3
+      apply List.ext_getElem?
+      intro j
+      simp only [List.getElem?_zipWith, List.getElem?_set, List.length_replicate,
+        List.getElem?_replicate, List.length_map, List.getElem?_map]
+      by_cases hj : j < values.length <;> by_cases hij : i = j <;>
+        simp_all [Cell.join]
+    · rw [lookup_singleton_ne hb, hRest, ite_eq_right hb]
+      exact lookup_allocation_ne hb
 
-theorem mem_borrowedSlot {l address : Loc} : address ∈ borrowedSlot l ↔ address = l := by
-  show address ∈ (Finmap.singleton l Slot.borrowed : HeapImpl) ↔ _
-  exact Finmap.mem_singleton _ _ _
+/-! ### Borrows -/
 
-theorem isBorrowed_borrowedSlot (l : Loc) : IsBorrowed (borrowedSlot l) l := by
-  simp [IsBorrowed, borrowedSlot]
+/-- `borrow` on a heap whose block at `q` is `b`. -/
+private theorem borrow_snd_of_lookup {α : Type} {h : Heap} {q : RawPtr α M}
+    (hValid : IsValid h q) {b : Block} (hLookup : h.lookup q.allocId = some (.live b)) :
+    (h.borrow q hValid).2 =
+      h.insert q.allocId (.live ⟨b.kind, b.ty, b.cells.set q.offset .notOwned⟩) := by
+  simp only [borrow, hLookup]
 
-theorem Subheap.isBorrowed {l : Loc} {h : Heap} (hSub : Heap.Subheap (borrowedSlot l) h) :
-    IsBorrowed h l := by
-  obtain ⟨rest, -, rfl⟩ := hSub
-  exact isBorrowed_union_left (isBorrowed_borrowedSlot l)
-
-theorem borrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (hValid : IsValid h₁ q) :
+theorem borrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M)
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hValid : IsValid h₁ q) :
     (h₁ ∪ h₂).borrow q (isValid_union_left hValid) =
-      Prod.map id (· ∪ h₂) (h₁.borrow q hValid) :=
-  Prod.ext (congrArg Prod.fst (read_union_left (h₂ := h₂) hValid) :) Heap.insert_union
+      Prod.map id (· ∪ h₂) (h₁.borrow q hValid) := by
+  obtain ⟨b, hLookup, hTy, x, hx⟩ := lookup_of_isValid hValid
+  refine Prod.ext (congrArg Prod.fst (read_union_left (h₂ := h₂) hValid) :) ?_
+  dsimp only [Prod.map]
+  rw [borrow_snd_of_lookup _ (lookup_union_live hLookup), borrow_snd_of_lookup _ hLookup]
+  apply ext
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_insert, lookup_union, lookup_insert]
+    have hBlock := hCompatible q.allocId
+    rw [hLookup] at hBlock
+    unfold cellsAt
+    rcases hs : h₂.lookup q.allocId with _ | (b₂ | _)
+    · simp [Option.merge, Cell.joinList_nil_right]
+    · rw [hs] at hBlock
+      simp only [OptCompatible, BlockSlot.Compatible] at hBlock
+      obtain ⟨k, t, c⟩ := b
+      obtain ⟨k₂, c₂, rfl⟩ := Block.eq_mk_of_compatible hBlock
+      dsimp only at hBlock hx ⊢
+      rw [Block.compatible_mk_iff] at hBlock
+      simp only [Option.merge, BlockSlot.join, Block.join_mk, Block.cellsAs_mk]
+      rw [Cell.joinList_set_notOwned]
+      intro y hy
+      have := (Cell.forall₂_iff_getElem?.mp hBlock.2).2 _ _ _ hx hy
+      simp [Cell.Compatible] at this
+    · rw [hs] at hBlock; exact hBlock.elim
+  · rw [lookup_insert_ne _ _ ha, lookup_union, lookup_union, lookup_insert_ne _ _ ha]
 
 theorem compatible_borrow_left {α : Type} {q : RawPtr α M} {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hValid : IsValid h₁ q) :
-    PartialCommMonoid.Compatible (h₁.borrow q hValid).2 h₂ :=
-  compatible_insert_left hCompatible (mem_of_isValid hValid)
+    PartialCommMonoid.Compatible (h₁.borrow q hValid).2 h₂ := by
+  obtain ⟨b, hLookup, -⟩ := lookup_of_isValid hValid
+  rw [borrow_snd_of_lookup hValid hLookup]
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    show OptCompatible ((h₁.insert _ _).lookup _) _
+    rw [lookup_insert]
+    have hBlock := hCompatible q.allocId
+    rw [hLookup] at hBlock
+    rcases hs : h₂.lookup q.allocId with _ | (b₂ | _)
+    · trivial
+    · rw [hs] at hBlock
+      simp only [OptCompatible, BlockSlot.Compatible] at hBlock ⊢
+      obtain ⟨k, t, c⟩ := b
+      obtain ⟨k₂, c₂, rfl⟩ := Block.eq_mk_of_compatible hBlock
+      dsimp only at hBlock ⊢
+      rw [Block.compatible_mk_iff] at hBlock ⊢
+      refine ⟨hBlock.1, Cell.forall₂_iff_getElem?.mpr ⟨by simp [hBlock.2.length_eq], ?_⟩⟩
+      intro i y z hy hz
+      rw [List.getElem?_set] at hy
+      split at hy
+      · simp at hy; obtain ⟨-, rfl⟩ := hy; cases z <;> trivial
+      · exact (Cell.forall₂_iff_getElem?.mp hBlock.2).2 i y z hy hz
+    · rw [hs] at hBlock; exact hBlock
+  · show OptCompatible ((h₁.insert _ _).lookup a) _
+    rw [lookup_insert_ne _ _ ha]
+    exact hCompatible a
 
-/-- A borrowed slot holds no value: no access goes through it until `endBorrow`. -/
+/-- A borrowed cell holds no value: no access goes through it until `endBorrow`. -/
 theorem not_isLive_borrow {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
-    ¬ IsLive (h.borrow q hValid).2 q.loc := by
-  simp [IsLive, Heap.lookup, Heap.borrow, Heap.insert, Slot.cell?]
+    ¬ IsLive (h.borrow q hValid).2 q := by
+  obtain ⟨b, hLookup, -⟩ := lookup_of_isValid hValid
+  rw [borrow_snd_of_lookup hValid hLookup]
+  simp only [IsLive, cell?, lookup_insert, List.getElem?_set]
+  split <;> simp_all
 
-theorem borrow_singleton {α : Type} (q : RawPtr α M) (value : α)
-    (hValid : IsValid (singleton q value) q) :
-    (singleton q value).borrow q hValid = (value, borrowedSlot q.loc) :=
-  Prod.ext (congrArg Prod.fst (read_singleton q value hValid) :)
-    (Heap.ext_impl (by simp [Heap.borrow, singleton, borrowedSlot, Heap.insert]))
+/-- A borrowed cell can be given back. -/
+theorem isBorrowed_borrow {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
+    IsBorrowed (h.borrow q hValid).2 q := by
+  obtain ⟨b, hLookup, hTy, x, hx⟩ := lookup_of_isValid hValid
+  rw [borrow_snd_of_lookup hValid hLookup]
+  have hi : q.offset < b.cells.length := (List.getElem?_eq_some_iff.mp hx).1
+  simp [IsBorrowed, lookup_insert, hTy, hi]
 
+private theorem lookup_borrowedBlock {α : Type} (q : RawPtr α M) (kind : AllocKind) (len : Nat) :
+    (borrowedBlock q kind len).lookup q.allocId =
+      some (.live ⟨kind, α, List.replicate len .notOwned⟩) :=
+  Finmap.lookup_singleton_eq
+
+theorem borrow_singleton {α : Type} (q : RawPtr α M) (value : α) (kind : AllocKind) (len : Nat)
+    (hValid : IsValid (singleton q value kind len) q) :
+    (singleton q value kind len).borrow q hValid = (value, borrowedBlock q kind len) := by
+  refine Prod.ext (congrArg Prod.fst (read_singleton q value kind len hValid) :) ?_
+  rw [borrow_snd_of_lookup hValid (lookup_singleton q value kind len)]
+  apply ext
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_insert, lookup_borrowedBlock]
+    simp only [List.set_set]
+    congr 3
+    apply List.ext_getElem?
+    intro j
+    simp only [List.getElem?_set, List.length_replicate, List.getElem?_replicate]
+    split <;> simp_all
+  · rw [lookup_insert_ne _ _ ha, lookup_singleton_ne ha]
+    exact (lookup_eq_none.mpr fun hMem => ha ((Finmap.mem_singleton _ _ _).mp hMem)).symm
+
+theorem isBorrowed_borrowedBlock {α : Type} (q : RawPtr α M) (kind : AllocKind) {len : Nat}
+    (hOffset : q.offset < len) : IsBorrowed (borrowedBlock q kind len) q := by
+  unfold IsBorrowed
+  rw [lookup_borrowedBlock]
+  simp [hOffset]
+
+/-- A frame that does not own the cell keeps it borrowed. -/
+theorem isBorrowed_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
+    (hBorrowed : IsBorrowed h₁ q) (hNotLive : ¬ IsLive h₂ q) :
+    IsBorrowed (h₁ ∪ h₂) q := by
+  unfold IsBorrowed at hBorrowed ⊢
+  split at hBorrowed
+  · rename_i b hLookup
+    rw [lookup_union_live hLookup]
+    refine ⟨hBorrowed.1, ?_⟩
+    rw [Cell.getElem?_joinList]
+    split
+    · rename_i hLen
+      rw [hBorrowed.2]
+      rcases hc : (h₂.cellsAt q.allocId b.ty)[q.offset]? with _ | (x | _)
+      · exfalso
+        have hi := hLen ▸ (List.getElem?_eq_some_iff.mp hBorrowed.2).1
+        simp [List.getElem?_eq_getElem hi] at hc
+      · exfalso
+        apply hNotLive
+        obtain ⟨k, t, c⟩ := b
+        dsimp only at hc
+        unfold cellsAt at hc
+        unfold IsLive cell?
+        rcases hs : h₂.lookup q.allocId with _ | (b₂ | _)
+        · simp [hs] at hc
+        · obtain ⟨k₂, t₂, c₂⟩ := b₂
+          rw [hs] at hc
+          by_cases hTy : t₂ = t
+          · subst hTy
+            simp only [Block.cellsAs_mk] at hc
+            simp [hc]
+          · simp [Block.cellsAs, hTy] at hc
+        · simp [hs] at hc
+      · rfl
+    · exact hBorrowed.2
+  · exact hBorrowed.elim
+
+/-- Framing for `endBorrow`, when the frame does not own the cell. -/
 theorem endBorrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (value : α)
-    (hBorrowed : IsBorrowed h₁ q.loc) :
-    (h₁ ∪ h₂).endBorrow q value (isBorrowed_union_left hBorrowed) =
-      Prod.map id (· ∪ h₂) (h₁.endBorrow q value hBorrowed) :=
-  congrArg (Prod.mk ()) Heap.insert_union
+    (hBorrowed : IsBorrowed h₁ q) (hNotLive : ¬ IsLive h₂ q) :
+    (h₁ ∪ h₂).endBorrow q value (isBorrowed_union_left hBorrowed hNotLive) =
+      Prod.map id (· ∪ h₂) (h₁.endBorrow q value hBorrowed) := by
+  unfold IsBorrowed at hBorrowed
+  split at hBorrowed
+  · rename_i b hLookup
+    exact congrArg (Prod.mk ()) (setOwned_union_left hLookup hBorrowed.1 _ _)
+  · exact hBorrowed.elim
 
 theorem compatible_endBorrow_left {α : Type} {q : RawPtr α M} {value : α} {h₁ h₂ : Heap}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hBorrowed : IsBorrowed h₁ q.loc) :
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hBorrowed : IsBorrowed h₁ q)
+    (hNotLive : ¬ IsLive h₂ q) :
     PartialCommMonoid.Compatible (h₁.endBorrow q value hBorrowed).2 h₂ :=
-  compatible_insert_left hCompatible (Finmap.mem_of_lookup_eq_some hBorrowed)
+  compatible_setOwned_left (hTy := ty_of_isBorrowed hBorrowed) hCompatible hNotLive
 
-theorem endBorrow_borrowedSlot {α : Type} (q : RawPtr α M) (value : α)
-    (hBorrowed : IsBorrowed (borrowedSlot q.loc) q.loc) :
-    (borrowedSlot q.loc).endBorrow q value hBorrowed = ((), singleton q value) :=
-  congrArg (Prod.mk ()) (Heap.ext_impl (by simp [singleton, borrowedSlot, Heap.insert]))
+theorem endBorrow_borrowedBlock {α : Type} (q : RawPtr α M) (value : α) (kind : AllocKind)
+    (len : Nat) (hBorrowed : IsBorrowed (borrowedBlock q kind len) q) :
+    (borrowedBlock q kind len).endBorrow q value hBorrowed = ((), singleton q value kind len) := by
+  refine congrArg (Prod.mk ()) ?_
+  show setOwned _ _ _ _ = _
+  rw [setOwned_of_lookup (lookup_borrowedBlock q kind len)]
+  apply ext
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_insert, lookup_singleton]
+    rfl
+  · rw [lookup_insert_ne _ _ ha, lookup_singleton_ne ha]
+    exact lookup_eq_none.mpr fun hMem => ha ((Finmap.mem_singleton _ _ _).mp hMem)
 
 end Heap
 
