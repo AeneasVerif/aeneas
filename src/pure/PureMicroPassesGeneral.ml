@@ -564,6 +564,11 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
     method! visit_Let env monadic lv rv next =
       [%ldebug "Visiting let:\n" ^ let_to_string ctx monadic lv rv next];
       match rv.e with
+      | _ when (not monadic) && is_result_ty rv.ty ->
+          (* The bound expression is a deferred monadic computation (for
+             instance, a stateful backward function without inputs): we must
+             not evaluate it, nor move its let-bindings outside *)
+          super#visit_Let env monadic lv rv next
       | Let (rmonadic, rlv, rrv, rnext) ->
           [%ldebug "Case: inner let"];
           (* Case 1: move the inner let outside then re-visit *)
@@ -676,9 +681,24 @@ let simplify_let_bindings =
 
     This micro pass removes those duplicate function calls.
 
-    TODO: this micro-pass will not be sound anymore once we allow stateful
-    (backward) functions. *)
-let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
+    Remark: we do not factor the monadic calls to functions which may access the
+    heap (because they manipulate raw pointers): reading twice through a pointer
+    may give different results if the heap was modified in between. *)
+let simplify_duplicate_calls_visitor (ctx : ctx) (def : fun_decl) =
+  let fun_infos = ctx.trans_ctx.fun_ctx.fun_infos in
+  (* We can't know which implementation a trait method call refers to *)
+  let crate_is_stateful = FunsAnalysis.crate_is_stateful fun_infos in
+  let may_access_heap (bound : texpr) : bool =
+    match (fst (destruct_apps bound)).e with
+    | Qualif { id = FunOrOp (Fun (Pure (RawPtrRead | RawPtrWrite))); _ } -> true
+    | Qualif { id = FunOrOp (Fun (Pure _) | Unop _ | Binop _); _ } -> false
+    | Qualif { id = FunOrOp (Fun (FromLlbc (FunId fid, _))); _ } ->
+        FunsAnalysis.is_stateful fun_infos fid
+    | FVar _ ->
+        (* Monadic backward functions are the stateful ones *)
+        true
+    | _ -> crate_is_stateful
+  in
   object (self)
     inherit [_] map_expr as super
 
@@ -688,13 +708,13 @@ let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
          variables *)
       let env =
         let factor =
-          monadic
-          ||
-          match destruct_apps bound with
-          | { e = FVar _; _ }, _ :: _ ->
-              (* May be a backward function call *)
-              true
-          | _ -> false
+          if monadic then not (may_access_heap bound)
+          else
+            match destruct_apps bound with
+            | { e = FVar _; _ }, _ :: _ ->
+                (* May be a backward function call *)
+                true
+            | _ -> false
         in
         if factor then
           match tpat_to_texpr def.item_meta.span pat with
