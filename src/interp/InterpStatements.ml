@@ -37,12 +37,12 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let _, mv = InterpPaths.read_place span access p ctx in
+    let _, mv, path = eval_place span access p ctx in
     let dummy_id = ctx.fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = VBottom } in
-    let ctx = write_place span access p nv ctx in
+    let ctx = write_path span path nv ctx in
     [%ltrace
       "place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -101,7 +101,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   let rv, ctx = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
-  let _, mv = InterpPaths.read_place span Write p ctx in
+  let _, mv, path = eval_place span Write p ctx in
   let dest_vid = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
@@ -110,7 +110,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
     (not (bottom_in_value ctx.ended_regions rv))
     "The value to move contains bottom";
   (* Update the destination *)
-  let ctx = write_place span Write p rv ctx in
+  let ctx = write_path span path rv ctx in
   (* Debug *)
   [%ltrace
     "- rv: "
@@ -980,7 +980,7 @@ and eval_switch_raw (config : config) (span : Meta.span) (data : switch_data)
       (* Access the place *)
       let access = Read in
       let expand_prim_copy = false in
-      let _, p_v, ctx, cf_read_p =
+      let _, p_v, _, ctx, cf_read_p =
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
