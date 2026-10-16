@@ -1,6 +1,7 @@
+/- `alloc::vec::into_iter` -/
 module
 public import Aeneas.Std.Core.Iter
-public import Aeneas.Std.Vec
+public import Aeneas.Std.Alloc.Vec
 public section
 
 namespace Aeneas.Std
@@ -88,6 +89,5 @@ def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
   alloc.vec.into_iter.IntoIter T → F →
   Result (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
   fun it f => .ok ⟨ it, f ⟩
-
 
 end Aeneas.Std
