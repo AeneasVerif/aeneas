@@ -75,4 +75,36 @@ def join_nested_shared_in_loop (b : Bool) (n : Std.U32) : Result Std.I32 := do
   else join_nested_shared_in_loop_loop1 n 0#u32
        ok 2#i32
 
+/-- [join_duplicate::NestedStaticRef]
+    Source: 'tests/src/join-duplicate.rs', lines 39:0-39:53
+    Visibility: public -/
+@[reducible]
+def NestedStaticRef := Std.U8
+
+/-- [join_duplicate::join_nested_shared_input]:
+    Source: 'tests/src/join-duplicate.rs', lines 41:0-44:1
+    Visibility: public -/
+def join_nested_shared_input
+  (_m : NestedStaticRef) (a : Bool) : Result Unit := do
+  if a
+  then if a
+       then ok ()
+       else ok ()
+  else if a
+       then ok ()
+       else ok ()
+
+/-- [join_duplicate::join_nested_shared_input_generic]:
+    Source: 'tests/src/join-duplicate.rs', lines 46:0-49:1
+    Visibility: public -/
+def join_nested_shared_input_generic
+  (_m : Std.U8) (a : Bool) : Result Unit := do
+  if a
+  then if a
+       then ok ()
+       else ok ()
+  else if a
+       then ok ()
+       else ok ()
+
 end join_duplicate
