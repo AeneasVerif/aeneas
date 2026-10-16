@@ -49,6 +49,7 @@ let borrows_infos_to_string (indent : string)
 type borrow_kind = BMut | BShared | BReserved [@@deriving show]
 
 (** Check that:
+    - loan ids are unique
     - loans and borrows are correctly related
     - a two-phase borrow can't point to a value inside an abstraction *)
 let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
@@ -78,6 +79,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
   let register_shared_loan (loan_in_abs : bool) (bid : BorrowId.id) : unit =
     let infos = !borrows_infos in
+    [%sanity_check] span (not (BorrowId.Map.mem bid infos));
     (* Insert the loan info *)
     let info =
       {
