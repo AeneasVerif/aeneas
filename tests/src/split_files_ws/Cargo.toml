@@ -1,0 +1,5 @@
+# A cargo workspace, so that charon reports paths relative to this directory
+# rather than to the crate root.
+[workspace]
+members = ["crates/wsmember"]
+resolver = "2"

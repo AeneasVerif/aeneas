@@ -196,19 +196,27 @@ The `body` returns `ControlFlow.cont x'` to continue or `ControlFlow.done y` to 
 
 ### 3.1 Generated File Layout
 
-When Aeneas translates a Rust crate, it produces several Lean files:
+With `-split-files`, Aeneas writes one Lean module per Rust source file,
+mirroring the crate. For a crate `my_crate` extracted with `-dest D`:
 
-| File                               | Contents                                                                                    |
-|------------------------------------|---------------------------------------------------------------------------------------------|
-| **Types.lean**                     | Rust type definitions (structs, enums) as Lean inductive types (imports TypesExternal.lean) |
-| **Funs.lean**                      | Rust function bodies as Lean definitions (imports Types.lean and FunsExternal.lean)         |
-| **TypesExternal_Template.lean**    | Template for hand-written models of opaque/external types                                   |
-| **FunsExternal_Template.lean**     | Template for hand-written models of external functions (e.g., from Rust's standard library) |
-| **TypesExternal.lean**             | User-maintained file with type models (never overwritten by Aeneas)                         |
-| **FunsExternal.lean**              | User-maintained file with function models (never overwritten by Aeneas)                     |
+| File                                                            | Contents                                                                                     |
+|-----------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| **D/MyCrate.lean**                                              | Entry point that imports every module                                                        |
+| **D/MyCrate/Foo.lean**                                          | The types and functions of `src/foo.rs` (`src/foo/bar.rs` gives `MyCrate/Foo/Bar.lean`)      |
+| **TypesExternal_Template.lean**, **FunsExternal_Template.lean** | Templates for hand-written models of the types and functions from external dependencies      |
+| **TypesExternal.lean**, **FunsExternal.lean**                   | The user's copies of the templates (never overwritten by Aeneas)                             |
 
-> **Tip:** Use the `-split-files` option to have Aeneas generate one file per
-> declaration group as detailed in the above table. This is helpful for large crates.
+Two things can make the modules differ from the source files:
+- **Bundles:** Lean modules can't import each other in a cycle, so source files
+  whose declarations depend on each other in a cycle are combined into one
+  bundle module.
+- **Layers:** a file whose opaque declarations form dependency cycles with transparent
+  ones, we have to split the file into layers (e.g. `Foo/Part1.lean`,
+  `Foo/Opaques2_Template.lean`, `Foo/Part3.lean`), and `Foo.lean` imports them
+  all. The `Opaques` templates are filled in like the external ones.
+
+The older layout, one `Types.lean` and one `Funs.lean` for the whole crate, is
+available with `-split-files-legacy`.
 
 ### 3.2 Scalar Types
 
@@ -411,7 +419,8 @@ representation.
 ```
 
 Useful options:
-- `-split-files` — one file per declaration group
+- `-split-files` — one Lean module per Rust source file (mirrors the crate
+  structure); also emits a `Crate.lean` entry point by default (unless `-subdir`)
 - `-dest DIR` — output directory for generated files
 
 **6. Import and verify:**
