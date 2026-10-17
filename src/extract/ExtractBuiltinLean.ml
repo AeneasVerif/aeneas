@@ -436,6 +436,9 @@ let lean_builtin_funs =
       "core.array.Array.index_mut";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 140 *)
     mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
+    (* file: "Aeneas/Std/Core/Char.lean", line: 9 *)
+    mk_fun "core::char::methods::{char}::is_ascii"
+      "core.char.methods.Char.is_ascii" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
