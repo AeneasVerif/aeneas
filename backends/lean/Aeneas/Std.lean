@@ -2,6 +2,7 @@ module
 public import Aeneas.Std.Alloc
 public import Aeneas.Std.Array
 public import Aeneas.Std.Core
+public import Aeneas.Std.Float
 public import Aeneas.Std.Heap
 public import Aeneas.Std.HeapLemmas
 public import Aeneas.Std.Primitives
@@ -15,6 +16,7 @@ public import Aeneas.Std.String
 public import Aeneas.Std.StringDef
 public import Aeneas.Std.StringIter
 public import Aeneas.Std.Target
+public import Aeneas.Std.Utf8
 public import Aeneas.Data.Tuples
 public import Aeneas.Std.RangeIter
 import Aeneas.Std.HeapTests

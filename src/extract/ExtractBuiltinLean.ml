@@ -190,6 +190,10 @@ let lean_builtin_types =
     mk_type "core::sync::atomic::AtomicBool" "core.sync.atomic.AtomicBool";
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 12 *)
     mk_type "core::sync::atomic::AtomicU32" "core.sync.atomic.AtomicU32";
+    (* file: "Aeneas/Std/Float.lean", line: 13 *)
+    mk_type "f32" "F32";
+    (* file: "Aeneas/Std/Float.lean", line: 16 *)
+    mk_type "f64" "F64";
   ]
 
 let lean_builtin_consts = []
@@ -415,6 +419,12 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
+    (* file: "Aeneas/Std/Float.lean", line: 19 *)
+    mk_fun "core::clone::impls::{core::clone::Clone<f32>}::clone"
+      "core.clone.impls.CloneF32.clone";
+    (* file: "Aeneas/Std/Float.lean", line: 22 *)
+    mk_fun "core::clone::impls::{core::clone::Clone<f64>}::clone"
+      "core.clone.impls.CloneF64.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 23 *)
     mk_fun "core::cmp::Eq::assert_fields_are_eq"
       "core.cmp.Eq.assert_fields_are_eq.default";
@@ -492,6 +502,10 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Default.lean", line: 12 *)
     mk_fun "core::default::{core::default::Default<bool>}::default"
       "core.default.DefaultBool.default";
+    (* file: "Aeneas/Std/Float.lean", line: 31 *)
+    mk_fun "core::f32::{f32}::to_bits" "core.f32.F32.to_bits";
+    (* file: "Aeneas/Std/Float.lean", line: 34 *)
+    mk_fun "core::f64::{f64}::to_bits" "core.f64.F64.to_bits";
     (* file: "Aeneas/Std/Scalar/Display.lean", line: 58 *)
     mk_fun "core::fmt::num::imp::{core::fmt::Display<i128>}::fmt"
       "core.fmt.num.imp.DisplayI128.fmt";
@@ -1510,6 +1524,9 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
     (* file: "Aeneas/Std/Slice.lean", line: 1008 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
+    (* file: "Aeneas/Std/Utf8.lean", line: 9 *)
+    mk_fun "core::str::converts::from_utf8_unchecked"
+      "core.str.converts.from_utf8_unchecked";
     (* file: "Aeneas/Std/StringIter.lean", line: 18 *)
     mk_fun
       "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, \
@@ -1955,6 +1972,10 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/NonNull.lean", line: 76 *)
     mk_trait_impl "core::marker::Copy<core::ptr::non_null::NonNull<@T>>"
       "NonNull.Insts.CoreMarkerCopy";
+    (* file: "Aeneas/Std/Float.lean", line: 25 *)
+    mk_trait_impl "core::marker::Copy<f32>" "core.marker.CopyF32";
+    (* file: "Aeneas/Std/Float.lean", line: 28 *)
+    mk_trait_impl "core::marker::Copy<f64>" "core.marker.CopyF64";
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 25 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"
