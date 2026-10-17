@@ -44,6 +44,7 @@ package «tests» {}
 @[default_target] lean_lib FnPtrGeneric
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib GenericUnitOutput
+@[default_target] lean_lib GlobalHeapInit
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib HigherRankedTraitBounds
 @[default_target] lean_lib ImplConstSelf

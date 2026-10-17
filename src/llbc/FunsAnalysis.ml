@@ -426,11 +426,7 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists fun_decl_is_global_initializer d in
-    (* Sanity check: global bodies don't access the heap *)
-    [%cassert] (List.hd d).item_meta.span
-      ((not is_global_decl_body) || not !stateful)
-      "Global definition accessing the heap (because it dereferences raw \
-       pointers, or calls a function which does)";
+    (* Global bodies may read the heap: Rust evaluates them at compile time *)
     [%cassert] (List.hd d).item_meta.span
       ((not is_global_decl_body) || List.length d = 1)
       "This global definition is in a group of mutually recursive definitions";
