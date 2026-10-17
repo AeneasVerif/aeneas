@@ -102,6 +102,14 @@ end
 @[expose] def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
+/-- `c as uN`: the code point of the character, truncated if `uN` has less than 32 bits. -/
+@[expose] def UScalar.cast_fromChar (ty : UScalarTy) (c : Char) : UScalar ty :=
+  ⟨ c.val.toBitVec.setWidth ty.numBits ⟩
+
+/-- `c as iN`: the code point of the character, truncated if `iN` has less than 32 bits. -/
+@[expose] def IScalar.cast_fromChar (ty : IScalarTy) (c : Char) : IScalar ty :=
+  ⟨ c.val.toBitVec.setWidth ty.numBits ⟩
+
 /-!
 # Casts: Theorems
 -/

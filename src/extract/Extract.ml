@@ -483,6 +483,21 @@ let extract_cast_kind_gen (span : Meta.span)
              in
              let tgt = integer_type_to_string tgt in
              (cast_str, None, Some tgt)
+         | TChar, (TInt _ | TUInt _) ->
+             (* [c as uN] gives the code point of [c], truncated if [uN] has
+                less than 32 bits *)
+             let tgt = literal_as_integer tgt in
+             let cast_str =
+               match backend () with
+               | Lean ->
+                   if Scalars.integer_type_is_signed tgt then
+                     "IScalar.cast_fromChar"
+                   else "UScalar.cast_fromChar"
+               | Coq | FStar | HOL4 ->
+                   admit_string __FILE__ __LINE__ span
+                     "Unsupported: casts from char"
+             in
+             (cast_str, None, Some (integer_type_to_string tgt))
          | TInt _, TBool | TUInt _, TBool ->
              (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
              [%craise] span "Unexpected cast: integer to bool"
