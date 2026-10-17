@@ -572,6 +572,18 @@ def FromI128I128 : core.convert.From I128 I128 := {
   «from» := fun x => ok (num.FromI128I128.from x)
 }
 
+/-! ## `From<bool>` instance records -/
+
+@[reducible]
+def FromU32Bool : core.convert.From U32 Bool := {
+  «from» := fun x => ok (num.FromU32Bool.from x)
+}
+
+@[reducible]
+def FromU64Bool : core.convert.From U64 Bool := {
+  «from» := fun x => ok (num.FromU64Bool.from x)
+}
+
 end core.convert
 
 open ScalarElab

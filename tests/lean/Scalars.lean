@@ -301,8 +301,38 @@ def test_try_from_usize_u32_ok : Result Unit := do
 /- Unit test for [scalars::test_try_from_usize_u32_ok] -/
 #guard (test_try_from_usize_u32_ok).reducesTo ()
 
+/-- [scalars::from_bool_u64]:
+    Source: 'tests/src/scalars.rs', lines 206:0-208:1 -/
+def from_bool_u64 (b : Bool) : Result Std.U64 := do
+  ok (core.convert.num.FromU64Bool.from b)
+
+/-- [scalars::from_bool_generic]:
+    Source: 'tests/src/scalars.rs', lines 212:0-214:1 -/
+def from_bool_generic
+  {T : Type _} (coreconvertFromTBoolInst : core.convert.From T Bool) 
+  (b : Bool) :
+  Result T
+  := do
+  coreconvertFromTBoolInst.«from» b
+
+/-- [scalars::test_from_bool]:
+    Source: 'tests/src/scalars.rs', lines 217:0-222:1
+    Visibility: public -/
+def test_from_bool : Result Unit := do
+  let i ← from_bool_u64 true
+  massert (i = 1#u64 : Bool)
+  let i1 ← from_bool_u64 false
+  massert (i1 = 0#u64 : Bool)
+  let i2 ← from_bool_generic core.convert.FromU32Bool true
+  massert (i2 = 1#u32 : Bool)
+  let i3 ← from_bool_generic core.convert.FromU64Bool false
+  massert (i3 = 0#u64 : Bool)
+
+/- Unit test for [scalars::test_from_bool] -/
+#guard (test_from_bool).reducesTo ()
+
 /-- [scalars::checked_div]:
-    Source: 'tests/src/scalars.rs', lines 206:0-211:1 -/
+    Source: 'tests/src/scalars.rs', lines 228:0-233:1 -/
 def checked_div
   (a : Std.U32) (b : Std.U32) : Result (core.result.Result Std.U32 Unit) := do
   if (b = 0#u32 : Bool)
@@ -311,7 +341,7 @@ def checked_div
        ok (core.result.Result.Ok i)
 
 /-- [scalars::use_question_mark]:
-    Source: 'tests/src/scalars.rs', lines 213:0-216:1 -/
+    Source: 'tests/src/scalars.rs', lines 235:0-238:1 -/
 def use_question_mark
   (a : Std.U32) (b : Std.U32) : Result (core.result.Result Std.U32 Unit) := do
   let r ← checked_div a b
@@ -325,7 +355,7 @@ def use_question_mark
       Std.U32 (core.convert.FromSame Unit) residual
 
 /-- [scalars::test_question_mark_ok]:
-    Source: 'tests/src/scalars.rs', lines 219:0-223:1
+    Source: 'tests/src/scalars.rs', lines 241:0-245:1
     Visibility: public -/
 def test_question_mark_ok : Result Unit := do
   let r ← use_question_mark 10#u32 2#u32
@@ -338,7 +368,7 @@ def test_question_mark_ok : Result Unit := do
 #guard (test_question_mark_ok).reducesTo ()
 
 /-- [scalars::test_question_mark_err]:
-    Source: 'tests/src/scalars.rs', lines 226:0-229:1
+    Source: 'tests/src/scalars.rs', lines 248:0-251:1
     Visibility: public -/
 def test_question_mark_err : Result Unit := do
   let r ← use_question_mark 10#u32 0#u32

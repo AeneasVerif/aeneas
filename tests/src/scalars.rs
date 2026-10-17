@@ -200,6 +200,28 @@ pub fn test_try_from_usize_u32_ok() {
 }
 
 // ============================================================================
+// From<bool>
+// ============================================================================
+
+fn from_bool_u64(b: bool) -> u64 {
+    u64::from(b)
+}
+
+// Going through a trait bound makes the extracted code refer to the instance
+// record (`core.convert.FromU32Bool`) rather than to the conversion function.
+fn from_bool_generic<T: From<bool>>(b: bool) -> T {
+    T::from(b)
+}
+
+#[verify::test]
+pub fn test_from_bool() {
+    assert!(from_bool_u64(true) == 1);
+    assert!(from_bool_u64(false) == 0);
+    assert!(from_bool_generic::<u32>(true) == 1);
+    assert!(from_bool_generic::<u64>(false) == 0);
+}
+
+// ============================================================================
 // `?` operator on Result (branch / from_residual)
 // ============================================================================
 
