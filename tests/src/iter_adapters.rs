@@ -1,5 +1,6 @@
 //@ [!lean] skip
 #![feature(register_tool)]
+#![feature(step_trait)]
 #![register_tool(verify)]
 
 //! Tests for iterator adapters: enumerate, take, and range iteration
@@ -201,6 +202,37 @@ pub fn test_take_exhausted_then_next() {
 // forward_checked, backward_checked via range iteration corner cases.
 // ============================================================================
 
+/// Signed backward steps may cross zero but must stay within the type's bounds.
+#[verify::test]
+pub fn test_signed_backward_checked_boundaries() {
+    assert!(<i8 as std::iter::Step>::backward_checked(0, 1).unwrap() == -1);
+    assert!(<i8 as std::iter::Step>::backward_checked(5, 7).unwrap() == -2);
+    assert!(<i8 as std::iter::Step>::backward_checked(-128, 0).unwrap() == -128);
+    assert!(<i8 as std::iter::Step>::backward_checked(127, 255).unwrap() == -128);
+    assert!(<i8 as std::iter::Step>::backward_checked(-128, 1).is_none());
+    assert!(<i8 as std::iter::Step>::backward_checked(127, 256).is_none());
+}
+
+/// A reversed signed range keeps yielding values below zero.
+#[verify::test]
+pub fn test_range_rev_negative() {
+    let mut value = 0i32;
+    for i in (-3i32..0i32).rev() {
+        value = value * 10 + i;
+    }
+    assert!(value == -123);
+}
+
+/// Reversing a positive signed range preserves its existing behavior.
+#[verify::test]
+pub fn test_range_rev_positive() {
+    let mut value = 0i32;
+    for i in (1i32..4i32).rev() {
+        value = value * 10 + i;
+    }
+    assert!(value == 321);
+}
+
 /// Range 0..1 yields exactly one element (forward_checked(0, 1) = Some(1))
 #[verify::test]
 pub fn test_range_single_element() {
@@ -324,6 +356,16 @@ pub fn test_step_by_u8_near_max() {
 // ============================================================================
 // RangeInclusive tests
 // ============================================================================
+
+/// A reversed inclusive signed range also keeps yielding values below zero.
+#[verify::test]
+pub fn test_range_inclusive_rev_negative() {
+    let mut value = 0i32;
+    for i in (-3i32..=-1i32).rev() {
+        value = value * 10 + i;
+    }
+    assert!(value == -123);
+}
 
 /// RangeInclusive `a..=b` yields a, a+1, ..., b (inclusive)
 #[verify::test]

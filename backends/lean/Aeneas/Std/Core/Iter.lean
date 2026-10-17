@@ -281,12 +281,12 @@ def core.iter.range.UScalarStep.backward_checked {ty : UScalarTy}
       (by have := start.hBounds; omega)))
   else ok none
 
-/-- Generic `backward_checked` for all unsigned scalar types. -/
+/-- Generic `backward_checked` for all signed scalar types. -/
 def core.iter.range.IScalarStep.backward_checked {ty : IScalarTy}
     (start : IScalar ty) (n : Usize) : Result (Option (IScalar ty)) :=
-  if h : n.val ≤ start.val then
+  if h : IScalar.min ty ≤ start.val - n.val then
     ok (some (IScalar.ofIntCore (start.val - n.val)
-      (by have := start.hBounds; omega)))
+      (by cases ty <;> grind)))
   else ok none
 
 /-! ### `forward_overflowing` / `backward_overflowing` for scalars
