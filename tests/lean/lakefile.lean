@@ -128,6 +128,7 @@ package «tests» {}
 @[default_target] lean_lib RawPointersGeneric
 @[default_target] lean_lib RawPointersSpecs
 @[default_target] lean_lib RawPointersTraitImpl
+@[default_target] lean_lib RawPointerSub
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib RyuRawPointers

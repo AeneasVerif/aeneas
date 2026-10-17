@@ -632,7 +632,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 28 *)
     mk_fun "core::intrinsics::discriminant_value"
       "core.intrinsics.discriminant_value";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 518 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 530 *)
     mk_fun "core::intrinsics::transmute" "core.mem.transmute";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 534 *)
     mk_fun
@@ -1155,66 +1155,70 @@ let lean_builtin_funs =
       "core.option.Option.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 400 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::add" "RawPtr.add";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 572 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 584 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::as_ref_unchecked"
       "RawPtr.as_ref_unchecked" ~stateful_lifetimes:[ 0 ];
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 442 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 454 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::cast" "RawPtr.cast"
       ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 413 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::offset" "RawPtr.offsetBy";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 430 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 442 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::offset_from" "RawPtr.offset_from";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 457 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 469 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 449 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 461 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read_unaligned"
       "RawPtr.read_unaligned";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 464 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 476 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read_volatile" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 490 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 425 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::sub" "RawPtr.sub";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 502 *)
     mk_fun "core::ptr::copy" "core.ptr.copy";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 499 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 511 *)
     mk_fun "core::ptr::copy_nonoverlapping" "core.ptr.copy_nonoverlapping";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 527 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 539 *)
     mk_fun "core::ptr::drop_in_place" "core.ptr.drop_in_place";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 542 *)
-    mk_fun "core::ptr::from_mut" "core.ptr.from_mut" ~stateful_lifetimes:[ 0 ];
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 554 *)
+    mk_fun "core::ptr::from_mut" "core.ptr.from_mut" ~stateful_lifetimes:[ 0 ];
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 566 *)
     mk_fun "core::ptr::from_ref" "core.ptr.from_ref" ~stateful_lifetimes:[ 0 ];
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 396 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::add" "RawPtr.add";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 563 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 575 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::as_mut_unchecked"
       "RawPtr.as_mut_unchecked" ~stateful_lifetimes:[ 0 ];
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 578 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 590 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::as_ref_unchecked"
       "RawPtr.as_ref_unchecked" ~stateful_lifetimes:[ 0 ];
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 438 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 450 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::cast" "RawPtr.cast" ~can_fail:false
       ~lift:false;
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 432 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 444 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" "RawPtr.cast_const"
       ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 404 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::offset" "RawPtr.offsetBy";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 418 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 430 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::offset_from" "RawPtr.offset_from";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 462 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 474 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 454 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 466 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read_unaligned"
       "RawPtr.read_unaligned";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 465 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 477 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read_volatile" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 480 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 417 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::sub" "RawPtr.sub";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 492 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write" "MutRawPtr.write";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 514 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 526 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_bytes" "core.ptr.write_bytes";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 472 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 484 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_unaligned"
       "MutRawPtr.write_unaligned";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 486 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 498 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_volatile" "MutRawPtr.write";
     (* file: "Aeneas/Std/Core/NonNull.lean", line: 66 *)
     mk_fun
@@ -1249,23 +1253,23 @@ let lean_builtin_funs =
     mk_fun
       "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::new_unchecked"
       "NonNull.new_unchecked";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 587 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 599 *)
     mk_fun "core::ptr::null" "core.ptr.null" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 590 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 602 *)
     mk_fun "core::ptr::null_mut" "core.ptr.null_mut" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 463 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 475 *)
     mk_fun "core::ptr::read" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 455 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 467 *)
     mk_fun "core::ptr::read_unaligned" "RawPtr.read_unaligned";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 466 *)
-    mk_fun "core::ptr::read_volatile" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 485 *)
-    mk_fun "core::ptr::write" "MutRawPtr.write";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 508 *)
-    mk_fun "core::ptr::write_bytes" "core.ptr.write_bytes";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 478 *)
+    mk_fun "core::ptr::read_volatile" "RawPtr.read";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 497 *)
+    mk_fun "core::ptr::write" "MutRawPtr.write";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 520 *)
+    mk_fun "core::ptr::write_bytes" "core.ptr.write_bytes";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 490 *)
     mk_fun "core::ptr::write_unaligned" "MutRawPtr.write_unaligned";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 487 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 499 *)
     mk_fun "core::ptr::write_volatile" "MutRawPtr.write";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 108 *)
     mk_fun

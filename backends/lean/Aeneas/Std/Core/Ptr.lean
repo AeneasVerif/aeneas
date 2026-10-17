@@ -412,6 +412,18 @@ def RawPtr.offsetBy {T : Type} [Pointee T] (q : RawPtr T M) (count : Isize) :
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset"] RawPtr.offsetBy
 
+/-- `sub` by an unsigned number of values: the cells between the result and the pointer must be
+live cells of the pointee (in particular, the result stays in the allocation). -/
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::sub"]
+def RawPtr.sub {T : Type} [Pointee T] (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
+  let target : Int := q.loc.offset - count.val * Pointee.size T
+  Result.guardedModify
+    (fun h => 0 ≤ target ∧ HeapOp.Live (Pointee.Cell T) h
+      ⟨q.loc.allocId, target.toNat⟩ (count.val * Pointee.size T))
+    fun h _ => (⟨⟨q.loc.allocId, target.toNat⟩⟩, h)
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::sub"] RawPtr.sub
+
 /-- The distance between two pointers, in values: they must point into the same allocation, the
 cells between them must be live cells of the pointee, the distance must be a multiple of the size
 of `T`, which must not be zero-sized. -/
