@@ -1625,6 +1625,9 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::split_at" "core.slice.Slice.split_at";
     (* file: "Aeneas/Std/Slice.lean", line: 948 *)
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 494 *)
+    mk_fun "core::slice::{[@T]}::split_first_chunk"
+      "core.slice.Slice.split_first_chunk";
     (* file: "Aeneas/Std/Slice.lean", line: 1008 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
     (* file: "Aeneas/Std/Utf8.lean", line: 9 *)

@@ -489,4 +489,14 @@ def Array.Insts.CoreConvertAsMutSlice (T : Type _) (N : Std.Usize) :
   as_mut := Array.Insts.CoreConvertAsMutSlice.as_mut
 }
 
+/-- The first `N` elements of a slice as an array, and the rest of the slice (`none` if the slice
+has less than `N` elements). -/
+@[expose, rust_fun "core::slice::{[@T]}::split_first_chunk"]
+def core.slice.Slice.split_first_chunk {T : Type _} (N : Usize) (s : Slice T) :
+    Result (Option ((Array T N) × (Slice T))) :=
+  if h : N.val ≤ s.length then
+    ok (some (Array.from (s.val.take N.val) (by simp; scalar_tac),
+      Slice.from (s.val.drop N.val) (by scalar_tac)))
+  else ok none
+
 end Aeneas.Std
