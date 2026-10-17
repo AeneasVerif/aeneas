@@ -43,7 +43,7 @@ def write_loop_loop.body
   (n : Std.Usize) (p : MutRawPtr Std.U8) (i : Std.Usize) :
   Result (ControlFlow Std.Usize Unit)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let p1 ← RawPtr.add p i
     MutRawPtr.write p1 0#u8
@@ -76,7 +76,7 @@ def view_in_loop_loop.body
   (n : Std.Usize) (data : Slice Std.U8) (i : Std.Usize) :
   Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Slice Std.U8))
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
     let p1 ← RawPtr.add p i

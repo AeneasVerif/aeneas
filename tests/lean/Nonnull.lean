@@ -150,7 +150,7 @@ def sum_loop.body
   (i : Std.Usize) (s : Std.U32) (cur : NonNull Node) (i1 : Std.Usize) :
   Result (ControlFlow (Std.U32 × (NonNull Node) × Std.Usize) Std.U32)
   := do
-  if i1 < i
+  if (i1 < i : Bool)
   then
     let (n, as_ref_back) ← NonNull.as_ref cur
     let s1 ← lift (core.num.U32.wrapping_add s n.value)
@@ -245,7 +245,7 @@ instance : Pointee Iter := Pointee.typed Iter (Pointee.nonZero (Option (NonNull
     Visibility: public -/
 def Iter.next
   (self : Iter) : Result ((Option Std.U32) × Iter × (Result Unit)) := do
-  if self.len = 0#usize
+  if (self.len = 0#usize : Bool)
   then ok (none, { self with _marker := () }, ok ())
   else
     let cf ← core.option.Option.Insts.CoreOpsTry.branch self.cur
@@ -287,7 +287,7 @@ def increment_loop.body
   (i : Std.Usize) (cur : NonNull Node) (i1 : Std.Usize) :
   Result (ControlFlow ((NonNull Node) × Std.Usize) Unit)
   := do
-  if i1 < i
+  if (i1 < i : Bool)
   then
     let (n, as_mut_back, _) ← NonNull.as_mut cur
     let i2 ← lift (core.num.U32.wrapping_add n.value 1#u32)

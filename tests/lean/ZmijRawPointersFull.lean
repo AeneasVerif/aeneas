@@ -178,7 +178,7 @@ def Pow10SignificandTable.compute (i : Std.U32) : Result uint128 := do
   let c0 ← lift (core.num.U64.wrapping_mul h1.lo m1)
   let i8 ← lift (core.num.U64.wrapping_mul h1.hi m1)
   let c1 ← lift (core.num.U64.wrapping_add h11 i8)
-  let i9 ← lift (UScalar.cast_fromBool .U64 (c1 < h11))
+  let i9 ← lift (UScalar.cast_fromBool .U64 (c1 < h11 : Bool))
   let i10 ← umul128_hi64 h1.hi m1
   let c2 ← i9 + i10
   let i11 ← c2 >>> 63#i32
@@ -221,7 +221,7 @@ def Pow10SignificandTable.new_loop.body
   Result (ControlFlow ((Array Std.U64 1236#usize) × Std.Usize) (Array Std.U64
     1236#usize))
   := do
-  if i < Pow10SignificandTable.NUM_POW10S
+  if (i < Pow10SignificandTable.NUM_POW10S : Bool)
   then
     if Pow10SignificandTable.COMPRESS
     then ok (done data)
@@ -350,7 +350,7 @@ def DIGITS2 : Digits2 :=
 /-- [zmij_raw_pointers_full::digits2]:
     Source: 'tests/src/zmij-raw-pointers-full.rs', lines 229:0-236:1 -/
 def digits2 (value : Std.Usize) : Result Std.U16 := do
-  massert (value < 100#usize)
+  massert (value < 100#usize : Bool)
   let a := DIGITS2
   let s ← lift (Array.to_slice a)
   let (p, as_ptr_back) ← Slice.as_ptr s
@@ -363,7 +363,7 @@ def digits2 (value : Std.Usize) : Result Std.U16 := do
 /-- [zmij_raw_pointers_full::read_digits2]:
     Source: 'tests/src/zmij-raw-pointers-full.rs', lines 239:0-246:1 -/
 def read_digits2 (value : Std.Usize) : Result Std.U16 := do
-  massert (value < 100#usize)
+  massert (value < 100#usize : Bool)
   let a := DIGITS2
   let s ← lift (Array.to_slice a)
   let (p, as_ptr_back) ← Slice.as_ptr s
@@ -410,7 +410,7 @@ def write_fixed
   := do
   let i ← lift (UScalar.hcast .I32 length)
   let i1 ← i - 1#i32
-  if i1 <= dec_exp
+  if (i1 <= dec_exp : Bool)
   then
     let p ← RawPtr.add buffer 1#usize
     let p1 := RawPtr.cast_const p
@@ -428,7 +428,7 @@ def write_fixed
     let i8 ← i7 + 3#usize
     RawPtr.add buffer i8
   else
-    if 0#i32 <= dec_exp
+    if (0#i32 <= dec_exp : Bool)
     then
       let p ← RawPtr.add buffer 1#usize
       let p1 := RawPtr.cast_const p
@@ -478,7 +478,7 @@ def write_exponent
   Result (MutRawPtr Std.U8)
   := do
   let e_sign ←
-    if dec_exp >= 0#i32
+    if (dec_exp >= 0#i32 : Bool)
     then
       do
       let i ← lift (core.convert.num.FromU16U8.from 43#u8)
@@ -492,10 +492,11 @@ def write_exponent
       let i2 ← lift (core.convert.num.FromU16U8.from 101#u8)
       ok (i1 ||| i2)
   let buffer1 ← RawPtr.add buffer 1#usize
-  let dec_exp1 ← if dec_exp >= 0#i32
+  let dec_exp1 ← if (dec_exp >= 0#i32 : Bool)
                    then ok dec_exp
                    else -. dec_exp
-  let i ← lift (core.convert.num.FromUsizeBool.from (dec_exp1 >= 10#i32))
+  let i ←
+    lift (core.convert.num.FromUsizeBool.from (dec_exp1 >= 10#i32 : Bool))
   let buffer2 ← RawPtr.add buffer1 i
   let digit ←
     if USE_UMUL128_HI64
@@ -513,7 +514,8 @@ def write_exponent
   let i1 ← lift (UScalar.cast .U8 digit)
   let i2 ← 48#u8 + i1
   MutRawPtr.write buffer2 i2
-  let i3 ← lift (core.convert.num.FromUsizeBool.from (dec_exp1 >= 100#i32))
+  let i3 ←
+    lift (core.convert.num.FromUsizeBool.from (dec_exp1 >= 100#i32 : Bool))
   let buffer3 ← RawPtr.add buffer2 i3
   let i4 ← digit * 100#u32
   let i5 ← lift (UScalar.hcast .I32 i4)

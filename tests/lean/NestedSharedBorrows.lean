@@ -85,9 +85,9 @@ def S.method_try
     Source: 'tests/src/nested-shared-borrows.rs', lines 57:0-66:1
     Visibility: public -/
 def shared_reborrow_same_tuple : Result Unit := do
-  massert (2#i32 = 2#i32)
-  massert (1#i32 = 1#i32)
-  massert (1#i32 = 1#i32)
+  massert (2#i32 = 2#i32 : Bool)
+  massert (1#i32 = 1#i32 : Bool)
+  massert (1#i32 = 1#i32 : Bool)
 
 /- Unit test for [nested_shared_borrows::shared_reborrow_same_tuple] -/
 #guard (shared_reborrow_same_tuple).reducesTo ()
@@ -96,8 +96,8 @@ def shared_reborrow_same_tuple : Result Unit := do
     Source: 'tests/src/nested-shared-borrows.rs', lines 69:0-77:1
     Visibility: public -/
 def shared_reborrow_same_box : Result Unit := do
-  massert (2#i32 = 2#i32)
-  massert (1#i32 = 1#i32)
+  massert (2#i32 = 2#i32 : Bool)
+  massert (1#i32 = 1#i32 : Bool)
 
 /- Unit test for [nested_shared_borrows::shared_reborrow_same_box] -/
 #guard (shared_reborrow_same_box).reducesTo ()
@@ -106,8 +106,8 @@ def shared_reborrow_same_box : Result Unit := do
     Source: 'tests/src/nested-shared-borrows.rs', lines 80:0-91:1
     Visibility: public -/
 def shared_reborrow_inside_mut_borrow : Result Unit := do
-  massert (2#i32 = 2#i32)
-  massert (1#i32 = 1#i32)
+  massert (2#i32 = 2#i32 : Bool)
+  massert (1#i32 = 1#i32 : Bool)
 
 /- Unit test for [nested_shared_borrows::shared_reborrow_inside_mut_borrow] -/
 #guard (shared_reborrow_inside_mut_borrow).reducesTo ()
@@ -125,7 +125,7 @@ def shared_reborrow_from_input
     Visibility: public -/
 def shared_reborrow_from_input_test : Result Unit := do
   let r ← shared_reborrow_from_input ((1#u32, 2#u32), (1#u32, 2#u32))
-  massert (r = 2#u32)
+  massert (r = 2#u32 : Bool)
 
 /- Unit test for [nested_shared_borrows::shared_reborrow_from_input_test] -/
 #guard (shared_reborrow_from_input_test).reducesTo ()

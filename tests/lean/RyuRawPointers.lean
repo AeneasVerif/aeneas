@@ -35,7 +35,7 @@ def DIGIT_TABLE : Array Std.U8 20#usize :=
 def write_exponent
   (k : Std.Isize) (result : MutRawPtr Std.U8) : Result Std.Usize := do
   let (k1, result1) ←
-    if k < 0#isize
+    if (k < 0#isize : Bool)
     then
       do
       MutRawPtr.write result 45#u8
@@ -46,7 +46,7 @@ def write_exponent
   let i ← lift (IScalar.hcast .U8 k1)
   let i1 ← 48#u8 + i
   MutRawPtr.write result1 i1
-  let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
+  let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize : Bool))
   i2 + 1#usize
 
 /-- [ryu_raw_pointers::write_two_digits]:

@@ -64,7 +64,7 @@ def test_map_some : Result Unit := do
       test_map_some.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 (some 1#u32)
       ()
   let i ← core.option.Option.unwrap o
-  massert (i = 2#u32)
+  massert (i = 2#u32 : Bool)
 
 /- Unit test for [options::test_map_some] -/
 #guard (test_map_some).reducesTo ()
@@ -131,7 +131,7 @@ def test_map_capture : Result Unit := do
       test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 (some
       1#u32) 3#u32
   let i ← core.option.Option.unwrap o
-  massert (i = 4#u32)
+  massert (i = 4#u32 : Bool)
 
 /- Unit test for [options::test_map_capture] -/
 #guard (test_map_capture).reducesTo ()
@@ -148,7 +148,7 @@ def
   (c : test_is_some_and_true.closure) (tupled_args : Std.U32) :
   Result Bool
   := do
-  ok (tupled_args > 1#u32)
+  ok (tupled_args > 1#u32 : Bool)
 
 /-- Trait implementation: [options::test_is_some_and_true::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_true::{closure}}]
     Source: 'tests/src/options.rs', lines 46:35-46:44 -/
@@ -184,7 +184,7 @@ def
   (c : test_is_some_and_false.closure) (tupled_args : Std.U32) :
   Result Bool
   := do
-  ok (tupled_args > 1#u32)
+  ok (tupled_args > 1#u32 : Bool)
 
 /-- Trait implementation: [options::test_is_some_and_false::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_false::{closure}}]
     Source: 'tests/src/options.rs', lines 51:36-51:45 -/
@@ -203,7 +203,7 @@ def test_is_some_and_false : Result Unit := do
     core.option.Option.is_some_and
       test_is_some_and_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
       (some 0#u32) ()
-  massert (¬ b)
+  massert (! b)
 
 /- Unit test for [options::test_is_some_and_false] -/
 #guard (test_is_some_and_false).reducesTo ()
@@ -239,7 +239,7 @@ def test_is_some_and_none : Result Unit := do
     core.option.Option.is_some_and
       test_is_some_and_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
       none ()
-  massert (¬ b)
+  massert (! b)
 
 /- Unit test for [options::test_is_some_and_none] -/
 #guard (test_is_some_and_none).reducesTo ()
@@ -272,7 +272,7 @@ def test_bool_then_true : Result Unit := do
     core.bool.Bool.then
       test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32 true ()
   let i ← core.option.Option.unwrap o
-  massert (i = 1#u32)
+  massert (i = 1#u32 : Bool)
 
 /- Unit test for [options::test_bool_then_true] -/
 #guard (test_bool_then_true).reducesTo ()
@@ -315,7 +315,7 @@ def test_bool_then_false : Result Unit := do
 def ok_if_even
   (x : Std.U32) : Result (core.result.Result Std.U32 Std.U32) := do
   let i ← x % 2#u32
-  if i = 0#u32
+  if (i = 0#u32 : Bool)
   then ok (core.result.Result.Ok x)
   else ok (core.result.Result.Err x)
 
@@ -325,7 +325,7 @@ def ok_if_even
 def test_result_unwrap_or_ok : Result Unit := do
   let r ← ok_if_even 2#u32
   let i ← lift (core.result.Result.unwrap_or r 0#u32)
-  massert (i = 2#u32)
+  massert (i = 2#u32 : Bool)
 
 /- Unit test for [options::test_result_unwrap_or_ok] -/
 #guard (test_result_unwrap_or_ok).reducesTo ()
@@ -336,7 +336,7 @@ def test_result_unwrap_or_ok : Result Unit := do
 def test_result_unwrap_or_err : Result Unit := do
   let r ← ok_if_even 3#u32
   let i ← lift (core.result.Result.unwrap_or r 0#u32)
-  massert (i = 0#u32)
+  massert (i = 0#u32 : Bool)
 
 /- Unit test for [options::test_result_unwrap_or_err] -/
 #guard (test_result_unwrap_or_err).reducesTo ()

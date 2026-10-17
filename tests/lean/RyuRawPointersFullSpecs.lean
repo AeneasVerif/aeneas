@@ -139,7 +139,7 @@ theorem expBytes_length_le (k : Int) : (expBytes k).length ≤ 4 := by
 theorem write_sign.spec (k : Isize) (result : MutRawPtr U8) (vs : List U8)
     (hk : -1000 < k.val) (hlen : 1 ≤ vs.length) :
     ⦃ result ↦* vs ⦄
-      (if k < 0#isize then do
+      (if (k < 0#isize : Bool) then do
         MutRawPtr.write result 45#u8
         let result2 ← RawPtr.add result 1#usize
         let k2 ← -. k
@@ -166,7 +166,7 @@ theorem sign_length_le (k : Int) : (sign k).length ≤ 1 := by simp [sign]; spli
 theorem write_digits_lt100.spec (k k1 : Isize) (result : MutRawPtr U8) (vs : List U8)
     (hk1 : k1.val = k.val.natAbs) (hk : k.val.natAbs < 100) (hlen : 3 ≤ vs.length) :
     ⦃ result ↦* (sign k.val ++ vs.drop (sign k.val).length) ⦄
-      (if k1 >= 10#isize then do
+      (if (k1 >= 10#isize : Bool) then do
         let s ← lift (Array.to_slice digit_table.DIGIT_TABLE)
         let (p, as_ptr_back) ← Slice.as_ptr s
         let i ← k1 * 2#isize

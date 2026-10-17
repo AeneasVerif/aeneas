@@ -25,7 +25,7 @@ namespace loops_rec
     Visibility: public -/
 @[rust_loop]
 def iter_loop (max : Std.U32) (i : Std.U32) : Result Std.U32 := do
-  if i < max
+  if (i < max : Bool)
   then let i1 ← i + 1#u32
        iter_loop max i1
   else ok i
@@ -43,7 +43,7 @@ def iter (max : Std.U32) : Result Std.U32 := do
     Visibility: public -/
 @[rust_loop]
 def sum_loop (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
-  if i < max
+  if (i < max : Bool)
   then let s1 ← s + i
        let i1 ← i + 1#u32
        sum_loop max i1 s1
@@ -63,7 +63,7 @@ def sum (max : Std.U32) : Result Std.U32 := do
 @[rust_loop]
 def sum_with_mut_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
-  if i < max
+  if (i < max : Bool)
   then
     let ms ← s + i
     let mi ← i + 1#u32
@@ -84,7 +84,7 @@ def sum_with_mut_borrows (max : Std.U32) : Result Std.U32 := do
 @[rust_loop]
 def sum_with_shared_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
-  if i < max
+  if (i < max : Bool)
   then
     let i1 ← i + 1#u32
     let s1 ← s + i1
@@ -107,7 +107,7 @@ def sum_array_loop
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
   Result Std.U32
   := do
-  if i < N
+  if (i < N : Bool)
   then
     let i1 ← Array.index_usize a i
     let s1 ← s + i1
@@ -132,7 +132,7 @@ def clear_loop
   Result (alloc.vec.Vec Std.U32)
   := do
   let i1 := alloc.vec.Vec.len v
-  if i < i1
+  if (i < i1 : Bool)
   then
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) v
@@ -164,7 +164,7 @@ inductive List (T : Type _) where
 @[rust_loop]
 def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   match ls with
-  | List.Cons y tl => if y = x
+  | List.Cons y tl => if (y = x : Bool)
                       then ok true
                       else list_mem_loop x tl
   | List.Nil => ok false
@@ -185,7 +185,7 @@ def list_nth_mut_loop
   {T : Type _} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match ls with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok (x, fun t => List.Cons t tl)
     else
       let i1 ← i - 1#u32
@@ -212,7 +212,7 @@ def list_nth_shared_loop
   {T : Type _} (ls : List T) (i : Std.U32) : Result T := do
   match ls with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth_shared_loop tl i1
@@ -236,7 +236,7 @@ def get_elem_mut_loop
   := do
   match ls with
   | List.Cons y tl =>
-    if y = x
+    if (y = x : Bool)
     then ok (y, fun i => List.Cons i tl)
     else
       let (i, back) ← get_elem_mut_loop x tl
@@ -268,9 +268,10 @@ def get_elem_mut
 def get_elem_shared_loop
   (x : Std.Usize) (ls : List Std.Usize) : Result Std.Usize := do
   match ls with
-  | List.Cons y tl => if y = x
-                      then ok y
-                      else get_elem_shared_loop x tl
+  | List.Cons y tl =>
+    if (y = x : Bool)
+    then ok y
+    else get_elem_shared_loop x tl
   | List.Nil => fail panic
 partial_fixpoint
 
@@ -307,7 +308,7 @@ def list_nth_mut_with_id_loop
   {T : Type _} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
   match ls with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok (x, fun t => List.Cons t tl)
     else
       let i1 ← i - 1#u32
@@ -337,7 +338,7 @@ def list_nth_shared_with_id_loop
   {T : Type _} (i : Std.U32) (ls : List T) : Result T := do
   match ls with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth_shared_with_id_loop i1 tl
@@ -364,7 +365,7 @@ def list_nth_mut_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1, fun t => List.Cons t tl0, fun t => List.Cons t tl1)
       else
         let i1 ← i - 1#u32
@@ -400,7 +401,7 @@ def list_nth_shared_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1)
       else let i1 ← i - 1#u32
            list_nth_shared_pair_loop tl0 tl1 i1
@@ -430,7 +431,7 @@ def list_nth_mut_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1, fun t => List.Cons t tl0, fun t => List.Cons t tl1)
       else
         let i1 ← i - 1#u32
@@ -472,7 +473,7 @@ def list_nth_shared_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1)
       else let i1 ← i - 1#u32
            list_nth_shared_pair_merge_loop tl0 tl1 i1
@@ -502,7 +503,7 @@ def list_nth_mut_shared_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1, fun t => List.Cons t tl0)
       else
         let i1 ← i - 1#u32
@@ -536,7 +537,7 @@ def list_nth_mut_shared_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1, fun t => List.Cons t tl0)
       else
         let i1 ← i - 1#u32
@@ -570,7 +571,7 @@ def list_nth_shared_mut_pair_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1, fun t => List.Cons t tl1)
       else
         let i1 ← i - 1#u32
@@ -604,7 +605,7 @@ def list_nth_shared_mut_pair_merge_loop
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
-      if i = 0#u32
+      if (i = 0#u32 : Bool)
       then ok (x0, x1, fun t => List.Cons t tl1)
       else
         let i1 ← i - 1#u32
@@ -631,7 +632,7 @@ def list_nth_shared_mut_pair_merge
     Visibility: public -/
 @[rust_loop]
 def ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
-  if i > 0#u32
+  if (i > 0#u32 : Bool)
   then let i1 ← i - 1#u32
        ignore_input_mut_borrow_loop i1
   else ok ()
@@ -649,7 +650,7 @@ def ignore_input_mut_borrow (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
     Visibility: public -/
 @[rust_loop]
 def incr_ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
-  if i > 0#u32
+  if (i > 0#u32 : Bool)
   then let i1 ← i - 1#u32
        incr_ignore_input_mut_borrow_loop i1
   else ok ()
@@ -669,7 +670,7 @@ def incr_ignore_input_mut_borrow
     Visibility: public -/
 @[rust_loop]
 def ignore_input_shared_borrow_loop (i : Std.U32) : Result Unit := do
-  if i > 0#u32
+  if (i > 0#u32 : Bool)
   then let i1 ← i - 1#u32
        ignore_input_shared_borrow_loop i1
   else ok ()
@@ -692,7 +693,7 @@ def issue500_1.bar (_a : Bool) : Result Bool := do
     Source: 'tests/src/loops-rec.rs', lines 384:4-386:5 -/
 @[rust_loop]
 def issue500_1_loop (a : Bool) : Result Bool := do
-  if 0#i32 < 0#i32
+  if (0#i32 < 0#i32 : Bool)
   then let a1 ← issue500_1.bar a
        issue500_1_loop a1
   else ok a
@@ -734,7 +735,7 @@ def issue500_3.A := Array Bool 1#usize
     Source: 'tests/src/loops-rec.rs', lines 406:4-406:18 -/
 @[rust_loop]
 def issue500_3_loop : Result Unit := do
-  if 0#i32 < 0#i32
+  if (0#i32 < 0#i32 : Bool)
   then issue500_3_loop
   else ok ()
 partial_fixpoint
@@ -795,7 +796,7 @@ def issue400_1_loop
   (i : Std.I32) :
   Result (Std.I32 × Std.I32)
   := do
-  if i < 32#i32
+  if (i < 32#i32 : Bool)
   then
     let (y1, back1) ←
       if cond
@@ -825,7 +826,7 @@ def issue400_2_loop
     Std.I32)))
   := do
   let i1 := Slice.len conds
-  if i < i1
+  if (i < i1 : Bool)
   then
     let b ← Slice.index_usize conds i
     let (y1, z1, back1) ←
@@ -864,7 +865,7 @@ def copy_carray_loop
   (a : Array Std.U32 2#usize) (i : Std.Usize) :
   Result (Array Std.U32 2#usize)
   := do
-  if i < 2#usize
+  if (i < 2#usize : Bool)
   then
     let i1 ← Array.index_usize copy_carray.CARRAY i
     let a1 ← Array.update a i i1
@@ -885,7 +886,7 @@ def copy_carray
 @[rust_loop]
 def iter_local_mut_borrow_loop (p : Std.I32) : Result Unit := do
   let p1 ← p + 1#i32
-  if p1 = 10#i32
+  if (p1 = 10#i32 : Bool)
   then ok ()
   else iter_local_mut_borrow_loop p1
 partial_fixpoint
@@ -900,7 +901,7 @@ def iter_local_mut_borrow : Result Unit := do
     Source: 'tests/src/loops-rec.rs', lines 499:4-505:5 -/
 @[rust_loop]
 def iter_local_shared_borrow_loop : Result Unit := do
-  if 0#i32 = 0#i32
+  if (0#i32 = 0#i32 : Bool)
   then ok ()
   else iter_local_shared_borrow_loop
 partial_fixpoint
@@ -928,7 +929,7 @@ def insert_in_list_loop
   := do
   match ls with
   | AList.Cons ckey cvalue tl =>
-    if ckey = key
+    if (ckey = key : Bool)
     then ok (false, AList.Cons ckey value tl)
     else
       let (b, back) ← insert_in_list_loop key value tl
@@ -955,7 +956,7 @@ def reborrow_const.reborrow (x : Std.U64) : Result Std.U64 := do
     Source: 'tests/src/loops-rec.rs', lines 542:4-544:5 -/
 @[rust_loop]
 def reborrow_const_loop : Result Unit := do
-  if 0#i32 < 5#i32
+  if (0#i32 < 5#i32 : Bool)
   then let _ ← reborrow_const.reborrow 0#u64
        reborrow_const_loop
   else ok ()
@@ -970,7 +971,7 @@ partial_fixpoint
     Source: 'tests/src/loops-rec.rs', lines 554:8-554:32 -/
 @[rust_loop]
 def decode_loop0_loop0 (dst_coeff : Std.U8) : Result Unit := do
-  if dst_coeff > 32#u8
+  if (dst_coeff > 32#u8 : Bool)
   then decode_loop0_loop0 dst_coeff
   else ok ()
 partial_fixpoint
@@ -982,11 +983,11 @@ def decode_loop0
   (pe_dst : Slice Std.U8) (i : Std.Usize) :
   Result (Bool × (Slice Std.U8))
   := do
-  if i < 128#usize
+  if (i < 128#usize : Bool)
   then
     let (dst_coeff, index_mut_back) ← Slice.index_mut_usize pe_dst i
     decode_loop0_loop0 dst_coeff
-    if dst_coeff > 32#u8
+    if (dst_coeff > 32#u8 : Bool)
     then let pe_dst1 := index_mut_back dst_coeff
          ok (true, pe_dst1)
     else let i1 ← i + 1#usize
@@ -1006,10 +1007,10 @@ def decode (pe_dst : Slice Std.U8) : Result (Bool × (Slice Std.U8)) := do
 @[rust_loop]
 def as_radix_minimized_loop
   (scalar : Array Std.U64 4#usize) (i : Std.Usize) : Result Unit := do
-  if i < 4#usize
+  if (i < 4#usize : Bool)
   then
     let _ ←
-      if i = 0#usize
+      if (i = 0#usize : Bool)
       then do
            let i1 ← Array.index_usize scalar i
            i1 >>> 1#i32

@@ -87,7 +87,7 @@ def write_zeros_loop.body
   (p : MutRawPtr Std.U8) (n : Std.Usize) (i : Std.Usize) :
   Result (ControlFlow Std.Usize Unit)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let p1 ← RawPtr.add p i
     MutRawPtr.write p1 48#u8

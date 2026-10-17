@@ -101,7 +101,7 @@ def shared_bool_scrutinee
   let f ← if k.value
             then ok x
             else ok y
-  if x >= f
+  if (x >= f : Bool)
   then ok 1#u32
   else ok 0#u32
 
@@ -112,7 +112,7 @@ def shared_integer_scrutinee
   let f ← match n with
             | 0#uscalar => ok x
             | _ => ok y
-  if x >= f
+  if (x >= f : Bool)
   then ok 1#u32
   else ok 0#u32
 

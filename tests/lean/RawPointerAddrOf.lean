@@ -72,7 +72,7 @@ def TABLE : Array Std.U16 4#usize :=
 def read_static (i : Std.Usize) : Result Std.U16 := do
   let (p, from_ref_back) ← core.ptr.from_ref TABLE
   let p1 := RawPtr.cast Std.U16 p
-  if i < 4#usize
+  if (i < 4#usize : Bool)
   then let p2 ← RawPtr.add p1 i
        let i1 ← RawPtr.read p2
        from_ref_back

@@ -200,7 +200,7 @@ def test_is_multiple_of_true : Result Unit := do
     Visibility: public -/
 def test_is_multiple_of_false : Result Unit := do
   let b ← core.num.Usize.is_multiple_of 7#usize 3#usize
-  massert (¬ b)
+  massert (! b)
 
 /- Unit test for [scalars::test_is_multiple_of_false] -/
 #guard (test_is_multiple_of_false).reducesTo ()
@@ -212,7 +212,7 @@ def test_is_multiple_of_zero_divisor : Result Unit := do
   let b ← core.num.Usize.is_multiple_of 0#usize 0#usize
   massert b
   let b1 ← core.num.Usize.is_multiple_of 5#usize 0#usize
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [scalars::test_is_multiple_of_zero_divisor] -/
 #guard (test_is_multiple_of_zero_divisor).reducesTo ()
@@ -224,7 +224,7 @@ def test_is_power_of_two_u8 : Result Unit := do
   let b ← core.num.U8.is_power_of_two 64#u8
   massert b
   let b1 ← core.num.U8.is_power_of_two 65#u8
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [scalars::test_is_power_of_two_u8] -/
 #guard (test_is_power_of_two_u8).reducesTo ()
@@ -236,7 +236,7 @@ def test_is_power_of_two_u16 : Result Unit := do
   let b ← core.num.U16.is_power_of_two 256#u16
   massert b
   let b1 ← core.num.U16.is_power_of_two 255#u16
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [scalars::test_is_power_of_two_u16] -/
 #guard (test_is_power_of_two_u16).reducesTo ()
@@ -250,7 +250,7 @@ def test_is_power_of_two_u32 : Result Unit := do
   let b1 ← core.num.U32.is_power_of_two 1024#u32
   massert b1
   let b2 ← core.num.U32.is_power_of_two 1023#u32
-  massert (¬ b2)
+  massert (! b2)
 
 /- Unit test for [scalars::test_is_power_of_two_u32] -/
 #guard (test_is_power_of_two_u32).reducesTo ()
@@ -260,9 +260,9 @@ def test_is_power_of_two_u32 : Result Unit := do
     Visibility: public -/
 def test_is_power_of_two_u64 : Result Unit := do
   let b ← core.num.U64.is_power_of_two 0#u64
-  massert (¬ b)
+  massert (! b)
   let b1 ← core.num.U64.is_power_of_two 3#u64
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [scalars::test_is_power_of_two_u64] -/
 #guard (test_is_power_of_two_u64).reducesTo ()
@@ -284,7 +284,7 @@ def test_is_power_of_two_usize : Result Unit := do
   let b ← core.num.Usize.is_power_of_two 8#usize
   massert b
   let b1 ← core.num.Usize.is_power_of_two 0#usize
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [scalars::test_is_power_of_two_usize] -/
 #guard (test_is_power_of_two_usize).reducesTo ()
@@ -305,7 +305,7 @@ def test_try_from_usize_u32_ok : Result Unit := do
     Source: 'tests/src/scalars.rs', lines 206:0-211:1 -/
 def checked_div
   (a : Std.U32) (b : Std.U32) : Result (core.result.Result Std.U32 Unit) := do
-  if b = 0#u32
+  if (b = 0#u32 : Bool)
   then ok (core.result.Result.Err ())
   else let i ← a / b
        ok (core.result.Result.Ok i)
@@ -332,7 +332,7 @@ def test_question_mark_ok : Result Unit := do
   let b ← core.result.Result.is_ok r
   massert b
   let i ← core.result.Result.unwrap core.fmt.DebugUnit r
-  massert (i = 6#u32)
+  massert (i = 6#u32 : Bool)
 
 /- Unit test for [scalars::test_question_mark_ok] -/
 #guard (test_question_mark_ok).reducesTo ()
@@ -343,7 +343,7 @@ def test_question_mark_ok : Result Unit := do
 def test_question_mark_err : Result Unit := do
   let r ← use_question_mark 10#u32 0#u32
   let b ← core.result.Result.is_ok r
-  massert (¬ b)
+  massert (! b)
 
 /- Unit test for [scalars::test_question_mark_err] -/
 #guard (test_question_mark_err).reducesTo ()

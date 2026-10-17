@@ -96,7 +96,7 @@ def loop_global_loop.body
   (n : Std.Usize) (s : Std.U32) (i : Std.Usize) :
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let i1 ← i % 2#usize
     let i2 ← Array.index_usize loop_global.CARRAY i1
@@ -162,7 +162,7 @@ def loop_take_static_loop.body
   (n : Std.U32) (s : Std.U32) (i : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let i1 ← take_static GLOBAL
     let s1 ← s + i1
@@ -212,7 +212,7 @@ def loop_glob_loop.body
   (n : Std.U32) (r : Std.U32) (i : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then let i1 ← i + 1#u32
        ok (cont (GLOBAL, i1))
   else ok (done r)
@@ -239,7 +239,7 @@ def loop_choose_loop.body
   (n : Std.U32) (r : Std.U32) (i : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then let i1 ← i + 1#u32
        ok (cont (GLOBAL, i1))
   else ok (done r)
@@ -273,7 +273,7 @@ def loop_choose_call_loop.body
   (n : Std.U32) (r : Std.U32) (i : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then let r1 ← choose true r GLOBAL
        let i1 ← i + 1#u32
        ok (cont (r1, i1))
@@ -301,7 +301,7 @@ def loop_static_mut_loop.body
   (n : Std.U32) (back : Std.U32 → Std.U32) (r : Std.U32) (i : Std.U32) :
   Result (ControlFlow ((Std.U32 → Std.U32) × Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let (r1, ret_static_mut_back) ← ret_static_mut r
     let r2 ← r1 + 1#u32
@@ -462,7 +462,7 @@ def loop_hidden_static_mut_loop.body
   (n : Std.U32) (back : Std.U32 → Std.U32) (i : Std.U32) (i1 : Std.U32) :
   Result (ControlFlow ((Std.U32 → Std.U32) × Std.U32 × Std.U32) Std.U32)
   := do
-  if i1 < n
+  if (i1 < n : Bool)
   then
     let (sm, id_hidden_static_mut_back) ← id_hidden_static_mut { x := i }
     let i2 ← sm.x + 1#u32
@@ -496,7 +496,7 @@ def loop_hidden_static_mut1_loop.body
   (n : Std.U32) (back : Std.U32 → Std.U32) (r : Std.U32) (i : Std.U32) :
   Result (ControlFlow ((Std.U32 → Std.U32) × Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let (r1, get_hidden_static_mut_back) ← get_hidden_static_mut { x := r }
     let r2 ← r1 + 1#u32
@@ -543,7 +543,7 @@ def loop_hidden_static_ref_loop.body
   (n : Std.U32) (i : Std.U32) (i1 : Std.U32) (acc : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32 × Std.U32) Std.U32)
   := do
-  if i1 < n
+  if (i1 < n : Bool)
   then
     let acc1 ← acc + GLOBAL
     let i2 ← i1 + 1#u32
@@ -685,7 +685,7 @@ def loop_opt_static_loop.body
   (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (acc : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let acc1 ← match o with
                  | none => ok acc
@@ -776,7 +776,7 @@ def loop_copy_static_ref_loop.body
   (i : Std.U32) (n : Std.U32) (i1 : Std.U32) (acc : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i1 < n
+  if (i1 < n : Bool)
   then let acc1 ← acc + i
        let i2 ← i1 + 1#u32
        ok (cont (i2, acc1))
@@ -850,7 +850,7 @@ def copy_in_loop_static_loop.body
   (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (r : Option Std.U32) :
   Result (ControlFlow (Std.U32 × (Option Std.U32)) (Option Std.U32))
   := do
-  if i < n
+  if (i < n : Bool)
   then let i1 ← i + 1#u32
        ok (cont (i1, o))
   else ok (done r)

@@ -53,7 +53,7 @@ def first_child (l : Links) : Result (Std.U32 × Links) := do
   let o ← Array.index_usize l.child 0#usize
   match o with
   | none => ok (0#u32, l)
-  | some x => if x > 0#u32
+  | some x => if (x > 0#u32 : Bool)
               then ok (x, l)
               else ok (1#u32, l)
 

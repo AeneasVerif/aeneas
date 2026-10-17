@@ -54,7 +54,7 @@ def digit_table.DIGIT_TABLE : Array Std.U8 200#usize :=
 def pretty.exponent.write_exponent3
   (k : Std.Isize) (result : MutRawPtr Std.U8) : Result Std.Usize := do
   let (k1, result1) ←
-    if k < 0#isize
+    if (k < 0#isize : Bool)
     then
       do
       MutRawPtr.write result 45#u8
@@ -62,8 +62,8 @@ def pretty.exponent.write_exponent3
       let k2 ← -. k
       ok (k2, result2)
     else ok (k, result)
-  massert (k1 < 1000#isize)
-  if k1 >= 100#isize
+  massert (k1 < 1000#isize : Bool)
+  if (k1 >= 100#isize : Bool)
   then
     let i ← k1 / 100#isize
     let i1 ← lift (IScalar.hcast .U8 i)
@@ -76,19 +76,19 @@ def pretty.exponent.write_exponent3
     let d ← RawPtr.offsetBy p i3
     let p1 ← RawPtr.add result1 1#usize
     core.ptr.copy_nonoverlapping d p1 2#usize
-    let i4 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
+    let i4 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize : Bool))
     let i5 ← i4 + 3#usize
     as_ptr_back
     ok i5
   else
-    if k1 >= 10#isize
+    if (k1 >= 10#isize : Bool)
     then
       let s ← lift (Array.to_slice digit_table.DIGIT_TABLE)
       let (p, as_ptr_back) ← Slice.as_ptr s
       let i ← k1 * 2#isize
       let d ← RawPtr.offsetBy p i
       core.ptr.copy_nonoverlapping d result1 2#usize
-      let i1 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
+      let i1 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize : Bool))
       let i2 ← i1 + 2#usize
       as_ptr_back
       ok i2
@@ -96,7 +96,7 @@ def pretty.exponent.write_exponent3
       let i ← lift (IScalar.hcast .U8 k1)
       let i1 ← 48#u8 + i
       MutRawPtr.write result1 i1
-      let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
+      let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize : Bool))
       i2 + 1#usize
 
 /-- [ryu_raw_pointers_full::pretty::exponent::write_exponent2]:
@@ -105,7 +105,7 @@ def pretty.exponent.write_exponent3
 def pretty.exponent.write_exponent2
   (k : Std.Isize) (result : MutRawPtr Std.U8) : Result Std.Usize := do
   let (k1, result1) ←
-    if k < 0#isize
+    if (k < 0#isize : Bool)
     then
       do
       MutRawPtr.write result 45#u8
@@ -113,15 +113,15 @@ def pretty.exponent.write_exponent2
       let k2 ← -. k
       ok (k2, result2)
     else ok (k, result)
-  massert (k1 < 100#isize)
-  if k1 >= 10#isize
+  massert (k1 < 100#isize : Bool)
+  if (k1 >= 10#isize : Bool)
   then
     let s ← lift (Array.to_slice digit_table.DIGIT_TABLE)
     let (p, as_ptr_back) ← Slice.as_ptr s
     let i ← k1 * 2#isize
     let d ← RawPtr.offsetBy p i
     core.ptr.copy_nonoverlapping d result1 2#usize
-    let i1 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
+    let i1 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize : Bool))
     let i2 ← i1 + 2#usize
     as_ptr_back
     ok i2
@@ -129,7 +129,7 @@ def pretty.exponent.write_exponent2
     let i ← lift (IScalar.hcast .U8 k1)
     let i1 ← 48#u8 + i
     MutRawPtr.write result1 i1
-    let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
+    let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize : Bool))
     i2 + 1#usize
 
 /-- [ryu_raw_pointers_full::pretty::format64_zero]:
@@ -305,7 +305,7 @@ def buffer.Buffer.format_finite
   let a := to_slice_mut_back s1
   let s2 ← lift (Array.to_slice a)
   let i := Slice.len s2
-  massert (n <= i)
+  massert (n <= i : Bool)
   let s3 ← lift (Array.to_slice a)
   let (p2, as_ptr_back) ← Slice.as_ptr s3
   let p3 := RawPtr.cast Std.U8 p2

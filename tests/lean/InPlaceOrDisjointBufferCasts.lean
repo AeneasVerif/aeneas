@@ -86,7 +86,7 @@ def InPlaceOrDisjointBuffer.new_disjoint_from_slices
   := do
   let left_val := Slice.len src
   let right_val := Slice.len dst
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   let (p, as_ptr_back) ← Slice.as_ptr src
   let (p1, as_mut_ptr_back) ← Slice.as_mut_ptr dst
   let i := Slice.len src
@@ -352,12 +352,12 @@ def const_time_slices_equal_impl
   (a : Slice Std.U8) (b : Slice Std.U8) : Result Bool := do
   let left_val := Slice.len a
   let right_val := Slice.len b
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   let len := Slice.len a
   let diff ←
     const_time_slices_equal_impl_loop { start := 0#usize, «end» := len } a b
       0#u8
-  ok (diff = 0#u8)
+  ok (diff = 0#u8 : Bool)
 
 /-- [in_place_or_disjoint_buffer_casts::const_time_slices_equal]:
     Source: 'tests/src/in-place-or-disjoint-buffer-casts.rs', lines 143:0-146:1
@@ -366,7 +366,7 @@ def const_time_slices_equal
   (a : Slice Std.U8) (b : Slice Std.U8) : Result Bool := do
   let left_val := Slice.len a
   let right_val := Slice.len b
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   const_time_slices_equal_impl a b
 
 /-- [in_place_or_disjoint_buffer_casts::const_time_slice_copy_impl]: loop body 0:
@@ -426,7 +426,7 @@ def const_time_slice_copy_impl
   := do
   let left_val := Slice.len a
   let right_val := Slice.len b
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   let len := Slice.len a
   const_time_slice_copy_impl_loop { start := 0#usize, «end» := len } a b
     copy_size
@@ -440,7 +440,7 @@ def const_time_slice_copy
   := do
   let left_val := Slice.len a
   let right_val := Slice.len b
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   const_time_slice_copy_impl a b copy_size
 
 end in_place_or_disjoint_buffer_casts

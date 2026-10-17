@@ -25,8 +25,8 @@ namespace step_overflowing
     Visibility: public -/
 def test_usize_forward_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepUsize.forward_overflowing 10#usize 5#usize
-  massert (v = 15#usize)
-  massert (o = false)
+  massert (v = 15#usize : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_usize_forward_no_overflow] -/
 #guard (test_usize_forward_no_overflow).reducesTo ()
@@ -36,8 +36,8 @@ def test_usize_forward_no_overflow : Result Unit := do
     Visibility: public -/
 def test_usize_forward_zero : Result Unit := do
   let (v, o) ← core.iter.range.StepUsize.forward_overflowing 7#usize 0#usize
-  massert (v = 7#usize)
-  massert (o = false)
+  massert (v = 7#usize : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_usize_forward_zero] -/
 #guard (test_usize_forward_zero).reducesTo ()
@@ -48,8 +48,8 @@ def test_usize_forward_zero : Result Unit := do
 def test_usize_forward_overflow_wraps_to_zero : Result Unit := do
   let (v, o) ←
     core.iter.range.StepUsize.forward_overflowing core.num.Usize.MAX 1#usize
-  massert (v = 0#usize)
-  massert (o = true)
+  massert (v = 0#usize : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_usize_forward_overflow_wraps_to_zero] -/
 #guard (test_usize_forward_overflow_wraps_to_zero).reducesTo ()
@@ -60,8 +60,8 @@ def test_usize_forward_overflow_wraps_to_zero : Result Unit := do
 def test_usize_forward_overflow_max_count : Result Unit := do
   let (v, o) ←
     core.iter.range.StepUsize.forward_overflowing 1#usize core.num.Usize.MAX
-  massert (v = 0#usize)
-  massert (o = true)
+  massert (v = 0#usize : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_usize_forward_overflow_max_count] -/
 #guard (test_usize_forward_overflow_max_count).reducesTo ()
@@ -72,8 +72,8 @@ def test_usize_forward_overflow_max_count : Result Unit := do
 def test_usize_backward_no_overflow : Result Unit := do
   let (v, o) ←
     core.iter.range.StepUsize.backward_overflowing 10#usize 5#usize
-  massert (v = 5#usize)
-  massert (o = false)
+  massert (v = 5#usize : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_usize_backward_no_overflow] -/
 #guard (test_usize_backward_no_overflow).reducesTo ()
@@ -83,8 +83,8 @@ def test_usize_backward_no_overflow : Result Unit := do
     Visibility: public -/
 def test_usize_backward_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepUsize.backward_overflowing 0#usize 1#usize
-  massert (v = core.num.Usize.MAX)
-  massert (o = true)
+  massert (v = core.num.Usize.MAX : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_usize_backward_overflow] -/
 #guard (test_usize_backward_overflow).reducesTo ()
@@ -94,8 +94,8 @@ def test_usize_backward_overflow : Result Unit := do
     Visibility: public -/
 def test_u8_forward_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.forward_overflowing 1#u8 2#usize
-  massert (v = 3#u8)
-  massert (o = false)
+  massert (v = 3#u8 : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_u8_forward_no_overflow] -/
 #guard (test_u8_forward_no_overflow).reducesTo ()
@@ -105,8 +105,8 @@ def test_u8_forward_no_overflow : Result Unit := do
     Visibility: public -/
 def test_u8_forward_overflow_count_fits : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.forward_overflowing 200#u8 100#usize
-  massert (v = 44#u8)
-  massert (o = true)
+  massert (v = 44#u8 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_u8_forward_overflow_count_fits] -/
 #guard (test_u8_forward_overflow_count_fits).reducesTo ()
@@ -116,8 +116,8 @@ def test_u8_forward_overflow_count_fits : Result Unit := do
     Visibility: public -/
 def test_u8_forward_count_too_large : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.forward_overflowing 0#u8 300#usize
-  massert (v = 44#u8)
-  massert (o = true)
+  massert (v = 44#u8 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_u8_forward_count_too_large] -/
 #guard (test_u8_forward_count_too_large).reducesTo ()
@@ -127,8 +127,8 @@ def test_u8_forward_count_too_large : Result Unit := do
     Visibility: public -/
 def test_u8_backward_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.backward_overflowing 10#u8 3#usize
-  massert (v = 7#u8)
-  massert (o = false)
+  massert (v = 7#u8 : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_u8_backward_no_overflow] -/
 #guard (test_u8_backward_no_overflow).reducesTo ()
@@ -138,8 +138,8 @@ def test_u8_backward_no_overflow : Result Unit := do
     Visibility: public -/
 def test_u8_backward_overflow_count_fits : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.backward_overflowing 3#u8 5#usize
-  massert (v = 254#u8)
-  massert (o = true)
+  massert (v = 254#u8 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_u8_backward_overflow_count_fits] -/
 #guard (test_u8_backward_overflow_count_fits).reducesTo ()
@@ -149,8 +149,8 @@ def test_u8_backward_overflow_count_fits : Result Unit := do
     Visibility: public -/
 def test_u8_backward_count_too_large : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.backward_overflowing 5#u8 300#usize
-  massert (v = 217#u8)
-  massert (o = true)
+  massert (v = 217#u8 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_u8_backward_count_too_large] -/
 #guard (test_u8_backward_count_too_large).reducesTo ()
@@ -160,8 +160,8 @@ def test_u8_backward_count_too_large : Result Unit := do
     Visibility: public -/
 def test_i32_forward_negative_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI32.forward_overflowing (-5)#i32 3#usize
-  massert (v = (-2)#i32)
-  massert (o = false)
+  massert (v = (-2)#i32 : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_i32_forward_negative_no_overflow] -/
 #guard (test_i32_forward_negative_no_overflow).reducesTo ()
@@ -172,8 +172,8 @@ def test_i32_forward_negative_no_overflow : Result Unit := do
 def test_i32_forward_overflow : Result Unit := do
   let (v, o) ←
     core.iter.range.StepI32.forward_overflowing core.num.I32.MAX 1#usize
-  massert (v = core.num.I32.MIN)
-  massert (o = true)
+  massert (v = core.num.I32.MIN : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i32_forward_overflow] -/
 #guard (test_i32_forward_overflow).reducesTo ()
@@ -184,8 +184,8 @@ def test_i32_forward_overflow : Result Unit := do
 def test_i32_forward_count_max : Result Unit := do
   let (v, o) ←
     core.iter.range.StepI32.forward_overflowing 0#i32 core.num.Usize.MAX
-  massert (v = (-1)#i32)
-  massert (o = true)
+  massert (v = (-1)#i32 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i32_forward_count_max] -/
 #guard (test_i32_forward_count_max).reducesTo ()
@@ -195,8 +195,8 @@ def test_i32_forward_count_max : Result Unit := do
     Visibility: public -/
 def test_i32_backward_negative_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI32.backward_overflowing (-5)#i32 3#usize
-  massert (v = (-8)#i32)
-  massert (o = false)
+  massert (v = (-8)#i32 : Bool)
+  massert (o = false : Bool)
 
 /- Unit test for [step_overflowing::test_i32_backward_negative_no_overflow] -/
 #guard (test_i32_backward_negative_no_overflow).reducesTo ()
@@ -207,8 +207,8 @@ def test_i32_backward_negative_no_overflow : Result Unit := do
 def test_i32_backward_overflow : Result Unit := do
   let (v, o) ←
     core.iter.range.StepI32.backward_overflowing core.num.I32.MIN 1#usize
-  massert (v = core.num.I32.MAX)
-  massert (o = true)
+  massert (v = core.num.I32.MAX : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i32_backward_overflow] -/
 #guard (test_i32_backward_overflow).reducesTo ()
@@ -219,8 +219,8 @@ def test_i32_backward_overflow : Result Unit := do
 def test_i32_backward_count_max : Result Unit := do
   let (v, o) ←
     core.iter.range.StepI32.backward_overflowing 0#i32 core.num.Usize.MAX
-  massert (v = 1#i32)
-  massert (o = true)
+  massert (v = 1#i32 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i32_backward_count_max] -/
 #guard (test_i32_backward_count_max).reducesTo ()
@@ -230,8 +230,8 @@ def test_i32_backward_count_max : Result Unit := do
     Visibility: public -/
 def test_i8_forward_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI8.forward_overflowing 120#i8 10#usize
-  massert (v = (-126)#i8)
-  massert (o = true)
+  massert (v = (-126)#i8 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i8_forward_overflow] -/
 #guard (test_i8_forward_overflow).reducesTo ()
@@ -241,8 +241,8 @@ def test_i8_forward_overflow : Result Unit := do
     Visibility: public -/
 def test_i8_backward_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI8.backward_overflowing (-120)#i8 10#usize
-  massert (v = 126#i8)
-  massert (o = true)
+  massert (v = 126#i8 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i8_backward_overflow] -/
 #guard (test_i8_backward_overflow).reducesTo ()
@@ -253,10 +253,10 @@ def test_i8_backward_overflow : Result Unit := do
 def test_u128_forward_no_overflow : Result Unit := do
   let (v, o) ←
     core.iter.range.StepU128.forward_overflowing 1#u128 core.num.Usize.MAX
-  massert (o = false)
+  massert (o = false : Bool)
   let i ← lift (UScalar.cast .U128 core.num.Usize.MAX)
   let i1 ← i + 1#u128
-  massert (v = i1)
+  massert (v = i1 : Bool)
 
 /- Unit test for [step_overflowing::test_u128_forward_no_overflow] -/
 #guard (test_u128_forward_no_overflow).reducesTo ()
@@ -267,8 +267,8 @@ def test_u128_forward_no_overflow : Result Unit := do
 def test_u128_forward_overflow : Result Unit := do
   let (v, o) ←
     core.iter.range.StepU128.forward_overflowing core.num.U128.MAX 1#usize
-  massert (v = 0#u128)
-  massert (o = true)
+  massert (v = 0#u128 : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_u128_forward_overflow] -/
 #guard (test_u128_forward_overflow).reducesTo ()
@@ -279,8 +279,8 @@ def test_u128_forward_overflow : Result Unit := do
 def test_i128_backward_overflow : Result Unit := do
   let (v, o) ←
     core.iter.range.StepI128.backward_overflowing core.num.I128.MIN 1#usize
-  massert (v = core.num.I128.MAX)
-  massert (o = true)
+  massert (v = core.num.I128.MAX : Bool)
+  massert (o = true : Bool)
 
 /- Unit test for [step_overflowing::test_i128_backward_overflow] -/
 #guard (test_i128_backward_overflow).reducesTo ()

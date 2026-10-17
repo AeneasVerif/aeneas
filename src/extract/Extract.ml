@@ -550,7 +550,14 @@ let extract_unop (span : Meta.span)
 let extract_binop (span : Meta.span) (ctx : extraction_ctx)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
     ~(inside : bool) (binop : binop) (arg0 : texpr) (arg1 : texpr) : unit =
-  if inside then F.pp_print_string fmt "(";
+  (* The comparison operators <, <=, >=, > always produce a `Prop` in Lean,
+     we want to force them to `Bool` *)
+  let lean_comp =
+    match (backend (), binop) with
+    | Lean, (Eq _ | Lt _ | Le _ | Ge _ | Gt _) -> true
+    | _ -> false
+  in
+  if inside || lean_comp then F.pp_print_string fmt "(";
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
@@ -600,7 +607,12 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_space fmt ();
       F.pp_print_string fmt binop_str;
       F.pp_print_space fmt ();
-      extract_expr ~inside:true arg1
+      extract_expr ~inside:true arg1;
+      if lean_comp then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ":";
+        F.pp_print_space fmt ();
+        extract_literal_type ctx fmt TBool)
   | ( Lean,
       ( Add (OWrap, _)
       | Sub (OWrap, _)
@@ -672,7 +684,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       extract_expr ~inside:true arg0;
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg1);
-  if inside then F.pp_print_string fmt ")"
+  if inside || lean_comp then F.pp_print_string fmt ")"
 
 (** [inside]: controls the introduction of parentheses. See [extract_ty]
 

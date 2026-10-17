@@ -60,7 +60,7 @@ def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialEqWrap.eq
   (self : Wrap) (other : Wrap) : Result Bool := do
-  ok (self = other)
+  ok (self = other : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 23:9-23:18 -/
@@ -145,11 +145,11 @@ def test_wrap_lt : Result Unit := do
   let b1 ←
     core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
       2#u64
-  massert (¬ b1)
+  massert (! b1)
   let b2 ←
     core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
       1#u64
-  massert (¬ b2)
+  massert (! b2)
 
 /- Unit test for [order::test_wrap_lt] -/
 #guard (test_wrap_lt).reducesTo ()
@@ -169,7 +169,7 @@ def test_wrap_le : Result Unit := do
   let b2 ←
     core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
       1#u64
-  massert (¬ b2)
+  massert (! b2)
 
 /- Unit test for [order::test_wrap_le] -/
 #guard (test_wrap_le).reducesTo ()
@@ -185,11 +185,11 @@ def test_wrap_gt : Result Unit := do
   let b1 ←
     core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
       2#u64
-  massert (¬ b1)
+  massert (! b1)
   let b2 ←
     core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
       2#u64
-  massert (¬ b2)
+  massert (! b2)
 
 /- Unit test for [order::test_wrap_gt] -/
 #guard (test_wrap_gt).reducesTo ()
@@ -209,7 +209,7 @@ def test_wrap_ge : Result Unit := do
   let b2 ←
     core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
       2#u64
-  massert (¬ b2)
+  massert (! b2)
 
 /- Unit test for [order::test_wrap_ge] -/
 #guard (test_wrap_ge).reducesTo ()
@@ -291,7 +291,7 @@ def Rank.Insts.CoreCmpPartialEqRank.eq
   (self : Rank) (other : Rank) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  ok (self1 = other1)
+  ok (self1 = other1 : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Rank> for order::Rank}]
     Source: 'tests/src/order.rs', lines 87:9-87:18 -/
@@ -361,11 +361,11 @@ def test_rank_lt : Result Unit := do
   let b1 ←
     core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
       Rank.Mid Rank.Mid
-  massert (¬ b1)
+  massert (! b1)
   let b2 ←
     core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
       Rank.High Rank.Low
-  massert (¬ b2)
+  massert (! b2)
 
 /- Unit test for [order::test_rank_lt] -/
 #guard (test_rank_lt).reducesTo ()
@@ -428,23 +428,23 @@ def test_num_incomparable : Result Unit := do
   let b ←
     core.cmp.PartialOrd.lt.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
       (Num.Val 1#u8)
-  massert (¬ b)
+  massert (! b)
   let b1 ←
     core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
       (Num.Val 1#u8)
-  massert (¬ b1)
+  massert (! b1)
   let b2 ←
     core.cmp.PartialOrd.gt.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
       (Num.Val 1#u8)
-  massert (¬ b2)
+  massert (! b2)
   let b3 ←
     core.cmp.PartialOrd.ge.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
       (Num.Val 1#u8)
-  massert (¬ b3)
+  massert (! b3)
   let b4 ←
     core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
       Num.Nan
-  massert (¬ b4)
+  massert (! b4)
 
 /- Unit test for [order::test_num_incomparable] -/
 #guard (test_num_incomparable).reducesTo ()
@@ -460,7 +460,7 @@ def test_wrap_ref_lt : Result Unit := do
   let b1 ←
     core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
       1#u64
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [order::test_wrap_ref_lt] -/
 #guard (test_wrap_ref_lt).reducesTo ()
@@ -476,7 +476,7 @@ def test_wrap_ref_le : Result Unit := do
   let b1 ←
     core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
       1#u64
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [order::test_wrap_ref_le] -/
 #guard (test_wrap_ref_le).reducesTo ()
@@ -492,7 +492,7 @@ def test_wrap_ref_gt : Result Unit := do
   let b1 ←
     core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
       2#u64
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [order::test_wrap_ref_gt] -/
 #guard (test_wrap_ref_gt).reducesTo ()
@@ -508,7 +508,7 @@ def test_wrap_ref_ge : Result Unit := do
   let b1 ←
     core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
       2#u64
-  massert (¬ b1)
+  massert (! b1)
 
 /- Unit test for [order::test_wrap_ref_ge] -/
 #guard (test_wrap_ref_ge).reducesTo ()
@@ -545,7 +545,7 @@ structure Keyed where
     Visibility: public -/
 def Keyed.Insts.CoreCmpPartialEqKeyed.eq
   (self : Keyed) (other : Keyed) : Result Bool := do
-  ok (self.key = other.key)
+  ok (self.key = other.key : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Keyed> for order::Keyed}]
     Source: 'tests/src/order.rs', lines 193:0-197:1 -/
@@ -610,7 +610,7 @@ def test_keyed_max_tie : Result Unit := do
   let k ←
     core.cmp.Ord.max.trait_default Keyed.Insts.CoreCmpOrd
       { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
-  massert (k.tag = 1#u8)
+  massert (k.tag = 1#u8 : Bool)
 
 /- Unit test for [order::test_keyed_max_tie] -/
 #guard (test_keyed_max_tie).reducesTo ()
@@ -622,7 +622,7 @@ def test_keyed_min_tie : Result Unit := do
   let k ←
     core.cmp.Ord.min.trait_default Keyed.Insts.CoreCmpOrd
       { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
-  massert (k.tag = 0#u8)
+  massert (k.tag = 0#u8 : Bool)
 
 /- Unit test for [order::test_keyed_min_tie] -/
 #guard (test_keyed_min_tie).reducesTo ()
@@ -635,12 +635,12 @@ def test_keyed_clamp_tie : Result Unit := do
     core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
       { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
       { key := 3#u8, tag := 3#u8 }
-  massert (r.tag = 0#u8)
+  massert (r.tag = 0#u8 : Bool)
   let r1 ←
     core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
       { key := 3#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
       { key := 3#u8, tag := 3#u8 }
-  massert (r1.tag = 0#u8)
+  massert (r1.tag = 0#u8 : Bool)
 
 /- Unit test for [order::test_keyed_clamp_tie] -/
 #guard (test_keyed_clamp_tie).reducesTo ()

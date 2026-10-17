@@ -72,9 +72,9 @@ def rle_loop
   match o with
   | none => ok (v, count1, current)
   | some next =>
-    if next = current
+    if (next = current : Bool)
     then
-      if count1 = 255#u8
+      if (count1 = 255#u8 : Bool)
       then
         let v1 ← alloc.vec.Vec.push v count1
         let v2 ← alloc.vec.Vec.push v1 current
@@ -167,7 +167,7 @@ def loop_wrap_loop
   (acc : Std.U32) (i : Std.U32) :
   Result Std.U32
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let i1 ← WrapInst.TrInst.f w
     let acc1 ← lift (core.num.U32.wrapping_add acc i1)
@@ -201,7 +201,7 @@ def loop_const_generic_loop
   (acc : Std.U32) (i : Std.U32) :
   Result Std.U32
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let i1 ← HasNInst.TrInst.f x
     let acc1 ← lift (core.num.U32.wrapping_add acc i1)
@@ -235,7 +235,7 @@ def loop_wrap2_loop
   (acc : Std.U32) (i : Std.U32) :
   Result Std.U32
   := do
-  if i < n
+  if (i < n : Bool)
   then
     let i1 ← Wrap2Inst.WrapInst.TrInst.f w
     let acc1 ← lift (core.num.U32.wrapping_add acc i1)

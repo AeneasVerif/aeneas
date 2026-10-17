@@ -65,7 +65,7 @@ def InPlaceOrDisjointBuffer.new_disjoint
   := do
   let left_val := Slice.len src
   let right_val := Slice.len dst
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   let len := Slice.len src
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr src
   let p1 := RawPtr.cast_const p

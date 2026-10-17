@@ -29,7 +29,7 @@ def add_checked
   := do
   let i ← lift (UScalar.cast .U8 output)
   let (a1, b1) ← lift (Std.U8.overflowing_add 48#u8 i)
-  massert (¬ b1)
+  massert (! b1)
   if c
   then ok (a1, b)
   else ok (a, a1)
@@ -43,7 +43,7 @@ def sub_checked
   := do
   let i ← lift (UScalar.cast .U8 output)
   let (a1, b1) ← lift (Std.U8.overflowing_sub i 48#u8)
-  massert (¬ b1)
+  massert (! b1)
   if c
   then ok (a1, b)
   else ok (a, a1)
@@ -57,7 +57,7 @@ def mul_checked
   := do
   let i ← lift (UScalar.cast .U8 output)
   let (a1, b1) ← lift (Std.U8.overflowing_mul i 10#u8)
-  massert (¬ b1)
+  massert (! b1)
   if c
   then ok (a1, b)
   else ok (a, a1)
