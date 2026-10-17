@@ -59,7 +59,7 @@ let lean_builtin_types =
     mk_type "core::mem::maybe_uninit::MaybeUninit" "MaybeUninit";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 817 *)
     mk_type "core::num::error::TryFromIntError" "core.num.error.TryFromIntError";
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 78 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 138 *)
     mk_type "core::ops::control_flow::ControlFlow"
       "core.ops.control_flow.ControlFlow"
       ~kind:(KEnum [ ("Continue", Some "Continue"); ("Break", Some "Break") ]);
@@ -1103,7 +1103,7 @@ let lean_builtin_funs =
     mk_fun
       "core::ops::arith::{core::ops::arith::Add<&'0 usize, usize, usize>}::add"
       "SharedUsize.Insts.CoreOpsArithAddUsizeUsize.add";
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 39 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 99 *)
     mk_fun "core::ops::drop::Drop::drop" "core.ops.drop.Drop.drop.default";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 653 *)
     mk_fun
@@ -1691,8 +1691,53 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::marker::StructuralPartialEq"
       "core.marker.StructuralPartialEq";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)
+    mk_trait_decl "core::ops::arith::Add" "core.ops.arith.Add"
+      ~methods:[ ("add", "add") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 67 *)
+    mk_trait_decl "core::ops::arith::AddAssign" "core.ops.arith.AddAssign"
+      ~methods:[ ("add_assign", "add_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 43 *)
+    mk_trait_decl "core::ops::arith::Div" "core.ops.arith.Div"
+      ~methods:[ ("div", "div") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 79 *)
+    mk_trait_decl "core::ops::arith::DivAssign" "core.ops.arith.DivAssign"
+      ~methods:[ ("div_assign", "div_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 39 *)
+    mk_trait_decl "core::ops::arith::Mul" "core.ops.arith.Mul"
+      ~methods:[ ("mul", "mul") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 75 *)
+    mk_trait_decl "core::ops::arith::MulAssign" "core.ops.arith.MulAssign"
+      ~methods:[ ("mul_assign", "mul_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 35 *)
+    mk_trait_decl "core::ops::arith::Sub" "core.ops.arith.Sub"
+      ~methods:[ ("sub", "sub") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 71 *)
+    mk_trait_decl "core::ops::arith::SubAssign" "core.ops.arith.SubAssign"
+      ~methods:[ ("sub_assign", "sub_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 47 *)
     mk_trait_decl "core::ops::bit::BitAnd" "core.ops.bit.BitAnd"
       ~methods:[ ("bitand", "bitand") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 83 *)
+    mk_trait_decl "core::ops::bit::BitAndAssign" "core.ops.bit.BitAndAssign"
+      ~methods:[ ("bitand_assign", "bitand_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 51 *)
+    mk_trait_decl "core::ops::bit::BitOr" "core.ops.bit.BitOr"
+      ~methods:[ ("bitor", "bitor") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 87 *)
+    mk_trait_decl "core::ops::bit::BitOrAssign" "core.ops.bit.BitOrAssign"
+      ~methods:[ ("bitor_assign", "bitor_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 55 *)
+    mk_trait_decl "core::ops::bit::BitXor" "core.ops.bit.BitXor"
+      ~methods:[ ("bitxor", "bitxor") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 91 *)
+    mk_trait_decl "core::ops::bit::BitXorAssign" "core.ops.bit.BitXorAssign"
+      ~methods:[ ("bitxor_assign", "bitxor_assign") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 59 *)
+    mk_trait_decl "core::ops::bit::Shl" "core.ops.bit.Shl"
+      ~methods:[ ("shl", "shl") ];
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 63 *)
+    mk_trait_decl "core::ops::bit::Shr" "core.ops.bit.Shr"
+      ~methods:[ ("shr", "shr") ];
     (* file: "Aeneas/Std/Core/Ops.lean", line: 22 *)
     mk_trait_decl "core::ops::deref::Deref" "core.ops.deref.Deref"
       ~methods:[ ("deref", "deref") ];
@@ -1700,18 +1745,18 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::ops::deref::DerefMut" "core.ops.deref.DerefMut"
       ~parent_clauses:[ "derefInst" ]
       ~methods:[ ("deref_mut", "deref_mut") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 35 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 95 *)
     mk_trait_decl "core::ops::drop::Drop" "core.ops.drop.Drop"
       ~methods:[ ("drop", "drop") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 53 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 113 *)
     mk_trait_decl "core::ops::function::Fn" "core.ops.function.Fn"
       ~parent_clauses:[ "FnMutInst" ]
       ~methods:[ ("call", "call") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 48 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 108 *)
     mk_trait_decl "core::ops::function::FnMut" "core.ops.function.FnMut"
       ~parent_clauses:[ "FnOnceInst" ]
       ~methods:[ ("call_mut", "call_mut") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 44 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 104 *)
     mk_trait_decl "core::ops::function::FnOnce" "core.ops.function.FnOnce"
       ~methods:[ ("call_once", "call_once") ];
     (* file: "Aeneas/Std/Core/Ops.lean", line: 13 *)
@@ -1721,14 +1766,14 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::ops::index::IndexMut" "core.ops.index.IndexMut"
       ~parent_clauses:[ "indexInst" ]
       ~methods:[ ("index_mut", "index_mut") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 74 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 134 *)
     mk_trait_decl "core::ops::try_trait::FromResidual"
       "core.ops.try_trait.FromResidual"
       ~methods:[ ("from_residual", "from_residual") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 89 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 149 *)
     mk_trait_decl "core::ops::try_trait::Residual" "core.ops.try_trait.Residual"
       ~parent_clauses:[ "TryInst" ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 83 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 143 *)
     mk_trait_decl "core::ops::try_trait::Try" "core.ops.try_trait.Try"
       ~parent_clauses:[ "FromResidualInst" ]
       ~methods:[ ("from_output", "from_output"); ("branch", "branch") ];

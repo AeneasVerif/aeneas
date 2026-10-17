@@ -331,6 +331,61 @@ let mk_builtin_trait_decls_map () =
 
 let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
 
+(** The [core::ops] traits implemented by the integer types: (module, trait,
+    method). The shifts are implemented for all the pairs of integer types. *)
+let core_ops_binops =
+  [
+    ("arith", "Add", "add");
+    ("arith", "Sub", "sub");
+    ("arith", "Mul", "mul");
+    ("arith", "Div", "div");
+    ("bit", "BitAnd", "bitand");
+    ("bit", "BitOr", "bitor");
+    ("bit", "BitXor", "bitxor");
+  ]
+
+let core_ops_shifts = [ ("Shl", "shl"); ("Shr", "shr") ]
+
+(** The implementations of the [core::ops] traits for the integer type [ty]:
+    (module, trait impl pattern, Lean name, method), e.g.
+    [U32.Insts.CoreOpsArithAddU32U32] for
+    [core::ops::arith::Add<u32, u32, u32>]. *)
+let core_ops_int_impls (ty : string) : (string * string * string * string) list
+    =
+  let cty = StringUtils.capitalize_first_letter ty in
+  let binops =
+    List.concat_map
+      (fun (m, t, f) ->
+        let cm = StringUtils.capitalize_first_letter m in
+        [
+          ( m,
+            "core::ops::" ^ m ^ "::" ^ t ^ "<" ^ ty ^ ", " ^ ty ^ ", " ^ ty
+            ^ ">",
+            cty ^ ".Insts.CoreOps" ^ cm ^ t ^ cty ^ cty,
+            f );
+          ( m,
+            "core::ops::" ^ m ^ "::" ^ t ^ "Assign<" ^ ty ^ ", " ^ ty ^ ">",
+            cty ^ ".Insts.CoreOps" ^ cm ^ t ^ "Assign" ^ cty,
+            f ^ "_assign" );
+        ])
+      core_ops_binops
+  in
+  (* The pattern variables only match type variables: we list the shift amounts *)
+  let shifts =
+    List.concat_map
+      (fun (t, f) ->
+        List.map
+          (fun rhs ->
+            let crhs = StringUtils.capitalize_first_letter rhs in
+            ( "bit",
+              "core::ops::bit::" ^ t ^ "<" ^ ty ^ ", " ^ rhs ^ ", " ^ ty ^ ">",
+              cty ^ ".Insts.CoreOpsBit" ^ t ^ crhs ^ cty,
+              f ))
+          all_int_names)
+      core_ops_shifts
+  in
+  binops @ shifts
+
 let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
     =
   let fmt (rust_name : string) ?(extract_name : string option = None)
@@ -409,6 +464,14 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
         ~extract_name:(Some "core::clone::CloneBool") ();
     ]
   @ mk_lean_only lean_builtin_trait_impls
+  (* core::ops::{Add, Sub, ..., Shl, Shr}<INT, ...> *)
+  @ mk_lean_only
+      (List.concat_map
+         (fun ty ->
+           List.map
+             (fun (_, pat, name, _) -> fmt pat ~extract_name:(Some name) ())
+             (core_ops_int_impls ty))
+         all_int_names)
   (* From<INT, bool> *)
   @ List.map
       (fun ty ->
@@ -580,6 +643,18 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            (fun ty -> StringUtils.capitalize_first_letter ty ^ ".checked_" ^ op)
            ~can_fail:false ())
        [ "add"; "sub"; "mul"; "div"; "rem" ])
+  (* core::ops::{Add, Sub, ..., Shl, Shr}<INT, ...> methods *)
+  @ mk_lean_only
+      (List.concat_map
+         (fun ty ->
+           List.map
+             (fun (m, pat, name, f) ->
+               mk_fun
+                 ("core::ops::" ^ m ^ "::{" ^ pat ^ "}::" ^ f)
+                 ~extract_name:(Some (name ^ "." ^ f))
+                 ())
+             (core_ops_int_impls ty))
+         all_int_names)
   (* From<INT, bool> *)
   @ mk_scalar_fun
       (fun ty ->

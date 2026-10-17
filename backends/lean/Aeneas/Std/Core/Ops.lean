@@ -28,9 +28,69 @@ structure core.ops.deref.DerefMut (Self Target : Type _) where
   derefInst : Deref Self Target
   deref_mut : Self → Result (Target × (Target → Self))
 
+@[rust_trait "core::ops::arith::Add"]
+structure core.ops.arith.Add (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  add : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::arith::Sub"]
+structure core.ops.arith.Sub (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  sub : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::arith::Mul"]
+structure core.ops.arith.Mul (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  mul : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::arith::Div"]
+structure core.ops.arith.Div (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  div : Self → Rhs → Result Self_Output
+
 @[rust_trait "core::ops::bit::BitAnd"]
 structure core.ops.bit.BitAnd (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
   bitand : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::bit::BitOr"]
+structure core.ops.bit.BitOr (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  bitor : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::bit::BitXor"]
+structure core.ops.bit.BitXor (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  bitxor : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::bit::Shl"]
+structure core.ops.bit.Shl (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  shl : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::bit::Shr"]
+structure core.ops.bit.Shr (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
+  shr : Self → Rhs → Result Self_Output
+
+@[rust_trait "core::ops::arith::AddAssign"]
+structure core.ops.arith.AddAssign (Self : Type _) (Rhs : Type _) where
+  add_assign : Self → Rhs → Result Self
+
+@[rust_trait "core::ops::arith::SubAssign"]
+structure core.ops.arith.SubAssign (Self : Type _) (Rhs : Type _) where
+  sub_assign : Self → Rhs → Result Self
+
+@[rust_trait "core::ops::arith::MulAssign"]
+structure core.ops.arith.MulAssign (Self : Type _) (Rhs : Type _) where
+  mul_assign : Self → Rhs → Result Self
+
+@[rust_trait "core::ops::arith::DivAssign"]
+structure core.ops.arith.DivAssign (Self : Type _) (Rhs : Type _) where
+  div_assign : Self → Rhs → Result Self
+
+@[rust_trait "core::ops::bit::BitAndAssign"]
+structure core.ops.bit.BitAndAssign (Self : Type _) (Rhs : Type _) where
+  bitand_assign : Self → Rhs → Result Self
+
+@[rust_trait "core::ops::bit::BitOrAssign"]
+structure core.ops.bit.BitOrAssign (Self : Type _) (Rhs : Type _) where
+  bitor_assign : Self → Rhs → Result Self
+
+@[rust_trait "core::ops::bit::BitXorAssign"]
+structure core.ops.bit.BitXorAssign (Self : Type _) (Rhs : Type _) where
+  bitxor_assign : Self → Rhs → Result Self
 
 @[rust_trait "core::ops::drop::Drop"]
 structure core.ops.drop.Drop (Self : Type _) where
