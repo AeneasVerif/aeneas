@@ -101,6 +101,7 @@ package «tests» {}
 @[default_target] lean_lib MatchIndex
 @[default_target] lean_lib MaybeUninit
 @[default_target] lean_lib MaybeUninitSpecs
+@[default_target] lean_lib MemSizeOf
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MultiTarget
 @[default_target] lean_lib MutBorrowInSharedBorrow

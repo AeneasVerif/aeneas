@@ -152,6 +152,8 @@ class Pointee (T : Type) where
   size : Nat
   align : Nat
   nonZero : Bool
+  /-- `size` is `size_of::<T>()`: true for the byte cells. -/
+  byteSized : Bool := false
   toCells : T → List (Option Cell)
   ofCells : List (Option Cell) → Option T
 
@@ -178,6 +180,7 @@ bytes are given (if any). -/
   size := size
   align := align
   nonZero := size != 0
+  byteSized := true
   toCells value := (encode value).map some
   ofCells cells := cells.mapM id >>= decode
 
@@ -423,6 +426,13 @@ def RawPtr.sub {T : Type} [Pointee T] (q : RawPtr T M) (count : Usize) : Result 
     fun h _ => (⟨⟨q.loc.allocId, target.toNat⟩⟩, h)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::sub"] RawPtr.sub
+
+/-- `size_of::<T>()`: known when the cells of `T` are its bytes (otherwise the model fails). -/
+@[rust_fun "core::mem::size_of"]
+def core.mem.size_of (T : Type) [Pointee T] : Result Usize :=
+  if h : Pointee.byteSized T ∧ Pointee.size T < 2 ^ UScalarTy.Usize.numBits then
+    .ok (Usize.ofNatCore (Pointee.size T) h.2)
+  else .fail .panic
 
 /-- The distance between two pointers, in values: they must point into the same allocation, the
 cells between them must be live cells of the pointee, the distance must be a multiple of the size
