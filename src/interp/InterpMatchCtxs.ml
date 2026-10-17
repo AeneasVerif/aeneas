@@ -2378,6 +2378,16 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
         "Region abstractions with distinct sets of ended sub-abstractions";
 
     [%ldebug "match_abstractions: matching values"];
+    (* The ignored values contain no borrows, loans nor symbolic values: an
+       abstraction may have kept them while the other one simplified them
+       away, so we don't match them. *)
+    let not_ignored (v : tavalue) =
+      match v.value with
+      | AIgnored _ -> false
+      | _ -> true
+    in
+    let avalues0 = List.filter not_ignored avalues0 in
+    let avalues1 = List.filter not_ignored avalues1 in
     let _ =
       if List.length avalues0 <> List.length avalues1 then
         raise_distinct "Region abstractions with not the same number of values"

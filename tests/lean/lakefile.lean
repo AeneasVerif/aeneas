@@ -83,6 +83,7 @@ package «tests» {}
 @[default_target] lean_lib IteratorsArray
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
+@[default_target] lean_lib JoinIgnoredAvalue
 @[default_target] lean_lib Joins
 @[default_target] lean_lib LeanKeywords
 @[default_target] lean_lib LeanKeywordsClash
