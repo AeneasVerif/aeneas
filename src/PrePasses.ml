@@ -2305,7 +2305,13 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
           let index = RegionId.of_int !next_index in
           incr next_index;
           new_regions :=
-            { index; name = None; variance = VaUnknown; mutability = LtUnknown }
+            {
+              index;
+              name = None;
+              variance = VaUnknown;
+              mutability = LtUnknown;
+              late_bound = false;
+            }
             :: !new_regions;
           RVar (Free index)
       end

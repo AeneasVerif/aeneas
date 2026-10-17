@@ -657,11 +657,10 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         match mk_integer_value ptr_size (get_ty sv) i with
         | Error _ -> Error EPanic
         | Ok sv -> Ok { v with value = VLiteral (VScalar sv) })
-    | Cast (CastScalar (src, tgt)), VLiteral (VScalar sv)
-      when scalar_type_is_integer src && scalar_type_is_integer tgt -> (
+    | Cast (CastScalar tgt), VLiteral (VScalar sv)
+      when scalar_type_is_integer tgt -> (
         (* Cast between integers *)
-        let src_ty, tgt_ty = (scalar_as_integer src, scalar_as_integer tgt) in
-        [%sanity_check] span (src_ty = get_ty sv);
+        let tgt_ty = scalar_as_integer tgt in
         let i = get_val sv in
         let ptr_size = get_target_ptr_size span ctx.crate in
         match mk_integer_value ptr_size tgt_ty i with
@@ -670,8 +669,8 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (TBool, tgt)), VLiteral (VBool sv)
-      when scalar_type_is_integer tgt -> (
+    | Cast (CastScalar tgt), VLiteral (VBool sv) when scalar_type_is_integer tgt
+      -> (
         (* Cast bool -> int *)
         let tgt_ty = scalar_as_integer tgt in
         let i = Z.of_int (if sv then 1 else 0) in
@@ -682,8 +681,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (src, TBool)), VLiteral (VScalar sv)
-      when scalar_type_is_integer src ->
+    | Cast (CastScalar TBool), VLiteral (VScalar sv) ->
         (* Cast int -> bool *)
         let b =
           if Z.of_int 0 = get_val sv then false
@@ -774,7 +772,8 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* There is a special case for casts which convert dyn traits (for instance:
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
-  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
+  | Cast (CastUnsize (ty1, MetaVTable (trait_ref, _))) -> (
+      let ty0 = v.ty in
       [%cassert] span
         (trait_ref.binder_regions = [])
         "Higher-ranked vtables are not supported";
@@ -943,7 +942,8 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
           in
           (Ok output, ctx, cc_comp cc cf)
       | _ -> [%craise] span "Unsupported cast to a dynamic trait")
-  | Cast (CastUnsize (ty0, ty1, MetaVTableUpcast fields)) ->
+  | Cast (CastUnsize (ty1, MetaVTableUpcast fields)) ->
+      let ty0 = v.ty in
       (* Casting a dyn trait to a dyn trait *)
       [%ltrace
         "dyn trait upcast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
@@ -970,13 +970,13 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
         | Not, (TScalar (TInteger (Unsigned _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Signed _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Unsigned _)) as lty) -> lty
-        | Cast (CastScalar (_, tgt_ty)), _ -> TScalar tgt_ty
-        | Cast (CastUnsize (ty0, ty1, _)), _ ->
+        | Cast (CastScalar tgt_ty), _ -> TScalar tgt_ty
+        | Cast (CastUnsize (ty1, _)), ty0 ->
             (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
             let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
             ty1
-        | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
+        | Cast (CastRawPtr tgt_ty), _ -> tgt_ty
         | _ ->
             [%craise] span
               ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
