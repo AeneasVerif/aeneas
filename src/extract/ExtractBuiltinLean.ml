@@ -675,6 +675,8 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 85 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"
       "core.fmt.Formatter.write_str";
+    (* file: "Aeneas/Std/Core/Hash.lean", line: 20 *)
+    mk_fun "core::hash::Hasher::write_u64" "core.hash.Hasher.write_u64.default";
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 28 *)
     mk_fun "core::intrinsics::discriminant_value"
       "core.intrinsics.discriminant_value";
@@ -1712,12 +1714,13 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 74 *)
     mk_trait_decl "core::fmt::LowerHex" "core.fmt.LowerHex"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Hash.lean", line: 13 *)
+    (* file: "Aeneas/Std/Core/Hash.lean", line: 25 *)
     mk_trait_decl "core::hash::Hash" "core.hash.Hash"
       ~methods:[ ("hash", "hash") ];
-    (* file: "Aeneas/Std/Core/Hash.lean", line: 8 *)
+    (* file: "Aeneas/Std/Core/Hash.lean", line: 13 *)
     mk_trait_decl "core::hash::Hasher" "core.hash.Hasher"
-      ~methods:[ ("finish", "finish"); ("write", "write") ];
+      ~methods:
+        [ ("finish", "finish"); ("write", "write"); ("write_u64", "write_u64") ];
     (* file: "Aeneas/Std/Core/Iter.lean", line: 33 *)
     mk_trait_decl "core::iter::adapters::zip::TrustedRandomAccessNoCoerce"
       "core.iter.adapters.zip.TrustedRandomAccessNoCoerce"
