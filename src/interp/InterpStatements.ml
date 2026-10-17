@@ -654,7 +654,10 @@ let rec end_unobservable_abs (config : config) (span : Meta.span)
   let is_candidate = candidate ctx in
   let try_end (abs : abs) :
       (eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)) option =
-    if is_candidate abs && abs.can_end && AbsId.Set.is_empty abs.parents then
+    if
+      is_candidate abs && abs_is_endable ctx abs
+      && AbsId.Set.is_empty abs.parents
+    then
       let ctx', cc = InterpBorrows.end_abs config span abs.abs_id 0 ctx in
       if unchanged ctx ctx' && other_abs ctx' = other_abs ctx then
         Some (ctx', cc)

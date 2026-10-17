@@ -135,6 +135,7 @@ package «tests» {}
 @[default_target] lean_lib SepLogic
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
+@[default_target] lean_lib StaticRetStateful
 @[default_target] lean_lib StepBy
 @[default_target] lean_lib StepOverflowing
 @[default_target] lean_lib StringChars
