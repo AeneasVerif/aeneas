@@ -69,6 +69,15 @@ let merge_region_groups (infos : modules_funs_info) (id : FunDeclId.id) : bool =
   | Some { stateful = true; stateful_region_groups = None; _ } -> true
   | _ -> false
 
+(** The same as [merge_region_groups], for a function or a trait method: the
+    methods of the traits declared in the crate may be stateful (see the end of
+    [analyze_module]). *)
+let merge_region_groups_of_fn_ptr (infos : modules_funs_info)
+    (kind : fn_ptr_kind) : bool =
+  match lookup_fn_ptr_info infos kind with
+  | Some { stateful = true; stateful_region_groups = None; _ } -> true
+  | _ -> false
+
 let is_stateful (infos : modules_funs_info) (id : FunDeclId.id) : bool =
   match lookup_fun_decl_info infos id with
   | Some info -> info.stateful
@@ -505,5 +514,55 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
   in
 
   analyze_decl_groups (Option.get m.declarations);
+
+  (* The methods of the traits declared in the crate which have an
+     implementation accessing the heap and returning a borrow: the signature of
+     the method in the trait declaration (which the calls through the trait
+     clauses use) must have the deferred, stateful backward functions of the
+     implementations. We make the method stateful, as well as all its
+     implementations, so that their signatures agree. *)
+  let stateful_methods =
+    TraitImplId.Map.fold
+      (fun _ (impl : trait_impl) acc ->
+        match TraitDeclId.Map.find_opt impl.impl_trait.id m.trait_decls with
+        | Some decl when decl.item_meta.is_local ->
+            Types.TraitMethodId.Map.fold
+              (fun method_id (meth : Types.fun_decl_ref Types.binder) acc ->
+                let fid = meth.binder_value.id in
+                match
+                  ( lookup_fun_decl_info !infos fid,
+                    FunDeclId.Map.find_opt fid funs_map )
+                with
+                | Some { stateful = true; _ }, Some d
+                  when TypesUtils.ty_has_regions d.signature.output ->
+                    (decl.def_id, method_id) :: acc
+                | _ -> acc)
+              impl.methods acc
+        | _ -> acc)
+      m.trait_impls []
+  in
+  let set_stateful (id : FunOrMethodId.id) =
+    match FunOrMethodId.Map.find_opt id !infos.infos with
+    | Some info ->
+        infos :=
+          {
+            infos =
+              FunOrMethodId.Map.add id
+                { info with stateful = true; can_fail = true }
+                !infos.infos;
+          }
+    | None -> ()
+  in
+  List.iter
+    (fun (decl_id, method_id) ->
+      set_stateful (FunOrMethodId.Method (decl_id, method_id));
+      TraitImplId.Map.iter
+        (fun _ (impl : trait_impl) ->
+          if impl.impl_trait.id = decl_id then
+            match Types.TraitMethodId.Map.find_opt method_id impl.methods with
+            | Some meth -> set_stateful (FunOrMethodId.Fun meth.binder_value.id)
+            | None -> ())
+        m.trait_impls)
+    stateful_methods;
 
   !infos

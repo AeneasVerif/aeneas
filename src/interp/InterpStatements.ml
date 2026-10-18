@@ -476,9 +476,8 @@ let mk_symbolic_fun_call_inst (span : Meta.span) (ctx : eval_ctx)
     call_sig = signature;
     call_inst_sig =
       (let merge_groups =
-         match call_kind with
-         | Fun fid -> FunsAnalysis.merge_region_groups ctx.fun_ctx.fun_infos fid
-         | TraitMethod _ -> false
+         FunsAnalysis.merge_region_groups_of_fn_ptr ctx.fun_ctx.fun_infos
+           call_kind
        in
        instantiate_fun_sig ~merge_groups (Some span) ctx inst_generics tr_self
          signature);

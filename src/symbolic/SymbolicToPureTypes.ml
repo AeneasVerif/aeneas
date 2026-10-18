@@ -1046,9 +1046,8 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
     let merge_groups =
-      match fun_id with
-      | FunId fid ->
-          FunsAnalysis.merge_region_groups decls_ctx.fun_ctx.fun_infos fid
+      match lookup_pure_fn_ptr_info decls_ctx.fun_ctx.fun_infos fun_id with
+      | Some { stateful = true; stateful_region_groups = None; _ } -> true
       | _ -> false
     in
     RegionsHierarchy.compute_regions_hierarchy_for_sig ~merge_groups span

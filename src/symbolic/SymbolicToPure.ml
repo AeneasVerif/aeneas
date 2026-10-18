@@ -344,9 +344,18 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   TraitMethodId.Map.iter
     (fun _ (m : T.fun_decl_ref T.binder) ->
       let fid = m.binder_value.id in
+      let trait_is_local =
+        match
+          TraitDeclId.Map.find_opt trait_impl.impl_trait.id
+            ctx.crate.trait_decls
+        with
+        | Some decl -> decl.item_meta.is_local
+        | None -> false
+      in
       match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
       | Some d
-        when FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fid
+        when (not trait_is_local)
+             && FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fid
              && TypesUtils.ty_has_regions d.signature.output ->
           [%craise_opt_span] span
             "Unsupported: implementation of a trait method by a method which \

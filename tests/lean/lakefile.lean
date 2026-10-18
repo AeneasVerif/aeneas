@@ -131,6 +131,7 @@ package «tests» {}
 @[default_target] lean_lib RawPointersControlFlow
 @[default_target] lean_lib RawPointersGeneric
 @[default_target] lean_lib RawPointersSpecs
+@[default_target] lean_lib RawPointersStatefulImplBorrow
 @[default_target] lean_lib RawPointersTraitImpl
 @[default_target] lean_lib RawPointerSub
 @[default_target] lean_lib RenameAttribute
@@ -150,6 +151,7 @@ package «tests» {}
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib TargetFeatures
+@[default_target] lean_lib TraitMethodHeapBorrow
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Transmutes
 @[default_target] lean_lib TransmutesSpecs
