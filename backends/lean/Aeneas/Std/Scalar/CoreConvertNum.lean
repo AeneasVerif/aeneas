@@ -825,6 +825,34 @@ def core.num.error.TryFromIntError : Type := Unit
   else
     ok (.Err ())
 
+/-- Fallible conversion from a signed to an unsigned scalar type. -/
+@[expose] def core.num.tryFromIScalar {srcTy : IScalarTy} (tgtTy : UScalarTy) (i : IScalar srcTy) :
+  Result (core.result.Result (UScalar tgtTy) core.num.error.TryFromIntError) :=
+  if 0 ≤ i.val ∧ i.val ≤ UScalar.max tgtTy then
+    ok (.Ok (IScalar.hcast tgtTy i))
+  else
+    ok (.Err ())
+
+@[expose, rust_fun "core::convert::num::{core::convert::TryFrom<u8, i32, core::num::error::TryFromIntError>}::try_from"]
+def core.convert.num.TryFromU8I32.try_from (i : I32) :
+  Result (core.result.Result U8 core.num.error.TryFromIntError) :=
+  core.num.tryFromIScalar .U8 i
+
+@[expose, rust_fun "core::convert::num::{core::convert::TryFrom<u16, i32, core::num::error::TryFromIntError>}::try_from"]
+def core.convert.num.TryFromU16I32.try_from (i : I32) :
+  Result (core.result.Result U16 core.num.error.TryFromIntError) :=
+  core.num.tryFromIScalar .U16 i
+
+@[expose, rust_fun "core::convert::num::{core::convert::TryFrom<u32, i32, core::num::error::TryFromIntError>}::try_from"]
+def core.convert.num.TryFromU32I32.try_from (i : I32) :
+  Result (core.result.Result U32 core.num.error.TryFromIntError) :=
+  core.num.tryFromIScalar .U32 i
+
+@[expose, rust_fun "core::convert::num::{core::convert::TryFrom<u64, i32, core::num::error::TryFromIntError>}::try_from"]
+def core.convert.num.TryFromU64I32.try_from (i : I32) :
+  Result (core.result.Result U64 core.num.error.TryFromIntError) :=
+  core.num.tryFromIScalar .U64 i
+
 -- TODO: define for all scalar pairs
 @[expose, rust_fun "core::convert::num::ptr_try_from_impls::{core::convert::TryFrom<u32, usize, core::num::error::TryFromIntError>}::try_from"]
 def core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from (i : Usize) :

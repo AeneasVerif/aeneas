@@ -2,6 +2,7 @@ module
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Core.Convert
 public import Aeneas.Data.BitVec
+public import Mathlib.Data.Nat.Log
 public meta import Aeneas.Extract.Extract
 @[expose] public section
 
@@ -39,5 +40,27 @@ def core.num.U64.to_le (x : U64) : U64 := x
 
 @[expose, rust_fun "core::num::{u64}::to_be" -canFail]
 def core.num.U64.to_be (x : U64) : U64 := ⟨ BitVec.setWidth _ (BitVec.fromLEBytes x.bv.toBEBytes) ⟩
+
+/-- `ilog10`: panics if the integer is not positive. -/
+def UScalar.ilog10 {ty : UScalarTy} (x : UScalar ty) : Result U32 :=
+  if h : 0 < x.val ∧ Nat.log 10 x.val < 2 ^ UScalarTy.U32.numBits then
+    .ok (UScalar.ofNatCore _ h.2)
+  else .fail .panic
+
+def IScalar.ilog10 {ty : IScalarTy} (x : IScalar ty) : Result U32 :=
+  if h : 0 < x.val ∧ Nat.log 10 x.val.toNat < 2 ^ UScalarTy.U32.numBits then
+    .ok (UScalar.ofNatCore _ h.2)
+  else .fail .panic
+
+attribute [rust_fun "core::num::{u8}::ilog10"] UScalar.ilog10
+attribute [rust_fun "core::num::{u16}::ilog10"] UScalar.ilog10
+attribute [rust_fun "core::num::{u32}::ilog10"] UScalar.ilog10
+attribute [rust_fun "core::num::{u64}::ilog10"] UScalar.ilog10
+attribute [rust_fun "core::num::{u128}::ilog10"] UScalar.ilog10
+attribute [rust_fun "core::num::{i8}::ilog10"] IScalar.ilog10
+attribute [rust_fun "core::num::{i16}::ilog10"] IScalar.ilog10
+attribute [rust_fun "core::num::{i32}::ilog10"] IScalar.ilog10
+attribute [rust_fun "core::num::{i64}::ilog10"] IScalar.ilog10
+attribute [rust_fun "core::num::{i128}::ilog10"] IScalar.ilog10
 
 end Aeneas.Std

@@ -41,4 +41,8 @@ example : Str := toStr "hello"
 example : Str := toStr "héllo ∀"
 example : Str := toStr ""
 
+/-- The length of a string, in bytes. -/
+@[expose, rust_fun "core::str::{str}::len" -canFail]
+def core.str.Str.len (s : Str) : Usize := Slice.len s
+
 end Aeneas.Std

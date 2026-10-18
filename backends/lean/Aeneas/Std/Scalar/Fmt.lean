@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Scalar.CoreConvertNum
 public section
 
 namespace Aeneas.Std
@@ -142,5 +143,12 @@ def core.fmt.DebugI128 : core.fmt.Debug I128 := {
 def core.fmt.DebugIsize : core.fmt.Debug Isize := {
   fmt := core.fmt.num.DebugIsize.fmt
 }
+
+@[expose, rust_fun "core::num::error::{core::fmt::Debug<core::num::error::TryFromIntError>}::fmt"]
+def core.num.error.DebugTryFromIntError.fmt (_ : core.num.error.TryFromIntError)
+  (fmt : core.fmt.Formatter) :
+  Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
+  -- TODO: this model is simplistic
+  .ok (.Ok (), fmt)
 
 end Aeneas.Std
