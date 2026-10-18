@@ -14,6 +14,7 @@ public import Aeneas.Std.Scalar.Fmt
 public import Aeneas.Std.Scalar.LeadingZeros
 public import Aeneas.Std.Scalar.Misc
 public import Aeneas.Std.Scalar.Notations
+public import Aeneas.Std.Scalar.NumMisc
 public import Aeneas.Std.Scalar.Ops
 public import Aeneas.Std.Scalar.OverflowingOps
 public import Aeneas.Std.Scalar.Pow

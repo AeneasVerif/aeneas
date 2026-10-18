@@ -43,7 +43,7 @@ let builtin_globals () : Pure.builtin_global_info list =
          unit_metadata;
        ];
      ]
-    @ mk_lean_only lean_builtin_consts)
+    @ [ mk_lean_only lean_builtin_consts ])
 
 let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list

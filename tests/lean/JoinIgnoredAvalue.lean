@@ -18,17 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace join_ignored_avalue
-
-/-- [core::num::{u64}::to_le]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 936:8-936:40; this code is generated from a macro invocation at: '/rustc/library/core/src/num/mod.rs', lines 1324:4-1348:5
-    Name pattern: [core::num::{u64}::to_le]
-    Visibility: public -/
-@[rust_fun "core::num::{u64}::to_le"]
-axiom core.num.U64.to_le : Std.U64 → Result Std.U64
 
 /-- [join_ignored_avalue::T]
     Source: 'tests/src/join-ignored-avalue.rs', lines 7:0-10:1
@@ -55,7 +45,7 @@ def f
   let e ←
     core.slice.Slice.get_unchecked (core.slice.index.SliceIndexUsizeSlice
       Std.U64) s i
-  let e1 ← core.num.U64.to_le e
+  let e1 ← lift (core.num.U64.to_le e)
   let (p, from_ref_back1) ← core.ptr.from_ref e1
   let p1 := RawPtr.cast Std.U8 p
   let i1 ←

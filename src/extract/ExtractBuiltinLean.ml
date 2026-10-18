@@ -190,13 +190,33 @@ let lean_builtin_types =
     mk_type "core::sync::atomic::AtomicBool" "core.sync.atomic.AtomicBool";
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 12 *)
     mk_type "core::sync::atomic::AtomicU32" "core.sync.atomic.AtomicU32";
-    (* file: "Aeneas/Std/Float.lean", line: 13 *)
+    (* file: "Aeneas/Std/Float.lean", line: 14 *)
     mk_type "f32" "F32";
-    (* file: "Aeneas/Std/Float.lean", line: 16 *)
+    (* file: "Aeneas/Std/Float.lean", line: 17 *)
     mk_type "f64" "F64";
   ]
 
-let lean_builtin_consts = []
+let lean_builtin_consts =
+  [
+    (* file: "Aeneas/Std/Float.lean", line: 38 *)
+    mk_global "core::f32::{f32}::MANTISSA_DIGITS" "core.f32.F32.MANTISSA_DIGITS"
+      ~can_fail:false;
+    (* file: "Aeneas/Std/Float.lean", line: 42 *)
+    mk_global "core::f32::{f32}::MAX_10_EXP" "core.f32.F32.MAX_10_EXP"
+      ~can_fail:false;
+    (* file: "Aeneas/Std/Float.lean", line: 40 *)
+    mk_global "core::f32::{f32}::MIN_10_EXP" "core.f32.F32.MIN_10_EXP"
+      ~can_fail:false;
+    (* file: "Aeneas/Std/Float.lean", line: 44 *)
+    mk_global "core::f64::{f64}::MANTISSA_DIGITS" "core.f64.F64.MANTISSA_DIGITS"
+      ~can_fail:false;
+    (* file: "Aeneas/Std/Float.lean", line: 48 *)
+    mk_global "core::f64::{f64}::MAX_10_EXP" "core.f64.F64.MAX_10_EXP"
+      ~can_fail:false;
+    (* file: "Aeneas/Std/Float.lean", line: 46 *)
+    mk_global "core::f64::{f64}::MIN_10_EXP" "core.f64.F64.MIN_10_EXP"
+      ~can_fail:false;
+  ]
 
 let lean_builtin_funs =
   [
@@ -419,10 +439,10 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
-    (* file: "Aeneas/Std/Float.lean", line: 19 *)
+    (* file: "Aeneas/Std/Float.lean", line: 20 *)
     mk_fun "core::clone::impls::{core::clone::Clone<f32>}::clone"
       "core.clone.impls.CloneF32.clone";
-    (* file: "Aeneas/Std/Float.lean", line: 22 *)
+    (* file: "Aeneas/Std/Float.lean", line: 23 *)
     mk_fun "core::clone::impls::{core::clone::Clone<f64>}::clone"
       "core.clone.impls.CloneF64.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 23 *)
@@ -490,6 +510,12 @@ let lean_builtin_funs =
       "core::convert::num::ptr_try_from_impls::{core::convert::TryFrom<u32, \
        usize, core::num::error::TryFromIntError>}::try_from"
       "core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 13 *)
+    mk_fun "core::convert::num::{core::convert::From<i32, u8>}::from"
+      "core.convert.num.FromI32U8.from" ~can_fail:false;
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 16 *)
+    mk_fun "core::convert::num::{core::convert::From<i64, u8>}::from"
+      "core.convert.num.FromI64U8.from" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Convert.lean", line: 31 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
       "core.convert.FromSame.from" ~can_fail:false;
@@ -502,9 +528,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Default.lean", line: 12 *)
     mk_fun "core::default::{core::default::Default<bool>}::default"
       "core.default.DefaultBool.default";
-    (* file: "Aeneas/Std/Float.lean", line: 31 *)
+    (* file: "Aeneas/Std/Float.lean", line: 32 *)
     mk_fun "core::f32::{f32}::to_bits" "core.f32.F32.to_bits";
-    (* file: "Aeneas/Std/Float.lean", line: 34 *)
+    (* file: "Aeneas/Std/Float.lean", line: 35 *)
     mk_fun "core::f64::{f64}::to_bits" "core.f64.F64.to_bits";
     (* file: "Aeneas/Std/Scalar/Display.lean", line: 58 *)
     mk_fun "core::fmt::num::imp::{core::fmt::Display<i128>}::fmt"
@@ -964,6 +990,9 @@ let lean_builtin_funs =
     mk_fun "core::mem::swap" "core.mem.swap" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 708 *)
     mk_fun "core::num::{i128}::cast_unsigned" "core.num.I128.cast_unsigned";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 31 *)
+    mk_fun "core::num::{i128}::unsigned_abs" "core.num.I128.unsigned_abs"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 46 *)
     mk_fun "core::num::{i128}::wrapping_shl" "core.num.I128.wrapping_shl"
       ~can_fail:false;
@@ -972,6 +1001,9 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 690 *)
     mk_fun "core::num::{i16}::cast_unsigned" "core.num.I16.cast_unsigned";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 22 *)
+    mk_fun "core::num::{i16}::unsigned_abs" "core.num.I16.unsigned_abs"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 43 *)
     mk_fun "core::num::{i16}::wrapping_shl" "core.num.I16.wrapping_shl"
       ~can_fail:false;
@@ -980,6 +1012,9 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 696 *)
     mk_fun "core::num::{i32}::cast_unsigned" "core.num.I32.cast_unsigned";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 25 *)
+    mk_fun "core::num::{i32}::unsigned_abs" "core.num.I32.unsigned_abs"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 44 *)
     mk_fun "core::num::{i32}::wrapping_shl" "core.num.I32.wrapping_shl"
       ~can_fail:false;
@@ -988,6 +1023,9 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 702 *)
     mk_fun "core::num::{i64}::cast_unsigned" "core.num.I64.cast_unsigned";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 28 *)
+    mk_fun "core::num::{i64}::unsigned_abs" "core.num.I64.unsigned_abs"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 45 *)
     mk_fun "core::num::{i64}::wrapping_shl" "core.num.I64.wrapping_shl"
       ~can_fail:false;
@@ -996,6 +1034,9 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 684 *)
     mk_fun "core::num::{i8}::cast_unsigned" "core.num.I8.cast_unsigned";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 19 *)
+    mk_fun "core::num::{i8}::unsigned_abs" "core.num.I8.unsigned_abs"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 42 *)
     mk_fun "core::num::{i8}::wrapping_shl" "core.num.I8.wrapping_shl"
       ~can_fail:false;
@@ -1028,6 +1069,8 @@ let lean_builtin_funs =
     mk_fun "core::num::{u16}::is_multiple_of" "core.num.U16.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 20 *)
     mk_fun "core::num::{u16}::is_power_of_two" "core.num.U16.is_power_of_two";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 34 *)
+    mk_fun "core::num::{u16}::to_le" "core.num.U16.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 37 *)
     mk_fun "core::num::{u16}::wrapping_shl" "core.num.U16.wrapping_shl"
       ~can_fail:false;
@@ -1052,6 +1095,10 @@ let lean_builtin_funs =
     mk_fun "core::num::{u64}::is_multiple_of" "core.num.U64.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 26 *)
     mk_fun "core::num::{u64}::is_power_of_two" "core.num.U64.is_power_of_two";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 40 *)
+    mk_fun "core::num::{u64}::to_be" "core.num.U64.to_be" ~can_fail:false;
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 37 *)
+    mk_fun "core::num::{u64}::to_le" "core.num.U64.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 39 *)
     mk_fun "core::num::{u64}::wrapping_shl" "core.num.U64.wrapping_shl"
       ~can_fail:false;
@@ -1105,6 +1152,10 @@ let lean_builtin_funs =
       "SharedUsize.Insts.CoreOpsArithAddUsizeUsize.add";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 99 *)
     mk_fun "core::ops::drop::Drop::drop" "core.ops.drop.Drop.drop.default";
+    (* file: "Aeneas/Std/RangeContains.lean", line: 14 *)
+    mk_fun
+      "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::contains"
+      "core.ops.range.RangeInclusive.contains";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 653 *)
     mk_fun
       "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"
@@ -2021,9 +2072,9 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/NonNull.lean", line: 76 *)
     mk_trait_impl "core::marker::Copy<core::ptr::non_null::NonNull<@T>>"
       "NonNull.Insts.CoreMarkerCopy";
-    (* file: "Aeneas/Std/Float.lean", line: 25 *)
+    (* file: "Aeneas/Std/Float.lean", line: 26 *)
     mk_trait_impl "core::marker::Copy<f32>" "core.marker.CopyF32";
-    (* file: "Aeneas/Std/Float.lean", line: 28 *)
+    (* file: "Aeneas/Std/Float.lean", line: 29 *)
     mk_trait_impl "core::marker::Copy<f64>" "core.marker.CopyF64";
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 25 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
