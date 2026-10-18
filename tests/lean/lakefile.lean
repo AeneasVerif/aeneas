@@ -156,6 +156,7 @@ package «tests» {}
 @[default_target] lean_lib Transmutes
 @[default_target] lean_lib TransmutesSpecs
 @[default_target] lean_lib Tutorial
+@[default_target] lean_lib UnreachableUnchecked
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecIter
 @[default_target] lean_lib ZmijRawPointers

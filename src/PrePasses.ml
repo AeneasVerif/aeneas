@@ -92,7 +92,12 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
     [UndefinedBehavior] - this can help us avoid merging control-flow after a
     match for instance *)
 let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
-  let impl_pat = NameMatcher.parse_pattern "core::intrinsics::unreachable" in
+  (* [hint::unreachable_unchecked] is undefined behavior if reached, as
+     [intrinsics::unreachable] *)
+  let impl_pats =
+    List.map NameMatcher.parse_pattern
+      [ "core::intrinsics::unreachable"; "core::hint::unreachable_unchecked" ]
+  in
   let match_name = ExtractName.match_name crate in
 
   let is_unreachable (st : statement) : bool =
@@ -106,7 +111,9 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
                   [%silent_unwrap_opt_span] (Some st.span)
                     (FunDeclId.Map.find_opt fid crate.fun_decls)
                 in
-                match_name impl_pat fun_decl.item_meta.name
+                List.exists
+                  (fun pat -> match_name pat fun_decl.item_meta.name)
+                  impl_pats
             | _ -> false)
         | FnOpDynamic _ -> false)
     | _ -> false
