@@ -497,7 +497,8 @@ let expand_symbolic_value_borrow (span : Meta.span)
  fun ctx ->
   [%sanity_check] span (region <> RErased);
   (* Check that we are allowed to expand the reference *)
-  [%sanity_check] span (not (region_in_set region ctx.ended_regions));
+  [%sanity_check] span
+    (not (Charon.TypesUtils.region_in_set region ctx.ended_regions));
   (* Match on the reference kind *)
   match rkind with
   | RMut ->

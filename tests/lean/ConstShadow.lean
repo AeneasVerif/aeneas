@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -21,7 +22,7 @@ namespace const_shadow
 
 /-- Trait declaration: [const_shadow::HasConst]
     Source: 'tests/src/const-shadow.rs', lines 11:0-15:1 -/
-structure HasConst (Self : Type) (N1 : Std.Usize) where
+structure HasConst (Self : Type _) (N1 : Std.Usize) where
   N : Result Std.Usize
   get : Self → Result (Array Std.U8 N1)
 
@@ -52,7 +53,7 @@ def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {
 /-- [const_shadow::use_has_const]:
     Source: 'tests/src/const-shadow.rs', lines 30:0-34:1 -/
 def use_has_const
-  {T : Type} {N : Std.Usize} (HasConstInst : HasConst T N) (x : T) :
+  {T : Type _} {N : Std.Usize} (HasConstInst : HasConst T N) (x : T) :
   Result ((Array Std.U8 N) × Std.Usize)
   := do
   let arr ← HasConstInst.get x

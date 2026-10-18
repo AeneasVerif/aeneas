@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -42,7 +43,7 @@ def slice_subslice_from_mut
     Source: 'tests/src/slices.rs', lines 11:0-13:1
     Visibility: public -/
 def split_at
-  {T : Type} (x : Slice T) (n : Std.Usize) :
+  {T : Type _} (x : Slice T) (n : Std.Usize) :
   Result ((Slice T) × (Slice T))
   := do
   core.slice.Slice.split_at x n
@@ -51,7 +52,7 @@ def split_at
     Source: 'tests/src/slices.rs', lines 15:0-17:1
     Visibility: public -/
 def split_at_mut
-  {T : Type} (x : Slice T) (n : Std.Usize) :
+  {T : Type _} (x : Slice T) (n : Std.Usize) :
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T))
   := do
   core.slice.Slice.split_at_mut x n
@@ -60,7 +61,7 @@ def split_at_mut
     Source: 'tests/src/slices.rs', lines 19:0-22:1
     Visibility: public -/
 def split_at_mut_and_deref
-  {T : Type} (coremarkerCopyInst : core.marker.Copy T) (x : Slice T)
+  {T : Type _} (coremarkerCopyInst : core.marker.Copy T) (x : Slice T)
   (n : Std.Usize) :
   Result ((T × T) × (Slice T))
   := do
@@ -74,7 +75,7 @@ def split_at_mut_and_deref
     Source: 'tests/src/slices.rs', lines 24:0-26:1
     Visibility: public -/
 def swap
-  {T : Type} (x : Slice T) (n : Std.Usize) (m : Std.Usize) :
+  {T : Type _} (x : Slice T) (n : Std.Usize) (m : Std.Usize) :
   Result (Slice T)
   := do
   core.slice.Slice.swap x n m
@@ -82,7 +83,7 @@ def swap
 /-- [slices::from_vec]:
     Source: 'tests/src/slices.rs', lines 28:0-30:1
     Visibility: public -/
-def from_vec {T : Type} (x : alloc.vec.Vec T) : Result (Slice T) := do
+def from_vec {T : Type _} (x : alloc.vec.Vec T) : Result (Slice T) := do
   alloc.vec.FromBoxSliceVec.from x
 
 end slices

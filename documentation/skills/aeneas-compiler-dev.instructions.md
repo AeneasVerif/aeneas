@@ -79,7 +79,7 @@ When adding a new Rust test file in `tests/src/`:
 2. **Update `tests/lean/lakefile.lean`** — add a `lean_lib` entry for the generated
    module. The entries are sorted alphabetically; insert the new one in the right place.
 
-3. **Mark test functions with `#[verify::test]`** — this generates `#assert` checks
+3. **Mark test functions with `#[verify::test]`** — this generates `#guard` checks
    in the extracted code. Requires `#![feature(register_tool)]` and
    `#![register_tool(verify)]` at the crate level. Only functions with no generics,
    no parameters (or unit parameter), and implicit unit return type qualify.

@@ -11,6 +11,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ namespace bst
 /-- [bst::{bst::TreeSet<T>}::new]:
     Source: 'src/bst.rs', lines 28:4-30:5
     Visibility: public -/
-def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
+def TreeSet.new {T : Type _} (OrdInst : Ord T) : Result (TreeSet T) := do
   ok { root := none }
 
 /-- [bst::{bst::TreeSet<T>}::find]: loop 0:
@@ -31,7 +32,7 @@ def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
     Visibility: public -/
 @[rust_loop]
 def TreeSet.find_loop
-  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type _} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
   := do
   match current_tree with
@@ -49,7 +50,7 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def TreeSet.find
-  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
+  {T : Type _} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result Bool
   := do
   TreeSet.find_loop OrdInst value self.root
@@ -59,7 +60,7 @@ def TreeSet.find
     Visibility: public -/
 @[rust_loop]
 def TreeSet.insert_loop
-  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type _} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result (Bool × (Option (Node T)))
   := do
   match current_tree with
@@ -82,7 +83,7 @@ partial_fixpoint
     Source: 'src/bst.rs', lines 45:4-63:5
     Visibility: public -/
 def TreeSet.insert
-  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
+  {T : Type _} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result (Bool × (TreeSet T))
   := do
   let (b, o) ← TreeSet.insert_loop OrdInst value self.root

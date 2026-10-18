@@ -19,7 +19,7 @@ This tactic is adapted from `zify`.
 namespace Aeneas.Bvify
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
-open Arith Std
+open Arith Aeneas.Std
 
 structure Config where
   nonLin : Bool := true -- We use the non linear lemmas by default
@@ -394,6 +394,37 @@ meta def parseBvify : TSyntax ``bvify -> TacticM (Config × Expr × Utils.Locati
 elab stx:bvify : tactic => do
   let (config, n, loc) ← parseBvify stx
   bvifyTac config n loc
+
+/-! # Bit-vector atoms
+
+`bv_decide` only supports bit-vectors whose width is a literal. `U32.bv x` is an `abbrev` which
+`bv_decide` unfolds to `UScalar.bv x : BitVec UScalarTy.U32.numBits`, a non-literal width.
+We thus register (with `bv_normalize`) rewrite rules to non-reducible copies of `U32.bv`, etc.
+(`U32.bvAtom x : BitVec 32`), which `bv_decide` treats as atoms of literal width.
+`Usize` and `Isize` are not supported (their width is not a literal). -/
+
+@[expose] def U8.bvAtom (x : Std.U8) : BitVec 8 := Std.UScalar.bv x
+@[expose] def U16.bvAtom (x : Std.U16) : BitVec 16 := Std.UScalar.bv x
+@[expose] def U32.bvAtom (x : Std.U32) : BitVec 32 := Std.UScalar.bv x
+@[expose] def U64.bvAtom (x : Std.U64) : BitVec 64 := Std.UScalar.bv x
+@[expose] def U128.bvAtom (x : Std.U128) : BitVec 128 := Std.UScalar.bv x
+@[expose] def I8.bvAtom (x : Std.I8) : BitVec 8 := Std.IScalar.bv x
+@[expose] def I16.bvAtom (x : Std.I16) : BitVec 16 := Std.IScalar.bv x
+@[expose] def I32.bvAtom (x : Std.I32) : BitVec 32 := Std.IScalar.bv x
+@[expose] def I64.bvAtom (x : Std.I64) : BitVec 64 := Std.IScalar.bv x
+@[expose] def I128.bvAtom (x : Std.I128) : BitVec 128 := Std.IScalar.bv x
+
+@[bv_normalize] theorem U8.bv_eq_bvAtom (x : Std.U8) : Std.UScalar.bv x = U8.bvAtom x := rfl
+@[bv_normalize] theorem U16.bv_eq_bvAtom (x : Std.U16) : Std.UScalar.bv x = U16.bvAtom x := rfl
+@[bv_normalize] theorem U32.bv_eq_bvAtom (x : Std.U32) : Std.UScalar.bv x = U32.bvAtom x := rfl
+@[bv_normalize] theorem U64.bv_eq_bvAtom (x : Std.U64) : Std.UScalar.bv x = U64.bvAtom x := rfl
+@[bv_normalize] theorem U128.bv_eq_bvAtom (x : Std.U128) : Std.UScalar.bv x = U128.bvAtom x := rfl
+@[bv_normalize] theorem I8.bv_eq_bvAtom (x : Std.I8) : Std.IScalar.bv x = I8.bvAtom x := rfl
+@[bv_normalize] theorem I16.bv_eq_bvAtom (x : Std.I16) : Std.IScalar.bv x = I16.bvAtom x := rfl
+@[bv_normalize] theorem I32.bv_eq_bvAtom (x : Std.I32) : Std.IScalar.bv x = I32.bvAtom x := rfl
+@[bv_normalize] theorem I64.bv_eq_bvAtom (x : Std.I64) : Std.IScalar.bv x = I64.bvAtom x := rfl
+@[bv_normalize] theorem I128.bv_eq_bvAtom (x : Std.I128) : Std.IScalar.bv x = I128.bvAtom x := rfl
+
 
 example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
   bvify 8 at h

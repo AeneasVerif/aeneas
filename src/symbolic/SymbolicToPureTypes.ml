@@ -65,7 +65,9 @@ let rec translate_generic_args (span : Meta.span option)
       generics.const_generics
   in
   let trait_refs =
-    List.map (translate_trait_ref span translate_ty) generics.trait_refs
+    List.map
+      (translate_region_binder (translate_trait_ref span translate_ty))
+      generics.trait_refs
   in
   { types; const_generics; trait_refs }
 
@@ -73,9 +75,7 @@ and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
   let trait_id = translate_trait_ref_kind span translate_ty tr in
   let trait_decl_ref =
-    translate_region_binder
-      (translate_trait_decl_ref span translate_ty)
-      tr.trait_decl_ref
+    translate_trait_decl_ref span translate_ty tr.trait_decl_ref
   in
   { trait_id; trait_decl_ref }
 
@@ -115,17 +115,17 @@ and translate_trait_ref_kind (span : Meta.span option)
         | _ ->
             [%craise_opt_span] span
               ("Unhandled `BuiltinOrAuto` for trait "
-              ^ TraitDeclId.to_string tref.trait_decl_ref.binder_value.id
+              ^ TraitDeclId.to_string tref.trait_decl_ref.id
               ^ "; builtin_impl_data: "
               ^ Types.show_builtin_impl_data data)
       in
       BuiltinOrAuto data
-  | Clause var ->
+  | Clause (var, _) ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
-  | ParentClause (tref, clause_id) ->
+  | ParentClause (tref, clause_id, _) ->
       let inst_id = translate_trait_ref_kind span translate_ty tref in
-      ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
+      ParentClause (inst_id, tref.trait_decl_ref.id, clause_id)
   | ItemClause _ ->
       (* `ItemClause`s are removed by Charon's `--remove-associated-types`, except for GATs *)
       [%craise_opt_span] span "Generic Associated Types are not supported yet"
@@ -394,7 +394,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
         "Unimplemented";
       let trait_ref = translate_fwd_trait_ref span decls_ctx trait_ref in
       TTraitType (trait_ref, type_name)
-  | TFnDef { binder_regions; binder_value = { kind; generics } } -> (
+  | TFnDef { binder_regions; binder_value = { kind; generics }; _ } -> (
       [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
       let generics = translate_fwd_generic_args span decls_ctx generics in
       match kind with
@@ -788,24 +788,27 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
 
   (* Compute the map from region id to region group id *)
   let rg_to_gr_id =
-    T.RegionId.Map.of_list
+    TypesUtils.RegionMap.of_list
       (List.flatten
          (List.map
-            (fun (gr : T.region_var_group) ->
-              List.map (fun rid -> (rid, gr.id)) gr.regions)
+            (fun (gr : T.region_group) ->
+              List.map (fun r -> (r, gr.id)) gr.regions)
             sg.regions_hierarchy))
   in
   let get_region_group (r : T.region) : T.RegionGroupId.id =
     match r with
-    | T.RStatic -> [%craise_opt_span] span "Unimplemented: static region"
+    | T.RStatic -> (
+        match TypesUtils.RegionMap.find_opt r rg_to_gr_id with
+        | Some gr -> gr
+        | None -> [%internal_error_opt_span] span)
     | RErased -> [%craise_opt_span] span "Unexpected erased region"
     | RVar (Bound _ as var) ->
         [%craise_opt_span] span
           ("Unexpected bound region: "
           ^ Charon.Print.region_db_var_to_pretty_string var)
     | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
-    | RVar (Free rid) -> (
-        match T.RegionId.Map.find_opt rid rg_to_gr_id with
+    | RVar (Free _) -> (
+        match TypesUtils.RegionMap.find_opt r rg_to_gr_id with
         | Some gr -> gr
         | None -> [%internal_error_opt_span] span)
   in
@@ -926,7 +929,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
     outputs
   in
-  let compute_back_info_for_group (rg : T.region_var_group) :
+  let compute_back_info_for_group (rg : T.region_group) :
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
     let back_effect_info =
@@ -992,7 +995,8 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     (input_names : string option list) : fun_sigs =
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig span decls_ctx.crate sg
+    RegionsHierarchy.compute_regions_hierarchy_for_sig span decls_ctx.crate
+      decls_ctx.type_ctx.type_infos sg
   in
 
   let inst_sg : LlbcAst.inst_fun_sig =
@@ -1003,7 +1007,7 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     let _, fresh_abs_id = V.AbsId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
       List.map
-        (fun (rg : T.region_var_group) -> (rg.id, fresh_abs_id ()))
+        (fun (rg : T.region_group) -> (rg.id, fresh_abs_id ()))
         regions_hierarchy
     in
     let region_gr_id_to_abs =
@@ -1012,7 +1016,7 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     let region_id_to_abs id = RegionGroupId.Map.find id region_gr_id_to_abs in
     let abs_regions_hierarchy =
       List.map
-        (fun (rg : T.region_var_group) ->
+        (fun (rg : T.region_group) ->
           let id = region_id_to_abs rg.id in
           let parents = List.map region_id_to_abs rg.parents in
           { T.id; parents; regions = rg.regions })
@@ -1052,14 +1056,11 @@ and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
     (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
     (_bound_method : A.trait_method T.binder) : fun_sigs =
   let span = trait_decl.item_meta.span in
-  let trait_decl_ref : T.trait_decl_ref T.region_binder =
+  let trait_decl_ref : T.trait_decl_ref =
     let generics =
       Charon.TypesUtils.generic_args_of_params (Some span) trait_decl.generics
     in
-    {
-      binder_regions = [];
-      binder_value = ({ id = trait_decl.def_id; generics } : T.trait_decl_ref);
-    }
+    { id = trait_decl.def_id; generics }
   in
   let trait_ref = ({ kind = T.Self; trait_decl_ref } : T.trait_ref) in
   let trait_ref = translate_fwd_trait_ref (Some span) decls_ctx trait_ref in

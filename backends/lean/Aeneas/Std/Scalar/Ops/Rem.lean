@@ -43,27 +43,27 @@ implemented by the `Int.tdiv`, `Int.tmod`, etc. definitions.
 
 namespace Tests
   -- Checking that the remainder over signed integers agrees with Rust
-  #assert Int.tmod 1 2 = 1
-  #assert Int.tmod (-1) 2 = -1
-  #assert Int.tmod 1 (-2) = 1
-  #assert Int.tmod (-1) (-2) = -1
-  #assert Int.tmod 7 3 = (1:Int)
-  #assert Int.tmod (-7) 3 = -1
-  #assert Int.tmod 7 (-3) = 1
-  #assert Int.tmod (-7) (-3) = -1
+  #guard Int.tmod 1 2 = 1
+  #guard Int.tmod (-1) 2 = -1
+  #guard Int.tmod 1 (-2) = 1
+  #guard Int.tmod (-1) (-2) = -1
+  #guard Int.tmod 7 3 = (1:Int)
+  #guard Int.tmod (-7) 3 = -1
+  #guard Int.tmod 7 (-3) = 1
+  #guard Int.tmod (-7) (-3) = -1
 
   -- Checking that the signed operation over bit-vectors agrees with Rust
   private def bv_srem (x y : Int) : Int :=
     (BitVec.srem (BitVec.ofInt 32 x) (BitVec.ofInt 32 y)).toInt
 
-  #assert bv_srem 1 2 = 1
-  #assert bv_srem (-1) 2 = -1
-  #assert bv_srem 1 (-2) = 1
-  #assert bv_srem (-1) (-2) = -1
-  #assert bv_srem 7 3 = (1:Int)
-  #assert bv_srem (-7) 3 = -1
-  #assert bv_srem 7 (-3) = 1
-  #assert bv_srem (-7) (-3) = -1
+  #guard bv_srem 1 2 = 1
+  #guard bv_srem (-1) 2 = -1
+  #guard bv_srem 1 (-2) = 1
+  #guard bv_srem (-1) (-2) = -1
+  #guard bv_srem 7 3 = (1:Int)
+  #guard bv_srem (-7) 3 = -1
+  #guard bv_srem 7 (-3) = 1
+  #guard bv_srem (-7) (-3) = -1
 end Tests
 
 /-!

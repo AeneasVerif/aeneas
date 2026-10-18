@@ -381,7 +381,7 @@ namespace Test
   /-!
   Making some tests here as models to guide the automation generation of proof terms when lifting theorems in `step_pure`
   -/
-  open Std Result
+  open Aeneas.Std Result
   def pos_pair : Int × Int := (0, 1)
 
   theorem pos_pair_is_pos :
@@ -458,7 +458,7 @@ meta def reduceProdProjs (e : Expr) : MetaM Expr := do
       pure (.continue e)
   transform e (pre := pre)
 
-open Std.WP
+open Aeneas.Std.WP
 
 theorem intro_uncurry' (p : α × β → Prop) : p = uncurry' (fun x y => p (x, y)) := by
   unfold uncurry'
@@ -655,7 +655,9 @@ info: Aeneas.Step.Test.pos_triple_is_pos.step_spec :
   #guard_msgs in
   #check pos_triple_is_pos.step_spec
 
-  def pos_triple_is_pos' := pos_triple_is_pos
+  theorem pos_triple_is_pos' :
+    let (x, y, z) := pos_triple
+    x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 := pos_triple_is_pos
   #step_pure_lift_thm pos_triple_is_pos' (∃ z, pos_triple = z)
 
   /--

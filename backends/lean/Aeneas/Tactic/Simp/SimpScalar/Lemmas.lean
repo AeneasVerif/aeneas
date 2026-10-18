@@ -4,31 +4,13 @@ public import Aeneas.Tactic.Simproc.ReduceNat
 import all Init.Data.Nat.Power2.Basic
 public section
 
-section
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
+dsimproc [scalar_tac_simps, simp_scalar_safe] Nat.reduceLog2' (Nat.log2 _) := Nat.reduceLog2
 
-  open Aeneas Utils Lean Meta
-
-  meta initialize registerTraceClass `ReduceLog2
-
-  -- TODO: the pattern `Nat.log2 (@OfNat.ofNat _ _ _)` doesn't work
-  simproc Nat.reduceLog2 (Nat.log2 _) := fun e => do
-    match e.consumeMData.getAppFnArgs with
-    | (``Nat.log2, #[value]) =>
-      trace[ReduceLog2] "- value: {value}"
-      -- Retrieve the value
-      let value ← if let some value := exprToNat? value then pure value else return .continue
-      -- Compute the log
-      let log := value.log2
-      trace[ReduceLog2] "- value.log2: {log}"
-      -- Create the new expression - the proof is by reflection
-      return .visit {expr := .lit (.natVal log)}
-    | _ => return .continue
-
-  example : (2^128).log2 = 128 := by simp
-
-  attribute [scalar_tac_simps, simp_scalar_safe] Nat.reduceLog2
-
-end
+example : (2^128).log2 = 128 := by simp
+example : Nat.log2 4294967296 = 32 := by simp_scalar
+example (x : Nat) (h : x < (2^128).log2) : x < 128 := by scalar_tac
 
 @[simp_scalar_safe]
 theorem Nat.mod_mod_of_pow_le (a n m : Nat) (h : m ≤ n) :

@@ -237,11 +237,15 @@ meta def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   let e := e.consumeMData
   if e.isIte || e.isDIte then
     let kind := if e.isIte then .ite else .dite
-    let e ← deltaExpand e (fun n => n == ``ite || n == ``dite)
-    let .const ``Decidable.casesOn uLevels := e.getAppFn
-      | throwError "Expected ``Decidable.casesOn, found {←ppExpr e.getAppFn}"
-    let #[prop, motive, dec, brFalse, brTrue] := e.getAppArgs
+    /- We do not unfold `ite`/`dite`: their implementation is an internal detail of the
+       `Decidable` class which changes between Lean versions. -/
+    let .const fn uLevels := e.getAppFn
+      | throwError "Expected a constant, found {←ppExpr e.getAppFn}"
+    let #[α, prop, dec, brTrue, brFalse] := e.getAppArgs
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs.size} [{e.getAppArgs}]"
+    let (brTrue, brFalse) :=
+      if e.isIte then (Expr.lam `h prop brTrue .default, Expr.lam `h (mkNot prop) brFalse .default)
+      else (brTrue, brFalse)
     let name? ← if e.isDIte
       then some <$> Utils.lambdaOne brFalse fun x _ => x.fvarId!.getUserName
       else pure none
@@ -252,10 +256,10 @@ meta def Info.ofExpr(e: Expr): MetaM (Option Info) := do
         { toExpr := brTrue,  numArgs := 1, },
         { toExpr := brFalse, numArgs := 1, }
       ]
-      matcher := ``Decidable.casesOn,
+      matcher := fn,
       uLevels,
       params  := #[prop]
-      motive,
+      motive := α,
       scrut := dec,
     }
   else if let some ma ← Meta.matchMatcherApp? e (alsoCasesOn := true) then
@@ -294,6 +298,7 @@ structure Config where
   /-- We need the original configuration syntax to generate the proof script -/
   configSyntax : Option (TSyntax `Lean.Parser.Tactic.optConfig)
   preconditionTac: Option Syntax.Tactic := none
+  dischargeTac : Option Name := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `step with ... as ⟨ ... ⟩`? -/
   prettyPrintedStep : Bool := true
   useCase : Bool := false
@@ -399,13 +404,16 @@ meta def analyzeTarget : TacticM TargetKind := do
     else
       trace[Step] "not a registered spec"
       pure .result
-  catch _ =>
-    trace[Step] "exception caught"
+  catch ex =>
+    trace[Step] "exception caught: {ex.toMessageData}"
     pure .unknown
 
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
+  -- Lookup the registered discharge tactic by analyzing which spec is in the target
+  let info? ← observing? (Step.getSpecInfoArgs (← instantiateMVars (← getMainTarget)))
+  let cfg := { cfg with dischargeTac := info?.bind (·.1.discharge_tactic) }
   -- Initialize the step state (grind threading)
   let initState : Step.StepState ←
     if cfg.stepConfig.threadGrindState then
@@ -457,7 +465,7 @@ where
       {simpThms := #[← Step.stepSimpExt.getTheorems]}
       (.targets #[] true)
     /- We may have proven the goal already -/
-    let tac : Array Syntax.Tactic ← do
+    let tac : Array (TaskOrDone (Option Syntax.Tactic)) ← do
       let genSimp : Bool ← do
         if r.isNone then pure true
         else do
@@ -616,8 +624,13 @@ where
             trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
+      let dischargeTacl ← cfg.dischargeTac.toList.mapM fun name => do
+        pure (
+          s!"discharge tactic `{name}`",
+          ← `(tactic| run_tac $(mkIdent name):ident),
+          do (← evalDischargeTactic name))
       let finishTactics :=
-        [("grind", ← `(tactic| agrind), grindTac)] ++
+        dischargeTacl ++ [("grind", ← `(tactic| agrind), grindTac)] ++
         match cfg.preconditionTac with
         | none => []
         | some tac => [("user tactic", tac, evalTactic tac)]
@@ -890,7 +903,7 @@ end StepStar
 
 section Examples
 
-open Std.WP
+open Aeneas.Std.WP
 
 /--
 info: Try this:
@@ -900,7 +913,7 @@ info: Try this:
 #guard_msgs in
 example : True := by step*?
 
-open Std Result
+open Aeneas.Std Result
 
 def add1 (x0 x1 : U32) : Std.Result U32 := do
   let x2 ← x0 + x1

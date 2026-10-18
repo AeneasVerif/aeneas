@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ namespace order
     Source: 'tests/src/order.rs', lines 7:0-9:1
     Visibility: public -/
 def compare
-  {T : Type} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
+  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
   Result Ordering
   := do
   corecmpOrdInst.cmp x y
@@ -151,7 +152,7 @@ def test_wrap_lt : Result Unit := do
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_lt] -/
-#assert (test_wrap_lt).reducesTo ()
+#guard (test_wrap_lt).reducesTo ()
 
 /-- [order::test_wrap_le]:
     Source: 'tests/src/order.rs', lines 46:0-50:1
@@ -171,7 +172,7 @@ def test_wrap_le : Result Unit := do
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_le] -/
-#assert (test_wrap_le).reducesTo ()
+#guard (test_wrap_le).reducesTo ()
 
 /-- [order::test_wrap_gt]:
     Source: 'tests/src/order.rs', lines 53:0-57:1
@@ -191,7 +192,7 @@ def test_wrap_gt : Result Unit := do
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_gt] -/
-#assert (test_wrap_gt).reducesTo ()
+#guard (test_wrap_gt).reducesTo ()
 
 /-- [order::test_wrap_ge]:
     Source: 'tests/src/order.rs', lines 60:0-64:1
@@ -211,7 +212,7 @@ def test_wrap_ge : Result Unit := do
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_ge] -/
-#assert (test_wrap_ge).reducesTo ()
+#guard (test_wrap_ge).reducesTo ()
 
 /-- [order::test_wrap_max]:
     Source: 'tests/src/order.rs', lines 67:0-71:1
@@ -228,7 +229,7 @@ def test_wrap_max : Result Unit := do
   massert b2
 
 /- Unit test for [order::test_wrap_max] -/
-#assert (test_wrap_max).reducesTo ()
+#guard (test_wrap_max).reducesTo ()
 
 /-- [order::test_wrap_min]:
     Source: 'tests/src/order.rs', lines 74:0-78:1
@@ -245,7 +246,7 @@ def test_wrap_min : Result Unit := do
   massert b2
 
 /- Unit test for [order::test_wrap_min] -/
-#assert (test_wrap_min).reducesTo ()
+#guard (test_wrap_min).reducesTo ()
 
 /-- [order::test_wrap_clamp]:
     Source: 'tests/src/order.rs', lines 81:0-85:1
@@ -265,7 +266,7 @@ def test_wrap_clamp : Result Unit := do
   massert b2
 
 /- Unit test for [order::test_wrap_clamp] -/
-#assert (test_wrap_clamp).reducesTo ()
+#guard (test_wrap_clamp).reducesTo ()
 
 /-- [order::Rank]
     Source: 'tests/src/order.rs', lines 88:0-92:1
@@ -367,7 +368,7 @@ def test_rank_lt : Result Unit := do
   massert (¬ b2)
 
 /- Unit test for [order::test_rank_lt] -/
-#assert (test_rank_lt).reducesTo ()
+#guard (test_rank_lt).reducesTo ()
 
 /-- [order::Num]
     Source: 'tests/src/order.rs', lines 105:0-108:1
@@ -446,7 +447,7 @@ def test_num_incomparable : Result Unit := do
   massert (¬ b4)
 
 /- Unit test for [order::test_num_incomparable] -/
-#assert (test_num_incomparable).reducesTo ()
+#guard (test_num_incomparable).reducesTo ()
 
 /-- [order::test_wrap_ref_lt]:
     Source: 'tests/src/order.rs', lines 142:0-147:1
@@ -462,7 +463,7 @@ def test_wrap_ref_lt : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_lt] -/
-#assert (test_wrap_ref_lt).reducesTo ()
+#guard (test_wrap_ref_lt).reducesTo ()
 
 /-- [order::test_wrap_ref_le]:
     Source: 'tests/src/order.rs', lines 150:0-155:1
@@ -478,7 +479,7 @@ def test_wrap_ref_le : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_le] -/
-#assert (test_wrap_ref_le).reducesTo ()
+#guard (test_wrap_ref_le).reducesTo ()
 
 /-- [order::test_wrap_ref_gt]:
     Source: 'tests/src/order.rs', lines 158:0-163:1
@@ -494,7 +495,7 @@ def test_wrap_ref_gt : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_gt] -/
-#assert (test_wrap_ref_gt).reducesTo ()
+#guard (test_wrap_ref_gt).reducesTo ()
 
 /-- [order::test_wrap_ref_ge]:
     Source: 'tests/src/order.rs', lines 166:0-171:1
@@ -510,7 +511,7 @@ def test_wrap_ref_ge : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_ge] -/
-#assert (test_wrap_ref_ge).reducesTo ()
+#guard (test_wrap_ref_ge).reducesTo ()
 
 /-- [order::test_wrap_ref_partial_cmp]:
     Source: 'tests/src/order.rs', lines 174:0-182:1
@@ -530,7 +531,7 @@ def test_wrap_ref_partial_cmp : Result Unit := do
   massert b
 
 /- Unit test for [order::test_wrap_ref_partial_cmp] -/
-#assert (test_wrap_ref_partial_cmp).reducesTo ()
+#guard (test_wrap_ref_partial_cmp).reducesTo ()
 
 /-- [order::Keyed]
     Source: 'tests/src/order.rs', lines 188:0-191:1
@@ -612,7 +613,7 @@ def test_keyed_max_tie : Result Unit := do
   massert (k.tag = 1#u8)
 
 /- Unit test for [order::test_keyed_max_tie] -/
-#assert (test_keyed_max_tie).reducesTo ()
+#guard (test_keyed_max_tie).reducesTo ()
 
 /-- [order::test_keyed_min_tie]:
     Source: 'tests/src/order.rs', lines 223:0-227:1
@@ -624,7 +625,7 @@ def test_keyed_min_tie : Result Unit := do
   massert (k.tag = 0#u8)
 
 /- Unit test for [order::test_keyed_min_tie] -/
-#assert (test_keyed_min_tie).reducesTo ()
+#guard (test_keyed_min_tie).reducesTo ()
 
 /-- [order::test_keyed_clamp_tie]:
     Source: 'tests/src/order.rs', lines 231:0-238:1
@@ -642,6 +643,6 @@ def test_keyed_clamp_tie : Result Unit := do
   massert (r1.tag = 0#u8)
 
 /- Unit test for [order::test_keyed_clamp_tie] -/
-#assert (test_keyed_clamp_tie).reducesTo ()
+#guard (test_keyed_clamp_tie).reducesTo ()
 
 end order

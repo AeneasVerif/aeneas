@@ -49,8 +49,8 @@ let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
 
     We check that the value *doesn't contain bottoms or reserved borrows*. *)
 let read_place_check (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : loan_id option * tvalue =
-  let lid, v = read_place span access p ctx in
+    (ctx : eval_ctx) : loan_id option * tvalue * path =
+  let lid, v, path = eval_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   [%cassert] span
     (not (bottom_in_value ctx.ended_regions v))
@@ -60,12 +60,15 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (not (reserved_in_value v))
     "There should be no reserved borrows in the value";
   (* Return *)
-  (lid, v)
+  (lid, v, path)
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    loan_id option * tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
-    =
+    loan_id option
+    * tvalue
+    * path
+    * eval_ctx
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Make sure we can evaluate the path *)
   let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
@@ -78,16 +81,16 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let lid, value = read_place_check span access p ctx in
+  let lid, value, path = read_place_check span access p ctx in
   (* Compose *)
-  (lid, value, ctx, cc)
+  (lid, value, path, ctx, cc)
 
 let access_rplace_reorganize (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   if ExpressionsUtils.place_accesses_global p then (ctx, fun x -> x)
   else
-    let _, _, ctx, f =
+    let _, _, _, ctx, f =
       access_rplace_reorganize_and_read config span greedy_expand access p ctx
     in
     (ctx, f)
@@ -246,10 +249,24 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         let updated_sv = mk_fresh_symbolic_value span ctx ty in
         let copied_sv = mk_fresh_symbolic_value span ctx ty in
 
+        (* Note that the static region is not refreshed: if the type contains
+           it (it may be hidden in an ADT, see
+           {!TypesUtils.adt_has_hidden_static}) we also need to introduce an
+           abstraction for the static region. *)
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) (RegionId.Map.values regions)
+          @
+          if
+            ty_has_regions_in_set ctx.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              ty
+          then [ RStatic ]
+          else []
+        in
         let abs =
           List.map
-            (fun rid ->
-              let owned = RegionId.Set.singleton rid in
+            (fun r ->
+              let owned = RegionSet.singleton r in
 
               (* Create the continuation, for the translation *)
               let abs_cont : abs_cont =
@@ -292,7 +309,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               (* *)
               abs
               (*mk_abs rid [ sv; updated_sv; copied_sv ]*))
-            (RegionId.Map.values regions)
+            regions
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in
         let ctx = { ctx with env = abs @ ctx.env } in
@@ -397,34 +414,23 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           | TAdt { builtin = Some TStr; _ } ->
               let v : tvalue = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
-          | TRef (RErased, (TAdt { builtin = Some TStr; _ } as str_ty), RShared)
-            ->
+          | TRef
+              ( (RErased | RStatic),
+                (TAdt { builtin = Some TStr; _ } as str_ty),
+                RShared ) ->
               (* Reference to a string *)
               (* Generate a fresh symbolic value for the string. In the translation,
                  this fresh symbolic value will be defined as equal to the value of
                  the string.
 
-                 We then create a reference to the string. *)
+                 We then create a reference to the string: we put the
+                 corresponding shared loan in a region abstraction owning the
+                 static region. *)
               let sv = mk_fresh_symbolic_value span ctx str_ty in
               let sval = mk_tvalue_from_symbolic_value sv in
-              (* Create a shared loan containing the string, as well as a shared borrow *)
-              let bid = ctx.fresh_borrow_id () in
-              let sid = ctx.fresh_shared_borrow_id () in
-              let loan : tvalue =
-                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              let ctx, borrow =
+                push_value_to_static_shared_loan span ctx sval str_ty
               in
-              let borrow : tvalue =
-                {
-                  value = VBorrow (VSharedBorrow (bid, sid));
-                  ty = TRef (RErased, sval.ty, RShared);
-                }
-              in
-              (* We need to push the shared loan in a dummy variable.
-                 Generally speaking we should not be allowed to put loans in dummy variables,
-                 but in the case of static lifetimes it is ok. TODO: generalize. *)
-              [%cassert] span (not !Config.use_static) "Unimplemented";
-              let dummy_id = ctx.fresh_dummy_var_id () in
-              let ctx = ctx_push_dummy_var ctx dummy_id loan in
               (* Create the symbolic expression *)
               let cf e =
                 let v : tvalue = { value = VLiteral lit; ty = str_ty } in
@@ -444,34 +450,22 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
              Remark: there is a special case if the value is a static reference:
              in this case we directly introduce the expanded borrow.
 
-             TODO: add static lifetimes in region abstractions. *)
+             We put the corresponding shared loan in a region abstraction owning
+             the static region. *)
 
           let ty = cv.ty in
-          (* TODO: the lifetime should be 'static but we erase it in PrePasses *)
           match ty with
           | TRef ((RStatic | RErased), ty_inner, ref_kind) ->
               [%ldebug "static ref"];
-              [%cassert] span (not !Config.use_static) "Unimplemented";
               [%cassert] span (ref_kind = RShared)
                 "Mutable references for lifetime 'static are not supported";
               let sval = mk_fresh_symbolic_tvalue span ctx ty_inner in
-              (* Create a shared loan containing the global, as well as a shared borrow *)
-              let bid = ctx.fresh_borrow_id () in
-              let sid = ctx.fresh_shared_borrow_id () in
-              let loan : tvalue =
-                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              (* Create a shared loan containing the constant (in a region
+                 abstraction owning the static region), as well as a shared
+                 borrow *)
+              let ctx, borrow =
+                push_value_to_static_shared_loan span ctx sval ty_inner
               in
-              let borrow : tvalue =
-                {
-                  value = VBorrow (VSharedBorrow (bid, sid));
-                  ty = TRef (RErased, sval.ty, RShared);
-                }
-              in
-              (* We need to push the shared loan in a dummy variable.
-                 Generally speaking we should not be allowed to put loans in dummy variables,
-                 but in the case of static lifetimes it is ok. TODO: generalize. *)
-              let dummy_id = ctx.fresh_dummy_var_id () in
-              let ctx = ctx_push_dummy_var ctx dummy_id loan in
 
               (* Wrap the generated expression *)
               let cf e =
@@ -556,7 +550,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let _, v = read_place_check span access p ctx in
+      let _, v, path = read_place_check span access p ctx in
       (* Sanity checks *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
@@ -571,20 +565,20 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         copy_value span allow_adt_copy config ctx v
       in
       (* Update the original value *)
-      let ctx = write_place span access p updated_value ctx in
+      let ctx = write_path span path updated_value ctx in
       (* *)
       (copied_value, ctx, cc)
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let _, v = read_place_check span access p ctx in
+      let _, v, path = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
         "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : tvalue = { value = VBottom; ty = v.ty } in
-      let ctx = write_place span access p bottom ctx in
+      let ctx = write_path span path bottom ctx in
       (v, ctx, fun e -> e)
 
 let eval_operand (config : config) (span : Meta.span) (op : operand)
@@ -663,11 +657,10 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         match mk_integer_value ptr_size (get_ty sv) i with
         | Error _ -> Error EPanic
         | Ok sv -> Ok { v with value = VLiteral (VScalar sv) })
-    | Cast (CastScalar (src, tgt)), VLiteral (VScalar sv)
-      when scalar_type_is_integer src && scalar_type_is_integer tgt -> (
+    | Cast (CastScalar tgt), VLiteral (VScalar sv)
+      when scalar_type_is_integer tgt -> (
         (* Cast between integers *)
-        let src_ty, tgt_ty = (scalar_as_integer src, scalar_as_integer tgt) in
-        [%sanity_check] span (src_ty = get_ty sv);
+        let tgt_ty = scalar_as_integer tgt in
         let i = get_val sv in
         let ptr_size = get_target_ptr_size span ctx.crate in
         match mk_integer_value ptr_size tgt_ty i with
@@ -676,8 +669,8 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (TBool, tgt)), VLiteral (VBool sv)
-      when scalar_type_is_integer tgt -> (
+    | Cast (CastScalar tgt), VLiteral (VBool sv) when scalar_type_is_integer tgt
+      -> (
         (* Cast bool -> int *)
         let tgt_ty = scalar_as_integer tgt in
         let i = Z.of_int (if sv then 1 else 0) in
@@ -688,8 +681,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (src, TBool)), VLiteral (VScalar sv)
-      when scalar_type_is_integer src ->
+    | Cast (CastScalar TBool), VLiteral (VScalar sv) ->
         (* Cast int -> bool *)
         let b =
           if Z.of_int 0 = get_val sv then false
@@ -780,7 +772,12 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* There is a special case for casts which convert dyn traits (for instance:
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
-  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
+  | Cast (CastUnsize (ty1, MetaVTable (trait_ref, _))) -> (
+      let ty0 = v.ty in
+      [%cassert] span
+        (trait_ref.binder_regions = [])
+        "Higher-ranked vtables are not supported";
+      let trait_ref = Charon.Substitute.poly_trait_ref_erase_binder trait_ref in
       (* Casting a type to a dyn trait *)
       [%ltrace
         "dyn trait cast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
@@ -908,7 +905,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
               kind = CopySymbolicValue;
               can_end = true;
               parents = AbsId.Set.empty;
-              regions = { owned = RegionId.Set.singleton rid };
+              regions = { owned = RegionSet.singleton (RVar (Free rid)) };
               ended_subabs = AbsLevelSet.empty;
               avalues = borrows @ [ loan ];
               cont =
@@ -945,7 +942,8 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
           in
           (Ok output, ctx, cc_comp cc cf)
       | _ -> [%craise] span "Unsupported cast to a dynamic trait")
-  | Cast (CastUnsize (ty0, ty1, MetaVTableUpcast fields)) ->
+  | Cast (CastUnsize (ty1, MetaVTableUpcast fields)) ->
+      let ty0 = v.ty in
       (* Casting a dyn trait to a dyn trait *)
       [%ltrace
         "dyn trait upcast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
@@ -972,13 +970,13 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
         | Not, (TScalar (TInteger (Unsigned _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Signed _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Unsigned _)) as lty) -> lty
-        | Cast (CastScalar (_, tgt_ty)), _ -> TScalar tgt_ty
-        | Cast (CastUnsize (ty0, ty1, _)), _ ->
+        | Cast (CastScalar tgt_ty), _ -> TScalar tgt_ty
+        | Cast (CastUnsize (ty1, _)), ty0 ->
             (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
             let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
             ty1
-        | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
+        | Cast (CastRawPtr tgt_ty), _ -> tgt_ty
         | _ ->
             [%craise] span
               ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
@@ -1223,7 +1221,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       in
 
       let greedy_expand = false in
-      let lid, v, ctx, cc =
+      let lid, v, path, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Generate the fresh shared borrow id *)
@@ -1241,7 +1239,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
             (bid, { v with value = v' })
       in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_path span path nv ctx in
       (* Compute the rvalue - simply a shared borrow with the fresh id.
        * Note that the reference is *mutable* if we do a two-phase borrow *)
       let ref_kind =
@@ -1269,7 +1267,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Access the value *)
       let access = Write in
       let greedy_expand = false in
-      let _, v, ctx, cc =
+      let _, v, path, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
@@ -1279,7 +1277,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Compute the loan value with which to replace the value at place p *)
       let nv = { v with value = VLoan (VMutLoan bid) } in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_path span path nv ctx in
       (* Return *)
       (rv, ctx, cc)
 
@@ -1378,7 +1376,7 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
   (* Read the place *)
   let access = Read in
   let expand_prim_copy = false in
-  let _, v, ctx, cf_read =
+  let _, v, _, ctx, cf_read =
     access_rplace_reorganize_and_read config span expand_prim_copy access p ctx
   in
   let v = value_strip_shared_loans v in
@@ -1491,7 +1489,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   let greedy_expand = false in
-  let _, v, ctx, cc =
+  let _, v, _, ctx, cc =
     access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
   [%cassert] span

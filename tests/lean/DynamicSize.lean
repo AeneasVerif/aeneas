@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -28,7 +29,7 @@ def alloc_slice (N : Std.Usize) : Result (Slice Std.U8) := do
 /-- [dynamic_size::Wrapper]
     Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1
     Visibility: public -/
-structure Wrapper (T : Type) where
+structure Wrapper (T : Type _) where
   data : T
 
 /-- [dynamic_size::alloc_wrapper]:

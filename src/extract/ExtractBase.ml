@@ -565,6 +565,10 @@ let scalar_name (ty : literal_type) : string =
       match backend () with
       | FStar | Coq | HOL4 -> "int"
       | Lean -> "Int")
+  | TPureString -> (
+      match backend () with
+      | FStar | Coq | HOL4 -> "string"
+      | Lean -> "String")
 
 (** Extraction context.
 
@@ -1458,11 +1462,21 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
 
 (** The type of types.
 
+    In Lean, [~poly:true] prints [Type _] so that generic type parameters are
+    universe-polymorphic: generic code sometimes needs to manipulate types which
+    live in universes higher than [Type]. For instance, adding effects to
+    [Result] can push it to a higher universe: an effect which
+    nondeterministically picks a value of any [Type] puts [Result] in [Type 1],
+    so a function type [A -> Result B] lives at least in [Type 1].
+
+    Use [~poly:false] where Lean can't infer the level.
+
     TODO: move inside the formatter? *)
-let type_keyword (span : Meta.span) =
+let type_keyword ~(poly : bool) (span : Meta.span) =
   match backend () with
   | FStar -> "Type0"
-  | Coq | Lean -> "Type"
+  | Coq -> "Type"
+  | Lean -> if poly then "Type _" else "Type"
   | HOL4 -> [%craise] span "Unexpected"
 
 (** Helper *)
@@ -2038,7 +2052,8 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TInt _ | TUInt _ -> "i"
           | TFloat _ -> "fl"
           | TPureNat -> "n"
-          | TPureInt -> "i")
+          | TPureInt -> "i"
+          | TPureString -> "s")
       | TArrow _ -> "f"
       | TTraitType (trait_ref, type_id) ->
           let name =
