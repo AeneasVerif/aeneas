@@ -397,6 +397,307 @@ let update_array_default (crate : crate) : crate =
 
 exception FoundStatement of statement
 
+(** Desugar the returns inside nested loops, and the breaks/continues to outer
+    loops, by using flags:
+    {[
+      loop {
+        loop {
+          if b { return; }
+          if c { break 1; }
+          ...
+        }
+        ...
+      }
+
+        ~~>
+
+      loop {
+        ret = false;
+        brk1 = false;
+        loop {
+          if b { ret = true; break; }
+          if c { brk1 = true; break; }
+          ...
+        }
+        if ret { return; }
+        if brk1 { break; }
+        ...
+      }
+    ]}
+    We proceed bottom-up: the statements inserted after an inner loop are
+    handled when processing the enclosing loop. The returns directly inside the
+    outermost loops are handled by [update_loops]. *)
+let desugar_nested_loop_exits (crate : crate) (f : fun_decl) : fun_decl =
+  (* The [Option] type, to carry the returned values out of the inner loops *)
+  let option_id =
+    let fmt_env = Print.crate_to_fmt_env crate in
+    TypeDeclId.Map.fold
+      (fun id (d : type_decl) acc ->
+        if
+          Print.name_to_string fmt_env d.item_meta.name = "core::option::Option"
+        then Some id
+        else acc)
+      crate.type_decls None
+  in
+  match f.body with
+  | StructuredBody body ->
+      let new_locals = ref [] in
+      let _, gen =
+        LocalId.mk_stateful_generator_starting_at_id
+          (LocalId.of_int (List.length body.locals.locals))
+      in
+      let fresh_local ty : place =
+        let local =
+          {
+            index = gen ();
+            local_ty = ty;
+            name = None;
+            span = f.item_meta.span;
+            drop_flag_for = None;
+          }
+        in
+        new_locals := local :: !new_locals;
+        { kind = PlaceLocal local.index; ty }
+      in
+      let fresh_flag () : place = fresh_local (TScalar TBool) in
+      let ret_place : place =
+        { kind = PlaceLocal LocalId.zero; ty = f.signature.output }
+      in
+      let opt_tref : type_decl_ref option =
+        Option.map
+          (fun id ->
+            {
+              id;
+              generics =
+                {
+                  regions = [];
+                  types = [ f.signature.output ];
+                  const_generics = [];
+                  trait_refs = [];
+                };
+              builtin = None;
+            })
+          option_id
+      in
+      let bool_cst b : constant_expr = { kind = CBool b; ty = TScalar TBool } in
+      let mk_st span kind : statement =
+        { span; statement_id = StatementId.zero; kind; comments_before = [] }
+      in
+      let mk_block span statements : block =
+        { span; block_id = BlockId.zero; statements }
+      in
+      let set_flag span p b =
+        mk_st span (Assign (p, Use (Constant (bool_cst b), NoRetag)))
+      in
+      (* [in_loop]: whether the current block is inside a loop *)
+      let rec process_block (in_loop : bool) (b : block) : block =
+        let rec go (stl : statement list) =
+          match stl with
+          | [] -> []
+          | st :: after -> process_st in_loop after st @ go after
+        in
+        { b with statements = go b.statements }
+      (* [after]: the statements after [st] in its block *)
+      and process_st (in_loop : bool) (after : statement list) (st : statement)
+          : statement list =
+        match st.kind with
+        | Loop lb ->
+            (* First process the inner loops *)
+            let lb = process_block true lb in
+            (* The returns of an outermost loop are handled by [update_loops],
+               unless the loop also has its own breaks and the statements after
+               the loop don't end the function (then [update_loops] can't move
+               them before the breaks): we desugar them too *)
+            let has_own_break =
+              let found = ref false in
+              let rec visit_block (b : block) = List.iter visit_st b.statements
+              and visit_st (st : statement) =
+                match st.kind with
+                | Break 0 -> found := true
+                | Switch (_, bl) -> List.iter visit_block bl
+                | _ -> ()
+              in
+              visit_block lb;
+              !found
+            in
+            let after_exits =
+              List.exists
+                (fun (st : statement) ->
+                  match st.kind with
+                  | Return | Panic _ | UnwindTerminate | UndefinedBehavior ->
+                      true
+                  | _ -> false)
+                after
+            in
+            let desugar_returns =
+              in_loop || (has_own_break && not after_exits)
+            in
+            (* Then the exits of this loop: we use one flag per exit site. We
+               move the [StorageDead] and [Drop] statements which immediately
+               precede the exit after the loop (otherwise the locals would be
+               considered as dead in the code after the loop, when joining the
+               contexts). *)
+            let exits = ref [] in
+            let rec update_block (b : block) : block =
+              let rec update (acc : statement list) (stl : statement list) =
+                match stl with
+                | [] -> List.rev acc
+                | st :: stl -> (
+                    let exit_kind =
+                      match st.kind with
+                      | Return when desugar_returns -> Some Return
+                      | Break k when k >= 1 -> Some (Break (k - 1))
+                      | Continue k when k >= 1 -> Some (Continue (k - 1))
+                      | _ -> None
+                    in
+                    match exit_kind with
+                    | Some Return when opt_tref = None ->
+                        raise
+                          (Failure "desugar_nested_loop_exits: no Option type")
+                    | Some k ->
+                        (* Split the preceding storage dead/drops *)
+                        let rec split moved acc =
+                          match acc with
+                          | ({ kind = StorageDead _ | Drop _; _ } as st') :: acc
+                            -> split (st' :: moved) acc
+                          | _ -> (moved, acc)
+                        in
+                        let moved, acc = split [] acc in
+                        let flag, set =
+                          match (k, opt_tref) with
+                          | Return, Some opt_tref ->
+                              (* [ret = Some(move _0)] *)
+                              let p = fresh_local (TAdt opt_tref) in
+                              ( p,
+                                mk_st st.span
+                                  (Assign
+                                     ( p,
+                                       Aggregate
+                                         ( AggregatedAdt
+                                             ( opt_tref,
+                                               Some option_some_id,
+                                               None ),
+                                           [ Move ret_place ] ) )) )
+                          | _ ->
+                              let p = fresh_flag () in
+                              (p, set_flag st.span p true)
+                        in
+                        exits := (flag, k, moved, st.span) :: !exits;
+                        update (mk_st st.span (Break 0) :: set :: acc) stl
+                    | None -> (
+                        match st.kind with
+                        | Switch (sd, bl) ->
+                            update
+                              ({
+                                 st with
+                                 kind = Switch (sd, List.map update_block bl);
+                               }
+                              :: acc)
+                              stl
+                        | _ -> update (st :: acc) stl))
+              in
+              { b with statements = update [] b.statements }
+            in
+            let lb = update_block lb in
+            let l = List.rev !exits in
+            let inits =
+              List.map
+                (fun ((p : place), k, _, _) ->
+                  match (k, opt_tref) with
+                  | Return, Some opt_tref ->
+                      mk_st st.span
+                        (Assign
+                           ( p,
+                             Aggregate
+                               ( AggregatedAdt
+                                   (opt_tref, Some option_none_id, None),
+                                 [] ) ))
+                  | _ -> set_flag st.span p false)
+                l
+            in
+            let checks =
+              List.map
+                (fun ((p : place), k, moved, span) ->
+                  match (k, opt_tref) with
+                  | Return, Some opt_tref ->
+                      (* [match ret { Some => { _0 = move ret.0; ...; return }, _ => {} }] *)
+                      let some_case : constant_expr =
+                        {
+                          kind = CDiscriminant (opt_tref, option_some_id);
+                          ty = TScalar (TInteger (Signed Isize));
+                        }
+                      in
+                      let get : statement =
+                        mk_st span
+                          (Assign
+                             ( ret_place,
+                               Use
+                                 ( Move
+                                     {
+                                       kind =
+                                         PlaceProjection
+                                           ( p,
+                                             Field
+                                               ( Some option_some_id,
+                                                 FieldId.zero ) );
+                                       ty = f.signature.output;
+                                     },
+                                   NoRetag ) ))
+                      in
+                      mk_st span
+                        (Switch
+                           ( {
+                               scrutinee = SwitchDiscriminant p;
+                               branches = [ (some_case, BranchId.zero) ];
+                               fallback = Some (BranchId.of_int 1);
+                             },
+                             [
+                               mk_block span ((get :: moved) @ [ mk_st span k ]);
+                               mk_block span [];
+                             ] ))
+                  | _ ->
+                      mk_st span
+                        (Switch
+                           ( {
+                               scrutinee = SwitchValue (Copy p);
+                               branches = [ (bool_cst true, BranchId.zero) ];
+                               fallback = Some (BranchId.of_int 1);
+                             },
+                             [
+                               mk_block span (moved @ [ mk_st span k ]);
+                               mk_block span [];
+                             ] )))
+                l
+            in
+            inits @ [ { st with kind = Loop lb } ] @ checks
+        | Switch (sd, bl) ->
+            [
+              {
+                st with
+                kind = Switch (sd, List.map (process_block in_loop) bl);
+              };
+            ]
+        | _ -> [ st ]
+      in
+      let body_body = process_block false body.body in
+      if !new_locals = [] then f
+      else
+        {
+          f with
+          body =
+            StructuredBody
+              {
+                body with
+                body = body_body;
+                locals =
+                  {
+                    body.locals with
+                    locals = body.locals.locals @ List.rev !new_locals;
+                  };
+              };
+        }
+  | _ -> f
+
 (** Check that loops:
     - do not contain early returns
     - do not continue/break to outer loops
@@ -3025,6 +3326,7 @@ let apply_passes (crate : crate) : crate =
       ("fix_anon_const_initializers", fix_anon_const_initializers);
       ("erase_body_regions", erase_body_regions);
       ("remove_unreachable", remove_unreachable);
+      ("desugar_nested_loop_exits", desugar_nested_loop_exits);
       ("update_loop", update_loops);
       ("remove_useless_joins", remove_useless_joins);
       ( "remove_shallow_borrows_storage_live_dead",
