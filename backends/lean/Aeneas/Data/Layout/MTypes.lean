@@ -55,18 +55,53 @@ def IUScalarTy.can_repr (ty : IUScalarTy) (z : ℤ) : Prop :=
 
 /-! ## Machine Types (`MType`) -/
 
+inductive TupleRepr where
+| reprRust
+| reprC
+| reprTransparent
+deriving Repr
+
+inductive TupleAlignmentModifier where
+| reasonablyAligned -- the default
+| packed (n : Nat) (hn : n.isPowerOfTwo)
+| aligned (n : Nat) (hn : n.isPowerOfTwo)
+deriving Repr
+
+structure TupleFlags where
+  repr: TupleRepr
+  align: TupleAlignmentModifier
+deriving Repr
+
+inductive EnumRepr where
+| reprRust
+| reprC
+| reprC_prim
+| reprPrim
+deriving Repr
+-- we do not handle repr(transparent) on enums for now. Use a struct instead.
+
+inductive EnumAlignmentModifier where
+| reasonablyAligned
+| aligned (n : Nat) (hn : n.isPowerOfTwo)
+deriving Repr
+
+structure EnumFlags where
+  repr: EnumRepr
+  align: EnumAlignmentModifier
+deriving Repr
+
 inductive MType where
   | int (ty : IUScalarTy)
-  | tuple (fields : List MType)
-  | enum (variants : List MType)
+  | tuple (fields : List MType) (f : TupleFlags)
+  | enum (variants : List MType) (f : EnumFlags)
 deriving Repr
 
 namespace MType
 
 def inhabited : MType → Bool
   | .int _ => true
-  | .tuple ts => ts.attach.all (λ ⟨t, _⟩ ↦ t.inhabited)
-  | .enum vs => vs.attach.any (λ ⟨v, _⟩ ↦ v.inhabited)
+  | .tuple ts _ => ts.attach.all (λ ⟨t, _⟩ ↦ t.inhabited)
+  | .enum vs _ => vs.attach.any (λ ⟨v, _⟩ ↦ v.inhabited)
 
 end MType
 
@@ -81,10 +116,10 @@ namespace MVal
 
 inductive valid_for : (v : MVal) → (ty : MType) → Prop where
   | int : st.can_repr i → valid_for (.int i) (.int st)
-  | tuple vs ts : List.Forall₂ valid_for vs ts → valid_for (.tuple vs) (.tuple ts)
+  | tuple vs ts : List.Forall₂ valid_for vs ts → valid_for (.tuple vs) (.tuple ts f)
   | enum (dv : Nat) v ts (hb : dv < ts.length) :
       valid_for v ts[dv] →
-      valid_for (.variant dv v) (.enum ts)
+      valid_for (.variant dv v) (.enum ts f)
 
 namespace valid_for
 
@@ -97,19 +132,22 @@ attribute [grind ←] int tuple enum
     ty.can_repr z :=
   match h with | .int f => f
 
-@[grind →] theorem tuple_len {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) :
+@[grind →] theorem tuple_len {vs ts f} (h : valid_for (.tuple vs) (.tuple ts f)) :
     vs.length = ts.length :=
   match h with | .tuple _ _ f => f.length_eq
 
-@[grind ←] theorem tuple_proj {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) (idx : Nat) (h_idx : idx < vs.length) :
+theorem tuple_proj {vs ts f} (h : valid_for (.tuple vs) (.tuple ts f)) (idx : Nat) (h_idx : idx < vs.length) :
     valid_for vs[idx] (ts[idx]'(by grind)) :=
   match h with | .tuple _ _ f => f.get _ _
 
-@[grind →] theorem variant_bound {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
+grind_pattern tuple_proj => valid_for (.tuple vs) (.tuple ts f), vs[idx]
+grind_pattern tuple_proj => valid_for (.tuple vs) (.tuple ts f), ts[idx]
+
+@[grind →] theorem variant_bound {d v ts f} (h : valid_for (.variant d v) (.enum ts f)) :
     d < ts.length :=
   match h with | .enum _ _ _ hb _ => hb
 
-@[grind →] theorem variant_proj {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
+@[grind →] theorem variant_proj {d v ts f} (h : valid_for (.variant d v) (.enum ts f)) :
     v.valid_for (ts[d]'(by grind)) :=
   match h with | .enum _ _ _ _ hv => hv
 
@@ -119,22 +157,22 @@ attribute [grind ←] int tuple enum
 
 /-! Helper functions for projecting valid fields out of valid values. -/
 @[expose, inline, simp]
-def field {vs : List MVal} {ts : List MType}
-    (h : valid_for (.tuple vs) (.tuple ts)) (i : Nat) (hi : i < vs.length := by simp) :
+def field {vs : List MVal} {ts : List MType} {f}
+    (h : valid_for (.tuple vs) (.tuple ts f)) (i : Nat) (hi : i < vs.length := by simp) :
     { v : MVal // v.valid_for (ts[i]'(by grind)) } :=
   ⟨vs[i], h.tuple_proj i hi⟩
 
 @[expose, inline, simp]
-def vdata {d : Nat} {v : MVal} {ts : List MType}
-    (h : valid_for (.variant d v) (.enum ts)) :
+def vdata {d : Nat} {v : MVal} {ts : List MType} {f}
+    (h : valid_for (.variant d v) (.enum ts f)) :
     { v : MVal // v.valid_for (ts[d]'(h.variant_bound)) } :=
   ⟨v, h.variant_proj⟩
 
 @[expose, inline, simp]
-def vfield {d : Nat} {vs : List MVal} {ts vts : List MType}
-    (h : valid_for (.variant d (.tuple vs)) (.enum ts))
+def vfield {d : Nat} {vs : List MVal} {ts vts : List MType} {f1 f2}
+    (h : valid_for (.variant d (.tuple vs)) (.enum ts f1))
     (i : Nat)
-    (hv : ts[d]'(h.variant_bound) = .tuple vts := by rfl)
+    (hv : ts[d]'(h.variant_bound) = .tuple vts f2 := by rfl)
     (hi : i < vs.length := by simp <;> grind) :
     { v : MVal // v.valid_for (vts[i]'(by grind)) } :=
   ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i hi⟩
@@ -145,7 +183,7 @@ end MVal
 namespace MType
 
 inductive isTuple : MType → Prop where
-  | tuple ts : isTuple (.tuple ts)
+  | tuple f ts : isTuple (.tuple ts f)
 
 attribute [class] isTuple
 attribute [instance] isTuple.tuple
@@ -153,28 +191,31 @@ attribute [instance] isTuple.tuple
     Notably, we need to rule out enums with a galactic number of variants. -/
 inductive Reasonable : MType → Prop where
   | int ty : Reasonable (.int ty)
-  | tuple ts :
+  | tuple ts f :
       (∀ idx (h : idx < ts.length), ts[idx].Reasonable) →
-      Reasonable (.tuple ts)
-  | enum vs :
+      Reasonable (.tuple ts f)
+  | enum vs f :
       vs.length ≤ Std.Usize.max →
       (∀ idx (h : idx < vs.length), vs[idx].isTuple) →
       (∀ idx (h : idx < vs.length), vs[idx].Reasonable) →
-      Reasonable (.enum vs)
+      Reasonable (.enum vs f)
 
 attribute [class] Reasonable
 attribute [instance] Reasonable.int
 
-class AllReasonable (l : List MType) : Prop where
-  out : ∀ idx (h : idx < l.length), l[idx].Reasonable
+class AllReasonable {α : Type} (l : List α) (f : α → MType) : Prop where
+  out : ∀ idx (h : idx < l.length), (f l[idx]).Reasonable
 
-instance : AllReasonable [] := ⟨λ _ h ↦ nomatch h⟩
-instance {x : MType} {xs : List MType} [hx : x.Reasonable] [hxs : AllReasonable xs] :
-    AllReasonable (x :: xs) :=
+instance {α : Type} {f : α → MType} : AllReasonable [] f := ⟨λ _ h ↦ nomatch h⟩
+instance {α : Type} {x : α} {xs : List α} {f : α → MType} [hx : (f x).Reasonable] [hxs : AllReasonable xs f] :
+    AllReasonable (x :: xs) f :=
   ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
 
-instance {ts : List MType} [h : AllReasonable ts] : (MType.tuple ts).Reasonable :=
-  .tuple ts h.out
+instance {α β : Type} {f1 : α → β} {f2 : β → MType} {xs : List α} [h : AllReasonable xs (λ x ↦ f2 (f1 x))]: MType.AllReasonable (xs.map f1) f2 := by
+  constructor; simp; apply h.out
+
+instance {ts : List MType} {f} [h : AllReasonable ts id] : (MType.tuple ts f).Reasonable :=
+  .tuple ts f h.out
 
 
 class AllTuple (l : List MType) : Prop where
@@ -194,17 +235,22 @@ class inductive ListLengthLe {α : Type _} : List α → Nat → Prop where
 
 attribute [instance] ListLengthLe.nil ListLengthLe.cons
 
+instance {α β : Type} {f : α → β} {xs : List α} n [h : ListLengthLe xs n] : ListLengthLe (xs.map f) n := by
+  induction h with
+  | nil => constructor
+  | cons ih => constructor
+
 lemma ListLengthLe.sound [h : ListLengthLe vs n] : vs.length ≤ n := by
   induction h with
   | nil => grind
   | cons ih => grind
 
-instance {vs : List MType}
+instance {vs : List MType} {f}
     [hl : ListLengthLe vs 4294967295] -- this is an astronomical bound
     [ht : AllTuple vs]
-    [hr : AllReasonable vs] :
-    (MType.enum vs).Reasonable :=
-  .enum vs
+    [hr : AllReasonable vs id] :
+    (MType.enum vs f).Reasonable :=
+  .enum vs f
     (have hl := hl.sound; by rcases System.Platform.numBits_eq with hb | hb <;> simp [Std.Usize.max, Std.Usize.numBits, hb] <;> omega)
     ht.out
     hr.out

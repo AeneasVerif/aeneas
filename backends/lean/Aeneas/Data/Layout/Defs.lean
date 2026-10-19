@@ -95,13 +95,13 @@ inductive Layout : MType → Type 0 where
       -- the inductive is strictly positive.
       (field_layouts : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
       (sa : SizeAndAlign) :
-      Layout (.tuple ts)
+      Layout (.tuple ts f)
   | enum
       (variant_tags : (idx : Nat) → idx < vs.length → List TagToWrite)
       (variant_layouts : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
       (discr : Discriminator)
       (sa : SizeAndAlign) :
-      Layout (.enum vs)
+      Layout (.enum vs f)
 
 namespace Layout
 
@@ -123,12 +123,12 @@ grind_pattern size_known => l.size_and_align
 grind_pattern size_known => l.size
 
 @[simp, grind =] lemma int_size (ty : IUScalarTy) : (@Layout.int ty).size = ty.size := rfl
-@[simp, grind =] lemma tuple_size {ts} fo fl sa : (@Layout.tuple ts fo fl sa).size = sa.size := rfl
-@[simp, grind =] lemma enum_size {vs} vt vl d sa : (@Layout.enum vs vt vl d sa).size = sa.size := rfl
+@[simp, grind =] lemma tuple_size {ts f} fo fl sa : (@Layout.tuple ts f fo fl sa).size = sa.size := rfl
+@[simp, grind =] lemma enum_size {vs f} vt vl d sa : (@Layout.enum vs f vt vl d sa).size = sa.size := rfl
 
 @[simp, grind =] lemma int_size_and_align (ty : IUScalarTy) : (@Layout.int ty).size_and_align = ty.size_and_align := rfl
-@[simp, grind =] lemma tuple_size_and_align ty ts fo sa : (@Layout.tuple ty ts fo sa).size_and_align = sa := rfl
-@[simp, grind =] lemma enum_size_and_align ty vt vl d sa : (@Layout.enum ty vt vl d sa).size_and_align = sa := rfl
+@[simp, grind =] lemma tuple_size_and_align ty f ts fo sa : (@Layout.tuple ty f ts fo sa).size_and_align = sa := rfl
+@[simp, grind =] lemma enum_size_and_align ty f vt vl d sa : (@Layout.enum ty f vt vl d sa).size_and_align = sa := rfl
 
 end Layout
 
@@ -210,7 +210,7 @@ def decode : {ty : MType} → (l : Layout ty) → Bytes l.size → Option MVal
   -- Tuples (and structs, ...):
   -- Note in particular that `decode` ignores the bytes which are before, between, or after
   -- the fields (usually called "padding").
-  | .tuple ts, .tuple fo fl sa, bytes =>
+  | .tuple ts _, .tuple fo fl sa, bytes =>
     (List.range ts.length).attach.mapM (λ (x : Subtype _) ↦ do
       let fsz := (fl x.val (by grind)).size
       if h : fo x.val (by grind) + fsz ≤ sa.size then
@@ -218,7 +218,7 @@ def decode : {ty : MType} → (l : Layout ty) → Bytes l.size → Option MVal
       else none)
     |>.map .tuple
   -- Enums:
-  | .enum vs, .enum _ vl discriminator sa, bytes => do
+  | .enum vs _, .enum _ vl discriminator sa, bytes => do
     let discriminant ← decode_discriminant bytes discriminator
     if hd : discriminant < vs.length then
       let vsz := (vl discriminant hd).size
@@ -240,7 +240,7 @@ def encode : {ty : MType} → (l : Layout ty) → (val : MVal) → val.valid_for
   -- Tuples (and structs, ...):
   -- `encode` always and deterministically makes padding bytes `Uninit`.
   -- (The generic properties defined below make this the only possible choice for `encode`.)
-  | .tuple ts, .tuple fo fl sa, .tuple values, hv =>
+  | .tuple ts _, .tuple fo fl sa, .tuple values, hv =>
     (List.range ts.length).attach.foldl (init := Bytes.uninit sa.size)
       λ (bytes : Bytes sa.size) x ↦
         bytes.write_subslice_at_index (fo x.val (by grind))
@@ -248,7 +248,7 @@ def encode : {ty : MType} → (l : Layout ty) → (val : MVal) → val.valid_for
   -- Enums:
   -- Note that the discriminant may not be written into bytes that contain encoded data.
   -- This is to ensure that pointers to the data always contain valid values.
-  | .enum vs, .enum vt vl _ sa, .variant discriminant data, hv =>
+  | .enum vs _, .enum vt vl _ sa, .variant discriminant data, hv =>
     let bytes := (Bytes.uninit sa.size).write_subslice_at_index 0
       (encode (vl discriminant hv.variant_bound) data hv.variant_proj)
     -- Write tag into the bytes around the data.
@@ -317,14 +317,14 @@ structure EnumValid {vs : List MType}
 
 inductive Valid : {ty : MType} → Layout ty → Prop where
   | int ty : Valid (.int : Layout (.int ty))
-  | tuple ts fo fl sa :
+  | tuple ts f fo fl sa :
       (∀ idx (h : idx < ts.length), (fl idx h).Valid) →
       TupleValid ts.length fo (λ i hi ↦ (fl i hi).size) sa →
-      Valid (.tuple fo fl sa : Layout (.tuple ts))
-  | enum vs vt vl dc sa :
+      Valid (.tuple fo fl sa : Layout (.tuple ts f))
+  | enum vs f vt vl dc sa :
       (∀ idx (h : idx < vs.length), (vl idx h).Valid) →
       EnumValid vt vl dc sa →
-      Valid (.enum vt vl dc sa : Layout (.enum vs))
+      Valid (.enum vt vl dc sa : Layout (.enum vs f))
 
 /-! ## Generic Representation Properties (Galois Connection)
     Following MiniRust's `spec/lang/representation.md` ("Generic properties"). -/
@@ -368,28 +368,28 @@ structure TupleReasonablyAligned (n : Nat) (field_offs : (idx : Nat) → idx < n
 --- This is a non-recursive property, since this does not affect the layout of the contained fields
 inductive ReasonablyAligned : {ty : MType} → Layout ty → Prop where
   | int ty : ReasonablyAligned (.int : Layout (.int ty))
-  | tuple ts fo fl sa :
+  | tuple ts f fo fl sa :
       TupleReasonablyAligned ts.length fo (λ i hi ↦ (fl i hi).size_and_align) sa →
-      ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts))
-  | enum vs vt vl dc sa :
+      ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts f))
+  | enum vs f vt vl dc sa :
       -- It is intended that this recurses here, to control the layout of each variant.
       (∀ idx (h : idx < vs.length), (vl idx h).ReasonablyAligned) →
-      ReasonablyAligned (.enum vt vl dc sa : Layout (.enum vs))
+      ReasonablyAligned (.enum vt vl dc sa : Layout (.enum vs f))
 
 inductive Transparent : {ty : MType} → Layout ty → Prop where
-| tuple_zero_sized ts fo fl :
+| tuple_zero_sized ts f fo fl :
     (∀ idx (h : idx < ts.length), (fl idx h).size_and_align = .zero_sized_minimally_aligned) →
-    Transparent (.tuple fo fl .zero_sized_minimally_aligned : Layout (.tuple ts))
-| tuple_one_elem ts fo fl idnz (hidnz : idnz < ts.length) :
+    Transparent (.tuple fo fl .zero_sized_minimally_aligned : Layout (.tuple ts f))
+| tuple_one_elem ts f fo fl idnz (hidnz : idnz < ts.length) :
     fo idnz hidnz = 0 →
     (∀ idx (h : idx < ts.length), idx ≠ idnz → (fl idx h).size_and_align = .zero_sized_minimally_aligned) →
-    Transparent (.tuple fo fl (fl idnz hidnz).size_and_align : Layout (.tuple ts))
-| enum v (vl : Layout v) :
+    Transparent (.tuple fo fl (fl idnz hidnz).size_and_align : Layout (.tuple ts f))
+| enum v f (vl : Layout v) :
     Transparent vl →
-    Transparent (.enum (λ _ _ ↦ []) (λ | 0, _ => vl) (.known 0) vl.size_and_align : Layout (.enum [v]))
+    Transparent (.enum (λ _ _ ↦ []) (λ | 0, _ => vl) (.known 0) vl.size_and_align : Layout (.enum [v] f))
 
 inductive Packed (n : Nat) : {ty : MType} → Layout ty → Prop where
-| tuple ts fo fl (ford : Fin ts.length → Fin ts.length) sa :
+| tuple ts f fo fl (ford : Fin ts.length → Fin ts.length) sa :
     n.isPowerOfTwo →
     sa.align ≤ n →
     -- we have a bijection telling us the field order
@@ -407,7 +407,7 @@ inductive Packed (n : Nat) : {ty : MType} → Layout ty → Prop where
     sa.size = natMax ts.length (λ x hx ↦ alignUp ((fo x hx) + (fl x hx).size) sa.align) 0 →
     -- our alignment upper-bounds the fields
     (∀ i (hi : i < ts.length), min n (fl i hi).size_and_align.align ≤ sa.align) →
-    Packed n (.tuple fo fl sa : Layout (.tuple ts))
+    Packed n (.tuple fo fl sa : Layout (.tuple ts f))
 
 structure Aligned (n : Nat) {ty : MType} (l : Layout ty) : Prop where
   n_wf : n.isPowerOfTwo
@@ -415,59 +415,59 @@ structure Aligned (n : Nat) {ty : MType} (l : Layout ty) : Prop where
 
 @[grind .]
 lemma Transparent_ReasonablyAligned ty (l : Layout ty) : l.Transparent → l.ReasonablyAligned
-  | .tuple_zero_sized ts fo fl h =>
-    .tuple ts fo fl .zero_sized_minimally_aligned ⟨by grind, by intro i hi; simp [h i hi]⟩
-  | .tuple_one_elem ts fo fl idnz hidnz h0 h =>
-    .tuple ts fo fl (fl idnz hidnz).size_and_align
+  | .tuple_zero_sized ts f fo fl h =>
+    .tuple ts f fo fl .zero_sized_minimally_aligned ⟨by grind, by intro i hi; simp [h i hi]⟩
+  | .tuple_one_elem ts f fo fl idnz hidnz h0 h =>
+    .tuple ts f fo fl (fl idnz hidnz).size_and_align
       ⟨by grind,
        by intro i hi
           by_cases heq : i = idnz
           · subst heq; simp [h0]
           · simp [h i hi heq]⟩
-  | .enum v vl hvl =>
-    .enum [v] _ _ _ _ (λ | 0, _ => Transparent_ReasonablyAligned v vl hvl)
+  | .enum v f vl hvl =>
+    .enum [v] f _ _ _ _ (λ | 0, _ => Transparent_ReasonablyAligned v vl hvl)
 
-def alignTupleUp {ts} (l : Layout (.tuple ts)) (a : Nat) (ha : a.isPowerOfTwo) : Layout (.tuple ts) := match ts, l with
+def alignTupleUp {ts f} (l : Layout (.tuple ts f)) (a : Nat) (ha : a.isPowerOfTwo) : Layout (.tuple ts f) := match ts, l with
 | ts, .tuple fo fl sa =>
     let na := max sa.align a;
     let ns := alignUp sa.size na;
     .tuple fo fl ⟨ns, na, by grind, by grind⟩
 
-def alignEnumUp {vs} (l : Layout (.enum vs)) (a : Nat) (ha : a.isPowerOfTwo) (ht : vs.Forall MType.isTuple) : Layout (.enum vs) := match vs, l with
+def alignEnumUp {vs f} (l : Layout (.enum vs f)) (a : Nat) (ha : a.isPowerOfTwo) (ht : vs.Forall MType.isTuple) : Layout (.enum vs f) := match vs, l with
 | vs, .enum vt vl d sa =>
     let na := max sa.align a;
     let ns := alignUp sa.size na;
     .enum vt (λ i hi ↦ match vs[i], vl i hi with
-      | .tuple ts, x => x.alignTupleUp a ha
+      | .tuple ts _, x => x.alignTupleUp a ha
       | _, x  => x -- vacuous case
     ) d ⟨ns, na, by grind, by grind⟩
 
 @[grind ←]
-lemma alignTupleUp_reasonablyAligned {ts} (l : Layout (.tuple ts)) (a : Nat) (ha : a.isPowerOfTwo)
+lemma alignTupleUp_reasonablyAligned {ts f} (l : Layout (.tuple ts f)) (a : Nat) (ha : a.isPowerOfTwo)
     (h : l.ReasonablyAligned) : (l.alignTupleUp a ha).ReasonablyAligned :=
   match ts, l, h with
-  | ts, .tuple fo fl sa, .tuple _ _ _ _ h_tup =>
-    .tuple ts fo fl _ ⟨by grind, h_tup.offs_aligned⟩
+  | ts, .tuple fo fl sa, .tuple _ _ _ _ _ h_tup =>
+    .tuple ts f fo fl _ ⟨by grind, h_tup.offs_aligned⟩
 
 @[grind ←]
-lemma alignEnumUp_reasonablyAligned {vs} (l : Layout (.enum vs)) (a : Nat) (ha : a.isPowerOfTwo)
+lemma alignEnumUp_reasonablyAligned {vs f} (l : Layout (.enum vs f)) (a : Nat) (ha : a.isPowerOfTwo)
     (ht : vs.Forall MType.isTuple) (h : l.ReasonablyAligned) :
     (l.alignEnumUp a ha ht).ReasonablyAligned :=
   match vs, l, h with
-  | vs, .enum vt vl d sa, .enum _ _ _ _ _ h_vl =>
-    .enum vs vt _ d _ (λ i hi ↦
+  | vs, .enum vt vl d sa, .enum _ _ _ _ _ _ h_vl =>
+    .enum vs f vt _ d _ (λ i hi ↦
       match vs[i], vl i hi, h_vl i hi with
-      | .tuple _, x, hx => alignTupleUp_reasonablyAligned x a ha hx
-      | .int _, _, hx | .enum _, _, hx => hx)
+      | .tuple _ _, x, hx => alignTupleUp_reasonablyAligned x a ha hx
+      | .int _, _, hx | .enum _ _, _, hx => hx)
 
 @[grind ←]
-lemma alignTupleUp_aligned {ts} (l : Layout (.tuple ts)) (a : Nat) (ha : a.isPowerOfTwo) :
+lemma alignTupleUp_aligned {ts f} (l : Layout (.tuple ts f)) (a : Nat) (ha : a.isPowerOfTwo) :
     (l.alignTupleUp a ha).Aligned a :=
   match ts, l with
   | _, .tuple _ _ _ => ⟨ha, by simp [alignTupleUp, size_and_align]⟩
 
 @[grind ←]
-lemma alignEnumUp_aligned {vs} (l : Layout (.enum vs)) (a : Nat) (ha : a.isPowerOfTwo)
+lemma alignEnumUp_aligned {vs f} (l : Layout (.enum vs f)) (a : Nat) (ha : a.isPowerOfTwo)
     (ht : vs.Forall MType.isTuple) :
     (l.alignEnumUp a ha ht).Aligned a :=
   match vs, l with

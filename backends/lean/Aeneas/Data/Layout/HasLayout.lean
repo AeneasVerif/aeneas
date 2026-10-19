@@ -144,25 +144,21 @@ namespace RichMType
   @[expose, simp, grind =, reducible] def mkTuple (ts : List ((m : MType) × (Layout m → Prop))) : RichMType :=
     ⟨ .tuple (ts.map (·.1)), .tuple (λ i hi l ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) ts i hi) ▸ (ts[i]'(by grind)).2) l) ⟩
 
-  instance {α : Type} {f : α → MType} : MType.AllReasonable ([].map f) := ⟨λ _ h ↦ nomatch h⟩
-  instance {α : Type} {f : α → MType} {x : α} {xs : List α} [hx : MType.Reasonable (f x)] [hxs : MType.AllReasonable (xs.map f)] :
-      MType.AllReasonable ((x :: xs).map f) :=
-    ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
-
-  instance {ts : List ((m : MType) × (Layout m → Prop))} [h : MType.AllReasonable (ts.map (·.1))] : (mkTuple ts).1.Reasonable :=
-    .tuple _ h.out
+  instance {ts : List ((m : MType) × (Layout m → Prop))} [h : MType.AllReasonable ts (·.1)] : (mkTuple ts).1.Reasonable :=
+    .tuple _ (by simp; apply h.out)
 
   @[expose, simp, grind =, reducible] def mkEnum (ts : List (List ((m : MType) × (Layout m → Prop)))) : RichMType :=
     let tuples := ts.map mkTuple;
     ⟨ .enum (tuples.map (·.1)), .enum (λ i hi ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) tuples i hi) ▸ (tuples[i]'(by grind)).2)) ⟩
 
-  instance {α β : Type} {f1 : α → β} {f2 : β → MType} : MType.AllReasonable (([].map f1).map f2) := ⟨λ _ h ↦ nomatch h⟩
-  instance {α β : Type} {f1 : α → β} {f2 : β → MType}  {x : α} {xs : List α} [hx : MType.Reasonable (f2 (f1 x))] [hxs : MType.AllReasonable ((xs.map f1).map f2)] :
-      MType.AllReasonable (((x :: xs).map f1).map f2) :=
-    ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
-
-  instance {ts : List (List ((m : MType) × (Layout m → Prop)))} [h : MType.AllReasonable ((ts.map mkTuple).map (·.1))] : (mkEnum ts).1.Reasonable := by
-    sorry
+  instance {ts : List (List ((m : MType) × (Layout m → Prop)))}
+    [hl : MType.ListLengthLe ts 4294967295] -- this is an astronomical bound
+    [h : MType.AllReasonable ts (λ x ↦ (mkTuple x).1)] : (mkEnum ts).1.Reasonable := by
+    constructor
+    · have := hl.sound
+      rcases System.Platform.numBits_eq with hb | hb <;> simp [Std.Usize.max, Std.Usize.numBits, hb] <;> omega
+    · intros _ _; simp; constructor
+    · simp; apply h.out
 
 end RichMType
 
