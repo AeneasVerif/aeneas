@@ -62,43 +62,50 @@ copy the slice to a fresh view (`allocView`), freed when the borrow ends;
 `from_raw_parts(_mut)` move the cells out into a borrow (so that raw accesses while the slice is
 live fail). The returned back computations run when the borrow ends. -/
 
+variable {H : Type (uh + 1)}
+
 /-- `borrowRange` of `len` cells, as a slice. -/
-def RawPtr.borrowSlice {T : Type} (q : RawPtr T M) (len : Usize) : Result (Slice T) := do
+def RawPtr.borrowSlice {T : Type u} [Stores H T] (q : RawPtr T M) (len : Usize) :
+    ResultAt H (Slice T) := do
   let values ← q.borrowRange len.val
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
 /-- End of the shared borrow of `as_ptr`: the cells must still hold `s` (writing through a const
 pointer cast to mut is UB), and the view is freed. -/
-def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
-  let values ← p.readRange s.length
-  p.endView s.length
+def Slice.end_as_ptr {T : Type u} [Stores H T] (s : Slice T) (p : ConstRawPtr T) :
+    ResultAt H Unit :=
+  Aeneas.Std.bind (p.readRange s.length) fun values =>
+  Aeneas.Std.bind (p.endView s.length) fun () =>
   Result.require (values = s.val)
 
-def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
+def Slice.as_ptr {T : Type u} [Stores H T] (s : Slice T) :
+    ResultAt H (ConstRawPtr T × ResultAt H Unit) :=
   Aeneas.Std.bind (RawPtr.allocView s.val) fun p =>
     .ok (p.cast_const, Slice.end_as_ptr s p.cast_const)
 
 /-- End of the mutable borrow of `as_mut_ptr`: the cells become the new slice, and the view is
 freed. -/
-def Slice.end_as_mut_ptr {T : Type} (s : Slice T) (p : MutRawPtr T) : Result (Slice T) := do
-  let values ← p.readRange s.length
-  p.endView s.length
+def Slice.end_as_mut_ptr {T : Type u} [Stores H T] (s : Slice T) (p : MutRawPtr T) :
+    ResultAt H (Slice T) :=
+  Aeneas.Std.bind (p.readRange s.length) fun values =>
+  Aeneas.Std.bind (p.endView s.length) fun () =>
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
-def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
+def Slice.as_mut_ptr {T : Type u} [Stores H T] (s : Slice T) :
+    ResultAt H (MutRawPtr T × ResultAt H (Slice T)) :=
   Aeneas.Std.bind (RawPtr.allocView s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
 
 /-- Back function of `from_raw_parts_mut`: ends the borrow of the cells with the final slice. -/
-def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : Usize)
-    (s : Slice T) : Result Unit :=
+def core.slice.raw.from_raw_parts_mut.back {T : Type u} [Stores H T] (p : MutRawPtr T)
+    (len : Usize) (s : Slice T) : ResultAt H Unit :=
   if s.length = len.val then p.endBorrowRange s.val else .fail .undef
 
-def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
-    Result (Slice T × Result Unit) :=
+def core.slice.raw.from_raw_parts {T : Type u} [Stores H T] (p : ConstRawPtr T) (len : Usize) :
+    ResultAt H (Slice T × ResultAt H Unit) :=
   Aeneas.Std.bind (p.borrowSlice len) fun s => .ok (s, p.endBorrowRange s.val)
 
-def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
-    Result (Slice T × (Slice T → Result Unit)) :=
+def core.slice.raw.from_raw_parts_mut {T : Type u} [Stores H T] (p : MutRawPtr T) (len : Usize) :
+    ResultAt H (Slice T × (Slice T → ResultAt H Unit)) :=
   Aeneas.Std.bind (p.borrowSlice len) fun s =>
     .ok (s, core.slice.raw.from_raw_parts_mut.back p len)
 

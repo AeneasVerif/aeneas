@@ -63,16 +63,18 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst
 }
 
+variable {H : Type (uh + 1)}
+
 /-- Allocates a pointer using `Global.allocate`, as creating a Box in Rust would do --/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
-def alloc.boxed.Box.into_raw (b : T) : Result (MutRawPtr T) :=
+def alloc.boxed.Box.into_raw [Stores H T] (b : T) : ResultAt H (MutRawPtr T) :=
   alloc.alloc.Global.mk.allocate [b]
 
 /-- Frees the `Box` using `Global.deallocate`, as dropping a Box in Rust would do --/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
-def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
-  let value ← RawPtr.read p
-  alloc.alloc.Global.mk.deallocate p 1
-  pure value
+def alloc.boxed.Box.from_raw [Stores H T] (p : MutRawPtr T) : ResultAt H T :=
+  Aeneas.Std.bind (RawPtr.read p) fun value =>
+  Aeneas.Std.bind (alloc.alloc.Global.mk.deallocate p 1) fun () =>
+  .ok value
 
 end Aeneas.Std

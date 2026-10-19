@@ -9,8 +9,8 @@ so two fragments can own different cells of the same block. Deallocated blocks s
 `freed`, so allocation ids are never reused.
 Supports interior pointers, stored pointers, provenance by allocation id.
 Not supported: uninitialized memory, byte-level representation/type punning,
-pointer-integer casts, higher-order store, the byte-level allocator API
-(`std::alloc::alloc`, `Layout`). -/
+pointer-integer casts, cyclic higher-order store (`HeapStrat` stacks heaps into an acyclic one),
+the byte-level allocator API (`std::alloc::alloc`, `Layout`). -/
 
 public section
 
@@ -57,6 +57,10 @@ structure Block : Type (v + 1) where
 structure Heap : Type (v + 1) where
   private mk ::
   private allocs : Finmap fun _ : AllocId => Block.{v}
+
+/-- The heap of level 0 (plain data), on which the code of `Result` runs. The higher levels
+of the stratified heap are in `HeapStrat`. -/
+abbrev Heap0 := Heap.{0}
 
 /-! Two examples of how blocks work. In the comments, the heap after each line, starting from the
 empty heap; `a ↦ kind [ ... ] right` is the allocation `a` with its cells and its `DeallocRight`.

@@ -110,7 +110,8 @@ the original structure.
 
 ### 2.3 The Result Error Monad
 
-All translated functions return `Result T` to model potential runtime failures:
+All translated functions return `Result T` to model potential runtime failures
+(`Result T` = `ResultAt Heap0 T`; see `Aeneas/Std/HeapStrat.lean`).
 
 | Constructor | Meaning                                                        |
 |-------------|----------------------------------------------------------------|

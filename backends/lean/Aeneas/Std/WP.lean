@@ -27,44 +27,46 @@ open Lean.Order
 
 section ResultImplementation
 
-unseal Result
+unseal ResultAt
+
+variable {H : Type (uh + 1)}
 
 @[expose] section
 
-/-- The WP of the effects of Rust programs (`RustEffect`). -/
+/-- The WP of the effects of Rust programs (`RustEffect`) on the heap `H`. -/
 @[reducible]
-def effectWP : EffectWP RustEffect where
+def effectWP (H : Type (uh + 1)) : EffectWP (RustEffect H) where
   State := Unit
   wp effect _ _ :=
     match effect with
     | _ => False
 
-instance : EffectWP.Monotonic effectWP where
+instance : EffectWP.Monotonic (effectWP H) where
   wp_monotonic _ := False.elim
 
-instance : EffectWP.Conjunctive effectWP where
+instance : EffectWP.Conjunctive (effectWP H) where
   wp_conj := by
     intro _ _ _ hNonempty hAll
     obtain ⟨C₀, hC₀⟩ := hNonempty
     exact (hAll C₀ hC₀).elim
 
-instance : EffectWP.ExcludedMiracle effectWP where
+instance : EffectWP.ExcludedMiracle (effectWP H) where
   wp_excludedMiracle := by
     intro _ _ h
     exact h
 
-def spec (m : Result α) (p : Post α) : Prop :=
-  DWP effectWP m (fun value _ => p value) ()
+def spec (m : ResultAt H α) (p : Post α) : Prop :=
+  DWP (effectWP H) m (fun value _ => p value) ()
 
-def dspec (m : Result α) (p : Post α) : Prop :=
-  DWLP effectWP m (fun value _ => p value) ()
+def dspec (m : ResultAt H α) (p : Post α) : Prop :=
+  DWLP (effectWP H) m (fun value _ => p value) ()
 
-theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
+theorem spec_dspec (α) (x : ResultAt H α) (p: Post α) : spec x p → dspec x p :=
   DWP.toPartial
 
 theorem dspec_admissible {α} (p : Post α) :
-    admissible (fun x => dspec x p) :=
-  DWLP.admissible effectWP _ ()
+    admissible (fun x : ResultAt H α => dspec x p) :=
+  DWLP.admissible (effectWP H) _ ()
 
 end
 
@@ -72,7 +74,7 @@ end
 side-goal it generates for a partial specification about a recursive function. -/
 @[dspec_admissible]
 theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
-    admissible (fun f : α → Result β => dspec (f arg) p) :=
+    admissible (fun f : α → ResultAt H β => dspec (f arg) p) :=
   admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
@@ -94,16 +96,17 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := DWP.ret_iff
+theorem spec_ok (x : α) : spec (ok x : ResultAt H α) p ↔ p x := DWP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => DWP.vis_view h, False.elim⟩
+theorem spec_vis (e : RustEffect.Input H) (k) : spec (.vis e k : ResultAt H α) p ↔ False :=
+  ⟨fun h => DWP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
+theorem spec_fail (e : Error) : spec (fail e : ResultAt H α) p ↔ False := by simp [Result.fail_eq_vis]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := ⟨DWP.div_false, False.elim⟩
+theorem spec_div : spec (div : ResultAt H α) p ↔ False := ⟨DWP.div_false, False.elim⟩
 
 /-! ### `spec_*` for tuple posts
 
@@ -111,62 +114,63 @@ Needed now with the new `uncurry`-based pattern matching. -/
 
 @[simp, grind =, agrind =]
 theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
-    spec (ok (a, b)) (uncurry f) ↔ f a b := by
+    spec (ok (a, b) : ResultAt H (α × β)) (uncurry f) ↔ f a b := by
   simp [spec_ok]
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (uncurry f) ↔ False := by simp
+    spec (fail e : ResultAt H (α × β)) (uncurry f) ↔ False := by simp
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
-    spec div (uncurry f) ↔ False := by simp
+    spec (div : ResultAt H (α × β)) (uncurry f) ↔ False := by simp
 
 /-- Mono rule used by `step`. -/
-theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+theorem spec_mono {α} {P₁ : Post α} {m : ResultAt H α} {P₀ : Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ :=
   fun HMonPost => DWP.mono h fun value _ => HMonPost value
 
 /-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
-theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+theorem spec_bind {α β} {k : α -> ResultAt H β} {Pₖ : Post β} {m : ResultAt H α} {Pₘ : Post α} :
   spec m Pₘ →
   (∀ x, Pₘ x → spec (k x) Pₖ) →
   spec (Std.bind m k) Pₖ :=
   fun Hm Hk => DWP.bind (k := k) Hm fun value _ => Hk value
 
-theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
+theorem spec_and {m : ResultAt H α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
     spec m (fun value => p value ∧ q value) :=
   DWP.and_iff.mpr ⟨h₁, h₂⟩
 
-theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value :=
+theorem spec_exists {m : ResultAt H α} {p : Post α} (h : spec m p) : ∃ value, p value :=
   let ⟨value, _, hp⟩ := DWP.exists h
   ⟨value, hp⟩
 
 -- `dspec` theorems
-theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
+theorem dspec_mono {α} {P₁ : Post α} {m : ResultAt H α} {P₀ : Post α} (h : dspec m P₀):
   (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
   fun HMonPost => DWLP.mono h fun value _ => HMonPost value
 
-theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+theorem dspec_bind {α β} {k : α -> ResultAt H β} {Pₖ : Post β} {m : ResultAt H α} {Pₘ : Post α} :
   dspec m Pₘ →
   (∀ x, Pₘ x → dspec (k x) Pₖ) →
   dspec (Std.bind m k) Pₖ :=
   fun Hm Hk => DWLP.bind (k := k) Hm fun value _ => Hk value
 
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := DWLP.ret_iff
+theorem dspec_ok (x : α) : dspec (ok x : ResultAt H α) p ↔ p x := DWLP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => DWLP.vis_view h, False.elim⟩
+theorem dspec_vis (e : RustEffect.Input H) (k) : dspec (.vis e k : ResultAt H α) p ↔ False :=
+  ⟨fun h => DWLP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.div
+theorem dspec_div : dspec (div : ResultAt H α) p ↔ True := iff_true_intro DWLP.div
 
 @[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
+theorem dspec_fail (e : Error) : dspec (fail e : ResultAt H α) p ↔ False := by simp [Result.fail_eq_vis]
 
-theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
+theorem dspec_and {m : ResultAt H α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
     dspec m (fun value => p value ∧ q value) :=
   DWLP.and_iff.mpr ⟨h₁, h₂⟩
 
@@ -421,9 +425,9 @@ where
 /-- Delaborator for `WP.spec e post` → `e ⦃ binders => body ⦄`. -/
 @[scoped delab app.Aeneas.Std.WP.spec]
 meta def delabSpec : Delab := do
-  guard $ (← getExpr).isAppOfArity' ``spec 3
-  let monadExpr ← withNaryArg 1 delab
-  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  guard $ (← getExpr).isAppOfArity' ``spec 4
+  let monadExpr ← withNaryArg 2 delab
+  let (binders, bodyTerm) ← withNaryArg 3 delabPostBinders
   if binders.size == 0 then
     `($monadExpr ⦃ $bodyTerm ⦄)
   else
@@ -432,9 +436,9 @@ meta def delabSpec : Delab := do
 /-- Delaborator for `WP.dspec e post` → `e ⦃ binders => body ⦄div`. -/
 @[scoped delab app.Aeneas.Std.WP.dspec]
 meta def delabDSpec : Delab := do
-  guard $ (← getExpr).isAppOfArity' ``dspec 3
-  let monadExpr ← withNaryArg 1 delab
-  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  guard $ (← getExpr).isAppOfArity' ``dspec 4
+  let monadExpr ← withNaryArg 2 delab
+  let (binders, bodyTerm) ← withNaryArg 3 delabPostBinders
   if binders.size == 0 then
     `($monadExpr ⦃ $bodyTerm ⦄div)
   else
@@ -679,12 +683,14 @@ namespace Aeneas.Std.WP
 open Aeneas.Std Result
 open Std.Do
 
+variable {H : Type (uh + 1)}
+
 -- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.
 -- This option is set here so that this same code works for any extension to RustEffect.Input
 set_option match.ignoreUnusedAlts true
 -- There are three types of exceptions in the type: the Error from Result.fail,
 -- a dummy exception thrown when any other effect is used, and Result.div.
-instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
+instance Result.instWP : WP (ResultAt.{uh, u} H) (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
   wp x := {
     trans Q := match x.match with
       | .ok a => Q.1 a
@@ -703,7 +709,7 @@ instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.e
   }
 set_option match.ignoreUnusedAlts false
 
-instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
+instance Result.instWPMonad : WPMonad (ResultAt.{uh, u} H) (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
   wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
   wp_bind x f := by
     apply PredTrans.ext
@@ -717,7 +723,7 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
     · cbv
 
 
-theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
+theorem Result.of_wp {α : Type u} {x : ResultAt H α} (P : ResultAt H α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
                   fun _ => ⌜False⌝, -- unreacheable
@@ -735,12 +741,12 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
-theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+theorem spec_to_mvcgen {α : Type u} {x : ResultAt H α} {Q : α → Prop}
     (h : spec x Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
-theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+theorem dspec_to_mvcgen {α : Type u} {x : ResultAt H α} {Q : α → Prop}
     (h : dspec x Q) :
     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
@@ -750,6 +756,8 @@ theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
 end Aeneas.Std.WP
 
 namespace Aeneas.Std
+
+variable {H : Type (uh + 1)}
 
 /-!
 # Loops
@@ -765,7 +773,7 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
   [wf : WellFoundedRelation γ]
   (inv : α → Prop)
   (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
+  (body : α → ResultAt H (ControlFlow α β)) (x : α)
   (hBody :
     ∀ x, inv x → body x ⦃ r =>
       match r with
@@ -791,7 +799,7 @@ theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   (measure : α → Nat)
   (inv : α → Prop)
   (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
+  (body : α → ResultAt H (ControlFlow α β)) (x : α)
   (hBody :
     ∀ x, inv x → body x ⦃ r =>
       match r with

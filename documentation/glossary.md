@@ -10,7 +10,7 @@
 
 **LLBC (Low-Level Borrow Calculus)** — Intermediate representation between Rust MIR and Lean. Captures ownership, borrowing, and lifetime information in a form suitable for translation to pure functional code.
 
-**`Result` monad** — The error monad used in all Aeneas-generated code: `ok v` for success, `fail` for errors (panic, overflow, out-of-bounds). All generated functions return `Result T`.
+**`Result` monad** — The error monad used in all Aeneas-generated code: `ok v` for success, `fail` for errors (panic, overflow, out-of-bounds). All generated functions return `Result T` (= `ResultAt Heap0 T`; `Result%n` runs on level `n` of the stratified heap, see `HeapStrat`).
 
 **`ControlFlow`** — Inductive type used in loop translation: `ControlFlow.cont x` to continue the loop with new state, `ControlFlow.done y` to break with a result.
 

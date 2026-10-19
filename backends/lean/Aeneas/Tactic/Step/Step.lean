@@ -229,7 +229,7 @@ structure Args where
 meta def getBindArgs? (program : Expr) : Option (Expr × Expr) :=
   match_expr program.consumeMData with
   | Bind.bind _ _ _ _ m next => some (m, next)
-  | Std.bind _ _ m next => some (m, next)
+  | Std.bind _ _ _ m next => some (m, next)
   | _ => none
 
 /-- Decompose a registered specification statement -/
@@ -881,6 +881,34 @@ meta def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option Lifting
   if name == info.spec_name then return .none else
   throwError "{name} is not a valid spec theorem"
 
+/-- `liftM x` (or `monadLift x`), the lift Lean inserts where code of a higher heap level calls
+    code of a lower level (`Result%n`): return `x`. -/
+meta def getLiftedCall? (fExpr : Expr) : Option Expr :=
+  match_expr fExpr.consumeMData with
+  | liftM _ _ _ _ x => some x
+  | MonadLiftT.monadLift _ _ _ _ x => some x
+  | _ => none
+
+/-- For the lifted call `fExpr = monadLift x`, turn `th : ∀ xs, spec x p` (or `dspec`) into
+    `∀ xs, spec (monadLift x) p`, with `SpecLift`. -/
+meta def liftSpecThm (fExpr th : Expr) : MetaM Expr := do
+  let some inst := fExpr.consumeMData.getAppArgs[2]? | throwError "not a lifted call"
+  let thTy ← normalizeLetBindings (← instantiateMVars (← inferType th))
+  forallTelescope thTy fun xs body => do
+    let liftName ← match body.consumeMData.getAppFn.constName? with
+      | some ``Std.WP.spec => pure ``Std.SpecLift.spec_monadLift
+      | some ``Std.WP.dspec => pure ``Std.SpecLift.dspec_monadLift
+      | _ => throwError "not a `spec`/`dspec` theorem"
+    let lifted ← mkAppOptM liftName
+      #[none, none, some inst, none, none, none, none, some (mkAppN th xs)]
+    mkLambdaFVars xs lifted
+
+/-- The theorems to try for `th` on the call `fExpr`: `th`, then, if `fExpr` is a lifted call,
+    `th` lifted with `liftSpecThm`. -/
+meta def withLiftedSpec (fExpr th : Expr) : MetaM (Array Expr) := do
+  if (getLiftedCall? fExpr).isNone then return #[th]
+  try return #[th, ← liftSpecThm fExpr th] catch _ => return #[th]
+
 /-- Try to step with an assumption.
     Return `some` if we succeed, `none` otherwise.
 
@@ -896,11 +924,12 @@ where
   let decls ← ctx.getAssumptions
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
-    try
-      let lifting ← getLiftingForThm info decl.toExpr
-      let goal ← stepWith info lifting args isLet fExpr decl.toExpr
-      return (some (goal, .localHyp decl))
-    catch _ => continue
+    for th in ← withLiftedSpec fExpr decl.toExpr do
+      try
+        let lifting ← getLiftingForThm info th
+        let goal ← stepWith info lifting args isLet fExpr th
+        return (some (goal, .localHyp decl))
+      catch _ => continue
   pure none
 
 meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
@@ -928,16 +957,21 @@ meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      Otherwise, lookup one. -/
   match withTh with
   | some th => do
-    let lifting ← getLiftingForThm info th
-    let goals ← stepWith info lifting args goalIsLet fExpr th
+    let step (th' : Expr) : TacticM Goals := do
+      stepWith info (← getLiftingForThm info th') args goalIsLet fExpr th'
+    let goals ← match ← withLiftedSpec fExpr th with
+      | #[th, lifted] => try step th catch _ => step lifted
+      | _ => step th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
     if let some res ← tryAssumptions info args goalIsLet fExpr then return res
     /- It failed: lookup the pspec theorems which match the expression *only
-       if the function is a constant* -/
+       if the function is a constant*. For a lifted call `monadLift x`, look up the theorems
+       of `x` and lift them. -/
+    let lookupExpr := (getLiftedCall? fExpr).getD fExpr
     let fIsConst ← do
-      fExpr.consumeMData.withApp fun mf _ => do
+      lookupExpr.consumeMData.withApp fun mf _ => do
       pure mf.isConst
     if ¬ fIsConst then
       trace[Step] "Step failed: the target function is not a constant"
@@ -950,7 +984,7 @@ meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
         let pspecs : Array Name ← do
           let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
             (match lifting with | .none => info.spec_name | .some l => l.from_statement)
-            fExpr
+            lookupExpr
           /- TODO: because of reduction, there may be several valid theorems (for
             instance for the scalars). We need to sort them from most specific to
             least specific. For now, we assume the most specific theorems are at
@@ -961,6 +995,8 @@ meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
         -- Try the theorems one by one
         for pspec in pspecs do
           let pspecExpr ← Term.mkConst pspec
+          let pspecExpr ← if lookupExpr == fExpr then pure pspecExpr else
+            try liftSpecThm fExpr pspecExpr catch _ => pure pspecExpr
           match ← tryApply info lifting args goalIsLet fExpr "pspec theorem" pspecExpr with
           | some goals => return (goals, .stepThm pspec)
           | none => pure ()

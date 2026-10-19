@@ -93,13 +93,15 @@ def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsSca
     (_ : RawPtr T M) : Result (RawPtr T' M') :=
   .fail .undef
 
+variable {H : Type (uh + 1)}
+
 /-- `add` stays in bounds: the heap owns every cell it steps over. -/
 def RawPtr.InBounds (q : RawPtr T M) (count : Nat) (h : Heap) : Prop :=
   ∀ i < count, Heap.IsLive h (q.shift i)
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
-def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
-  Result.guardedModify (fun h => q.InBounds count.val h) fun h _ => (q.shift count.val, h)
+def RawPtr.add [Stores H T] (q : RawPtr T M) (count : Usize) : ResultAt H (RawPtr T M) :=
+  Stores.modifySmall T (fun h => q.InBounds count.val h) fun h _ => (q.shift count.val, h)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
@@ -112,8 +114,8 @@ def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
 namespace RawPtr
 
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
-def read (q : RawPtr T M) : Result T :=
-  Result.guardedModify _ (Heap.read q)
+def read [Stores H T] (q : RawPtr T M) : ResultAt H T :=
+  Stores.modify T _ (Heap.read q)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
 attribute [rust_fun "core::ptr::read"] read
@@ -121,8 +123,8 @@ attribute [rust_fun "core::ptr::read"] read
 end RawPtr
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
-def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.write q value)
+def MutRawPtr.write [Stores H T] (q : MutRawPtr T) (value : T) : ResultAt H Unit :=
+  Stores.modifySmall T _ (Heap.write q value)
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
@@ -133,13 +135,13 @@ directly. -/
 
 /-- Dereferences `q` and gives its cell away, so that every access to the cell through a raw
 pointer fails until the borrow is ended with `endBorrow`. -/
-def RawPtr.borrow (q : RawPtr T M) : Result T :=
-  Result.guardedModify _ (Heap.borrow q)
+def RawPtr.borrow [Stores H T] (q : RawPtr T M) : ResultAt H T :=
+  Stores.modify T _ (Heap.borrow q)
 
-def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.endBorrow q value)
+def RawPtr.endBorrow [Stores H T] (q : RawPtr T M) (value : T) : ResultAt H Unit :=
+  Stores.modifySmall T _ (Heap.endBorrow q value)
 
-def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
+def RawPtr.borrowRange [Stores H T] (q : RawPtr T M) : Nat → ResultAt H (List T)
   | 0 => .ok []
   | n + 1 => do
     let value ← q.borrow
@@ -147,14 +149,14 @@ def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
     .ok (value :: values)
 
 /-- `endBorrow` on the `values.length` cells from `q` on. -/
-def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
+def RawPtr.endBorrowRange [Stores H T] (q : RawPtr T M) : List T → ResultAt H Unit
   | [] => .ok ()
   | value :: values => do
     q.endBorrow value
     (q.shift 1).endBorrowRange values
 
 /-- `read` on the `n` cells from `q` on. -/
-def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
+def RawPtr.readRange [Stores H T] (q : RawPtr T M) : Nat → ResultAt H (List T)
   | 0 => .ok []
   | n + 1 => do
     let value ← q.read
@@ -164,21 +166,21 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
 /-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
 value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
 allocation holding a copy of `values` (`Heap.newView`), which only `endView` frees. -/
-def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.newView values
+def RawPtr.allocView [Stores H T] (values : List T) : ResultAt H (MutRawPtr T) :=
+  Stores.modifySmall T (fun _ => True) fun h _ => h.newView values
 
-def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
-  Result.guardedModify _ (Heap.removeView q count)
+def RawPtr.endView [Stores H T] (q : RawPtr T M) (count : Nat) : ResultAt H Unit :=
+  Stores.modifySmall T _ (Heap.removeView q count)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the view, so that the pointer can't be used anymore. -/
-def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
-  let value ← p.read
-  p.endView 1
+def core.ptr.end_from_mut [Stores H T] (p : MutRawPtr T) : ResultAt H T :=
+  Aeneas.Std.bind p.read fun value =>
+  Aeneas.Std.bind (p.endView 1) fun () =>
   .ok value
 
 /-- The pointer is a view of `r`; the back computation runs when the borrow ends. -/
-def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
+def core.ptr.from_mut [Stores H T] (r : T) : ResultAt H (MutRawPtr T × ResultAt H T) :=
   Aeneas.Std.bind (RawPtr.allocView [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std
