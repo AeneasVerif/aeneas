@@ -9,7 +9,8 @@ namespace Aeneas.Std.HeapTests
 open Heap
 
 -- The start of the first allocation in the empty heap.
-local notation "p₀" => (RawPtr.mk (freshAllocId ∅) 0 : MutRawPtr Nat)
+set_option quotPrecheck false in
+local notation "p₀" => (RawPtr.mk (freshAllocId (∅ : Heap.{0})) 0 : MutRawPtr Nat)
 
 /-- A fresh heap allocation can be deallocated, but only once. -/
 example (value : Nat) :

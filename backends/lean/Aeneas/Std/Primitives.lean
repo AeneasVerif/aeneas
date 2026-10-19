@@ -50,8 +50,8 @@ deriving Repr, BEq
 open Error
 
 inductive RustEffect.Input : Type 1 where
-| guardedModify (α : Type) (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → α × Heap) : RustEffect.Input
+| guardedModify (α : Type) (pre : Heap.{0} → Prop)
+    (modify : (h : Heap.{0}) → pre h → α × Heap.{0}) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
 @[implicit_reducible]
@@ -469,8 +469,8 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.done x => ok x
 partial_fixpoint
 
-def Result.guardedModify {α : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → α × Heap) : Result α :=
+def Result.guardedModify {α : Type} (pre : Heap.{0} → Prop)
+    (modify : (h : Heap.{0}) → pre h → α × Heap.{0}) : Result α :=
   Result.vis (.guardedModify α pre modify) fun answer =>
     Result.ok answer.down
 

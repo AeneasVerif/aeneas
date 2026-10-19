@@ -46,17 +46,17 @@ inductive DeallocRight where
   deriving DecidableEq
 
 /-- An allocation block -/
-structure Block : Type 1 where
+structure Block : Type (v + 1) where
   /-- The allocation kind determines whether we're allowed to manually free the block or not -/
   kind : AllocKind
   /-- The type of the allocated values -/
-  ty : Type
+  ty : Type v
   cells : List (Cell ty)
   right : DeallocRight
 
-structure Heap where
+structure Heap : Type (v + 1) where
   private mk ::
-  private allocs : Finmap fun _ : AllocId => Block
+  private allocs : Finmap fun _ : AllocId => Block.{v}
 
 /-! Two examples of how blocks work. In the comments, the heap after each line, starting from the
 empty heap; `a ↦ kind [ ... ] right` is the allocation `a` with its cells and its `DeallocRight`.
@@ -141,7 +141,7 @@ namespace Block
 open Classical in
 /-- The cells of `b` as cells of type `t`, or none if `b` holds another type. Comparing the types
 is not computable. -/
-noncomputable def cellsAs (b : Block) (t : Type) : List (Cell t) :=
+noncomputable def cellsAs (b : Block.{v}) (t : Type v) : List (Cell t) :=
   if hTy : b.ty = t then hTy ▸ b.cells else []
 
 /-- Two fragments of a block combine if they agree on the kind, the type and the number of
@@ -170,7 +170,7 @@ inductive Mutability where
 
 /-- `T` is universe-polymorphic so that pointers to values in higher universes
 (`dyn Trait`, functions returning `Result`) elaborate. Only the cells a pointer reads or writes
-need to live in `Type`. -/
+need to live in the universe of the heap. -/
 @[ext]
 structure RawPtr (T : Type u) (M : Mutability) where
   allocId : AllocId
@@ -211,8 +211,8 @@ def empty : Heap := ⟨∅⟩
 @[no_expose] instance instEmptyCollection : EmptyCollection Heap := ⟨empty⟩
 
 /-- The block of `a` in `h₁ ∪ h₂`, for `a` in `h₂` (the default is unreachable). -/
-private noncomputable def joinAt (h₁ h₂ : Heap) (a : AllocId) : Block :=
-  ((h₁.lookup a).merge Block.join (h₂.lookup a)).getD ⟨.heap, Unit, [], .none⟩
+private noncomputable def joinAt (h₁ h₂ : Heap.{v}) (a : AllocId) : Block.{v} :=
+  ((h₁.lookup a).merge Block.join (h₂.lookup a)).getD ⟨.heap, PUnit, [], .none⟩
 
 private noncomputable def insertJoin (h₁ h₂ : Heap) (a : AllocId)
     (m : Finmap fun _ : AllocId => Block) : Finmap fun _ : AllocId => Block :=
@@ -238,7 +238,7 @@ def Mem (a : AllocId) (h : Heap) : Prop := a ∈ h.allocs
 def Compatible (h₁ h₂ : Heap) : Prop := ∀ a, OptCompatible (h₁.lookup a) (h₂.lookup a)
 
 /-- The value at `q`, if `h` owns it. It does not depend on the type of `q`. -/
-private def cell? (h : Heap) (q : RawPtr T M) : Option (Σ α : Type, α) :=
+private def cell? (h : Heap.{v}) (q : RawPtr T M) : Option (Σ α : Type v, α) :=
   match h.lookup q.allocId with
   | some b =>
     match b.cells[q.offset]? with
