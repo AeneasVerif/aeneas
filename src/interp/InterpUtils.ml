@@ -292,6 +292,55 @@ let mk_eproj_loans_value_from_symbolic_value env
       ty = svalue.sv_ty;
     }
 
+(** Given a fresh symbolic value [sv] (typically introduced for the value of a
+    global), if its type contains borrows living in the static region (for
+    instance because it is an ADT with fields of type [&'static T]), push a
+    fresh region abstraction owning the static region and containing a loan
+    projector over [sv].
+
+    This is similar to what we do for the input values of a function: this way,
+    when we expand [sv] we can introduce the loans corresponding to the static
+    shared borrows it contains (otherwise those borrows would be dangling).
+
+    We only support shared static borrows. *)
+let push_static_loans_proj_for_symbolic_value (span : Meta.span)
+    (ctx : eval_ctx) (sv : symbolic_value) : eval_ctx =
+  let type_infos = ctx.type_ctx.type_infos in
+  let static_regions = RegionSet.singleton RStatic in
+  if not (ty_has_regions_in_set type_infos static_regions sv.sv_ty) then ctx
+  else begin
+    [%cassert] span
+      (not
+         (ty_has_mut_borrow_for_region_in_set type_infos static_regions sv.sv_ty))
+      "Unimplemented: constants and globals whose value contains mutable \
+       borrows with the 'static lifetime (only shared 'static borrows are \
+       supported)";
+    let loan_proj =
+      mk_aproj_loans_value_from_symbolic_value type_infos static_regions sv
+        sv.sv_ty
+    in
+    (* The abstraction doesn't have any computational content *)
+    let cont : abs_cont =
+      {
+        output = Some (mk_etuple ~borrow_proj:true []);
+        input = Some (mk_etuple ~borrow_proj:false []);
+      }
+    in
+    let abs : abs =
+      {
+        abs_id = ctx.fresh_abs_id ();
+        kind = Static;
+        can_end = true;
+        parents = AbsId.Set.empty;
+        regions = { owned = static_regions };
+        ended_subabs = AbsLevelSet.empty;
+        avalues = [ loan_proj ];
+        cont = Some cont;
+      }
+    in
+    { ctx with env = EAbs abs :: ctx.env }
+  end
+
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)

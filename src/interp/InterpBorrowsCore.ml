@@ -1975,7 +1975,10 @@ let lookup_shared_value_opt (span : Meta.span) (env : env) (bid : BorrowId.id) :
 
 let lookup_shared_value (span : Meta.span) (env : env) (bid : BorrowId.id) :
     tvalue =
-  Option.get (lookup_shared_value_opt span env bid)
+  [%unwrap_with_span] span
+    (lookup_shared_value_opt span env bid)
+    ("Could not find the shared loan for borrow " ^ BorrowId.to_string bid
+   ^ " (dangling shared borrow)")
 
 let ctx_lookup_shared_value span ctx = lookup_shared_value span ctx.env
 
