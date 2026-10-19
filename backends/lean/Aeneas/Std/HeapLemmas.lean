@@ -181,30 +181,26 @@ private theorem joinList_set_owned (l₁ l₂ : List (Cell α)) (i : Nat) (x : �
     · simp [hij]
   · simp [hLen]
 
-/-- Giving a cell away: the other fragment must not own it. -/
-private theorem joinList_set_notOwned (l₁ l₂ : List (Cell α)) (i : Nat)
-    (h : ∀ x, l₂[i]? ≠ some (.owned x)) :
-    joinList (l₁.set i .notOwned) l₂ = (joinList l₁ l₂).set i .notOwned := by
+private theorem joinList_set_borrowed (l₁ l₂ : List (Cell α)) (i : Nat) :
+    joinList (l₁.set i .borrowed) l₂ = (joinList l₁ l₂).set i .borrowed := by
   apply List.ext_getElem?
   intro j
   rw [getElem?_joinList, List.length_set, List.getElem?_set, List.getElem?_set,
     getElem?_joinList, length_joinList]
-  split
-  · rename_i hLen
-    split
-    · rename_i hij
-      subst hij
-      split
-      · rename_i hi
-        have hi₂ : i < l₂.length := hLen ▸ hi
-        have hCell := h
-        rw [List.getElem?_eq_getElem hi₂] at hCell ⊢
-        cases hc : l₂[i] with
-        | owned x => exact absurd (by rw [hc]) (hCell x)
-        | notOwned => simp [join]
-      · simp
-    · rfl
-  · rfl
+  by_cases hLen : l₁.length = l₂.length
+  · simp only [hLen, ite_true]
+    by_cases hij : i = j
+    · subst hij
+      by_cases hi : i < l₂.length
+      · simp [hi, join]
+      · simp [hi]
+    · simp [hij]
+  · simp [hLen]
+
+/-- A fragment compatible with an owned or borrowed cell does not own or borrow it. -/
+private theorem eq_notOwned_of_compatible {x y : Cell α} (h : Compatible x y)
+    (hx : x ≠ .notOwned) : y = .notOwned := by
+  cases x <;> cases y <;> simp_all [Compatible]
 
 private theorem forall₂_iff_getElem? {l₁ l₂ : List (Cell α)} :
     List.Forall₂ Compatible l₁ l₂ ↔
@@ -816,10 +812,12 @@ private theorem lookup_setOwned_ne {α : Type} {h : Heap} {q : RawPtr α M} {val
   · exact lookup_insert_ne _ _ ha
   · rfl
 
-/-- Owning a cell keeps compatibility with a frame that does not own it. -/
+/-- Owning a cell that `h₁` owns or borrows keeps compatibility: a compatible frame does not own or
+borrow it. -/
 private theorem compatible_setOwned_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     {value : α} {hTy : ∀ b, h₁.lookup q.allocId = some (.live b) → b.ty = α}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hNotLive : ¬ IsLive h₂ q) :
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
+    (hExcl : ∀ b, h₁.lookup q.allocId = some (.live b) → b.cells[q.offset]? ≠ some .notOwned) :
     PartialCommMonoid.Compatible (h₁.setOwned q value hTy) h₂ := by
   intro a
   by_cases ha : a = q.allocId
@@ -831,7 +829,8 @@ private theorem compatible_setOwned_left {α : Type} {h₁ h₂ : Heap} {q : Raw
       · rename_i b hLookup; simp [hs₁] at hLookup
       · show OptCompatible (h₁.lookup _) _
         rw [hs₁]; trivial
-    · obtain ⟨x, hx⟩ := lookup_setOwned (value := value) (hTy := hTy) hs₁
+    · have hExcl₁ := hExcl b₁ hs₁
+      obtain ⟨x, hx⟩ := lookup_setOwned (value := value) (hTy := hTy) hs₁
       show OptCompatible _ _
       rw [hx]
       rw [hs₁] at hBlock
@@ -840,6 +839,7 @@ private theorem compatible_setOwned_left {α : Type} {h₁ h₂ : Heap} {q : Raw
       · rw [hs₂] at hBlock
         simp only [OptCompatible, BlockSlot.Compatible] at hBlock ⊢
         obtain ⟨k₁, t, c₁⟩ := b₁
+        dsimp only at hExcl₁
         obtain ⟨k₂, c₂, rfl⟩ := Block.eq_mk_of_compatible hBlock
         dsimp only at hBlock hs₂ ⊢
         rw [Block.compatible_mk_iff] at hBlock ⊢
@@ -849,12 +849,14 @@ private theorem compatible_setOwned_left {α : Type} {h₁ h₂ : Heap} {q : Raw
         split at hy
         · rename_i hi
           subst hi
-          cases z with
-          | notOwned => cases y <;> trivial
-          | owned w =>
-            exfalso
-            apply hNotLive
-            simp [IsLive, cell?, hs₂, hz]
+          have hi₁ : q.offset < c₁.length := by
+            have := hBlock.2.length_eq; have := (List.getElem?_eq_some_iff.mp hz).1; omega
+          rw [List.getElem?_eq_getElem hi₁] at hExcl₁
+          have hz' := Cell.eq_notOwned_of_compatible
+            ((Cell.forall₂_iff_getElem?.mp hBlock.2).2 _ _ _ (List.getElem?_eq_getElem hi₁) hz)
+            (fun h => hExcl₁ (congrArg some h))
+          subst hz'
+          cases y <;> trivial
         · exact (Cell.forall₂_iff_getElem?.mp hBlock.2).2 i y z hy hz
       · rw [hs₂] at hBlock; exact hBlock
     · unfold setOwned
@@ -871,15 +873,11 @@ theorem compatible_write_left {α : Type} {q : RawPtr α M} {value : α}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hValid : IsValid h₁ q) :
     PartialCommMonoid.Compatible (h₁.write q value hValid).2 h₂ :=
-  compatible_setOwned_left (hTy := ty_of_isValid hValid) hCompatible fun hLive =>
-    not_compatible_of_isValid hValid (by
-      obtain ⟨c, hCell⟩ := Option.isSome_iff_exists.mp hLive
-      obtain ⟨b, hLookup, x, hx, rfl⟩ := lookup_of_cell? hCell
-      obtain ⟨b₁, hLookup₁, hTy₁, -⟩ := lookup_of_isValid hValid
-      have hBlock := hCompatible q.allocId
-      rw [hLookup₁, hLookup] at hBlock
-      have hTy : b.ty = α := hBlock.2.1.trans hTy₁
-      simp only [IsValid, hCell, hTy]) hCompatible
+  compatible_setOwned_left (hTy := ty_of_isValid hValid) hCompatible fun b hLookup => by
+    obtain ⟨b₁, hLookup₁, -, x, hx⟩ := lookup_of_isValid hValid
+    rw [hLookup₁] at hLookup
+    cases hLookup
+    simp [hx]
 
 /-! ### Deallocation -/
 
@@ -1172,7 +1170,7 @@ theorem Subheap.singleton_allocation {α : Type} (a : AllocId) (values : List α
 private theorem borrow_snd_of_lookup {α : Type} {h : Heap} {q : RawPtr α M}
     (hValid : IsValid h q) {b : Block} (hLookup : h.lookup q.allocId = some (.live b)) :
     (h.borrow q hValid).2 =
-      h.insert q.allocId (.live ⟨b.kind, b.ty, b.cells.set q.offset .notOwned⟩) := by
+      h.insert q.allocId (.live ⟨b.kind, b.ty, b.cells.set q.offset .borrowed⟩) := by
   simp only [borrow, hLookup]
 
 theorem borrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M)
@@ -1200,17 +1198,14 @@ theorem borrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M)
       dsimp only at hBlock hx ⊢
       rw [Block.compatible_mk_iff] at hBlock
       simp only [Option.merge, BlockSlot.join, Block.join_mk, Block.cellsAs_mk]
-      rw [Cell.joinList_set_notOwned]
-      intro y hy
-      have := (Cell.forall₂_iff_getElem?.mp hBlock.2).2 _ _ _ hx hy
-      simp [Cell.Compatible] at this
+      rw [Cell.joinList_set_borrowed]
     · rw [hs] at hBlock; exact hBlock.elim
   · rw [lookup_insert_ne _ _ ha, lookup_union, lookup_union, lookup_insert_ne _ _ ha]
 
 theorem compatible_borrow_left {α : Type} {q : RawPtr α M} {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hValid : IsValid h₁ q) :
     PartialCommMonoid.Compatible (h₁.borrow q hValid).2 h₂ := by
-  obtain ⟨b, hLookup, -⟩ := lookup_of_isValid hValid
+  obtain ⟨b, hLookup, -, x, hx⟩ := lookup_of_isValid hValid
   rw [borrow_snd_of_lookup hValid hLookup]
   intro a
   by_cases ha : a = q.allocId
@@ -1225,13 +1220,18 @@ theorem compatible_borrow_left {α : Type} {q : RawPtr α M} {h₁ h₂ : Heap}
       simp only [OptCompatible, BlockSlot.Compatible] at hBlock ⊢
       obtain ⟨k, t, c⟩ := b
       obtain ⟨k₂, c₂, rfl⟩ := Block.eq_mk_of_compatible hBlock
-      dsimp only at hBlock ⊢
+      dsimp only at hBlock hx ⊢
       rw [Block.compatible_mk_iff] at hBlock ⊢
       refine ⟨hBlock.1, Cell.forall₂_iff_getElem?.mpr ⟨by simp [hBlock.2.length_eq], ?_⟩⟩
       intro i y z hy hz
       rw [List.getElem?_set] at hy
       split at hy
-      · simp at hy; obtain ⟨-, rfl⟩ := hy; cases z <;> trivial
+      · rename_i hi
+        subst hi
+        simp at hy; obtain ⟨-, rfl⟩ := hy
+        rw [Cell.eq_notOwned_of_compatible ((Cell.forall₂_iff_getElem?.mp hBlock.2).2 _ _ _ hx hz)
+          (by simp)]
+        trivial
       · exact (Cell.forall₂_iff_getElem?.mp hBlock.2).2 i y z hy hz
     · rw [hs] at hBlock; exact hBlock
   · show OptCompatible ((h₁.insert _ _).lookup a) _
@@ -1256,6 +1256,11 @@ theorem isBorrowed_borrow {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsV
 
 private theorem lookup_borrowedBlock {α : Type} (q : RawPtr α M) (kind : AllocKind) (len : Nat) :
     (borrowedBlock q kind len).lookup q.allocId =
+      some (.live ⟨kind, α, (List.replicate len .notOwned).set q.offset .borrowed⟩) :=
+  Finmap.lookup_singleton_eq
+
+private theorem lookup_header {α : Type} (q : RawPtr α M) (kind : AllocKind) (len : Nat) :
+    (header q kind len).lookup q.allocId =
       some (.live ⟨kind, α, List.replicate len .notOwned⟩) :=
   Finmap.lookup_singleton_eq
 
@@ -1270,11 +1275,6 @@ theorem borrow_singleton {α : Type} (q : RawPtr α M) (value : α) (kind : Allo
   · subst ha
     rw [lookup_insert, lookup_borrowedBlock]
     simp only [List.set_set]
-    congr 3
-    apply List.ext_getElem?
-    intro j
-    simp only [List.getElem?_set, List.length_replicate, List.getElem?_replicate]
-    split <;> simp_all
   · rw [lookup_insert_ne _ _ ha, lookup_singleton_ne ha]
     exact (lookup_eq_none.mpr fun hMem => ha ((Finmap.mem_singleton _ _ _).mp hMem)).symm
 
@@ -1284,10 +1284,9 @@ theorem isBorrowed_borrowedBlock {α : Type} (q : RawPtr α M) (kind : AllocKind
   rw [lookup_borrowedBlock]
   simp [hOffset]
 
-/-- A frame that does not own the cell keeps it borrowed. -/
+/-- The borrow of a cell wins over any other fragment of it. -/
 theorem isBorrowed_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
-    (hBorrowed : IsBorrowed h₁ q) (hNotLive : ¬ IsLive h₂ q) :
-    IsBorrowed (h₁ ∪ h₂) q := by
+    (hBorrowed : IsBorrowed h₁ q) : IsBorrowed (h₁ ∪ h₂) q := by
   unfold IsBorrowed at hBorrowed ⊢
   split at hBorrowed
   · rename_i b hLookup
@@ -1296,35 +1295,16 @@ theorem isBorrowed_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     rw [Cell.getElem?_joinList]
     split
     · rename_i hLen
-      rw [hBorrowed.2]
-      rcases hc : (h₂.cellsAt q.allocId b.ty)[q.offset]? with _ | (x | _)
-      · exfalso
-        have hi := hLen ▸ (List.getElem?_eq_some_iff.mp hBorrowed.2).1
-        simp [List.getElem?_eq_getElem hi] at hc
-      · exfalso
-        apply hNotLive
-        obtain ⟨k, t, c⟩ := b
-        dsimp only at hc
-        unfold cellsAt at hc
-        unfold IsLive cell?
-        rcases hs : h₂.lookup q.allocId with _ | (b₂ | _)
-        · simp [hs] at hc
-        · obtain ⟨k₂, t₂, c₂⟩ := b₂
-          rw [hs] at hc
-          by_cases hTy : t₂ = t
-          · subst hTy
-            simp only [Block.cellsAs_mk] at hc
-            simp [hc]
-          · simp [Block.cellsAs, hTy] at hc
-        · simp [hs] at hc
-      · rfl
+      have hi : q.offset < (h₂.cellsAt q.allocId b.ty).length := by
+        rw [← hLen]; exact (List.getElem?_eq_some_iff.mp hBorrowed.2).1
+      simp [hBorrowed.2, List.getElem?_eq_getElem hi, Cell.join]
     · exact hBorrowed.2
   · exact hBorrowed.elim
 
-/-- Framing for `endBorrow`, when the frame does not own the cell. -/
+/-- Framing for `endBorrow`. -/
 theorem endBorrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (value : α)
-    (hBorrowed : IsBorrowed h₁ q) (hNotLive : ¬ IsLive h₂ q) :
-    (h₁ ∪ h₂).endBorrow q value (isBorrowed_union_left hBorrowed hNotLive) =
+    (hBorrowed : IsBorrowed h₁ q) :
+    (h₁ ∪ h₂).endBorrow q value (isBorrowed_union_left hBorrowed) =
       Prod.map id (· ∪ h₂) (h₁.endBorrow q value hBorrowed) := by
   unfold IsBorrowed at hBorrowed
   split at hBorrowed
@@ -1333,10 +1313,12 @@ theorem endBorrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (v
   · exact hBorrowed.elim
 
 theorem compatible_endBorrow_left {α : Type} {q : RawPtr α M} {value : α} {h₁ h₂ : Heap}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hBorrowed : IsBorrowed h₁ q)
-    (hNotLive : ¬ IsLive h₂ q) :
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hBorrowed : IsBorrowed h₁ q) :
     PartialCommMonoid.Compatible (h₁.endBorrow q value hBorrowed).2 h₂ :=
-  compatible_setOwned_left (hTy := ty_of_isBorrowed hBorrowed) hCompatible hNotLive
+  compatible_setOwned_left (hTy := ty_of_isBorrowed hBorrowed) hCompatible fun b hLookup => by
+    unfold IsBorrowed at hBorrowed
+    rw [hLookup] at hBorrowed
+    simp [hBorrowed.2]
 
 theorem endBorrow_borrowedBlock {α : Type} (q : RawPtr α M) (value : α) (kind : AllocKind)
     (len : Nat) (hBorrowed : IsBorrowed (borrowedBlock q kind len) q) :
@@ -1349,7 +1331,7 @@ theorem endBorrow_borrowedBlock {α : Type} (q : RawPtr α M) (value : α) (kind
   by_cases ha : a = q.allocId
   · subst ha
     rw [lookup_insert, lookup_singleton]
-    rfl
+    simp [List.set_set]
   · rw [lookup_insert_ne _ _ ha, lookup_singleton_ne ha]
     exact lookup_eq_none.mpr fun hMem => ha ((Finmap.mem_singleton _ _ _).mp hMem)
 

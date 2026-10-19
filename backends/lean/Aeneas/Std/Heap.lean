@@ -28,9 +28,11 @@ inductive AllocKind where
 inductive Cell (α : Type u) where
   /-- We own the value -/
   | owned (x : α)
-  /-- Someone else owns it: useful for separation, but also when converting a raw pointer
-  to a mutable borrow -/
+  /-- Someone else owns it: useful for separation -/
   | notOwned
+  /-- Given away by `borrow` (converting a raw pointer to a borrow): we hold the exclusive right
+  to give it back with `endBorrow`, but no value -/
+  | borrowed
 
 /-- An allocation block -/
 structure Block : Type 1 where
@@ -82,7 +84,7 @@ See the safety section of
 
 /-
 The operations, and how they change blocks and cells. `freed` is final: no operation leaves it, so
-deallocated memory can never be used again. A cell given away by `borrow` is `notOwned` until
+deallocated memory can never be used again. A cell given away by `borrow` is `borrowed` until
 `endBorrow` gives it back, at the same address. `dealloc` frees a whole block, and only for its kind.
 
 | Operation           | Effect                                       | Used by                                       |
@@ -91,22 +93,23 @@ deallocated memory can never be used again. A cell given away by `borrow` is `no
 | `alloc _ .view`     | fresh id → live .view [owned*]               | `from_mut`, `as_ptr`, `as_mut_ptr`            |
 | `dealloc _ _ .heap` | live .heap [owned*] → freed                  | `Box::from_raw`, `Global::deallocate`         |
 | `dealloc _ _ .view` | live .view [owned*] → freed                  | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
-| `borrow`            | owned → notOwned                             | `from_raw_parts`, `from_raw_parts_mut`        |
-| `endBorrow`         | notOwned → owned                             | end of `from_raw_parts`, `from_raw_parts_mut` |
+| `borrow`            | owned → borrowed                             | `from_raw_parts`, `from_raw_parts_mut`        |
+| `endBorrow`         | borrowed → owned                             | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
 
 namespace Cell
 
-/-- Combines two fragments of a cell: the owned one wins. -/
+/-- Combines two fragments of a cell: the owned or borrowed one wins. -/
 def join : Cell α → Cell α → Cell α
   | .owned x, _ => .owned x
+  | .borrowed, _ => .borrowed
   | .notOwned, c => c
 
-/-- Two fragments of a cell combine if at most one of them owns it. -/
+/-- Two fragments of a cell combine if at most one of them owns or borrows it. -/
 def Compatible : Cell α → Cell α → Prop
-  | .owned _, .owned _ => False
-  | .owned _, .notOwned => True
   | .notOwned, _ => True
+  | _, .notOwned => True
+  | _, _ => False
 
 /-- Combines two fragments of the cells of a block, cell by cell. Lists of different lengths
 give `c₁`. -/
@@ -242,9 +245,15 @@ def singleton (q : RawPtr α M) (value : α) (kind : AllocKind) (len : Nat) : He
   ⟨Finmap.singleton q.allocId
     (.live ⟨kind, α, (List.replicate len .notOwned).set q.offset (.owned value)⟩)⟩
 
-/-- The block of `q`, of kind `kind` and `len` cells, owning none of them: what is left of
-`singleton q _ kind len` after `borrow`. -/
+/-- The block of `q`, of kind `kind` and `len` cells, whose cell at `q` is borrowed and the others
+not owned: what is left of `singleton q _ kind len` after `borrow`. -/
 def borrowedBlock (q : RawPtr α M) (kind : AllocKind) (len : Nat) : Heap :=
+  ⟨Finmap.singleton q.allocId
+    (.live ⟨kind, α, (List.replicate len .notOwned).set q.offset .borrowed⟩)⟩
+
+/-- The block of `q`, of kind `kind` and `len` cells, owning none of them: the header of the block,
+which fixes its kind, type and length. -/
+def header (q : RawPtr α M) (kind : AllocKind) (len : Nat) : Heap :=
   ⟨Finmap.singleton q.allocId (.live ⟨kind, α, List.replicate len .notOwned⟩)⟩
 
 /-- The block `a` holding `values`, all owned. -/
@@ -277,11 +286,11 @@ def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
        simpa [IsValid, hlookup] using hValid
      exact (htype ▸ value, h)
 
-/-- `h` does not own the cell of `q`, whose block holds values of type `α`: `endBorrow` can give
-it back. -/
+/-- `h` holds the borrow of the cell of `q`, whose block holds values of type `α`: `endBorrow` can
+give it back. -/
 def IsBorrowed (h : Heap) (q : RawPtr α M) : Prop :=
   match h.lookup q.allocId with
-  | some (.live b) => b.ty = α ∧ b.cells[q.offset]? = some .notOwned
+  | some (.live b) => b.ty = α ∧ b.cells[q.offset]? = some .borrowed
   | _ => False
 
 /-- Owns `value` at `q`, given that the block of `q` holds values of type `α`. -/
@@ -328,13 +337,13 @@ def dealloc (q : RawPtr α M) (n : Nat) (kind : AllocKind) (h : Heap)
     (_ : CanDealloc h q n kind) : Unit × Heap :=
   ((), h.insert q.allocId .freed)
 
-/-- Moves the value of `q` out into a borrow (`from_raw_parts`): the cell is not owned until
+/-- Moves the value of `q` out into a borrow (`from_raw_parts`): the cell is `borrowed` until
 `endBorrow`, so every access through a raw pointer fails meanwhile. -/
 def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
   ((read q h hValid).1,
     match h.lookup q.allocId with
     | some (.live b) =>
-      h.insert q.allocId (.live ⟨b.kind, b.ty, b.cells.set q.offset .notOwned⟩)
+      h.insert q.allocId (.live ⟨b.kind, b.ty, b.cells.set q.offset .borrowed⟩)
     | _ => h)
 
 /-- Ends the borrow of `q`. -/
