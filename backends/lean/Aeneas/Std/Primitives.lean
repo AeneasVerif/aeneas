@@ -49,93 +49,117 @@ deriving Repr, BEq
 
 open Error
 
-inductive RustEffect.Input : Type 1 where
-| guardedModify (α : Type) (pre : Heap.{0} → Prop)
-    (modify : (h : Heap.{0}) → pre h → α × Heap.{0}) : RustEffect.Input
-| fail : Error → RustEffect.Input
+/-- The effects of Rust code running on the heap `H`. An answer lives one universe below `H`,
+like the values in its heap. -/
+inductive RustEffect.Input (H : Type (v + 1)) : Type (v + 1) where
+| guardedModify (α : Type v) (pre : H → Prop)
+    (modify : (h : H) → pre h → α × H) : RustEffect.Input H
+| fail : Error → RustEffect.Input H
 
 @[implicit_reducible]
-def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
+def RustEffect.Output {H : Type (v + 1)} (i : RustEffect.Input H) : Type (v + 1) :=
   match i with
-  | .guardedModify α _ _ => ULift α
+  | .guardedModify α _ _ => ULift.{v + 1} α
   | .fail _ => PEmpty
 
 @[implicit_reducible]
-def RustEffect : Effect := {
-  I := RustEffect.Input
+def RustEffect (H : Type (v + 1)) : Effect := {
+  I := RustEffect.Input H
   O := RustEffect.Output
 }
 
--- We need Result to be irreducible outside this file (to not break metaprograms which normalize
+-- We need ResultAt to be irreducible outside this file (to not break metaprograms which normalize
 -- types), but reducible within. The `unseal` command only affects the local scope.
--- `Result α` lives at least in `Type 1` because of `RustEffect.Input`.
--- Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
--- (a closure, a function pointer, a trait-instance structure) cannot be stored behind a raw pointer:
--- that would need a higher-order store. Such pointers fail with a universe error.
+/-- The monad of Rust code running on the heap `H` (levels: `HeapStrat`). -/
 @[irreducible]
-def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
-unseal Result
-attribute [local implicit_reducible] Result
+def ResultAt (H : Type (v + 1)) (α : Type u) : Type (max u (v + 1)) := ITree (RustEffect H) α
+unseal ResultAt
+attribute [local implicit_reducible] ResultAt
 
-def Result.ok {α} (a : α) : Result α := .ret a
+/-- The monad of plain Rust code: it runs on the heap of level 0. -/
+abbrev Result : Type u → Type (max u 1) := ResultAt Heap0
 
-def Result.vis {α} (eff : RustEffect.Input) (k : RustEffect.Output eff → Result α) : Result α := ITree.vis eff k
+/-- Makes `Heap0` the default heap of the terms that don't fix it (`ok 0`, `massert b`, …), the way
+numerals default to `Nat`: every heap is an instance, and the default instance picks `Heap0` when
+nothing else determines the heap. -/
+class HeapLevel (H : Type (uh + 1)) : Prop
+
+instance (H : Type (uh + 1)) : HeapLevel H := ⟨⟩
+@[default_instance] instance : HeapLevel Heap0 := ⟨⟩
+
+variable {H : Type (uh + 1)}
+
+def Result.ok [HeapLevel H] {α} (a : α) : ResultAt H α := .ret a
+
+def Result.vis {α} (eff : RustEffect.Input H) (k : RustEffect.Output eff → ResultAt H α) : ResultAt H α := ITree.vis eff k
 
 /- `Result.fail` is deliberately kept opaque: we do *not* mark it with `simp`/`grind` so that it
    never gets unfolded to a `Result.vis`. All the reasoning about `fail` should go through the
    dedicated lemmas below (`bind_fail`, `spec_fail`, ...). -/
-def Result.fail {α} (e : Error) : Result α := Result.vis (.fail e) PEmpty.elim
+def Result.fail [HeapLevel H] {α} (e : Error) : ResultAt H α := Result.vis (.fail e) PEmpty.elim
 
 theorem Result.fail_eq_vis {α} (e : Error) :
-  (Result.fail e : Result α) = Result.vis (.fail e) PEmpty.elim := rfl
+  (Result.fail e : ResultAt H α) = Result.vis (.fail e) PEmpty.elim := rfl
 
-def Result.div {α} : Result α := ITree.div
+def Result.div [HeapLevel H] {α} : ResultAt H α := ITree.div
 
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+/- `.ok`/`.fail`/… on `ResultAt H`; field-notation operations (`x.match`) live in `ResultAt`. -/
+namespace ResultAt
+export Result (ok vis fail div)
+end ResultAt
+
+def bind {α : Type u} {β : Type v} (x: ResultAt H α) (f: α → ResultAt H β) : ResultAt H β :=
   ITree.bind x f
 
-instance : Monad Result where
+instance : Monad (ResultAt H) where
   pure := .ok
   bind := bind
 
 @[elab_as_elim, cases_eliminator]
-def Result.cases {R}
-    {motive : Result R → Sort v}
-    (t : Result R)
+def ResultAt.cases {R}
+    {motive : ResultAt H R → Sort v}
+    (t : ResultAt H R)
     (ret : ∀ r, motive (Result.ok r))
     (vis : ∀ i k, motive (Result.vis i k))
     (div :  motive (Result.div))
     : motive t := ITree.cases ret div vis t
 
-inductive MatchResult (α : Type u) : Type (max u 1) where
-| ok : (a : α) → MatchResult α
-| div : MatchResult α
-| vis : (eff : RustEffect.Input) → (RustEffect.Output eff → Result α) → MatchResult α
+/-- `ResultAt.cases` for `Result`: `cases` finds its eliminator by the head of the type, which is the
+abbreviation `Result` rather than `ResultAt`. -/
+@[elab_as_elim, cases_eliminator]
+def Result.cases0 {R} {motive : Result R → Sort v} (t : Result R)
+    (ret : ∀ r, motive (Result.ok r)) (vis : ∀ i k, motive (Result.vis i k))
+    (div : motive Result.div) : motive t := ResultAt.cases t ret vis div
+
+inductive MatchResult (H : Type (uh + 1)) (α : Type u) : Type (max u (uh + 1)) where
+| ok : (a : α) → MatchResult H α
+| div : MatchResult H α
+| vis : (eff : RustEffect.Input H) → (RustEffect.Output eff → ResultAt H α) → MatchResult H α
 
 /-!
 Can simulate a match on the Result type by matching on the output of this function.
 -/
-def Result.match {α : Type u} (r : Result α) : MatchResult α :=
+def ResultAt.match {α : Type u} (r : ResultAt H α) : MatchResult H α :=
   r.cases .ok .vis .div
 
 @[simp, grind =]
-theorem Result.match.ok {α : Type u} {a : α} : (Result.ok a).match = .ok a := by
-  simp [Result.match, Result.ok, Result.cases]
+theorem ResultAt.match.ok {α : Type u} {a : α} : (Result.ok a : ResultAt H α).match = .ok a := by
+  simp [ResultAt.match, Result.ok, ResultAt.cases]
 @[simp, grind =]
-theorem Result.match.vis {α : Type u} {e k} : (@Result.vis α e k).match = .vis e k := by
-  simp [Result.match, Result.vis, Result.cases]
+theorem ResultAt.match.vis {α : Type u} {e k} : (@Result.vis H α e k).match = .vis e k := by
+  simp [ResultAt.match, Result.vis, ResultAt.cases]
 @[simp, grind =]
-theorem Result.match.div {α : Type u} : Result.div.match = @MatchResult.div α := by
-  simp [Result.match, Result.div, Result.cases]
+theorem ResultAt.match.div {α : Type u} : (Result.div : ResultAt H α).match = @MatchResult.div H α := by
+  simp [ResultAt.match, Result.div, ResultAt.cases]
 @[simp, grind =]
-theorem Result.match.fail {α : Type u} {e} :
-  (Result.fail e : Result α).match = .vis (.fail e) PEmpty.elim := by
+theorem ResultAt.match.fail {α : Type u} {e} :
+  (Result.fail e : ResultAt H α).match = .vis (.fail e) PEmpty.elim := by
   simp [Result.fail_eq_vis]
 
 /-- The `Repr` instance for `Result`, so that `#eval` on `Result`-producing expressions prints `Aeneas.Std.Result.ok`/`fail`/`div`. -/
-instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
+instance Result.reprInst {α : Type u} [Repr α] : Repr (ResultAt H α) where
   reprPrec r _ :=
-    match Result.match r with
+    match ResultAt.match r with
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
     | .div => "Aeneas.Std.Result.div"
     | .vis (.fail e) _ => "Aeneas.Std.Result.fail " ++ repr e
@@ -154,139 +178,139 @@ does not reveal how `Result` is represented.
 -/
 
 @[grind inj]
-theorem Result.ok_injective {α} : Function.Injective (@Result.ok α) := by
-  intro a b h; simpa using congrArg Result.match h
+theorem Result.ok_injective {α} : Function.Injective (@Result.ok H _ α) := by
+  intro a b h; simpa using congrArg ResultAt.match h
 
 /-- `Result.fail` is opaque, so its injectivity has to be stated separately. -/
 @[grind inj]
-theorem Result.fail_injective {α} : Function.Injective (@Result.fail α) := by
+theorem Result.fail_injective {α} : Function.Injective (@Result.fail H _ α) := by
   intro a b h
-  have h := congrArg Result.match h
-  simp only [Result.match.fail, MatchResult.vis.injEq, RustEffect.Input.fail.injEq] at h
+  have h := congrArg ResultAt.match h
+  simp only [ResultAt.match.fail, MatchResult.vis.injEq, RustEffect.Input.fail.injEq] at h
   exact h.1
 
 /-! The disequality lemmas for the constructors of `Result`. They all follow from the fact that
-`Result.match` maps the constructors to *distinct* constructors of the inductive `MatchResult`. -/
+`ResultAt.match` maps the constructors to *distinct* constructors of the inductive `MatchResult`. -/
 
 @[simp]
-theorem ok_not_vis {α} {a : α} {eff k} : ¬ Result.ok a = .vis eff k := by
-  intro h; simpa using congrArg Result.match h
+theorem ok_not_vis {α} {a : α} {eff k} : ¬ (Result.ok a : ResultAt H α) = .vis eff k := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem vis_not_ok {α} {a : α} {eff k} : ¬ .vis eff k = Result.ok a := by
-  intro h; simpa using congrArg Result.match h
+theorem vis_not_ok {α} {a : α} {eff k} : ¬ .vis eff k = (Result.ok a : ResultAt H α) := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by
-  intro h; simpa using congrArg Result.match h
+theorem ok_not_div {α} {a : α} : ¬ (Result.ok a : ResultAt H α) = .div := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem div_not_ok {α} {a : α} : ¬ Result.div = .ok a := by
-  intro h; simpa using congrArg Result.match h
+theorem div_not_ok {α} {a : α} : ¬ Result.div = (Result.ok a : ResultAt H α) := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem vis_not_div {α} {eff k} : ¬ @Result.vis α eff k = .div := by
-  intro h; simpa using congrArg Result.match h
+theorem vis_not_div {α} {eff k} : ¬ @Result.vis H α eff k = .div := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem div_not_vis {α} {eff k} : ¬ .div = @Result.vis α eff k := by
-  intro h; simpa using congrArg Result.match h
+theorem div_not_vis {α} {eff k} : ¬ .div = @Result.vis H α eff k := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by
-  intro h; simpa using congrArg Result.match h
+theorem ok_not_fail {α} {a : α} {e} : ¬ (Result.ok a : ResultAt H α) = .fail e := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = .ok a := by
-  intro h; simpa using congrArg Result.match h
+theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = (Result.ok a : ResultAt H α) := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem fail_not_div {α} {e} : ¬ (Result.fail e : Result α) = .div := by
-  intro h; simpa using congrArg Result.match h
+theorem fail_not_div {α} {e} : ¬ (Result.fail e : ResultAt H α) = .div := by
+  intro h; simpa using congrArg ResultAt.match h
 @[simp]
-theorem div_not_fail {α} {e} : ¬ (Result.div : Result α) = .fail e := by
-  intro h; simpa using congrArg Result.match h
+theorem div_not_fail {α} {e} : ¬ (Result.div : ResultAt H α) = .fail e := by
+  intro h; simpa using congrArg ResultAt.match h
 
 @[simp]
-theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
+theorem Result.ok.injEq {α} {a b : α} : ((Result.ok a : ResultAt H α) = .ok b) = (a = b) := by
   simp only [eq_iff_iff]
   exact ⟨fun h => Result.ok_injective h, fun h => by simp [h]⟩
 
 @[simp]
-theorem Result.fail.injEq {α} {a b : Error} : ((Result.fail a : Result α) = .fail b) = (a = b) := by
+theorem Result.fail.injEq {α} {a b : Error} : ((Result.fail a : ResultAt H α) = .fail b) = (a = b) := by
   simp only [eq_iff_iff]
   exact ⟨fun h => Result.fail_injective h, fun h => by simp [h]⟩
 
 -- TODO: when necessary, we may need a stronger version of this which outputs ≍ for the continuations
-theorem Result.vis.injEq {α} {a b} {k1 k2} : (@Result.vis α a k1 = .vis b k2) → (a = b) := by
+theorem Result.vis.injEq {α} {a b} {k1 k2} : (@Result.vis H α a k1 = .vis b k2) → (a = b) := by
   intro h
-  have h := congrArg Result.match h
-  simp only [Result.match.vis, MatchResult.vis.injEq] at h
+  have h := congrArg ResultAt.match h
+  simp only [ResultAt.match.vis, MatchResult.vis.injEq] at h
   exact h.left
 
 @[simp]
-theorem Result.match.isOk {α : Type u} {a : α} {r : Result α} : (r.match = .ok a) ↔ r = .ok a := by
+theorem ResultAt.match.isOk {α : Type u} {a : α} {r : ResultAt H α} : (r.match = .ok a) ↔ r = .ok a := by
   cases r <;> grind
 @[simp]
-theorem Result.match.isVis {α : Type u} {e k} {r : Result α} : (r.match = .vis e k) ↔ r = .vis e k := by
+theorem ResultAt.match.isVis {α : Type u} {e k} {r : ResultAt H α} : (r.match = .vis e k) ↔ r = .vis e k := by
   cases r <;> grind
 @[simp]
-theorem Result.match.isDiv {α : Type u} {r : Result α} : (r.match = .div) ↔ r = .div := by
+theorem ResultAt.match.isDiv {α : Type u} {r : ResultAt H α} : (r.match = .div) ↔ r = .div := by
   cases r <;> grind
 
 /-- `r.reducesTo expected` is `true` iff `r` evaluates to `ok expected`. -/
-def Result.reducesTo {R : Type _} [BEq R] (r : Result R) (expected : R) : Bool :=
+def ResultAt.reducesTo {R : Type _} [BEq R] (r : ResultAt H R) (expected : R) : Bool :=
   match r.match with
   | .ok x => x == expected
   | _ => false
 
 open Result
 
-instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
+instance Result_Inhabited (α : Type u) : Inhabited (ResultAt H α) :=
   Inhabited.mk (fail panic)
 
-instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
+instance Result_Nonempty (α : Type u) : Nonempty (ResultAt H α) :=
   Nonempty.intro div
 
 /-!
 # Helpers
 -/
 
-def massert (b : Prop) [Decidable b] : Result Unit :=
+def massert [HeapLevel H] (b : Prop) [Decidable b] : ResultAt H Unit :=
   if b then ok () else fail assertionFailure
 
 @[simp]
-def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
+def Result.ofOption {a : Type u} (x : Option a) (e : Error) : ResultAt H a :=
   match x with
   | some x => ok x
   | none => fail e
 
-@[simp] abbrev liftFun1 {α β} (f : α → β) : α → Result β := fun x => ok (f x)
-@[simp] abbrev liftFun2 {α β γ : Type _} (f : α → β → γ) : α → β → Result γ := fun x y => ok (f x y)
-@[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → Result δ := fun x y z => ok (f x y z)
-@[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → Result ε := fun x y z a => ok (f x y z a)
+@[simp] abbrev liftFun1 {α β} (f : α → β) : α → ResultAt H β := fun x => ok (f x)
+@[simp] abbrev liftFun2 {α β γ : Type _} (f : α → β → γ) : α → β → ResultAt H γ := fun x y => ok (f x y)
+@[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → ResultAt H δ := fun x y z => ok (f x y z)
+@[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → ResultAt H ε := fun x y z a => ok (f x y z a)
 
 /-!
 # Do-DSL Support
 -/
 
-@[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
+@[simp] theorem bind_ok (x : α) (f : α → ResultAt H β) : bind (.ok x) f = f x :=
   by simp [bind, ok]
-@[simp] theorem bind_vis (e k) (f : α → Result β) : bind (.vis e k) f = .vis e (fun x => bind (k x) f) :=
+@[simp] theorem bind_vis (e k) (f : α → ResultAt H β) : bind (.vis e k) f = .vis e (fun x => bind (k x) f) :=
   by simp [bind, vis]
      rfl
-@[simp] theorem bind_fail (e : Error) (f : α → Result β) : bind (.fail e) f = .fail e := by
+@[simp] theorem bind_fail (e : Error) (f : α → ResultAt H β) : bind (.fail e) f = .fail e := by
   simp only [Result.fail_eq_vis, bind_vis]
   apply congrArg
   funext x
   exact x.elim
 
-@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
+@[simp] theorem bind_div (f : α → ResultAt H β) : bind .div f = .div := by simp [bind, div]
 
 /-- Left identity. -/
-protected theorem pure_bind {α : Type u} {β : Type v} (x : α) (f : α → Result β) :
+protected theorem pure_bind {α : Type u} {β : Type v} (x : α) (f : α → ResultAt H β) :
     bind (.ok x) f = f x := bind_ok x f
 
 /-- Right identity. -/
-@[simp] protected theorem bind_pure {α : Type u} (x : Result α) : bind x .ok = x := by
+@[simp] protected theorem bind_pure {α : Type u} (x : ResultAt H α) : bind x .ok = x := by
   change ITree.bind x ITree.ret = x
-  exact _root_.bind_pure (m := ITree RustEffect) x
+  exact _root_.bind_pure (m := ITree (RustEffect H)) x
 
 /-- Associativity. -/
 @[simp] protected theorem bind_assoc {α : Type u} {β : Type v} {γ : Type w}
-    (x : Result α) (f : α → Result β) (g : β → Result γ) :
+    (x : ResultAt H α) (f : α → ResultAt H β) (g : β → ResultAt H γ) :
     bind (bind x f) g = bind x (fun x => bind (f x) g) := by
   change ITree.bind (ITree.bind x f) g = ITree.bind x (fun x => ITree.bind (f x) g)
   ext n
@@ -298,43 +322,45 @@ protected theorem pure_bind {α : Type u} {β : Type v} (x : α) (f : α → Res
     · simp
     · simp [*]
 
-instance : LawfulMonad Result := LawfulMonad.mk' Result
+instance : LawfulMonad (ResultAt H) := LawfulMonad.mk' (ResultAt H)
   (id_map := Std.bind_pure)
   (pure_bind := Std.pure_bind)
   (bind_assoc := Std.bind_assoc)
 
 /-- Normalize the typeclass bind (`>>=`) to `Std.bind`. -/
-theorem bind_tc_eq {α β : Type u} (x : Result α) (f : α → Result β) :
+theorem bind_tc_eq {α β : Type u} (x : ResultAt H α) (f : α → ResultAt H β) :
     Bind.bind x f = bind x f := rfl
 
 /-- Normalize the typeclass `pure` to `Result.ok`. -/
-theorem pure_tc_eq {α : Type u} (x : α) : (pure x : Result α) = .ok x := rfl
+theorem pure_tc_eq {α : Type u} (x : α) : (pure x : ResultAt H α) = .ok x := rfl
 
-@[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
+@[simp] theorem bind_tc_ok (x : α) (f : α → ResultAt H β) :
   (do let y ← .ok x; f y) = f x := by simp [bind, Bind.bind, ok]
 
-@[simp] theorem bind_tc_vis (e k) (f : α → Result β) :
+@[simp] theorem bind_tc_vis (e k) (f : α → ResultAt H β) :
   (do let y ← Result.vis e k; f y) = .vis e (fun x => do let y ← k x; f y) := by
   simp [bind, Bind.bind, vis]
   rfl
 
-@[simp] theorem bind_tc_fail (e : Error) (f : α → Result β) :
+@[simp] theorem bind_tc_fail (e : Error) (f : α → ResultAt H β) :
   (do let y ← Result.fail e; f y) = .fail e := by
   simp [Bind.bind]
 
-@[simp] theorem bind_tc_div (f : α → Result β) :
+@[simp] theorem bind_tc_div (f : α → ResultAt H β) :
   (do let y ← div; f y) = div := by simp [bind, Bind.bind, div]
 
 /-- `Std.bind_assoc` for the typeclass bind (whose computations live in the same universe). -/
 @[simp] theorem bind_assoc_eq {a b c : Type u}
-  (e : Result a) (g :  a → Result b) (h : b → Result c) :
+  (e : ResultAt H a) (g :  a → ResultAt H b) (h : b → ResultAt H c) :
   (Bind.bind (Bind.bind e g) h) =
   (Bind.bind e (λ x => Bind.bind (g x) h)) := Std.bind_assoc e g h
 
 end
 
-unseal Result
+unseal ResultAt
 open Result
+
+variable {H : Type (uh + 1)}
 
 /-!
 # Partial Fixpoint
@@ -344,14 +370,15 @@ section Order
 
 open Lean.Order
 
-instance : Lean.Order.PartialOrder (Result α) :=
-  instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
-noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
-noncomputable instance : MonoBind Result := instMonoBindITree
+instance : Lean.Order.PartialOrder (ResultAt H α) :=
+  instPartialOrderCoIndOfInhabitedPUnit (ITreeF (RustEffect H) α)
+noncomputable instance : CCPO (ResultAt H α) :=
+  instCCPOCoIndOfInhabitedPUnit (ITreeF (RustEffect H) α)
+noncomputable instance : MonoBind (ResultAt H) := instMonoBindITree
 
 @[partial_fixpoint_monotone]
 theorem bind_mono {R : Type a} {α} {S : Type b} [Lean.Order.PartialOrder α]
-  (f : α → Result R) (g : α → R → Result S) :
+  (f : α → ResultAt H R) (g : α → R → ResultAt H S) :
   monotone f →
   monotone g →
   monotone (λ x => bind (f x) (g x)) := by
@@ -462,20 +489,41 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
-def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+def loop {α : Type u} {β : Type v} (body : α → ResultAt H (ControlFlow α β)) (x : α) : ResultAt H β := do
   bind (body x) fun r =>
   match r with
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
 
-def Result.guardedModify {α : Type} (pre : Heap.{0} → Prop)
-    (modify : (h : Heap.{0}) → pre h → α × Heap.{0}) : Result α :=
+def Result.guardedModify {α : Type uh} (pre : H → Prop)
+    (modify : (h : H) → pre h → α × H) : ResultAt H α :=
   Result.vis (.guardedModify α pre modify) fun answer =>
     Result.ok answer.down
 
-def Result.require (p : Prop) : Result Unit :=
-  Result.guardedModify (fun _ => p) fun h _ => ((), h)
+def Result.require (p : Prop) : ResultAt H Unit :=
+  bind (Result.guardedModify (α := PUnit) (fun _ => p) fun h _ => (⟨⟩, h)) fun _ => .ok ()
+
+/-- `H` has a layer `Heap.{u}` holding the values of `T : Type u`. No instance: `T` mentions the
+monad of `H` itself (cyclic store), or generic code lacks `[Stores H T]`. -/
+class Stores (H : Type (uh + 1)) (T : Type u) where
+  /-- `Result.guardedModify` on the layer of `T`. -/
+  modify {α : Type u} (pre : Heap.{u} → Prop) (f : (h : Heap.{u}) → pre h → α × Heap.{u}) :
+    ResultAt H α
+
+/-- A plain heap holds the values of its universe. -/
+instance Stores.heap {T : Type u} : Stores Heap.{u} T := ⟨Result.guardedModify⟩
+
+/-- `Heap0` is the default when nothing fixes the heap, like `HeapLevel`. Only level 0 has a
+default: the plain heaps of the higher universes are not levels of the stratified heap. -/
+@[default_instance]
+instance Stores.heap0 {T : Type} : Stores Heap0 T := Stores.heap
+
+/-- `Stores.modify` with an answer in `Type` (`Unit`, a pointer), lifted to the layer's universe. -/
+def Stores.modifySmall (T : Type u) [Stores H T] {α : Type} (pre : Heap.{u} → Prop)
+    (f : (h : Heap.{u}) → pre h → α × Heap.{u}) : ResultAt H α :=
+  bind (Stores.modify (T := T) pre fun h hPre => let (a, h) := f h hPre; (ULift.up a, h))
+    fun a => .ok a.down
 
 end
 
@@ -495,7 +543,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 
 /- A helper function that converts failure (and any effects) to none and success to some
    TODO: move up to Core module? -/
-@[expose] def Option.ofResult {a : Type u} (x : Result a) :
+@[expose] def Option.ofResult {a : Type u} (x : ResultAt H a) :
   Option a :=
   match x.match with
   | .ok x => .some x

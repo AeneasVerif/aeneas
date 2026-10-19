@@ -376,24 +376,26 @@ meta structure BindingEntry where
 meta def matchBind? (e : Expr) : Option (Expr × Expr × Expr) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
-  if fn.isConstOf ``Aeneas.Std.bind && args.size == 4 then
-    let [u, _] := fn.constLevels! | none
-    return (mkConst ``Aeneas.Std.Result [u], args[2]!, args[3]!)
+  if fn.isConstOf ``Aeneas.Std.bind && args.size == 5 then
+    let [v, u, _] := fn.constLevels! | none
+    return (mkApp (mkConst ``Aeneas.Std.ResultAt [v, u]) args[0]!, args[3]!, args[4]!)
   guard ((fn.isConstOf ``Bind.bind || fn.isConstOf ``bind) && args.size == 6)
   return (args[0]!, args[4]!, args[5]!)
 
 /-- In `Result`, we always use `Std.bind` (like the `do` elaborator): the computation and
     continuation may inhabit different universes, and `step` expects a uniform bind. -/
 private meta def mkBind (computation continuation : Expr) : MetaM Expr := do
-  if (← whnf (← inferType computation)).isAppOfArity ``Aeneas.Std.Result 1 then
+  if (← whnf (← inferType computation)).isAppOfArity ``Aeneas.Std.ResultAt 2 then
     return ← mkAppM ``Aeneas.Std.bind #[computation, continuation]
   mkAppM ``Bind.bind #[computation, continuation]
 
 /-- In `Result`, we use `Result.ok` (a newly extracted result can live above or below the
     original monad's universe). -/
 private meta def mkPure (m value : Expr) : MetaM Expr := do
-  if m.isConstOf ``Aeneas.Std.Result then
-    return ← mkAppM ``Aeneas.Std.Result.ok #[value]
+  -- `Result` unfolds to `ResultAt Heap0`
+  let m ← if m.isConstOf ``Aeneas.Std.Result then whnfR m else pure m
+  if m.isAppOfArity ``Aeneas.Std.ResultAt 1 then
+    return ← mkAppOptM ``Aeneas.Std.Result.ok #[some m.appArg!, none, none, some value]
   mkAppOptM ``Pure.pure #[some m, none, none, some value]
 
 /-- Match `@ite α cond inst thenBranch elseBranch`. -/

@@ -41,29 +41,35 @@ meta instance [Monad m] [MonadQuotation m] : MonadQuotation (ContT r m) where
 namespace Aeneas
 namespace Do
 
-/-- Info cached from the `do` block's expected type `Result α`. -/
+/-- Info cached from the `do` block's expected type `ResultAt H α`. -/
 structure Context where
   /-- The element type `α`. -/
   expectedAlpha : Expr
+  /-- The heap `H`. -/
+  heap : Expr
+  /-- The universe parameter of the heap. -/
+  heapLevel : Level
 
 abbrev ElabM := ReaderT Context $ ContT Expr TermElabM
 
-/-- Split `Result α`. -/
+/-- Split `ResultAt H α` (`Result α` unfolds to `ResultAt Heap0 α`). -/
 meta def mkContext (expectedType : Expr) : TermElabM Context := do
   let expectedType ← whnf expectedType
   match_expr expectedType with
-  | Aeneas.Std.Result α => return { expectedAlpha := α }
-  | _ => throwError "expected a type of the shape `Result α`, got {indentExpr expectedType}"
+  | Aeneas.Std.ResultAt H α =>
+    return { expectedAlpha := α, heap := H, heapLevel := expectedType.getAppFn.constLevels![0]! }
+  | _ => throwError "expected a type of the shape `Result α` or `ResultAt H α`, got {indentExpr expectedType}"
 
-/-- Build `Result α`. `Std.bind` supports binds between different universes, so we do not force
+/-- Build `ResultAt H α`. `Std.bind` supports binds between different universes, so we do not force
     `α` to live in the universe of the `do` block's expected type. -/
 meta def ElabM.mkMonadicType (α : Expr) : ElabM Expr := do
-  return mkApp (mkConst ``Aeneas.Std.Result [← getDecLevel α]) α
+  let ctx ← read
+  return mkApp2 (mkConst ``Aeneas.Std.ResultAt [ctx.heapLevel, ← getDecLevel α]) ctx.heap α
 
-/-- Build `Std.bind e k`. We always use the universe polymorphic `Std.bind` (and never `Bind.bind`).
-    We do not provide the result type: it is inferred from `k`. -/
+/-- Build `Std.bind e k`. We always use the universe polymorphic `Std.bind` (and never
+    `Bind.bind`). We do not provide the result type: it is inferred from `k`. -/
 meta def ElabM.mkBind (e k : Expr) : ElabM Expr :=
-  mkAppOptM ``Aeneas.Std.bind #[none, none, some e, some k]
+  mkAppOptM ``Aeneas.Std.bind #[none, none, none, some e, some k]
 
 /-- Run an `ElabM` against the given `do` block expected type. -/
 meta def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
@@ -403,7 +409,7 @@ meta partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
       -- RHS is a do-element (e.g. `if`, `match`): elaborate as a singleton seq.
       let e ← elabDoElem rhs []
       let eType ← instantiateMVars (← inferType e)
-      if let some α := eType.getAppArgs[0]? then
+      if let some α := eType.getAppArgs.back? then
         discard <| isDefEq ty α
       pure e
   let ty ← instantiateMVars ty
@@ -427,7 +433,7 @@ meta partial def elabDoLetArrowPat (pat : Term) (rhs : DoElem) (rest : List DoEl
     | _ => do
       let e ← elabDoElem rhs []
       let eType ← instantiateMVars (← inferType e)
-      if let some a := eType.getAppArgs[0]? then
+      if let some a := eType.getAppArgs.back? then
         discard <| isDefEq α a
       pure e
   let α ← instantiateMVars α
@@ -468,7 +474,7 @@ meta partial def elabDoLetPat (pat : Term) (rhs : Term)
 meta partial def elabDoIfChain (branches : Array (TSyntax ``doIfCond × TSyntax ``doSeq))
     (elseSeq : TSyntax ``doSeq) (rest : List DoElem) : ElabM Expr := do
   let elabAtType (ty : Expr) : ElabM Expr := do
-    let some α := ty.getAppArgs[0]?
+    let some α := ty.getAppArgs.back?
       | throwError "elabDoIfChain: expected monadic type, got{indentExpr ty}"
     withReader (fun ctx => { ctx with expectedAlpha := α }) do
       let mut result ← elabDoSeqCore (← getDoElems elseSeq)
@@ -520,7 +526,7 @@ meta partial def elabDoMatch
     | _ => throwError "elabDoMatch: unexpected match arm syntax{indentD alt}"
   let termMatch ← `(match $[(generalizing := $gen?)]? $[$motive?]? $[$discrs],* with $holedAlts:matchAlt*)
   let elabAtType (ty : Expr) : ElabM Expr := do
-    let some α := ty.getAppArgs[0]?
+    let some α := ty.getAppArgs.back?
       | throwError "elabDoMatch: expected monadic type, got{indentExpr ty}"
     /- Synthesize pending metavariables before match elaboration.
        The holed match `match d with | pat => _ | ...` needs fully resolved
@@ -562,15 +568,15 @@ meta register_option Aeneas.customDoElab : Bool := {
   }
 
 /-- `do`-notation elaborator. Dispatches to the new `ElabM`-based elaborator for
-    `Aeneas.Std.Result _` blocks when `Aeneas.newDoElab` is set; otherwise falls
-    back to Lean's default. -/
+    `Aeneas.Std.ResultAt _ _` blocks (so `Result _` too) when `Aeneas.customDoElab` is set; otherwise falls back to
+    Lean's default. -/
 @[term_elab «do»]
 meta def elabDo : TermElab := fun stx expectedType? => do
   let useNewElab ← do
     let some expectedType := expectedType? | pure false
     let expectedType ← instantiateMVars =<< whnf expectedType
     match_expr expectedType with
-    | Aeneas.Std.Result _ => pure (Aeneas.customDoElab.get (← getOptions))
+    | Aeneas.Std.ResultAt _ _ => pure (Aeneas.customDoElab.get (← getOptions))
     | _ => pure false
   if useNewElab then
     let `(do $doSeq) := stx | throwUnsupportedSyntax

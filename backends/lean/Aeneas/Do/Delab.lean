@@ -59,7 +59,7 @@ private meta def parseCtorBind? (arg : Expr) : DelabM CtorBindShape := do
 meta partial def aeneasDelabDoElems : DelabM (List DoElem) := do
   let e ← getExpr
   let α? :=
-    if e.isAppOfArity ``Aeneas.Std.bind 4 then some e.getAppArgs[0]!
+    if e.isAppOfArity ``Aeneas.Std.bind 5 then some e.getAppArgs[1]!
     else if e.isAppOfArity ``Bind.bind 6 then some e.getAppArgs[2]!
     else none
   if let some α := α? then
@@ -126,17 +126,38 @@ meta def aeneasDelabDoCore : Delab := whenNotPPOption getPPExplicit <| whenPPOpt
 /-- Top-level `do`-block delab for `Std.bind`. -/
 @[delab app.Aeneas.Std.bind]
 meta def aeneasDelabStdBindDo : Delab := do
-  unless (← getExpr).isAppOfArity ``Aeneas.Std.bind 4 do failure
+  unless (← getExpr).isAppOfArity ``Aeneas.Std.bind 5 do failure
   aeneasDelabDoCore
 
-/-- Top-level `do`-block delab for `Bind.bind`, restricted to the `Std.Result` monad
+/-- Top-level `do`-block delab for `Bind.bind`, restricted to the `Std.ResultAt` monads
     (the code elaborated with Lean's `do`). -/
 @[delab app.Bind.bind]
 meta def aeneasDelabBindBindDo : Delab := do
   let e ← getExpr
   unless e.isAppOfArity ``Bind.bind 6 do failure
-  unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.Result do failure
+  let m := e.getAppArgs[0]!
+  unless m.isConstOf ``Aeneas.Std.Result || m.isAppOfArity ``Aeneas.Std.ResultAt 1 do failure
   aeneasDelabDoCore
+
+/-- Print `ResultAt Heap0 α` (e.g. the type inferred for `ok 0`) as `Result α`, and the monad of
+level `n` (`ResultAt (HeapS (… Heap0))`) as `Result%n`. -/
+@[app_delab Aeneas.Std.ResultAt]
+meta def delabResultAtHeap0 : Delab :=
+  whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
+  let e ← getExpr
+  let some H0 := e.getArg? 0 | failure
+  let mut H := H0
+  let mut n := 0
+  while H.isAppOfArity ``Aeneas.Std.HeapS 1 do
+    H := H.appArg!
+    n := n + 1
+  unless H.isConstOf ``Aeneas.Std.Heap0 || H == mkConst ``Aeneas.Std.Heap [levelZero] do failure
+  let res ← if n == 0 then `($(mkIdent (← unresolveNameGlobal ``Aeneas.Std.Result)))
+    else `(Result%$(Syntax.mkNumLit (toString n)))
+  match e.getAppNumArgs with
+  | 1 => pure res
+  | 2 => `($res $(← withAppArg delab))
+  | _ => failure
 
 end Delab
 end Do

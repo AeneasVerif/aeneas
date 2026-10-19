@@ -394,7 +394,7 @@ meta def analyzeTarget : TacticM TargetKind := do
     let e ← Utils.normalizeLetBindings program
     -- Check whether this is a bind
     if e.getAppFn.isConstOf ``Bind.bind || e.getAppFn.isConstOf ``Std.bind then
-      let arity : Nat := if e.getAppFn.isConstOf ``Bind.bind then 6 else 4
+      let arity : Nat := if e.getAppFn.isConstOf ``Bind.bind then 6 else 5
       let some (_, cont) := Step.getBindArgs? e
         | throwError "Expected bind to have {arity} arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
       let names ← Step.getPostNames cont

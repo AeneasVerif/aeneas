@@ -4,6 +4,7 @@ public import Aeneas.Std.Array
 public import Aeneas.Std.Core
 public import Aeneas.Std.Heap
 public import Aeneas.Std.HeapLemmas
+public import Aeneas.Std.HeapStrat
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.PrimitivesLemmas
 public import Aeneas.Std.Scalar
@@ -18,3 +19,4 @@ public import Aeneas.Std.Target
 public import Aeneas.Data.Tuples
 public import Aeneas.Std.RangeIter
 import Aeneas.Std.HeapTests
+import Aeneas.Std.HeapStratTests
