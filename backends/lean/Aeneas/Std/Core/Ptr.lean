@@ -163,12 +163,12 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
 
 /-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
 value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
-allocation holding a copy of `values`, which only `endView` frees (`AllocKind.view`). -/
+allocation holding a copy of `values` (`Heap.newView`), which only `endView` frees. -/
 def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.alloc values .view
+  Result.guardedModify (fun _ => True) fun h _ => h.newView values
 
 def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
-  Result.guardedModify _ (Heap.dealloc q count .view)
+  Result.guardedModify _ (Heap.removeView q count)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the view, so that the pointer can't be used anymore. -/

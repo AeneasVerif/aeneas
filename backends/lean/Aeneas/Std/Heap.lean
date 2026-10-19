@@ -91,19 +91,20 @@ See the safety section of
 -/
 
 /-
-The operations, and how they change blocks and cells. `dealloc` gives up every cell and turns the
-right to deallocate into `freed`, which is final: no fragment can own a cell of a `freed` block, so
-deallocated memory can never be used again. A cell given away by `borrow` is `borrowed` until
-`endBorrow` gives it back, at the same address. `dealloc` frees a whole block, and only for its kind.
+The operations, and how they change blocks and cells. `dealloc` and `removeView` give up every cell
+and turn the right to deallocate into `freed`, which is final: no fragment can own a cell of a
+`freed` block, so deallocated memory can never be used again. A cell given away by `borrow` is
+`borrowed` until `endBorrow` gives it back, at the same address. `dealloc` frees a whole `.heap`
+block, and `removeView` a whole `.view` block.
 
-| Operation           | Effect                                       | Used by                                       |
-|---------------------|----------------------------------------------|-----------------------------------------------|
-| `alloc _ .heap`     | fresh id → .heap [owned*] freeable           | `Box::into_raw`, `Global::allocate`           |
-| `alloc _ .view`     | fresh id → .view [owned*] freeable           | `from_mut`, `as_ptr`, `as_mut_ptr`            |
-| `dealloc _ _ .heap` | .heap [owned*] freeable → [notOwned*] freed  | `Box::from_raw`, `Global::deallocate`         |
-| `dealloc _ _ .view` | .view [owned*] freeable → [notOwned*] freed  | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
-| `borrow`            | owned → borrowed                             | `from_raw_parts`, `from_raw_parts_mut`        |
-| `endBorrow`         | borrowed → owned                             | end of `from_raw_parts`, `from_raw_parts_mut` |
+| Operation    | Effect                                       | Used by                                       |
+|--------------|----------------------------------------------|-----------------------------------------------|
+| `alloc`      | fresh id → .heap [owned*] freeable           | `Box::into_raw`, `Global::allocate`           |
+| `newView`    | fresh id → .view [owned*] freeable           | `from_mut`, `as_ptr`, `as_mut_ptr`            |
+| `dealloc`    | .heap [owned*] freeable → [notOwned*] freed  | `Box::from_raw`, `Global::deallocate`         |
+| `removeView` | .view [owned*] freeable → [notOwned*] freed  | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
+| `borrow`     | owned → borrowed                             | `from_raw_parts`, `from_raw_parts_mut`        |
+| `endBorrow`  | borrowed → owned                             | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
 
 namespace Cell
@@ -276,9 +277,19 @@ def freshAllocId (h : Heap) : AllocId :=
 def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
-/-- Creates a fresh allocation in the heap: fresh memory is mutable in Rust. -/
-def alloc (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
+/-- Creates a fresh block of kind `kind`: fresh memory is mutable in Rust. Use `alloc` or
+`newView`; the lemmas are stated on `allocBlock` and apply to both. -/
+def allocBlock (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
   (⟨freshAllocId h, 0⟩, h.insert (freshAllocId h) ⟨kind, α, values.map .owned, .freeable⟩)
+
+/-- Allocates `values` with the global allocator (`Box::into_raw`, `Global::allocate`). -/
+abbrev alloc (values : List α) (h : Heap) : MutRawPtr α × Heap :=
+  allocBlock values .heap h
+
+/-- Creates a raw-pointer view of a place that holds `values` (`from_mut`, `as_ptr`,
+`as_mut_ptr`). -/
+abbrev newView (values : List α) (h : Heap) : MutRawPtr α × Heap :=
+  allocBlock values .view h
 
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
   match h.cell? q with
@@ -329,11 +340,11 @@ private theorem ty_of_isBorrowed {h : Heap} {q : RawPtr α M} (hBorrowed : IsBor
 def write (q : RawPtr α M) (value : α) (h : Heap) (hValid : IsValid h q) : Unit × Heap :=
   ((), h.setOwned q value (ty_of_isValid hValid))
 
-/-- The guard of `dealloc q n kind`: `q` starts a block of kind `kind`, of exactly `n` cells, all
-owned, with the right to deallocate it. So `Global.deallocate` (`.heap`) fails on a view, and
-`endView` (`.view`) fails on memory from the global allocator. Anything else is undefined behaviour
-in Rust as well: a pointer into the middle of an allocation, the wrong size, or memory already
-deallocated. See the safety section of
+/-- The guard of `dealloc` (kind `.heap`) and `removeView` (kind `.view`): `q` starts a block of
+kind `kind`, of exactly `n` cells, all owned, with the right to deallocate it. So
+`Global.deallocate` fails on a view, and `endView` fails on memory from the global allocator.
+Anything else is undefined behaviour in Rust as well: a pointer into the middle of an allocation,
+the wrong size, or memory already deallocated. See the safety section of
 [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate) -/
 def CanDealloc (h : Heap) (q : RawPtr α M) (n : Nat) (kind : AllocKind) : Prop :=
   q.offset = 0 ∧
@@ -342,12 +353,23 @@ def CanDealloc (h : Heap) (q : RawPtr α M) (n : Nat) (kind : AllocKind) : Prop 
       b.kind = kind ∧ b.cells.length = n ∧ (∀ i < n, IsLive h (q.shift i)) ∧ b.right = .freeable
     | _ => False
 
-/-- Deallocates the block of `q`: it stays in the heap as `freed`, owning none of its cells. -/
-def dealloc (q : RawPtr α M) (n : Nat) (kind : AllocKind) (h : Heap)
+/-- Frees the block of `q`: it stays in the heap as `freed`, owning none of its cells. Use
+`dealloc` or `removeView`; the lemmas are stated on `freeBlock` and apply to both. -/
+def freeBlock (q : RawPtr α M) (n : Nat) (kind : AllocKind) (h : Heap)
     (_ : CanDealloc h q n kind) : Unit × Heap :=
   ((), match h.lookup q.allocId with
     | some b => h.insert q.allocId ⟨b.kind, b.ty, List.replicate n .notOwned, .freed⟩
     | _ => h)
+
+/-- Frees memory of the global allocator (`Box::from_raw`, `Global::deallocate`). -/
+abbrev dealloc (q : RawPtr α M) (n : Nat) (h : Heap) (hDealloc : CanDealloc h q n .heap) :
+    Unit × Heap :=
+  freeBlock q n .heap h hDealloc
+
+/-- Removes a raw-pointer view (the end of `from_mut`, `as_ptr`, `as_mut_ptr`). -/
+abbrev removeView (q : RawPtr α M) (n : Nat) (h : Heap) (hRemove : CanDealloc h q n .view) :
+    Unit × Heap :=
+  freeBlock q n .view h hRemove
 
 /-- Moves the value of `q` out into a borrow (`from_raw_parts`): the cell is `borrowed` until
 `endBorrow`, so every access through a raw pointer fails meanwhile. -/

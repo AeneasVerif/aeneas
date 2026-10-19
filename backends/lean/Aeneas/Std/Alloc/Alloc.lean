@@ -27,7 +27,7 @@ def core.clone.CloneGlobal : core.clone.Clone alloc.alloc.Global := {
 -- TODO: it should take a Layout and return a NonNull <u8>
 -- TODO: it should return an AllocError
 def alloc.alloc.Global.allocate (_ : alloc.alloc.Global) (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.alloc values .heap
+  Result.guardedModify (fun _ => True) fun h _ => h.alloc values
 
 -- [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate).
 -- This signature is different from Rust's signature in two ways:
@@ -35,6 +35,6 @@ def alloc.alloc.Global.allocate (_ : alloc.alloc.Global) (values : List T) : Res
 -- TODO: then a NonNull<u8> and a Layout
 def alloc.alloc.Global.deallocate (_ : alloc.alloc.Global) (p : MutRawPtr T) (count : Nat) :
     Result Unit :=
-  Result.guardedModify _ (Heap.dealloc p count .heap)
+  Result.guardedModify _ (Heap.dealloc p count)
 
 end Aeneas.Std
