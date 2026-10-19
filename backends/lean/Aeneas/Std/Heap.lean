@@ -3,9 +3,10 @@ module
 public import Mathlib.Data.Finmap
 
 /-! Block-based heap: a finite map from allocation ids to blocks. A block records how it was
-allocated (`AllocKind`), the type of its values, and one `Cell` per value. A heap is also a fragment
-of the memory: fragments combine (`∪`) cell by cell, so two fragments can own different cells of the
-same block. Freed blocks stay in the map so allocation ids are never reused.
+allocated (`AllocKind`), the type of its values, one `Cell` per value, and the right to deallocate
+it (`DeallocRight`). A heap is also a fragment of the memory: fragments combine (`∪`) cell by cell,
+so two fragments can own different cells of the same block. Deallocated blocks stay in the map as
+`freed`, so allocation ids are never reused.
 Supports interior pointers, stored pointers, provenance by allocation id.
 Not supported: uninitialized memory, byte-level representation/type punning,
 pointer-integer casts, higher-order store, the byte-level allocator API
@@ -34,6 +35,16 @@ inductive Cell (α : Type u) where
   to give it back with `endBorrow`, but no value -/
   | borrowed
 
+/-- The right to deallocate a block. At most one fragment of a block holds `freeable` or `freed`. -/
+inductive DeallocRight where
+  /-- No right -/
+  | none
+  /-- The block may be deallocated -/
+  | freeable
+  /-- The block was deallocated: no fragment owns or borrows its cells -/
+  | freed
+  deriving DecidableEq
+
 /-- An allocation block -/
 structure Block : Type 1 where
   /-- The allocation kind determines whether we're allowed to manually free the block or not -/
@@ -41,35 +52,32 @@ structure Block : Type 1 where
   /-- The type of the allocated values -/
   ty : Type
   cells : List (Cell ty)
-
-inductive BlockSlot : Type 1 where
-  | live (block : Block)
-  | freed
+  right : DeallocRight
 
 structure Heap where
   private mk ::
-  private allocs : Finmap fun _ : AllocId => BlockSlot
+  private allocs : Finmap fun _ : AllocId => Block
 
 /-! Two examples of how blocks work. In the comments, the heap after each line, starting from the
-empty heap; `a ↦ live kind [ ... ]` is the allocation `a` with its cells.
+empty heap; `a ↦ kind [ ... ] right` is the allocation `a` with its cells and its `DeallocRight`.
 ```rust
 pub fn boxed() -> u32 {
     // In Aeneas' model, `Box::new(1u32)` returns `1`, which gets allocated in memory
     // in `into_raw` by using the global allocator (because Rust's `Box::new` uses it),
     // thus the block is recorded in the Heap with kind `.heap`.
     let p = Box::into_raw(Box::new(1u32));
-    // 0 ↦ live .heap [ owned 1 ]
+    // 0 ↦ .heap [ owned 1 ] freeable
     unsafe { *Box::from_raw(p) }
     // `from_raw` turns `p` into a new `Box` whose lifetime ends at the end of this statement,
     // so it is freed. Rust only lets a program free memory allocated by the global allocator,
     // which is what the kind `.heap` records. The model reads 1 and frees at once:
-    // 0 ↦ freed
+    // 0 ↦ .heap [ notOwned ] freed
 }
 
 pub fn borrowed() -> u32 {
     let mut x = 1u32;
     let p = core::ptr::from_mut(&mut x);
-    // 0 ↦ live .view [ owned 1 ]
+    // 0 ↦ .view [ owned 1 ] freeable
     // `p` points to the local `x`, which the global allocator did not hand out,
     // so the kind is `.view`.
     unsafe { *Box::from_raw(p) }
@@ -83,16 +91,17 @@ See the safety section of
 -/
 
 /-
-The operations, and how they change blocks and cells. `freed` is final: no operation leaves it, so
+The operations, and how they change blocks and cells. `dealloc` gives up every cell and turns the
+right to deallocate into `freed`, which is final: no fragment can own a cell of a `freed` block, so
 deallocated memory can never be used again. A cell given away by `borrow` is `borrowed` until
 `endBorrow` gives it back, at the same address. `dealloc` frees a whole block, and only for its kind.
 
 | Operation           | Effect                                       | Used by                                       |
 |---------------------|----------------------------------------------|-----------------------------------------------|
-| `alloc _ .heap`     | fresh id → live .heap [owned*]               | `Box::into_raw`, `Global::allocate`           |
-| `alloc _ .view`     | fresh id → live .view [owned*]               | `from_mut`, `as_ptr`, `as_mut_ptr`            |
-| `dealloc _ _ .heap` | live .heap [owned*] → freed                  | `Box::from_raw`, `Global::deallocate`         |
-| `dealloc _ _ .view` | live .view [owned*] → freed                  | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
+| `alloc _ .heap`     | fresh id → .heap [owned*] freeable           | `Box::into_raw`, `Global::allocate`           |
+| `alloc _ .view`     | fresh id → .view [owned*] freeable           | `from_mut`, `as_ptr`, `as_mut_ptr`            |
+| `dealloc _ _ .heap` | .heap [owned*] freeable → [notOwned*] freed  | `Box::from_raw`, `Global::deallocate`         |
+| `dealloc _ _ .view` | .view [owned*] freeable → [notOwned*] freed  | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
 | `borrow`            | owned → borrowed                             | `from_raw_parts`, `from_raw_parts_mut`        |
 | `endBorrow`         | borrowed → owned                             | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
@@ -118,6 +127,15 @@ def joinList (c₁ c₂ : List (Cell α)) : List (Cell α) :=
 
 end Cell
 
+namespace DeallocRight
+
+/-- Combines the rights of two fragments: the one that holds a right wins. -/
+def join : DeallocRight → DeallocRight → DeallocRight
+  | .none, r => r
+  | r, _ => r
+
+end DeallocRight
+
 namespace Block
 
 open Classical in
@@ -127,34 +145,23 @@ noncomputable def cellsAs (b : Block) (t : Type) : List (Cell t) :=
   if hTy : b.ty = t then hTy ▸ b.cells else []
 
 /-- Two fragments of a block combine if they agree on the kind, the type and the number of
-cells, and no cell is owned by both. -/
+cells, no cell is owned by both, at most one holds a right, and a `freed` fragment combines only
+with fragments that own or borrow no cell. -/
 def Compatible (b₁ b₂ : Block) : Prop :=
-  b₁.kind = b₂.kind ∧ b₂.ty = b₁.ty ∧ List.Forall₂ Cell.Compatible b₁.cells (b₂.cellsAs b₁.ty)
+  b₁.kind = b₂.kind ∧ b₂.ty = b₁.ty ∧ List.Forall₂ Cell.Compatible b₁.cells (b₂.cellsAs b₁.ty) ∧
+    (b₁.right = .none ∨ b₂.right = .none) ∧
+    (b₁.right = .freed → ∀ c ∈ b₂.cells, c = .notOwned) ∧
+    (b₂.right = .freed → ∀ c ∈ b₁.cells, c = .notOwned)
 
 /-- Combines two fragments of a block cell by cell, keeping the header of `b₁`. A block of another
-type adds nothing. -/
+type adds no cell. -/
 noncomputable def join (b₁ b₂ : Block) : Block :=
-  ⟨b₁.kind, b₁.ty, Cell.joinList b₁.cells (b₂.cellsAs b₁.ty)⟩
+  ⟨b₁.kind, b₁.ty, Cell.joinList b₁.cells (b₂.cellsAs b₁.ty), b₁.right.join b₂.right⟩
 
 end Block
 
-namespace BlockSlot
-
-/-- A `freed` block is exclusive: it combines with nothing. -/
-def Compatible : BlockSlot → BlockSlot → Prop
-  | .live b₁, .live b₂ => b₁.Compatible b₂
-  | .live _, .freed => False
-  | .freed, _ => False
-
-noncomputable def join : BlockSlot → BlockSlot → BlockSlot
-  | .live b₁, .live b₂ => .live (b₁.join b₂)
-  | .live b₁, .freed => .live b₁
-  | .freed, _ => .freed
-
-end BlockSlot
-
-private def OptCompatible : Option BlockSlot → Option BlockSlot → Prop
-  | some s₁, some s₂ => s₁.Compatible s₂
+private def OptCompatible : Option Block → Option Block → Prop
+  | some b₁, some b₂ => b₁.Compatible b₂
   | some _, none => True
   | none, _ => True
 
@@ -194,21 +201,21 @@ end RawPtr
 
 namespace Heap
 
-private def lookup (h : Heap) (a : AllocId) : Option BlockSlot := h.allocs.lookup a
+private def lookup (h : Heap) (a : AllocId) : Option Block := h.allocs.lookup a
 
-private def insert (h : Heap) (a : AllocId) (slot : BlockSlot) : Heap :=
-  ⟨h.allocs.insert a slot⟩
+private def insert (h : Heap) (a : AllocId) (b : Block) : Heap :=
+  ⟨h.allocs.insert a b⟩
 
 def empty : Heap := ⟨∅⟩
 
 @[no_expose] instance instEmptyCollection : EmptyCollection Heap := ⟨empty⟩
 
-/-- The slot of `a` in `h₁ ∪ h₂`, for `a` in `h₂`. -/
-private noncomputable def joinAt (h₁ h₂ : Heap) (a : AllocId) : BlockSlot :=
-  ((h₁.lookup a).merge BlockSlot.join (h₂.lookup a)).getD .freed
+/-- The block of `a` in `h₁ ∪ h₂`, for `a` in `h₂` (the default is unreachable). -/
+private noncomputable def joinAt (h₁ h₂ : Heap) (a : AllocId) : Block :=
+  ((h₁.lookup a).merge Block.join (h₂.lookup a)).getD ⟨.heap, Unit, [], .none⟩
 
 private noncomputable def insertJoin (h₁ h₂ : Heap) (a : AllocId)
-    (m : Finmap fun _ : AllocId => BlockSlot) : Finmap fun _ : AllocId => BlockSlot :=
+    (m : Finmap fun _ : AllocId => Block) : Finmap fun _ : AllocId => Block :=
   m.insert a (joinAt h₁ h₂ a)
 
 private theorem insertJoin_leftComm (h₁ h₂ : Heap) : LeftCommutative (insertJoin h₁ h₂) :=
@@ -217,7 +224,7 @@ private theorem insertJoin_leftComm (h₁ h₂ : Heap) : LeftCommutative (insert
     · subst hEq; rfl
     · exact Finmap.insert_insert_of_ne m (Ne.symm hEq)⟩
 
-/-- Combines two fragments block by block: the slots of `h₂` are joined into `h₁`. -/
+/-- Combines two fragments block by block: the blocks of `h₂` are joined into `h₁`. -/
 noncomputable def union (h₁ h₂ : Heap) : Heap :=
   ⟨@Multiset.foldr _ _ (insertJoin h₁ h₂) (insertJoin_leftComm h₁ h₂) h₁.allocs h₂.allocs.keys.val⟩
 
@@ -233,7 +240,7 @@ def Compatible (h₁ h₂ : Heap) : Prop := ∀ a, OptCompatible (h₁.lookup a)
 /-- The value at `q`, if `h` owns it. It does not depend on the type of `q`. -/
 private def cell? (h : Heap) (q : RawPtr T M) : Option (Σ α : Type, α) :=
   match h.lookup q.allocId with
-  | some (.live b) =>
+  | some b =>
     match b.cells[q.offset]? with
     | some (.owned x) => some ⟨b.ty, x⟩
     | _ => none
@@ -243,22 +250,22 @@ private def cell? (h : Heap) (q : RawPtr T M) : Option (Σ α : Type, α) :=
 `len ≤ q.offset`). -/
 def singleton (q : RawPtr α M) (value : α) (kind : AllocKind) (len : Nat) : Heap :=
   ⟨Finmap.singleton q.allocId
-    (.live ⟨kind, α, (List.replicate len .notOwned).set q.offset (.owned value)⟩)⟩
+    ⟨kind, α, (List.replicate len .notOwned).set q.offset (.owned value), .none⟩⟩
 
 /-- The block of `q`, of kind `kind` and `len` cells, whose cell at `q` is borrowed and the others
 not owned: what is left of `singleton q _ kind len` after `borrow`. -/
 def borrowedBlock (q : RawPtr α M) (kind : AllocKind) (len : Nat) : Heap :=
   ⟨Finmap.singleton q.allocId
-    (.live ⟨kind, α, (List.replicate len .notOwned).set q.offset .borrowed⟩)⟩
+    ⟨kind, α, (List.replicate len .notOwned).set q.offset .borrowed, .none⟩⟩
 
-/-- The block of `q`, of kind `kind` and `len` cells, owning none of them: the header of the block,
-which fixes its kind, type and length. -/
+/-- The block of `q`, of kind `kind` and `len` cells, owning none of them but holding the right
+to deallocate it: the header of the block. -/
 def header (q : RawPtr α M) (kind : AllocKind) (len : Nat) : Heap :=
-  ⟨Finmap.singleton q.allocId (.live ⟨kind, α, List.replicate len .notOwned⟩)⟩
+  ⟨Finmap.singleton q.allocId ⟨kind, α, List.replicate len .notOwned, .freeable⟩⟩
 
-/-- The block `a` holding `values`, all owned. -/
+/-- The block `a` holding `values`, all owned, and the right to deallocate it. -/
 def allocation (a : AllocId) (values : List α) (kind : AllocKind) : Heap :=
-  ⟨Finmap.singleton a (.live ⟨kind, α, values.map .owned⟩)⟩
+  ⟨Finmap.singleton a ⟨kind, α, values.map .owned, .freeable⟩⟩
 
 def IsLive (h : Heap) (q : RawPtr T M) : Prop := (h.cell? q).isSome
 
@@ -271,7 +278,7 @@ def Subheap (h h' : Heap) : Prop :=
 
 /-- Creates a fresh allocation in the heap: fresh memory is mutable in Rust. -/
 def alloc (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
-  (⟨freshAllocId h, 0⟩, h.insert (freshAllocId h) (.live ⟨kind, α, values.map .owned⟩))
+  (⟨freshAllocId h, 0⟩, h.insert (freshAllocId h) ⟨kind, α, values.map .owned, .freeable⟩)
 
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
   match h.cell? q with
@@ -290,20 +297,21 @@ def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
 give it back. -/
 def IsBorrowed (h : Heap) (q : RawPtr α M) : Prop :=
   match h.lookup q.allocId with
-  | some (.live b) => b.ty = α ∧ b.cells[q.offset]? = some .borrowed
+  | some b => b.ty = α ∧ b.cells[q.offset]? = some .borrowed
   | _ => False
 
 /-- Owns `value` at `q`, given that the block of `q` holds values of type `α`. -/
 private def setOwned (h : Heap) (q : RawPtr α M) (value : α)
-    (hTy : ∀ b, h.lookup q.allocId = some (.live b) → b.ty = α) : Heap :=
+    (hTy : ∀ b, h.lookup q.allocId = some b → b.ty = α) : Heap :=
   match hlookup : h.lookup q.allocId with
-  | some (.live b) =>
+  | some b =>
     h.insert q.allocId
-      (.live ⟨b.kind, b.ty, b.cells.set q.offset (.owned (cast (hTy b hlookup).symm value))⟩)
+      ⟨b.kind, b.ty, b.cells.set q.offset (.owned (cast (hTy b hlookup).symm value)),
+        b.right⟩
   | _ => h
 
 private theorem ty_of_isValid {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
-    ∀ b, h.lookup q.allocId = some (.live b) → b.ty = α := by
+    ∀ b, h.lookup q.allocId = some b → b.ty = α := by
   intro b hlookup
   unfold IsValid cell? at hValid
   simp only [hlookup] at hValid
@@ -312,7 +320,7 @@ private theorem ty_of_isValid {h : Heap} {q : RawPtr α M} (hValid : IsValid h q
   · rename_i hCell; split at hCell <;> simp_all
 
 private theorem ty_of_isBorrowed {h : Heap} {q : RawPtr α M} (hBorrowed : IsBorrowed h q) :
-    ∀ b, h.lookup q.allocId = some (.live b) → b.ty = α := by
+    ∀ b, h.lookup q.allocId = some b → b.ty = α := by
   intro b hlookup
   unfold IsBorrowed at hBorrowed
   rw [hlookup] at hBorrowed
@@ -322,28 +330,32 @@ def write (q : RawPtr α M) (value : α) (h : Heap) (hValid : IsValid h q) : Uni
   ((), h.setOwned q value (ty_of_isValid hValid))
 
 /-- The guard of `dealloc q n kind`: `q` starts a block of kind `kind`, of exactly `n` cells, all
-owned. So `Global.deallocate` (`.heap`) fails on a view, and `endView` (`.view`) fails on memory
-from the global allocator. Anything else is undefined behaviour in Rust as well: a pointer into the
-middle of an allocation, the wrong size, or memory already deallocated. See the safety section of
+owned, with the right to deallocate it. So `Global.deallocate` (`.heap`) fails on a view, and
+`endView` (`.view`) fails on memory from the global allocator. Anything else is undefined behaviour
+in Rust as well: a pointer into the middle of an allocation, the wrong size, or memory already
+deallocated. See the safety section of
 [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate) -/
 def CanDealloc (h : Heap) (q : RawPtr α M) (n : Nat) (kind : AllocKind) : Prop :=
   q.offset = 0 ∧
     match h.lookup q.allocId with
-    | some (.live b) => b.kind = kind ∧ b.cells.length = n ∧ ∀ i < n, IsLive h (q.shift i)
+    | some b =>
+      b.kind = kind ∧ b.cells.length = n ∧ (∀ i < n, IsLive h (q.shift i)) ∧ b.right = .freeable
     | _ => False
 
-/-- Deallocates the block of `q`. It stays in the heap as `freed`. -/
+/-- Deallocates the block of `q`: it stays in the heap as `freed`, owning none of its cells. -/
 def dealloc (q : RawPtr α M) (n : Nat) (kind : AllocKind) (h : Heap)
     (_ : CanDealloc h q n kind) : Unit × Heap :=
-  ((), h.insert q.allocId .freed)
+  ((), match h.lookup q.allocId with
+    | some b => h.insert q.allocId ⟨b.kind, b.ty, List.replicate n .notOwned, .freed⟩
+    | _ => h)
 
 /-- Moves the value of `q` out into a borrow (`from_raw_parts`): the cell is `borrowed` until
 `endBorrow`, so every access through a raw pointer fails meanwhile. -/
 def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
   ((read q h hValid).1,
     match h.lookup q.allocId with
-    | some (.live b) =>
-      h.insert q.allocId (.live ⟨b.kind, b.ty, b.cells.set q.offset .borrowed⟩)
+    | some b =>
+      h.insert q.allocId ⟨b.kind, b.ty, b.cells.set q.offset .borrowed, b.right⟩
     | _ => h)
 
 /-- Ends the borrow of `q`. -/
