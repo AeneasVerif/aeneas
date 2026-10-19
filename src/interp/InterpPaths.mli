@@ -6,6 +6,28 @@ open Cps
 
 type access_kind = Read | Write | Move
 
+(** A resolved location: a local or shared loan payload followed by structural
+    projections (i.e., field projection, box dereference, or mutable borrow
+    dereference). *)
+type path
+
+(** Evaluate a non-global place. Return the loan immediately above the value (if
+    any), the value, and its resolved path. The context must first be prepared
+    for the requested access kind: the function raises an exception if it can't
+    evaluate the place. *)
+val eval_place :
+  Meta.span ->
+  access_kind ->
+  place ->
+  eval_ctx ->
+  loan_id option * tvalue * path
+
+(** Read a resolved path in the current context. *)
+val read_path : Meta.span -> path -> eval_ctx -> tvalue
+
+(** Update the value at a resolved path. *)
+val write_path : Meta.span -> path -> tvalue -> eval_ctx -> eval_ctx
+
 (** Update the environment to be able to read a place.
 
     When reading a place, we may be stuck along the way because some value is

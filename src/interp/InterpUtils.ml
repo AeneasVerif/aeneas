@@ -1051,6 +1051,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
               name = None;
               variance = VaUnknown;
               mutability = LtUnknown;
+              late_bound = false;
             })
           fresh_regions
       in

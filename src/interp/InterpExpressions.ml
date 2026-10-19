@@ -49,8 +49,8 @@ let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
 
     We check that the value *doesn't contain bottoms or reserved borrows*. *)
 let read_place_check (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : loan_id option * tvalue =
-  let lid, v = read_place span access p ctx in
+    (ctx : eval_ctx) : loan_id option * tvalue * path =
+  let lid, v, path = eval_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   [%cassert] span
     (not (bottom_in_value ctx.ended_regions v))
@@ -60,12 +60,15 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (not (reserved_in_value v))
     "There should be no reserved borrows in the value";
   (* Return *)
-  (lid, v)
+  (lid, v, path)
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    loan_id option * tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
-    =
+    loan_id option
+    * tvalue
+    * path
+    * eval_ctx
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Make sure we can evaluate the path *)
   let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
@@ -78,16 +81,16 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let lid, value = read_place_check span access p ctx in
+  let lid, value, path = read_place_check span access p ctx in
   (* Compose *)
-  (lid, value, ctx, cc)
+  (lid, value, path, ctx, cc)
 
 let access_rplace_reorganize (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   if ExpressionsUtils.place_accesses_global p then (ctx, fun x -> x)
   else
-    let _, _, ctx, f =
+    let _, _, _, ctx, f =
       access_rplace_reorganize_and_read config span greedy_expand access p ctx
     in
     (ctx, f)
@@ -560,7 +563,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let _, v = read_place_check span access p ctx in
+      let _, v, path = read_place_check span access p ctx in
       (* Sanity checks *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
@@ -575,20 +578,20 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         copy_value span allow_adt_copy config ctx v
       in
       (* Update the original value *)
-      let ctx = write_place span access p updated_value ctx in
+      let ctx = write_path span path updated_value ctx in
       (* *)
       (copied_value, ctx, cc)
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let _, v = read_place_check span access p ctx in
+      let _, v, path = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
         "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : tvalue = { value = VBottom; ty = v.ty } in
-      let ctx = write_place span access p bottom ctx in
+      let ctx = write_path span path bottom ctx in
       (v, ctx, fun e -> e)
 
 let eval_operand (config : config) (span : Meta.span) (op : operand)
@@ -667,11 +670,10 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         match mk_integer_value ptr_size (get_ty sv) i with
         | Error _ -> Error EPanic
         | Ok sv -> Ok { v with value = VLiteral (VScalar sv) })
-    | Cast (CastScalar (src, tgt)), VLiteral (VScalar sv)
-      when scalar_type_is_integer src && scalar_type_is_integer tgt -> (
+    | Cast (CastScalar tgt), VLiteral (VScalar sv)
+      when scalar_type_is_integer tgt -> (
         (* Cast between integers *)
-        let src_ty, tgt_ty = (scalar_as_integer src, scalar_as_integer tgt) in
-        [%sanity_check] span (src_ty = get_ty sv);
+        let tgt_ty = scalar_as_integer tgt in
         let i = get_val sv in
         let ptr_size = get_target_ptr_size span ctx.crate in
         match mk_integer_value ptr_size tgt_ty i with
@@ -680,8 +682,8 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (TBool, tgt)), VLiteral (VBool sv)
-      when scalar_type_is_integer tgt -> (
+    | Cast (CastScalar tgt), VLiteral (VBool sv) when scalar_type_is_integer tgt
+      -> (
         (* Cast bool -> int *)
         let tgt_ty = scalar_as_integer tgt in
         let i = Z.of_int (if sv then 1 else 0) in
@@ -692,8 +694,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (src, TBool)), VLiteral (VScalar sv)
-      when scalar_type_is_integer src ->
+    | Cast (CastScalar TBool), VLiteral (VScalar sv) ->
         (* Cast int -> bool *)
         let b =
           if Z.of_int 0 = get_val sv then false
@@ -784,7 +785,8 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* There is a special case for casts which convert dyn traits (for instance:
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
-  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
+  | Cast (CastUnsize (ty1, MetaVTable (trait_ref, _))) -> (
+      let ty0 = v.ty in
       [%cassert] span
         (trait_ref.binder_regions = [])
         "Higher-ranked vtables are not supported";
@@ -953,7 +955,8 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
           in
           (Ok output, ctx, cc_comp cc cf)
       | _ -> [%craise] span "Unsupported cast to a dynamic trait")
-  | Cast (CastUnsize (ty0, ty1, MetaVTableUpcast fields)) ->
+  | Cast (CastUnsize (ty1, MetaVTableUpcast fields)) ->
+      let ty0 = v.ty in
       (* Casting a dyn trait to a dyn trait *)
       [%ltrace
         "dyn trait upcast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
@@ -980,13 +983,13 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
         | Not, (TScalar (TInteger (Unsigned _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Signed _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Unsigned _)) as lty) -> lty
-        | Cast (CastScalar (_, tgt_ty)), _ -> TScalar tgt_ty
-        | Cast (CastUnsize (ty0, ty1, _)), _ ->
+        | Cast (CastScalar tgt_ty), _ -> TScalar tgt_ty
+        | Cast (CastUnsize (ty1, _)), ty0 ->
             (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
             let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
             ty1
-        | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
+        | Cast (CastRawPtr tgt_ty), _ -> tgt_ty
         | _ ->
             [%craise] span
               ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
@@ -1231,7 +1234,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       in
 
       let greedy_expand = false in
-      let lid, v, ctx, cc =
+      let lid, v, path, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Generate the fresh shared borrow id *)
@@ -1249,7 +1252,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
             (bid, { v with value = v' })
       in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_path span path nv ctx in
       (* Compute the rvalue - simply a shared borrow with the fresh id.
        * Note that the reference is *mutable* if we do a two-phase borrow *)
       let ref_kind =
@@ -1277,7 +1280,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Access the value *)
       let access = Write in
       let greedy_expand = false in
-      let _, v, ctx, cc =
+      let _, v, path, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
@@ -1287,7 +1290,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Compute the loan value with which to replace the value at place p *)
       let nv = { v with value = VLoan (VMutLoan bid) } in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_path span path nv ctx in
       (* Return *)
       (rv, ctx, cc)
 
@@ -1386,7 +1389,7 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
   (* Read the place *)
   let access = Read in
   let expand_prim_copy = false in
-  let _, v, ctx, cf_read =
+  let _, v, _, ctx, cf_read =
     access_rplace_reorganize_and_read config span expand_prim_copy access p ctx
   in
   let v = value_strip_shared_loans v in
@@ -1499,7 +1502,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   let greedy_expand = false in
-  let _, v, ctx, cc =
+  let _, v, _, ctx, cc =
     access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
   [%cassert] span

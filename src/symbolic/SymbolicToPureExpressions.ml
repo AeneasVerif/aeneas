@@ -384,7 +384,12 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
     ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg];
   (* We have to treat unsized casts separately *)
   match call.call_id with
-  | S.Unop (Cast (CastUnsize (ty0, ty1, _))) ->
+  | S.Unop (Cast (CastUnsize (ty1, _))) ->
+      let ty0 =
+        match call.args with
+        | [ arg ] -> arg.ty
+        | _ -> [%internal_error] ctx.span
+      in
       translate_cast_unsize call e ty0 ty1 ctx
   | _ -> translate_function_call_aux call e ctx
 
@@ -567,13 +572,23 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Cast kind) -> begin
+        let arg_ty =
+          match call.args with
+          | [ arg ] -> arg.ty
+          | _ -> [%internal_error] ctx.span
+        in
         let kind, can_fail =
           match kind with
-          | CastScalar (src_ty, tgt_ty) ->
+          | CastScalar tgt_ty ->
+              let src_ty =
+                match arg_ty with
+                | TScalar src_ty -> src_ty
+                | _ -> [%internal_error] ctx.span
+              in
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
-          | CastRawPtr (src_ty, tgt_ty) ->
+          | CastRawPtr tgt_ty ->
               (* We only support casts between pointers to literal types for now *)
               let get_ty (ty : T.ty) =
                 match ty with
@@ -591,16 +606,18 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                         literal types; found: "
                       ^ Charon.Print.cast_kind_to_string env kind)
               in
-              let src_ty, src_mut = get_ty src_ty in
+              let src_ty, src_mut = get_ty arg_ty in
               let tgt_ty, tgt_mut = get_ty tgt_ty in
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
-          | CastPtrExposeProvenance _ ->
+          | CastPtrExposeProvenance ->
               [%craise] ctx.span "Unsupported: pointer to address casts"
           | CastPtrWithExposedProvenance _ ->
               [%craise] ctx.span "Unsupported: address to pointer casts"
-          | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
+          | CastFnDefToFnPtr | CastFnPtrToUnsafe ->
+              [%craise] ctx.span "TODO: function casts"
+          | CastSubtype _ -> [%craise] ctx.span "Unsupported: subtype casts"
           | CastUnsize _ ->
               (* We shouldn't get there: this case should have been detected before
                and handled in [translate_cast_unsize] *)

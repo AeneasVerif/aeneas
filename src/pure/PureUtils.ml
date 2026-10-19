@@ -2446,6 +2446,34 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   in
   visitor#visit_texpr () e;
 
+  (* Repeatedly explore the needed trait clauses to make sure we include
+     all their parameters in the set. We compute a fixed point as theoretically
+     trait clauses can depend on other trait clauses, though this can not
+     currently be the case with Charon's handling of traits. *)
+  let rec close_clauses (visited : TraitClauseId.Set.t) : unit =
+    let to_visit =
+      List.filter
+        (fun (clause : trait_param) ->
+          TraitClauseId.Set.mem clause.clause_id !clause_ids
+          && not (TraitClauseId.Set.mem clause.clause_id visited))
+        generic.trait_clauses
+    in
+    if to_visit <> [] then begin
+      List.iter
+        (fun (clause : trait_param) ->
+          visitor#visit_generic_args () clause.generics)
+        to_visit;
+      let visited =
+        List.fold_left
+          (fun visited (clause : trait_param) ->
+            TraitClauseId.Set.add clause.clause_id visited)
+          visited to_visit
+      in
+      close_clauses visited
+    end
+  in
+  close_clauses TraitClauseId.Set.empty;
+
   (* Filter *)
   let { types; const_generics; trait_clauses } : generic_params = generic in
   let types =
@@ -2480,13 +2508,10 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   let const_generics =
     List.filter_map (fun (b, x) -> if b then Some x else None) const_generics
   in
-  (* WARNING: the indices and generics inside the trait clause are not correct!
-     We update them below. *)
   let trait_clauses =
     List.filter_map (fun (b, x) -> if b then Some x else None) trait_clauses
   in
 
-  (* Reindex the generic params *)
   let generics : generic_params = { types; const_generics; trait_clauses } in
   (generics, filter)
 
