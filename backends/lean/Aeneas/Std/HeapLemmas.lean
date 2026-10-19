@@ -1286,6 +1286,20 @@ theorem Subheap.singleton_allocation {α : Type v} (a : AllocId) (values : List 
     · rw [lookup_singleton_ne hb, hRest, ite_eq_right hb]
       exact lookup_allocation_ne hb
 
+/-- `read` leaves the heap alone. -/
+theorem read_snd {α : Type v} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
+    (h.read q hValid).2 = h := by
+  unfold Heap.read
+  split
+  · rename_i hLookup
+    simp [IsValid, hLookup] at hValid
+  · rfl
+
+/-- `borrow` returns the value that `read` returns. -/
+theorem borrow_fst {α : Type v} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
+    (h.borrow q hValid).1 = (h.read q hValid).1 := by
+  unfold Heap.borrow; rfl
+
 /-! ### Borrows -/
 
 /-- `borrow` on a heap whose block at `q` is `b`. -/
@@ -1456,6 +1470,314 @@ theorem endBorrow_borrowedBlock {α : Type v} (q : RawPtr α M) (value : α) (ki
     simp [List.set_set]
   · rw [lookup_insert_ne _ _ ha, lookup_singleton_ne ha]
     exact lookup_eq_none.mpr fun hMem => ha ((Finmap.mem_singleton _ _ _).mp hMem)
+
+/-! ### Separation logic support -/
+
+@[simp] theorem notMem_empty (a : AllocId) : a ∉ (∅ : Heap) :=
+  Finmap.notMem_empty
+
+theorem mem_header {α : Type v} {q : RawPtr α M} {kind : AllocKind} {len : Nat}
+    {a : AllocId} : a ∈ header q kind len ↔ a = q.allocId :=
+  Finmap.mem_singleton _ _ _
+
+/-- The header of a block does not depend on the offset of the pointer. -/
+theorem header_eq_of_allocId {α : Type v} {q : RawPtr α M} {r : RawPtr α M'}
+    (hId : q.allocId = r.allocId) (kind : AllocKind) (len : Nat) :
+    header q kind len = header r kind len := by
+  unfold header
+  rw [hId]
+
+@[simp] theorem header_shift {α : Type v} (q : RawPtr α M) (i : Nat) (kind : AllocKind)
+    (len : Nat) : header (q.shift i) kind len = header q kind len :=
+  header_eq_of_allocId (RawPtr.allocId_shift q i) kind len
+
+/-- A fragment with the header of the block of `q` that owns all its cells can
+deallocate it. -/
+theorem canDealloc_of_subheap {α : Type v} {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hOffset : q.offset = 0) (hSub : Heap.Subheap (header q kind n) h)
+    (hLive : ∀ i < n, IsLive h (q.shift i)) : CanDealloc h q n kind := by
+  obtain ⟨rest, -, rfl⟩ := hSub
+  exact canDealloc_iff'.mpr ⟨hOffset, _, lookup_union_some (lookup_header q kind n), rfl,
+    by simp only [Cell.length_joinList, List.length_replicate], hLive,
+    by simp [DeallocRight.join]⟩
+
+/-- The cells of `range`: `values` from `offset` on, in a block of `len` cells. -/
+private def rangeCells {α : Type v} (offset : Nat) (values : List α) (len : Nat) : List (Cell α) :=
+  (List.range len).map fun i =>
+    if offset ≤ i then (values[i - offset]?.map .owned).getD .notOwned else .notOwned
+
+private theorem getElem?_rangeCells {α : Type v} (offset : Nat) (values : List α) (len i : Nat) :
+    (rangeCells offset values len)[i]? =
+      if i < len then
+        some (if offset ≤ i then (values[i - offset]?.map .owned).getD .notOwned else .notOwned)
+      else none := by
+  simp only [rangeCells, List.getElem?_map]
+  by_cases hi : i < len
+  · rw [ite_eq_left hi, List.getElem?_range hi]
+    rfl
+  · rw [ite_eq_right hi, List.getElem?_eq_none (by simp; omega)]
+    rfl
+
+/-- The block of `q`, of kind `kind` and `len` cells, owning `values` from `q` on (those that fit in
+the block), and the right to deallocate it. -/
+def range {α : Type v} (q : RawPtr α M) (values : List α) (kind : AllocKind) (len : Nat) : Heap :=
+  ⟨Finmap.singleton q.allocId ⟨kind, α, rangeCells q.offset values len, .freeable⟩⟩
+
+private theorem lookup_range {α : Type v} (q : RawPtr α M) (values : List α) (kind : AllocKind)
+    (len : Nat) :
+    (range q values kind len).lookup q.allocId =
+      some ⟨kind, α, rangeCells q.offset values len, .freeable⟩ :=
+  Finmap.lookup_singleton_eq
+
+private theorem lookup_range_ne {α : Type v} {q : RawPtr α M} {values : List α} {kind : AllocKind}
+    {len : Nat} {a : AllocId} (hNe : a ≠ q.allocId) : (range q values kind len).lookup a = none :=
+  lookup_eq_none.mpr fun hMem => hNe ((Finmap.mem_singleton _ _ _).mp hMem)
+
+/-- Owning no value leaves the header of the block. -/
+theorem range_nil {α : Type v} (q : RawPtr α M) (kind : AllocKind) (len : Nat) :
+    range q ([] : List α) kind len = header q kind len := by
+  apply ext
+  intro a
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_range, lookup_header]
+    congr 2
+    apply List.ext_getElem?
+    intro i
+    rw [getElem?_rangeCells, List.getElem?_replicate]
+    simp
+  · rw [lookup_range_ne ha]
+    exact (lookup_eq_none.mpr fun hMem => ha ((Finmap.mem_singleton _ _ _).mp hMem)).symm
+
+/-- A fresh allocation owns all its values. -/
+theorem allocation_eq_range {α : Type v} (a : AllocId) (values : List α) (kind : AllocKind) :
+    allocation a values kind = range (⟨a, 0⟩ : MutRawPtr α) values kind values.length := by
+  apply ext
+  intro b
+  by_cases hb : b = a
+  · subst hb
+    rw [lookup_allocation, lookup_range (⟨b, 0⟩ : MutRawPtr α)]
+    congr 2
+    apply List.ext_getElem?
+    intro i
+    rw [getElem?_rangeCells, List.getElem?_map]
+    by_cases hi : i < values.length
+    · simp [hi]
+    · simp [hi]
+  · rw [lookup_allocation_ne hb, lookup_range_ne hb]
+
+private theorem lookup_range_shift {α : Type v} (q : RawPtr α M) (values : List α)
+    (kind : AllocKind) (len : Nat) :
+    (range (q.shift 1) values kind len).lookup q.allocId =
+      some ⟨kind, α, rangeCells (q.offset + 1) values len, .freeable⟩ :=
+  lookup_range (q.shift 1) values kind len
+
+private theorem forall₂_singleton_range {α : Type v} (q : RawPtr α M) (value : α) (values : List α)
+    (len : Nat) :
+    List.Forall₂ Cell.Compatible ((List.replicate len .notOwned).set q.offset (.owned value))
+      (rangeCells (q.offset + 1) values len) := by
+  refine Cell.forall₂_iff_getElem?.mpr ⟨by simp [rangeCells], fun i x y hx hy => ?_⟩
+  rw [getElem?_rangeCells] at hy
+  simp only [List.getElem?_set, List.length_replicate, List.getElem?_replicate] at hx
+  by_cases hi : q.offset = i
+  · subst hi
+    have hy' : y = .notOwned := by
+      split at hy
+      · simp only [Option.some.injEq] at hy
+        rw [ite_eq_right (by omega)] at hy
+        exact hy.symm
+      · cases hy
+    subst hy'
+    cases x <;> trivial
+  · have hx' : x = .notOwned := by
+      rw [ite_eq_right hi] at hx
+      split at hx
+      · exact (Option.some.inj hx).symm
+      · cases hx
+    subst hx'
+    trivial
+
+theorem compatible_singleton_range {α : Type v} (q : RawPtr α M) (value : α) (values : List α)
+    (kind : AllocKind) (len : Nat) :
+    PartialCommMonoid.Compatible (singleton q value kind len) (range (q.shift 1) values kind len) := by
+  intro a
+  show OptCompatible _ _
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_singleton, lookup_range_shift]
+    exact (Block.compatible_mk_iff _ _ _ _ _ _ _).mpr
+      ⟨rfl, forall₂_singleton_range q value values len, .inl rfl, nofun, nofun⟩
+  · rw [lookup_singleton_ne ha]
+    trivial
+
+/-- A range is its first cell and the range after it. -/
+theorem singleton_union_range {α : Type v} (q : RawPtr α M) (value : α) (values : List α)
+    (kind : AllocKind) (len : Nat) :
+    singleton q value kind len ∪ range (q.shift 1) values kind len =
+      range q (value :: values) kind len := by
+  apply ext
+  intro a
+  rw [lookup_union]
+  by_cases ha : a = q.allocId
+  · subst ha
+    rw [lookup_singleton, lookup_range_shift, lookup_range]
+    simp only [Option.merge, Block.join_mk,
+      Cell.joinList_of_forall₂ (forall₂_singleton_range q value values len)]
+    congr 2
+    apply List.ext_getElem?
+    intro i
+    rw [List.getElem?_zipWith, getElem?_rangeCells, getElem?_rangeCells, List.getElem?_set,
+      List.length_replicate, List.getElem?_replicate]
+    by_cases hi : i < len
+    · by_cases hOffset : q.offset = i
+      · subst hOffset
+        simp [hi, Cell.join]
+      · by_cases hLe : q.offset ≤ i
+        · have hSub : i - q.offset = (i - (q.offset + 1)) + 1 := by omega
+          simp [hi, hOffset, hLe, Cell.join, hSub, show q.offset + 1 ≤ i by omega]
+        · simp [hi, hOffset, hLe, Cell.join, show ¬ q.offset + 1 ≤ i by omega]
+    · simp [hi]
+  · rw [lookup_singleton_ne ha, lookup_range_ne (q := q.shift 1) ha, lookup_range_ne (q := q) ha]
+    rfl
+
+private theorem cells_eq_of_joinList_eq {α : Type v} {c₁ c₂ c : List (Cell α)}
+    (h₁ : List.Forall₂ Cell.Compatible c₁ c) (h₂ : List.Forall₂ Cell.Compatible c₂ c)
+    (hEq : Cell.joinList c₁ c = Cell.joinList c₂ c) : c₁ = c₂ := by
+  rw [Cell.joinList_of_forall₂ h₁, Cell.joinList_of_forall₂ h₂] at hEq
+  induction h₁ generalizing c₂ with
+  | nil => cases h₂; rfl
+  | @cons x y l₁ l hxy _ ih =>
+    cases h₂ with
+    | @cons x' _ l₂ _ hxy' h₂' =>
+      simp only [List.zipWith_cons_cons, List.cons.injEq] at hEq
+      rw [ih h₂' hEq.2]
+      congr 1
+      have hHead := hEq.1
+      cases x <;> cases x' <;> cases y <;> simp_all [Cell.join, Cell.Compatible]
+
+/-- Two blocks that combine with `f` into the same block are equal, unless one of them is absent. -/
+private theorem block_eq_of_merge_eq {s₁ s₂ f : Option Block}
+    (h₁ : OptCompatible s₁ f) (h₂ : OptCompatible s₂ f)
+    (hEq : Option.merge Block.join s₁ f = Option.merge Block.join s₂ f) :
+    s₁ = none ∨ s₂ = none ∨ s₁ = s₂ := by
+  rcases s₁ with _ | b₁
+  · exact .inl rfl
+  rcases s₂ with _ | b₂
+  · exact .inr (.inl rfl)
+  refine .inr (.inr ?_)
+  rcases f with _ | bf
+  · simpa [Option.merge] using hEq
+  simp only [Option.merge, Option.some.injEq] at hEq
+  simp only [OptCompatible] at h₁ h₂
+  obtain ⟨k₁, t, c₁, r₁⟩ := b₁
+  obtain ⟨kf, cf, rf, rfl⟩ := Block.eq_mk_of_compatible h₁
+  obtain ⟨k₂, c₂, r₂, rfl⟩ := Block.eq_mk_of_compatible (Block.compatible_symm h₂)
+  dsimp only at h₁ h₂ hEq ⊢
+  rw [Block.compatible_mk_iff] at h₁ h₂
+  simp only [Block.join_mk, Block.mk.injEq, heq_eq_eq, true_and] at hEq
+  have hr : r₁ = r₂ := by
+    have := hEq.2.2; have := h₁.2.2.1; have := h₂.2.2.1
+    cases r₁ <;> cases r₂ <;> cases rf <;> simp_all [DeallocRight.join]
+  rw [hEq.1, cells_eq_of_joinList_eq h₁.2.1 h₂.2.1 hEq.2.1, hr]
+
+private theorem merge_join_self (s : Option Block) : Option.merge Block.join s s = s := by
+  rcases s with _ | ⟨k, t, c, r⟩
+  · rfl
+  · have hCells : Cell.joinList c c = c := by
+      rw [Cell.joinList, ite_eq_left rfl]
+      induction c with
+      | nil => rfl
+      | cons x c ih => rw [List.zipWith_cons_cons, ih]; cases x <;> rfl
+    cases r <;> simp [Option.merge, Block.join_mk, hCells, DeallocRight.join]
+
+/-- The blocks of `h₂` that are not in `h₁`. -/
+private noncomputable def without (h₂ h₁ : Heap) : Heap :=
+  ⟨h₁.allocs.keys.toList.foldr (fun a m => Finmap.erase a m) h₂.allocs⟩
+
+private theorem lookup_foldr_erase (m : Finmap fun _ : AllocId => Block) (a : AllocId) :
+    ∀ l : List AllocId,
+      (l.foldr (fun b m => Finmap.erase b m) m).lookup a = if a ∈ l then none else m.lookup a
+  | [] => by simp
+  | b :: l => by
+    rw [List.foldr_cons]
+    by_cases hab : a = b
+    · subst hab
+      simp
+    · rw [Finmap.lookup_erase_ne hab, lookup_foldr_erase m a l]
+      simp [hab]
+
+private theorem lookup_without_of_mem {h₁ h₂ : Heap} {a : AllocId} (ha : a ∈ h₁) :
+    (without h₂ h₁).lookup a = none := by
+  show Finmap.lookup a (h₁.allocs.keys.toList.foldr (fun b m => Finmap.erase b m) h₂.allocs) = _
+  rw [lookup_foldr_erase, ite_eq_left (Finset.mem_toList.mpr (Finmap.mem_keys.mpr ha))]
+
+private theorem lookup_without_of_not_mem {h₁ h₂ : Heap} {a : AllocId} (ha : a ∉ h₁) :
+    (without h₂ h₁).lookup a = h₂.lookup a := by
+  show Finmap.lookup a (h₁.allocs.keys.toList.foldr (fun b m => Finmap.erase b m) h₂.allocs) = _
+  rw [lookup_foldr_erase,
+    ite_eq_right fun hMem => ha (Finmap.mem_keys.mp (Finset.mem_toList.mp hMem))]
+  rfl
+
+private theorem subheap_union_of_slots {g₁ g₂ : Heap}
+    (hSlot : ∀ a, g₁.lookup a = none ∨ g₂.lookup a = none ∨ g₁.lookup a = g₂.lookup a) :
+    Heap.Subheap g₁ (g₁ ∪ g₂) := by
+  refine ⟨without g₂ g₁, fun a => ?_, ext fun a => ?_⟩
+  · show OptCompatible _ _
+    by_cases ha : a ∈ g₁
+    · rw [lookup_without_of_mem ha]
+      cases g₁.lookup a <;> trivial
+    · rw [lookup_eq_none.mpr ha]
+      trivial
+  · rw [lookup_union, lookup_union]
+    by_cases ha : a ∈ g₁
+    · rw [lookup_without_of_mem ha, Option.merge_none_right]
+      rcases hSlot a with h | h | h
+      · exact absurd ha (lookup_eq_none.mp h)
+      · rw [h, Option.merge_none_right]
+      · rw [← h, merge_join_self]
+    · rw [lookup_without_of_not_mem ha]
+
+/-- `∪` does not cancel: two fragments that combine with `frame` into the same heap may differ by
+blocks of which they own no cell. Both are below a fragment that combines with `frame` into the
+same heap. -/
+theorem exists_subheap_of_union_eq {h₁ h₂ frame : Heap}
+    (hCompatible₁ : PartialCommMonoid.Compatible h₁ frame)
+    (hCompatible₂ : PartialCommMonoid.Compatible h₂ frame)
+    (hEq : h₁ ∪ frame = h₂ ∪ frame) :
+    ∃ h, PartialCommMonoid.Compatible h frame ∧ h ∪ frame = h₁ ∪ frame ∧
+      Heap.Subheap h₁ h ∧ Heap.Subheap h₂ h := by
+  have hLookup a : Option.merge Block.join (h₁.lookup a) (frame.lookup a) =
+      Option.merge Block.join (h₂.lookup a) (frame.lookup a) := by
+    rw [← lookup_union, ← lookup_union, hEq]
+  have hSlot a : h₁.lookup a = none ∨ h₂.lookup a = none ∨ h₁.lookup a = h₂.lookup a :=
+    block_eq_of_merge_eq (hCompatible₁ a) (hCompatible₂ a) (hLookup a)
+  have hSlot' a : h₂.lookup a = none ∨ h₁.lookup a = none ∨ h₂.lookup a = h₁.lookup a := by
+    rcases hSlot a with h | h | h
+    · exact .inr (.inl h)
+    · exact .inl h
+    · exact .inr (.inr h.symm)
+  have hComm : h₁ ∪ h₂ = h₂ ∪ h₁ := ext fun a => by
+    rw [lookup_union, lookup_union]
+    rcases hSlot a with h | h | h
+    · rw [h, Option.merge_none_left, Option.merge_none_right]
+    · rw [h, Option.merge_none_left, Option.merge_none_right]
+    · rw [h]
+  refine ⟨h₁ ∪ h₂, fun a => ?_, ext fun a => ?_, subheap_union_of_slots hSlot,
+    hComm ▸ subheap_union_of_slots hSlot'⟩
+  · show OptCompatible ((h₁ ∪ h₂).lookup a) _
+    rw [lookup_union]
+    rcases hSlot a with h | h | h
+    · rw [h, Option.merge_none_left]
+      exact hCompatible₂ a
+    · rw [h, Option.merge_none_right]
+      exact hCompatible₁ a
+    · rw [h, merge_join_self]
+      exact hCompatible₂ a
+  · rw [lookup_union, lookup_union, lookup_union]
+    rcases hSlot a with h | h | h
+    · rw [h, Option.merge_none_left, ← hLookup, h]
+    · rw [h, Option.merge_none_right]
+    · rw [h, merge_join_self]
 
 end Heap
 
