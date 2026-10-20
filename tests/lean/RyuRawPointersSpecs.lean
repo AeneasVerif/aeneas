@@ -15,8 +15,8 @@ theorem write_exponent.spec_neg (k : Isize) (result : MutRawPtr U8) (cs : List (
       ⦃ n => ⌜n = 2#usize⌝ ∗ result ↦*? ((cs.set 0 (some 45#u8)).set 1 (some c)) ⦄ := by
   unfold write_exponent
   rw [if_pos (by scalar_tac)]
-  have h0 := MutRawPtr.write.spec_cells result cs 0 45#u8 (by omega)
-  simp only [RawPtr.shift_zero, Pointee.toCell_default] at h0
+  have h0 := MutRawPtr.write.spec_cells result cs 0 45#u8 (by omega) (by simp)
+  simp only [RawPtr.shift_zero] at h0
   step with h0
   step with RawPtr.add.spec_cells result (cs.set 0 (some 45#u8)) 1#usize (by simp; omega)
   step* 1
@@ -28,7 +28,7 @@ theorem write_exponent.spec_neg (k : Isize) (result : MutRawPtr U8) (cs : List (
   have : i1 = c := by scalar_tac
   subst this
   have h1 := MutRawPtr.write.spec_cells result (cs.set 0 (some 45#u8)) 1 i1 (by simp; omega)
-  simp only [Pointee.toCell_default] at h1
+    (by simp)
   step with h1
   step*
 
@@ -45,12 +45,12 @@ theorem write_exponent.spec_nonneg (k : Isize) (result : MutRawPtr U8) (cs : Lis
     rw [i_post, IScalar.hcast_val_eq, Int.emod_eq_of_lt (by omega) (by simp; omega)]
   have : i1 = c := by scalar_tac
   subst this
-  have h0 := MutRawPtr.write.spec_cells result cs 0 i1 (by omega)
-  simp only [RawPtr.shift_zero, Pointee.toCell_default] at h0
+  have h0 := MutRawPtr.write.spec_cells result cs 0 i1 (by omega) (by simp)
+  simp only [RawPtr.shift_zero] at h0
   step with h0
   step*
 
-theorem add_shift.spec {T : Type} {M} (q : RawPtr T M) (vs : List T) (i : Nat) (c : Usize)
+theorem add_shift.spec {T : Type} [Pointee T] [Pointee.Lawful T] {M} (q : RawPtr T M) (vs : List T) (i : Nat) (c : Usize)
     (h : i + c.val ≤ vs.length) :
     ⦃ q ↦* vs ⦄ (q.shift i).add c ⦃ r => ⌜r = q.shift (i + c.val)⌝ ∗ q ↦* vs ⦄ := by
   have hSplit := RawPtr.pointsToRange_split q vs i
@@ -114,15 +114,16 @@ theorem write_exponent.spec (k : Isize) (result : MutRawPtr U8) (cs : List (Opti
 /-- `mul_shift_all` initializes the cells `vp` and `vm` point to. -/
 @[step]
 theorem mul_shift_all.spec (m : U64) (vp vm : MutRawPtr U64) (mm_shift : U32) (cp cm : Option U64)
-    (hm : 4 * m.val + 2 ≤ U64.max) (hshift : 1 + mm_shift.val ≤ 4 * m.val) :
+    (hm : 4 * m.val + 2 ≤ U64.max) (hshift : 1 + mm_shift.val ≤ 4 * m.val) (hvp : vp.Aligned)
+    (hvm : vm.Aligned) :
     ⦃ vp ↦? cp ∗ vm ↦? cm ⦄ mul_shift_all m vp vm mm_shift
       ⦃ r => ⌜r.val = 4 * m.val⌝ ∗ (∃ a, ⌜a.val = 4 * m.val + 2⌝ ∗ vp ↦ a) ∗
         (∃ b, ⌜b.val = 4 * m.val - 1 - mm_shift.val⌝ ∗ vm ↦ b) ⦄ := by
   unfold mul_shift_all
   step* 2
-  step with MutRawPtr.write.spec_cell vp cp i1
+  step with MutRawPtr.write.spec_opt vp cp i1 hvp
   step* 3
-  step with MutRawPtr.write.spec_cell vm cm i4
+  step with MutRawPtr.write.spec_opt vm cm i4 hvm
   step*
 
 /-- The outputs of `mul_shift_all` are initialized: `assume_init` succeeds. -/
@@ -137,9 +138,10 @@ theorem d2d_bounds.spec (m : U64) (mm_shift : U32)
   step with core.mem.maybe_uninit.MaybeUninit.end_as_mut_ptr.spec _ (some a)
   simp only [MaybeUninit.ofOption_some] at *
   subst_vars
-  step*
-  simp only [MaybeUninit.ofOption_some, Pointee.toCell_default] at vm_uninit_post
-  subst vm_uninit_post
+  step
+  step with core.mem.maybe_uninit.MaybeUninit.end_as_mut_ptr.spec _ (some b)
+  simp only [MaybeUninit.ofOption_some] at *
+  subst_vars
   step*
 
 @[step]
@@ -180,7 +182,10 @@ theorem Buffer.format_exponent.spec (self : Buffer) (k : Isize) (c : U8)
   have hs2 : s2.val = (expBytes k c).map MaybeUninit.init ++ self.bytes.val.drop (expBytes k c).length := by
     simp [s2_post, Std.Array.to_slice, hfs, s1_post, s_post]
   rw [hs2, MaybeUninit.pointsToRange_init]
+  have hn : 0 < n.val * Pointee.size U8 := by
+    rw [n_post]; simp only [expBytes]; split <;> simp
   step with core.slice.raw.from_raw_parts.spec (p2.cast U8) n (expBytes k c) n_post
+    (hNotNull := RawPtr.notNull_of_pos hn)
   apply (WP.ispec_ok _).2
   rw [s3_post]
   apply entails_exists_r (iprop((p2.cast U8) ↦† (expBytes k c).length ∗

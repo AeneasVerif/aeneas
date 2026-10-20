@@ -80,8 +80,8 @@ def alloc.boxed.Box.from_raw {T : Type} [Pointee T] (p : MutRawPtr T) : Result T
   pure value
 
 @[step]
-theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] (value : T) :
-    ⦃ emp ⦄ alloc.boxed.Box.into_raw value ⦃ q => q ↦ value ∗ q.freeable⦄ := by
+theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] [Pointee.Lawful T] (value : T) :
+    ⦃ emp ⦄ alloc.boxed.Box.into_raw value ⦃ q => ⌜q.Aligned⌝ ∗ q ↦ value ∗ q.freeable⦄ := by
   unfold alloc.boxed.Box.into_raw
   apply WP.ispec_bind (alloc.alloc.Global.allocate.spec alloc.alloc.Global.mk [value])
   · iframe
@@ -94,11 +94,12 @@ theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] (value : T) :
 behind a reference, and freeing it is undefined behaviour
 ([`Box::from_raw`](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.from_raw)). -/
 @[step]
-theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] {value : T} (q : MutRawPtr T) :
+theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] [Pointee.Lawful T] {value : T}
+    (q : MutRawPtr T) (hAlign : q.Aligned) :
     ⦃ q ↦ value ∗ q.freeable ⦄ alloc.boxed.Box.from_raw q
       ⦃ result => ⌜result = value⌝⦄ := by
   unfold alloc.boxed.Box.from_raw
-  apply WP.ispec_bind (RawPtr.read.spec q value) (entails_refl _)
+  apply WP.ispec_bind (RawPtr.read.spec q value hAlign) (entails_refl _)
   intro result
   apply WP.ispec_bind (alloc.alloc.Global.deallocate.spec alloc.alloc.Global.mk ⟨q⟩ [value] 1 rfl)
   · rw [← RawPtr.pointsTo_eq_range]
@@ -108,11 +109,12 @@ theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] {value : T} (q : Mu
     iframe
 
 /-- `Box::from_raw` leaves the block of the box freed. -/
-theorem alloc.boxed.Box.from_raw.spec_freed {T : Type} [Pointee T] {value : T} (q : MutRawPtr T) :
+theorem alloc.boxed.Box.from_raw.spec_freed {T : Type} [Pointee T] [Pointee.Lawful T] {value : T}
+    (q : MutRawPtr T) (hAlign : q.Aligned) :
     ⦃ q ↦ value ∗ q.freeable ⦄ alloc.boxed.Box.from_raw q
       ⦃ result => ⌜result = value⌝ ∗ q.freed⦄ := by
   unfold alloc.boxed.Box.from_raw
-  apply WP.ispec_bind (RawPtr.read.spec q value) (entails_refl _)
+  apply WP.ispec_bind (RawPtr.read.spec q value hAlign) (entails_refl _)
   intro result
   apply WP.ispec_bind
     (alloc.alloc.Global.deallocate.spec_freed alloc.alloc.Global.mk ⟨q⟩ [value] 1 rfl)
@@ -123,24 +125,31 @@ theorem alloc.boxed.Box.from_raw.spec_freed {T : Type} [Pointee T] {value : T} (
     iframe
 
 /-- Freeing a box twice fails. -/
-theorem alloc.boxed.Box.from_raw.fails_freed {T : Type} [Pointee T] (q : MutRawPtr T) :
+theorem alloc.boxed.Box.from_raw.fails_freed {T : Type} [Pointee T] (q : MutRawPtr T)
+    (hSize : Pointee.size T ≠ 0) :
     ifails q.freed (alloc.boxed.Box.from_raw q) := by
   unfold alloc.boxed.Box.from_raw
-  exact ifails_bind_left (RawPtr.read.fails_freed q)
+  exact ifails_bind_left (RawPtr.read.fails_freed q hSize)
 
 /-- Freeing a pointer which does not come from a box (`from_mut`, `as_mut_ptr`, ...) fails. -/
-theorem alloc.boxed.Box.from_raw.fails_view {T : Type} [Pointee T] {value : T} (q : MutRawPtr T) :
+theorem alloc.boxed.Box.from_raw.fails_view {T : Type} [Pointee T] [Pointee.Lawful T] {value : T}
+    (q : MutRawPtr T) :
     ifails (q ↦ value ∗ q.freeable 1 .view) (alloc.boxed.Box.from_raw q) := by
   unfold alloc.boxed.Box.from_raw
-  refine ifails_bind (ispec_frame (RawPtr.read.spec q value) (q.freeable 1 .view)) fun _ => ?_
+  by_cases hAlign : q.Aligned
+  swap
+  · exact ifails_bind_left (RawPtr.read.fails_misaligned q hAlign)
+  refine ifails_bind (ispec_frame (RawPtr.read.spec q value hAlign) (q.freeable 1 .view))
+    fun _ => ?_
   exact ifails_bind_left (ifails_mono (by iframe)
     (alloc.alloc.Global.deallocate.fails_view alloc.alloc.Global.mk ⟨q⟩ 1))
 
 /-- Freeing a pointer one past the cell of a box (an interior pointer) fails. -/
-theorem alloc.boxed.Box.from_raw.fails_end {T : Type} [Pointee T] (q : MutRawPtr T) :
+theorem alloc.boxed.Box.from_raw.fails_end {T : Type} [Pointee T] (q : MutRawPtr T)
+    (hSize : Pointee.size T ≠ 0) :
     ifails q.freeable (alloc.boxed.Box.from_raw (q.shift 1)) := by
   unfold alloc.boxed.Box.from_raw
-  exact ifails_bind_left (RawPtr.read.fails_end q 1 .heap)
+  exact ifails_bind_left (RawPtr.read.fails_end q 1 .heap hSize)
 
 /-- `Box::new_uninit`: a box is its content. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::new_uninit"]

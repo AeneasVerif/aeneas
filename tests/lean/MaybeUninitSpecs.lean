@@ -25,7 +25,7 @@ theorem read_uninit.fails (Q : IPost U64) : ¬ ispec emp read_uninit Q := by
   refine ifails_bind (core.mem.maybe_uninit.MaybeUninit.as_ptr.spec _) fun ⟨p, back⟩ => ?_
   simp only [Std.uncurry, MaybeUninit.toOption_uninit]
   refine ifails_ipure fun _ => ifails_bind_left ?_
-  exact ifails_mono (by iframe) (RawPtr.read.fails_uninit p rfl)
+  exact ifails_mono (by iframe) (RawPtr.read.fails_uninit p)
 
 @[step]
 theorem Buffer.new.spec : ⦃ emp ⦄ Buffer.new ⦃ b => ⌜b.bytes.val = List.replicate 4 .uninit⌝ ⦄ := by
@@ -111,9 +111,9 @@ theorem Buffer.fill_too_much.fails (self : Buffer)
     simp [h]
   refine ifails_bind (Slice.as_mut_ptr.spec s) fun ⟨p, ab⟩ => ?_
   simp only [Std.uncurry]
-  refine ifails_ipure fun hab => ?_
+  refine ifails_ipure fun hab => ifails_ipure fun hAlign => ?_
   subst hab
-  have h0 := MaybeUninit.write_cast.spec_range p s.val 0 111#u8 (by simp [hs])
+  have h0 := MaybeUninit.write_cast.spec_range p s.val 0 111#u8 (by simp [hs]) hAlign
   simp only [RawPtr.shift_zero] at h0
   refine ifails_bind (ispec_frame h0 (p.freeable s.length .view)) fun _ => ?_
   refine ifails_bind (Slice.end_as_mut_ptr.spec s p _ (by simp)) fun s1 => ?_
@@ -132,9 +132,9 @@ theorem Buffer.fill_too_much.fails (self : Buffer)
     simp only [Std.Array.to_slice, htb, hfs, hs1, hs]
     rfl
   rw [hs2, MaybeUninit.pointsToRange_init]
-  refine ifails_mono ?_ (core.slice.raw.from_raw_parts.fails (p2.cast U8) 2#usize [111#u8] none rfl
-    (by simp))
-  simp only [List.map, RawPtr.pointsToCells_cons]
+  refine ifails_mono ?_ (core.slice.raw.from_raw_parts.fails (p2.cast U8) 2#usize [111#u8]
+    (Pointee.optCells none) (by simp) Pointee.UninitInvalid.ofCells_uninit (by simp))
+  simp only [List.map, RawPtr.pointsToOpts_cons, RawPtr.pointsToOpt_eq]
   iframe
 
 end maybe_uninit

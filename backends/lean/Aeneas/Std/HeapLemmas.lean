@@ -29,18 +29,20 @@ namespace Aeneas.Std
 
 namespace RawPtr
 
-@[simp] theorem allocId_shift (q : RawPtr T M) (i : Nat) : (q.shift i).allocId = q.allocId := by
-  simp [RawPtr.shift]
+@[simp] theorem allocId_shiftCells (q : RawPtr T M) (i : Nat) :
+    (q.shiftCells i).allocId = q.allocId := by
+  simp [RawPtr.shiftCells]
 
-@[simp] theorem offset_shift (q : RawPtr T M) (i : Nat) : (q.shift i).offset = q.offset + i := by
-  simp [RawPtr.shift]
+@[simp] theorem offset_shiftCells (q : RawPtr T M) (i : Nat) :
+    (q.shiftCells i).offset = q.offset + i := by
+  simp [RawPtr.shiftCells]
 
-@[simp] theorem shift_zero (q : RawPtr T M) : q.shift 0 = q := by
-  simp [RawPtr.shift]
+@[simp] theorem shiftCells_zero (q : RawPtr T M) : q.shiftCells 0 = q := by
+  simp [RawPtr.shiftCells]
 
-theorem shift_shift (q : RawPtr T M) (i j : Nat) :
-    (q.shift i).shift j = q.shift (i + j) := by
-  simp [RawPtr.shift, Nat.add_assoc]
+theorem shiftCells_shiftCells (q : RawPtr T M) (i j : Nat) :
+    (q.shiftCells i).shiftCells j = q.shiftCells (i + j) := by
+  simp [RawPtr.shiftCells, Nat.add_assoc]
 
 end RawPtr
 
@@ -570,12 +572,26 @@ theorem not_isValid_empty {α : Type v} (q : RawPtr α M) :
     ¬ IsValid (∅ : Heap) q := by
   simp [IsValid, cell?]
 
-theorem notMem_freshAllocId {h : Heap} {a : AllocId}
-    (hBase : a = freshAllocId h) : a ∉ h := by
+/-- The identifier of a fresh allocation is a multiple of its alignment. -/
+theorem dvd_freshAllocId (h : Heap) (align : Nat) : max align 1 ∣ freshAllocId h align :=
+  Nat.dvd_mul_right _ _
+
+/-- The identifier of a fresh allocation is not `0`, the allocation of the null pointer. -/
+theorem freshAllocId_ne_zero (h : Heap) (align : Nat) : freshAllocId h align ≠ 0 := by
+  unfold freshAllocId
+  exact Nat.mul_ne_zero (by grind) (by grind)
+
+theorem notMem_freshAllocId {h : Heap} {align : Nat} {a : AllocId}
+    (hBase : a = freshAllocId h align) : a ∉ h := by
   intro hMem
   have hLe : a ≤ h.allocs.keys.sup id := Finset.le_sup (f := id) (Finmap.mem_keys.mpr hMem)
-  rw [hBase, freshAllocId] at hLe
-  exact Nat.not_succ_le_self _ hLe
+  have hGe : h.allocs.keys.sup id + 1 ≤ freshAllocId h align := by
+    unfold freshAllocId
+    have h1 : 1 ≤ max align 1 := Nat.le_max_right _ _
+    calc h.allocs.keys.sup id + 1 ≤ 2 * (h.allocs.keys.sup id + 1) + 1 := by grind
+      _ = 1 * (2 * (h.allocs.keys.sup id + 1) + 1) := by grind
+      _ ≤ max align 1 * (2 * (h.allocs.keys.sup id + 1) + 1) := Nat.mul_le_mul_right _ h1
+  grind
 
 private theorem lookup_allocation {α : Type v} (a : AllocId) (values : List (Option α)) (kind : AllocKind) :
     (allocation a values kind).lookup a = some ⟨kind, α, values.map .owned, .freeable⟩ :=
@@ -586,24 +602,26 @@ private theorem lookup_allocation_ne {α : Type v} {a b : AllocId} {values : Lis
   lookup_eq_none.mpr fun hMem => hNe ((Finmap.mem_singleton _ _ _).mp hMem)
 
 /-- A fresh allocation sits next to the heap it was allocated in. -/
-theorem allocBlock_eq {α : Type v} (h : Heap) (values : List (Option α)) (kind : AllocKind) :
-    h.allocBlock values kind =
-      (⟨freshAllocId h, 0⟩, allocation (freshAllocId h) values kind ∪ h) := by
+theorem allocBlock_eq {α : Type v} (h : Heap) (align : Nat) (values : List (Option α))
+    (kind : AllocKind) :
+    h.allocBlock align values kind =
+      (⟨freshAllocId h align, 0⟩, allocation (freshAllocId h align) values kind ∪ h) := by
   refine Prod.ext rfl (ext fun a => ?_)
   rw [lookup_union]
-  by_cases ha : a = freshAllocId h
+  by_cases ha : a = freshAllocId h align
   · subst ha
-    have hNone := lookup_eq_none.mpr (notMem_freshAllocId (h := h) rfl)
+    have hNone := lookup_eq_none.mpr (notMem_freshAllocId (h := h) (align := align) rfl)
     simp only [allocBlock, lookup_insert, hNone, lookup_allocation]
     rfl
   · simp only [allocBlock, lookup_insert_ne _ _ ha, lookup_allocation_ne ha, Option.merge_none_left]
 
-theorem compatible_freshAllocId {α : Type v} (h : Heap) (values : List (Option α)) (kind : AllocKind) :
-    PartialCommMonoid.Compatible (allocation (freshAllocId h) values kind) h := by
+theorem compatible_freshAllocId {α : Type v} (h : Heap) (align : Nat) (values : List (Option α))
+    (kind : AllocKind) :
+    PartialCommMonoid.Compatible (allocation (freshAllocId h align) values kind) h := by
   intro a
-  by_cases ha : a = freshAllocId h
+  by_cases ha : a = freshAllocId h align
   · rw [lookup_eq_none.mpr (notMem_freshAllocId ha)]
-    cases (allocation (freshAllocId h) values kind).lookup a <;> trivial
+    cases (allocation (freshAllocId h align) values kind).lookup a <;> trivial
   · rw [lookup_allocation_ne ha]
     trivial
 
@@ -939,7 +957,7 @@ theorem compatible_write_left {α : Type v} {q : RawPtr α M} {value : Option α
 private theorem canDealloc_iff' {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind} :
     CanDealloc h q n kind ↔
       q.offset = 0 ∧ ∃ b, h.lookup q.allocId = some b ∧ b.kind = kind ∧
-        b.cells.length = n ∧ (∀ i < n, IsLive h (q.shift i)) ∧ b.right = .freeable := by
+        b.cells.length = n ∧ (∀ i < n, IsLive h (q.shiftCells i)) ∧ b.right = .freeable := by
   unfold CanDealloc
   constructor
   · rintro ⟨hOffset, hBlock⟩
@@ -960,9 +978,23 @@ theorem offset_eq_zero_of_canDealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kin
 
 /-- Every cell of a deallocated block must be owned. -/
 theorem isLive_of_canDealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h q n kind) {i : Nat} (hi : i < n) : IsLive h (q.shift i) := by
+    (hDealloc : CanDealloc h q n kind) {i : Nat} (hi : i < n) : IsLive h (q.shiftCells i) := by
   obtain ⟨-, -, -, -, -, hLive, -⟩ := canDealloc_iff'.mp hDealloc
   exact hLive i hi
+
+/-- A deallocated block has exactly `n` cells: none is owned past them. -/
+theorem not_isLive_of_canDealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) {r : RawPtr T M'} (hId : r.allocId = q.allocId)
+    (hLen : n ≤ r.offset) : ¬ IsLive h r := by
+  obtain ⟨-, b, hLookup, -, hLength, -⟩ := canDealloc_iff'.mp hDealloc
+  intro hLive
+  obtain ⟨c, hCell⟩ := Option.isSome_iff_exists.mp hLive
+  obtain ⟨b', hLookup', x, hx, -⟩ := lookup_of_cell? hCell
+  rw [hId, hLookup] at hLookup'
+  cases hLookup'
+  have hi := (List.getElem?_eq_some_iff.mp hx).1
+  rw [hLength] at hi
+  exact absurd hi (Nat.not_lt.mpr hLen)
 
 /-- The block `b` that `q` deallocates owns all its `n` cells and the right to deallocate it. -/
 private theorem block_of_canDealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
@@ -1092,42 +1124,45 @@ theorem not_isBorrowed_freeBlock {h : Heap} {q : RawPtr α M} {r : RawPtr β M'}
 
 /-! ### Allocation -/
 
-private theorem lookup_allocBlock {α : Type v} (h : Heap) (values : List (Option α)) (kind : AllocKind) :
-    (h.allocBlock values kind).2.lookup (freshAllocId h) =
+private theorem lookup_allocBlock {α : Type v} (h : Heap) (align : Nat) (values : List (Option α))
+    (kind : AllocKind) :
+    (h.allocBlock align values kind).2.lookup (freshAllocId h align) =
       some ⟨kind, α, values.map .owned, .freeable⟩ :=
   lookup_insert _ _ _
 
 /-- Allocation leaves the blocks already in the heap untouched. -/
-theorem isLive_allocBlock_of_mem {β : Type v} {h : Heap} {values : List (Option β)}
+theorem isLive_allocBlock_of_mem {β : Type v} {h : Heap} {align : Nat} {values : List (Option β)}
     {kind : AllocKind} {l : RawPtr T M} (hMem : l.allocId ∈ h) :
-    IsLive (h.allocBlock values kind).2 l ↔ IsLive h l := by
-  have hNe : l.allocId ≠ freshAllocId h := fun hEq => notMem_freshAllocId hEq hMem
+    IsLive (h.allocBlock align values kind).2 l ↔ IsLive h l := by
+  have hNe : l.allocId ≠ freshAllocId h align := fun hEq => notMem_freshAllocId hEq hMem
   simp only [IsLive, cell?, allocBlock, lookup_insert_ne _ _ hNe]
 
 /-- Even an empty allocation reserves its id. -/
-theorem mem_allocBlock {α : Type v} {kind : AllocKind} (h : Heap) (values : List (Option α)) :
-    freshAllocId h ∈ (h.allocBlock values kind).2 :=
+theorem mem_allocBlock {α : Type v} {kind : AllocKind} (h : Heap) (align : Nat)
+    (values : List (Option α)) :
+    freshAllocId h align ∈ (h.allocBlock align values kind).2 :=
   mem_iff_lookup.mpr (by simp [lookup_allocBlock])
 
 /-- The values of a fresh allocation are live, whatever the type of the pointer. -/
-theorem isLive_allocBlock {α : Type v} {h : Heap} {values : List (Option α)} {kind : AllocKind}
+theorem isLive_allocBlock {α : Type v} {h : Heap} {align : Nat} {values : List (Option α)}
+    {kind : AllocKind}
     {i : Nat}
     (hIndex : i < values.length) :
-    IsLive (h.allocBlock values kind).2 (⟨freshAllocId h, i⟩ : RawPtr T M) := by
+    IsLive (h.allocBlock align values kind).2 (⟨freshAllocId h align, i⟩ : RawPtr T M) := by
   simp [IsLive, cell?, lookup_allocBlock, hIndex]
 
 /-- A fresh allocation has no cell past its values. -/
-theorem not_isLive_allocBlock_of_le {α : Type v} {h : Heap} {values : List (Option α)}
-    {kind : AllocKind}
+theorem not_isLive_allocBlock_of_le {α : Type v} {h : Heap} {align : Nat}
+    {values : List (Option α)} {kind : AllocKind}
     {i : Nat} (hIndex : values.length ≤ i) :
-    ¬ IsLive (h.allocBlock values kind).2 (⟨freshAllocId h, i⟩ : RawPtr T M) := by
+    ¬ IsLive (h.allocBlock align values kind).2 (⟨freshAllocId h align, i⟩ : RawPtr T M) := by
   simp [IsLive, cell?, lookup_allocBlock, List.getElem?_eq_none hIndex]
 
 /-- A fresh allocation can be freed whole, and only for its kind. -/
-theorem canDealloc_allocBlock_iff {α : Type v} {β : Type u} (h : Heap) (values : List (Option α))
-    (n : Nat)
+theorem canDealloc_allocBlock_iff {α : Type v} {β : Type u} (h : Heap) (align : Nat)
+    (values : List (Option α)) (n : Nat)
     (kind kind' : AllocKind) :
-    CanDealloc (h.allocBlock values kind).2 (⟨freshAllocId h, 0⟩ : MutRawPtr β) n kind' ↔
+    CanDealloc (h.allocBlock align values kind).2 (⟨freshAllocId h align, 0⟩ : MutRawPtr β) n kind' ↔
       kind = kind' ∧ values.length = n := by
   rw [canDealloc_iff']
   constructor
@@ -1137,7 +1172,7 @@ theorem canDealloc_allocBlock_iff {α : Type v} {β : Type u} (h : Heap) (values
     exact ⟨hKind, by simpa using hLen⟩
   · rintro ⟨rfl, rfl⟩
     exact ⟨rfl, _, by rw [lookup_allocBlock], rfl, by simp,
-      fun i hi => by simpa [RawPtr.shift] using isLive_allocBlock hi, rfl⟩
+      fun i hi => by simpa [RawPtr.shiftCells] using isLive_allocBlock hi, rfl⟩
 
 /-! ### Singletons -/
 
@@ -1487,15 +1522,15 @@ theorem header_eq_of_allocId {α : Type v} {q : RawPtr α M} {r : RawPtr α M'}
   unfold header
   rw [hId]
 
-@[simp] theorem header_shift {α : Type v} (q : RawPtr α M) (i : Nat) (kind : AllocKind)
-    (len : Nat) : header (q.shift i) kind len = header q kind len :=
-  header_eq_of_allocId (RawPtr.allocId_shift q i) kind len
+@[simp] theorem header_shiftCells {α : Type v} (q : RawPtr α M) (i : Nat) (kind : AllocKind)
+    (len : Nat) : header (q.shiftCells i) kind len = header q kind len :=
+  header_eq_of_allocId (RawPtr.allocId_shiftCells q i) kind len
 
 /-- A fragment with the header of the block of `q` that owns all its cells can
 deallocate it. -/
 theorem canDealloc_of_subheap {α : Type v} {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
     (hOffset : q.offset = 0) (hSub : Heap.Subheap (header q kind n) h)
-    (hLive : ∀ i < n, IsLive h (q.shift i)) : CanDealloc h q n kind := by
+    (hLive : ∀ i < n, IsLive h (q.shiftCells i)) : CanDealloc h q n kind := by
   obtain ⟨rest, -, rfl⟩ := hSub
   exact canDealloc_iff'.mpr ⟨hOffset, _, lookup_union_some (lookup_header q kind n), rfl,
     by simp only [Cell.length_joinList, List.length_replicate], hLive,
@@ -1566,11 +1601,11 @@ theorem allocation_eq_range {α : Type v} (a : AllocId) (values : List (Option �
     · simp [hi]
   · rw [lookup_allocation_ne hb, lookup_range_ne hb]
 
-private theorem lookup_range_shift {α : Type v} (q : RawPtr α M) (values : List (Option α))
+private theorem lookup_range_shiftCells {α : Type v} (q : RawPtr α M) (values : List (Option α))
     (kind : AllocKind) (len : Nat) :
-    (range (q.shift 1) values kind len).lookup q.allocId =
+    (range (q.shiftCells 1) values kind len).lookup q.allocId =
       some ⟨kind, α, rangeCells (q.offset + 1) values len, .freeable⟩ :=
-  lookup_range (q.shift 1) values kind len
+  lookup_range (q.shiftCells 1) values kind len
 
 private theorem forall₂_singleton_range {α : Type v} (q : RawPtr α M) (value : Option α) (values : List (Option α))
     (len : Nat) :
@@ -1599,12 +1634,12 @@ private theorem forall₂_singleton_range {α : Type v} (q : RawPtr α M) (value
 
 theorem compatible_singleton_range {α : Type v} (q : RawPtr α M) (value : Option α) (values : List (Option α))
     (kind : AllocKind) (len : Nat) :
-    PartialCommMonoid.Compatible (singleton q value kind len) (range (q.shift 1) values kind len) := by
+    PartialCommMonoid.Compatible (singleton q value kind len) (range (q.shiftCells 1) values kind len) := by
   intro a
   show OptCompatible _ _
   by_cases ha : a = q.allocId
   · subst ha
-    rw [lookup_singleton, lookup_range_shift]
+    rw [lookup_singleton, lookup_range_shiftCells]
     exact (Block.compatible_mk_iff _ _ _ _ _ _ _).mpr
       ⟨rfl, forall₂_singleton_range q value values len, .inl rfl, nofun, nofun⟩
   · rw [lookup_singleton_ne ha]
@@ -1613,14 +1648,14 @@ theorem compatible_singleton_range {α : Type v} (q : RawPtr α M) (value : Opti
 /-- A range is its first cell and the range after it. -/
 theorem singleton_union_range {α : Type v} (q : RawPtr α M) (value : Option α) (values : List (Option α))
     (kind : AllocKind) (len : Nat) :
-    singleton q value kind len ∪ range (q.shift 1) values kind len =
+    singleton q value kind len ∪ range (q.shiftCells 1) values kind len =
       range q (value :: values) kind len := by
   apply ext
   intro a
   rw [lookup_union]
   by_cases ha : a = q.allocId
   · subst ha
-    rw [lookup_singleton, lookup_range_shift, lookup_range]
+    rw [lookup_singleton, lookup_range_shiftCells, lookup_range]
     simp only [Option.merge, Block.join_mk,
       Cell.joinList_of_forall₂ (forall₂_singleton_range q value values len)]
     congr 2
@@ -1637,7 +1672,7 @@ theorem singleton_union_range {α : Type v} (q : RawPtr α M) (value : Option α
           simp [hi, hOffset, hLe, Cell.join, hSub, show q.offset + 1 ≤ i by omega]
         · simp [hi, hOffset, hLe, Cell.join, show ¬ q.offset + 1 ≤ i by omega]
     · simp [hi]
-  · rw [lookup_singleton_ne ha, lookup_range_ne (q := q.shift 1) ha, lookup_range_ne (q := q) ha]
+  · rw [lookup_singleton_ne ha, lookup_range_ne (q := q.shiftCells 1) ha, lookup_range_ne (q := q) ha]
     rfl
 
 private theorem cells_eq_of_joinList_eq {α : Type v} {c₁ c₂ c : List (Cell α)}
@@ -1786,6 +1821,21 @@ theorem isLive_congr {h : Heap} {q : RawPtr T M} {r : RawPtr T' M'}
     (hId : q.allocId = r.allocId) (hOffset : q.offset = r.offset) : IsLive h q ↔ IsLive h r := by
   unfold IsLive cell?
   rw [hId, hOffset]
+
+theorem isValid_congr {α : Type v} {h : Heap} {q : RawPtr α M} {r : RawPtr α M'}
+    (hId : q.allocId = r.allocId) (hOffset : q.offset = r.offset) :
+    IsValid h q ↔ IsValid h r := by
+  unfold IsValid cell?
+  rw [hId, hOffset]
+
+/-- The cells of a block have one type. -/
+theorem isValid_unique {α β : Type v} {h : Heap} {q : RawPtr α M} {r : RawPtr β M'}
+    (hq : IsValid h q) (hr : IsValid h r) (hId : q.allocId = r.allocId) : α = β := by
+  obtain ⟨b, hLookup, hTy, -⟩ := lookup_of_isValid hq
+  obtain ⟨b', hLookup', hTy', -⟩ := lookup_of_isValid hr
+  rw [← hId, hLookup] at hLookup'
+  cases hLookup'
+  exact hTy.symm.trans hTy'
 
 theorem canDealloc_congr {h : Heap} {q : RawPtr α M} {r : RawPtr β M'} {n : Nat}
     {kind : AllocKind} (hId : q.allocId = r.allocId) (hOffset : q.offset = r.offset) :

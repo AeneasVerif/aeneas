@@ -1057,6 +1057,26 @@ let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
     (match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
        (builtin_trait_decls_map ()))
 
+(** The trait declarations which are opaque ([--opaque]) or defined in another
+    crate are external, like the opaque types: when we split the files, they are
+    extracted in the template of the external types, and the user provides them
+    (for instance by importing the model of the crate which defines them). *)
+let trait_decl_is_external (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
+  match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+  | None -> false
+  | Some trait_decl ->
+      trait_decl.item_meta.opacity <> Transparent
+      && not (trait_decl_is_builtin ctx id)
+
+(** Should we extract the trait declaration, depending on whether it is external
+    (see {!trait_decl_is_external})? *)
+let extract_trait_decl_with_config (config : gen_config) (ctx : gen_ctx)
+    (id : Pure.trait_decl_id) : bool =
+  config.extract_trait_decls
+  &&
+  if trait_decl_is_external ctx id then config.extract_opaque
+  else config.extract_transparent
+
 let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
   let trait_impl =
     [%silent_unwrap_opt_span] None
@@ -1170,7 +1190,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | TraitDeclGroup (RecGroup ids) ->
         (* Only print the warning if we actually extract the group *)
         let extract =
-          config.extract_trait_decls && config.extract_transparent
+          List.exists (extract_trait_decl_with_config config ctx) ids
         in
         if extract then
           (* Lookup the trait decls to print a nice error message *)
@@ -1208,7 +1228,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
               ids)
     | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)
-        if config.extract_trait_decls && config.extract_transparent then (
+        if extract_trait_decl_with_config config ctx id then (
           export_trait_decl_group id;
           export_trait_decl_group_extra_info id)
     | TraitImplGroup (NonRecGroup id) ->
@@ -1859,6 +1879,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     crate_has_opaque_non_builtin_decls ctx true
   in
   let has_opaque = has_opaque_types || has_opaque_funs in
+  (* The external trait declarations go to the file of the external types *)
+  let has_opaque_types =
+    has_opaque_types
+    || Pure.TraitDeclId.Map.exists
+         (fun id _ -> trait_decl_is_external ctx id)
+         ctx.trans_trait_decls
+  in
 
   (* Extract one or several files, depending on the configuration *)
   (if !Config.split_files then (
