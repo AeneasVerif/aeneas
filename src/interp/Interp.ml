@@ -405,187 +405,150 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
 
     We only consider abstractions without parents: the others are ended when
     their parents are ended. *)
-let rec end_dead_fun_call_abs (config : config) (span : Meta.span)
+let end_dead_fun_call_abs (config : config) (span : Meta.span)
     (get_ret_value : eval_ctx -> tvalue option) : cm_fun =
- fun ctx ->
-  (* Compute the borrows and symbolic values which are (transitively) derived
-     from the inputs *)
-  let input_borrows = ref BorrowId.Set.empty in
-  let input_svs = ref SymbolicValueId.Set.empty in
-  let input_abs_visitor =
-    object
-      inherit [_] iter_abs as super
-
-      method! visit_aloan_content env lc =
-        (match lc with
-        | AMutLoan (_, lid, _) | ASharedLoan (_, lid, _, _) ->
-            input_borrows := BorrowId.Set.add lid !input_borrows
-        | _ -> ());
-        super#visit_aloan_content env lc
-
-      method! visit_aproj env proj =
-        (match proj with
-        | AProjLoans { proj; _ } ->
-            input_svs := SymbolicValueId.Set.add proj.sv_id !input_svs
-        | _ -> ());
-        super#visit_aproj env proj
-    end
-  in
-  env_iter_abs
-    (fun abs ->
-      match abs.kind with
-      | SynthInput _ -> input_abs_visitor#visit_abs () abs
-      | _ -> ())
-    ctx.env;
-  (* The loans inside a value borrowed from the inputs are derived from the
-     inputs, as well as the loans of the abstractions which consume values
-     derived from the inputs: we compute a fixed point *)
-  let changed = ref true in
-  let add_loan (lid : BorrowId.id) =
-    if not (BorrowId.Set.mem lid !input_borrows) then (
-      input_borrows := BorrowId.Set.add lid !input_borrows;
-      changed := true)
-  in
-  let add_sv (id : SymbolicValueId.id) =
-    if not (SymbolicValueId.Set.mem id !input_svs) then (
-      input_svs := SymbolicValueId.Set.add id !input_svs;
-      changed := true)
-  in
-  let collect_loans_visitor =
-    object
-      inherit [_] iter_abs as super
-
-      method! visit_loan_content env lc =
-        (match lc with
-        | VSharedLoan (lid, _) | VMutLoan lid -> add_loan lid);
-        super#visit_loan_content env lc
-
-      method! visit_aloan_content env lc =
-        (match lc with
-        | AMutLoan (_, lid, _) | ASharedLoan (_, lid, _, _) -> add_loan lid
-        | _ -> ());
-        super#visit_aloan_content env lc
-
-      method! visit_aproj env proj =
-        (match proj with
-        | AProjLoans { proj; _ } -> add_sv proj.sv_id
-        | _ -> ());
-        super#visit_aproj env proj
-    end
-  in
   (* Does an abstraction consume values derived from the inputs? *)
-  let consumes_inputs (abs : abs) : bool =
-    let found = ref false in
-    let visitor =
+  let consumes_inputs (ctx : eval_ctx) : abs -> bool =
+    (* Compute the borrows and symbolic values which are (transitively) derived
+     from the inputs *)
+    let input_borrows = ref BorrowId.Set.empty in
+    let input_svs = ref SymbolicValueId.Set.empty in
+    let input_abs_visitor =
       object
         inherit [_] iter_abs as super
 
-        method! visit_aborrow_content env bc =
-          (match bc with
-          | AMutBorrow (_, bid, _) | ASharedBorrow (_, bid, _) ->
-              if BorrowId.Set.mem bid !input_borrows then found := true
+        method! visit_aloan_content env lc =
+          (match lc with
+          | AMutLoan (_, lid, _) | ASharedLoan (_, lid, _, _) ->
+              input_borrows := BorrowId.Set.add lid !input_borrows
           | _ -> ());
-          super#visit_aborrow_content env bc
+          super#visit_aloan_content env lc
 
-        method! visit_borrow_content env bc =
-          (match bc with
-          | VSharedBorrow (bid, _)
-          | VMutBorrow (bid, _)
-          | VReservedMutBorrow (bid, _) ->
-              if BorrowId.Set.mem bid !input_borrows then found := true);
-          super#visit_borrow_content env bc
-
-        method! visit_symbolic_value_id _ id =
-          if SymbolicValueId.Set.mem id !input_svs then found := true
+        method! visit_aproj env proj =
+          (match proj with
+          | AProjLoans { proj; _ } ->
+              input_svs := SymbolicValueId.Set.add proj.sv_id !input_svs
+          | _ -> ());
+          super#visit_aproj env proj
       end
     in
-    visitor#visit_abs () abs;
-    !found
-  in
-  let derived_visitor =
-    object
-      inherit [_] iter_env as super
-
-      method! visit_VMutBorrow env bid v =
-        if BorrowId.Set.mem bid !input_borrows then
-          collect_loans_visitor#visit_tvalue () v;
-        super#visit_VMutBorrow env bid v
-
-      method! visit_AMutBorrow env pm bid av =
-        if BorrowId.Set.mem bid !input_borrows then
-          collect_loans_visitor#visit_tavalue () av;
-        super#visit_AMutBorrow env pm bid av
-
-      method! visit_abs env abs =
-        (match abs.kind with
-        | FunCall _ when consumes_inputs abs ->
-            collect_loans_visitor#visit_abs () abs
-        | _ -> ());
-        super#visit_abs env abs
-    end
-  in
-  while !changed do
-    changed := false;
-    derived_visitor#visit_env () ctx.env
-  done;
-  let non_fun_call_abs (ctx : eval_ctx) : abs list =
-    env_filter_map_abs
+    env_iter_abs
       (fun abs ->
         match abs.kind with
-        | FunCall _ -> None
-        | _ -> Some abs)
-      ctx.env
-  in
-  (* Attempt to end an abstraction, then check that it had no influence on the
-     returned value nor on the other abstractions *)
-  let try_end (abs : abs) : (eval_ctx * (SA.expr -> SA.expr)) option =
-    match abs.kind with
-    | FunCall _
-      when abs.can_end
-           && AbsId.Set.is_empty abs.parents
-           && not (consumes_inputs abs) ->
-        let ctx', cc = end_abs config span abs.abs_id 0 ctx in
-        if
-          get_ret_value ctx' = get_ret_value ctx
-          && non_fun_call_abs ctx' = non_fun_call_abs ctx
-        then Some (ctx', cc)
-        else None
-    | _ -> None
-  in
-  (* We end the abstractions of the most recent function calls first: the raw
-     pointers manipulated by a function call may come from a previous call (for
-     instance, a slice created by [from_raw_parts] from a pointer given by
-     [as_mut_ptr]) *)
-  let call_id (abs : abs) =
-    match abs.kind with
-    | FunCall (call_id, _) -> FunCallId.to_int call_id
-    | _ -> -1
-  in
-  let abs_list =
-    List.sort
-      (fun a0 a1 -> Int.compare (call_id a1) (call_id a0))
-      (env_filter_map_abs (fun abs -> Some abs) ctx.env)
-  in
-  match List.find_map try_end abs_list with
-  | None -> (ctx, fun e -> e)
-  | Some (ctx, cc) ->
-      comp cc (end_dead_fun_call_abs config span get_ret_value ctx)
+        | SynthInput _ -> input_abs_visitor#visit_abs () abs
+        | _ -> ())
+      ctx.env;
+    (* The loans inside a value borrowed from the inputs are derived from the
+     inputs, as well as the loans of the abstractions which consume values
+     derived from the inputs: we compute a fixed point *)
+    let changed = ref true in
+    let add_loan (lid : BorrowId.id) =
+      if not (BorrowId.Set.mem lid !input_borrows) then (
+        input_borrows := BorrowId.Set.add lid !input_borrows;
+        changed := true)
+    in
+    let add_sv (id : SymbolicValueId.id) =
+      if not (SymbolicValueId.Set.mem id !input_svs) then (
+        input_svs := SymbolicValueId.Set.add id !input_svs;
+        changed := true)
+    in
+    let collect_loans_visitor =
+      object
+        inherit [_] iter_abs as super
 
-(** Does a region group appear at the top-level of a signature (i.e., not under
-    a borrow)? The backward functions of such groups are the ones which may
-    access the heap in the functions which manipulate raw pointers (see
-    [SymbolicToPureTypes.translate_inst_fun_sig_to_decomposed_fun_type]). *)
-let back_group_is_top_level (inst_sg : inst_fun_sig)
-    (back_id : RegionGroupId.id) : bool =
-  let top_level =
-    RegionsHierarchy.top_level_regions (inst_sg.output :: inst_sg.inputs)
+        method! visit_loan_content env lc =
+          (match lc with
+          | VSharedLoan (lid, _) | VMutLoan lid -> add_loan lid);
+          super#visit_loan_content env lc
+
+        method! visit_aloan_content env lc =
+          (match lc with
+          | AMutLoan (_, lid, _) | ASharedLoan (_, lid, _, _) -> add_loan lid
+          | _ -> ());
+          super#visit_aloan_content env lc
+
+        method! visit_aproj env proj =
+          (match proj with
+          | AProjLoans { proj; _ } -> add_sv proj.sv_id
+          | _ -> ());
+          super#visit_aproj env proj
+      end
+    in
+    (* Does an abstraction consume values derived from the inputs? *)
+    let consumes_inputs (abs : abs) : bool =
+      let found = ref false in
+      let visitor =
+        object
+          inherit [_] iter_abs as super
+
+          method! visit_aborrow_content env bc =
+            (match bc with
+            | AMutBorrow (_, bid, _) | ASharedBorrow (_, bid, _) ->
+                if BorrowId.Set.mem bid !input_borrows then found := true
+            | _ -> ());
+            super#visit_aborrow_content env bc
+
+          method! visit_borrow_content env bc =
+            (match bc with
+            | VSharedBorrow (bid, _)
+            | VMutBorrow (bid, _)
+            | VReservedMutBorrow (bid, _) ->
+                if BorrowId.Set.mem bid !input_borrows then found := true);
+            super#visit_borrow_content env bc
+
+          method! visit_symbolic_value_id _ id =
+            if SymbolicValueId.Set.mem id !input_svs then found := true
+        end
+      in
+      visitor#visit_abs () abs;
+      !found
+    in
+    let derived_visitor =
+      object
+        inherit [_] iter_env as super
+
+        method! visit_VMutBorrow env bid v =
+          if BorrowId.Set.mem bid !input_borrows then
+            collect_loans_visitor#visit_tvalue () v;
+          super#visit_VMutBorrow env bid v
+
+        method! visit_AMutBorrow env pm bid av =
+          if BorrowId.Set.mem bid !input_borrows then
+            collect_loans_visitor#visit_tavalue () av;
+          super#visit_AMutBorrow env pm bid av
+
+        method! visit_abs env abs =
+          (match abs.kind with
+          | FunCall _ when consumes_inputs abs ->
+              collect_loans_visitor#visit_abs () abs
+          | _ -> ());
+          super#visit_abs env abs
+      end
+    in
+    while !changed do
+      changed := false;
+      derived_visitor#visit_env () ctx.env
+    done;
+    consumes_inputs
   in
-  List.exists
-    (fun r ->
-      match r with
-      | RVar (Free rid) -> RegionId.Set.mem rid top_level
-      | _ -> false)
-    (RegionGroupId.nth inst_sg.regions_hierarchy back_id).regions
+  (* Ending an abstraction may leave the returned value unchanged while ending
+     a region which appears in the type of one of its symbolic values (for
+     instance the output of an opaque function): this invalidates the value. *)
+  let unchanged (ctx : eval_ctx) (ctx' : eval_ctx) : bool =
+    let ret = get_ret_value ctx' in
+    ret = get_ret_value ctx
+    && Option.fold ~none:true
+         ~some:(fun v -> not (bottom_in_value ctx'.ended_regions v))
+         ret
+  in
+  end_unobservable_abs config span ~ignore_joins:false
+    (fun ctx ->
+      let consumes_inputs = consumes_inputs ctx in
+      fun abs ->
+        match abs.kind with
+        | FunCall _ -> not (consumes_inputs abs)
+        | _ -> false)
+    unchanged
 
 (** Small helper.
 
@@ -711,7 +674,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      - we end the remaining dead abstractions at the very end *)
   let stateful =
     FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fdef.def_id
-    && back_group_is_top_level inst_sg back_id
+    && RegionGroupId.Set.mem back_id
+         (RegionsHierarchy.stateful_groups inst_sg.regions_hierarchy
+            (inst_sg.output :: inst_sg.inputs))
   in
   let end_ret_and_dead_abs ctx =
     if stateful then
@@ -795,7 +760,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   in
 
   (* Create the continuation to finish the evaluation *)
-  let config = mk_config SymbolicMode in
+  let config = mk_symbolic_fun_config ctx fdef in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
     [%ltrace

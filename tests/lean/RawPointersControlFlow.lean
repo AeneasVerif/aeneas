@@ -116,7 +116,7 @@ def slice_in_branch (p : MutRawPtr Std.U8) (b : Bool) : Result Unit := do
        from_raw_parts_mut_back s1
 
 /-- [raw_pointers_control_flow::local_view]:
-    Source: 'tests/src/raw_pointers_control_flow.rs', lines 58:0-64:1 -/
+    Source: 'tests/src/raw_pointers_control_flow.rs', lines 57:0-63:1 -/
 def local_view : Result Std.U32 := do
   let a := Array.repeat 2#usize 0#u32
   let (s, _) ← lift (Array.to_slice_mut a)
@@ -124,8 +124,8 @@ def local_view : Result Std.U32 := do
   let (s1, from_raw_parts_mut_back) ←
     core.slice.raw.from_raw_parts_mut p 2#usize
   let s2 ← Slice.update s1 0#usize 5#u32
-  let _ ← as_mut_ptr_back
   from_raw_parts_mut_back s2
+  let _ ← as_mut_ptr_back
   ok 0#u32
 
 end raw_pointers_control_flow

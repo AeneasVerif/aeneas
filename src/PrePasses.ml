@@ -2325,10 +2325,576 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
     }
   else f
 
+(** Decompose the accesses to the places behind raw pointers.
+
+    The interpreter only reads and writes values through raw pointers at the
+    top-level of a place ([copy *p], [*p = v]). This pass rewrites the other
+    accesses:
+    {[
+      // Read
+      x = copy (( *p).f)  ~~>  tmp = copy *p; x = copy tmp.f
+      // Write: read, update and write back the whole value
+      ( *p).f = v         ~~>  tmp = copy *p; tmp.f = v; *p = move tmp
+      // Borrow
+      x = &mut ( *p).f    ~~>  tmp = <*mut T>::as_mut_unchecked(copy p);
+                               x = &mut ( *tmp).f
+    ]}
+
+    The borrows of places behind raw pointers become calls to
+    [<*mut T>::as_mut_unchecked] and [<*const T>::as_ref_unchecked] (or
+    [<*mut T>::as_ref_unchecked]): the heap model moves the value out of the
+    heap while the borrow is live, and gives it back when the borrow ends (the
+    backward functions of those functions are stateful). We add the declarations
+    of those functions to the crate if needed.
+
+    The places behind raw pointers stored behind raw pointers ([*( *p).next])
+    are decomposed recursively. *)
+let decompose_raw_ptr_derefs (crate : crate) : crate =
+  let is_raw_ptr (ty : ty) : bool =
+    match ty with
+    | TRawPtr _ -> true
+    | _ -> false
+  in
+  let rec has_raw_deref (p : place) : bool =
+    match p.kind with
+    | PlaceLocal _ | PlaceGlobal _ -> false
+    | PlaceProjection (q, Deref) when is_raw_ptr q.ty -> true
+    | PlaceProjection (q, _) -> has_raw_deref q
+  in
+  (* The declarations of [as_mut_unchecked] and [as_ref_unchecked], which we
+     add to the crate if needed *)
+  (* [fun_decls] has holes for the items which were not translated: we allocate
+     past every registered function id *)
+  let next_fun_id =
+    ref
+      (FunDeclId.of_int
+         (List.fold_left
+            (fun n ((id : item_id), _) ->
+              match id with
+              | IdFun id -> max n (FunDeclId.to_int id + 1)
+              | _ -> n)
+            (match FunDeclId.Map.max_binding_opt crate.fun_decls with
+            | Some (id, _) -> FunDeclId.to_int id + 1
+            | None -> 0)
+            crate.item_names))
+  in
+  let new_decls : ((ref_kind * ref_kind) * fun_decl) list ref = ref [] in
+  let get_borrow_fun (template : fun_decl) (ptr_kind : ref_kind)
+      (ref_kind : ref_kind) : FunDeclId.id =
+    match List.assoc_opt (ptr_kind, ref_kind) !new_decls with
+    | Some decl -> decl.def_id
+    | None ->
+        let def_id = !next_fun_id in
+        next_fun_id := FunDeclId.of_int (FunDeclId.to_int def_id + 1);
+        let ident s = PeIdent (s, Disambiguator.zero) in
+        let types : type_param list =
+          [ { index = TypeVarId.zero; name = "T"; variance = VaUnknown } ]
+        in
+        let pointee = TVar (Free TypeVarId.zero) in
+        let ptr_ty = TRawPtr (pointee, ptr_kind) in
+        let name =
+          [
+            ident "core";
+            ident "ptr";
+            ident (if ptr_kind = RMut then "mut_ptr" else "const_ptr");
+            PeImpl
+              (ImplElemTy
+                 {
+                   binder_params = { empty_generic_params with types };
+                   binder_value = ptr_ty;
+                 });
+            ident
+              (if ref_kind = RMut then "as_mut_unchecked"
+               else "as_ref_unchecked");
+          ]
+        in
+        let regions : region_param list =
+          [
+            {
+              index = RegionId.zero;
+              name = Some "'a";
+              variance = VaUnknown;
+              mutability = LtUnknown;
+              late_bound = false;
+            };
+          ]
+        in
+        let decl : fun_decl =
+          {
+            def_id;
+            item_meta =
+              {
+                template.item_meta with
+                name;
+                source_text = None;
+                attr_info =
+                  {
+                    template.item_meta.attr_info with
+                    attributes = [];
+                    rename = None;
+                    public = true;
+                  };
+                is_local = false;
+                started_from = false;
+                is_extern = false;
+                opacity = ItemOpaque;
+                lang_item = None;
+                diagnostic_item = None;
+                has_errors = false;
+              };
+            generics = { empty_generic_params with regions; types };
+            signature =
+              {
+                template.signature with
+                is_unsafe = true;
+                is_variadic = false;
+                inputs = [ ptr_ty ];
+                output = TRef (RVar (Free RegionId.zero), pointee, ref_kind);
+              };
+            src = NormalFun;
+            body = OpaqueBody;
+          }
+        in
+        new_decls := ((ptr_kind, ref_kind), decl) :: !new_decls;
+        def_id
+  in
+  let update_fun (f : fun_decl) : fun_decl =
+    match f.body with
+    | StructuredBody body ->
+        let new_locals = ref [] in
+        let _, gen =
+          LocalId.mk_stateful_generator_starting_at_id
+            (LocalId.of_int (List.length body.locals.locals))
+        in
+        let fresh_place (ty : ty) : place =
+          let local =
+            {
+              index = gen ();
+              local_ty = ty;
+              name = None;
+              span = f.item_meta.span;
+              drop_flag_for = None;
+            }
+          in
+          new_locals := local :: !new_locals;
+          { kind = PlaceLocal local.index; ty }
+        in
+        let update_statement (st : statement) : statement list =
+          let span = st.span in
+          let mk_statement kind : statement =
+            {
+              span;
+              statement_id = StatementId.zero;
+              kind;
+              comments_before = [];
+            }
+          in
+          (* The statements to insert before the current statement, in
+             reverse order *)
+          let before = ref [] in
+          let emit kind = before := mk_statement kind :: !before in
+          let flush () =
+            let sts = List.rev !before in
+            before := [];
+            sts
+          in
+          let deref (q : place) : place =
+            match q.ty with
+            | TRawPtr (ty, _) | TRef (_, ty, _) ->
+                { kind = PlaceProjection (q, Deref); ty }
+            | _ -> [%internal_error] span
+          in
+          (* Read the values behind the raw pointers into fresh variables, so
+             that the place does not dereference raw pointers anymore *)
+          let rec read_raw_derefs (p : place) : place =
+            match p.kind with
+            | PlaceLocal _ | PlaceGlobal _ -> p
+            | PlaceProjection (q, Deref) when is_raw_ptr q.ty ->
+                let q = read_raw_derefs q in
+                let tmp = fresh_place p.ty in
+                emit (Assign (tmp, Use (Copy (deref q), NoRetag)));
+                tmp
+            | PlaceProjection (q, proj) ->
+                { p with kind = PlaceProjection (read_raw_derefs q, proj) }
+          in
+          (* Same as [read_raw_derefs], but leave the top-level dereference of
+             a raw pointer: the interpreter supports it *)
+          let read_operand_place (p : place) : place =
+            match p.kind with
+            | PlaceProjection (q, Deref) when is_raw_ptr q.ty ->
+                deref (read_raw_derefs q)
+            | _ -> read_raw_derefs p
+          in
+          (* Decompose a place at its outermost dereference of a raw pointer:
+             return the raw pointer, and a function to rebuild the place from
+             the place which replaces the dereference *)
+          let rec split (p : place) : (place * (place -> place)) option =
+            match p.kind with
+            | PlaceLocal _ | PlaceGlobal _ -> None
+            | PlaceProjection (q, Deref) when is_raw_ptr q.ty ->
+                Some (q, fun base -> base)
+            | PlaceProjection (q, proj) -> (
+                match split q with
+                | None -> None
+                | Some (ptr, rebuild) ->
+                    Some
+                      ( ptr,
+                        fun base ->
+                          { p with kind = PlaceProjection (rebuild base, proj) }
+                      ))
+          in
+          (* Borrow a place behind a raw pointer *)
+          let borrow (p : place) (kind : borrow_kind) : place =
+            match split p with
+            | None -> p
+            | Some (ptr, rebuild) ->
+                let ptr = read_raw_derefs ptr in
+                let pointee, ptr_kind =
+                  match ptr.ty with
+                  | TRawPtr (ty, rk) -> (ty, rk)
+                  | _ -> [%internal_error] span
+                in
+                let ref_kind =
+                  match kind with
+                  | BShared | BShallow -> RShared
+                  | BMut | BTwoPhaseMut | BUniqueImmutable -> RMut
+                in
+                let fid = get_borrow_fun f ptr_kind ref_kind in
+                let tmp = fresh_place (TRef (RErased, pointee, ref_kind)) in
+                let call =
+                  {
+                    func =
+                      FnOpRegular
+                        {
+                          kind = Fun fid;
+                          generics =
+                            {
+                              empty_generic_args with
+                              regions = [ RErased ];
+                              types = [ pointee ];
+                            };
+                        };
+                    args = [ Copy ptr ];
+                    dest = tmp;
+                    safety = Inherit;
+                  }
+                in
+                let on_unwind =
+                  { span; block_id = BlockId.zero; statements = [] }
+                in
+                emit (Call (call, on_unwind));
+                rebuild (deref tmp)
+          in
+          let visitor =
+            object
+              inherit [_] map_statement as super
+
+              (* The nested statements are handled by [map_statement] *)
+              method! visit_block _ b = b
+
+              method! visit_operand env op =
+                match op with
+                | Copy p when has_raw_deref p -> Copy (read_operand_place p)
+                | Move p when has_raw_deref p -> Move (read_operand_place p)
+                | _ -> super#visit_operand env op
+
+              method! visit_rvalue env rv =
+                match rv with
+                | RvRef (p, kind, metadata) when has_raw_deref p ->
+                    let metadata = super#visit_operand env metadata in
+                    RvRef (borrow p kind, kind, metadata)
+                | Discriminant p when has_raw_deref p ->
+                    Discriminant (read_raw_derefs p)
+                | _ -> super#visit_rvalue env rv
+
+              method! visit_SwitchDiscriminant env p =
+                if has_raw_deref p then SwitchDiscriminant (read_raw_derefs p)
+                else super#visit_SwitchDiscriminant env p
+            end
+          in
+          (* Assign a value to a place *)
+          let assign (p : place) (rv : rvalue) : statement list =
+            match p.kind with
+            | PlaceProjection (q, Deref) when is_raw_ptr q.ty ->
+                let p = deref (read_raw_derefs q) in
+                flush () @ [ mk_statement (Assign (p, rv)) ]
+            | _ -> (
+                match split p with
+                | None -> flush () @ [ mk_statement (Assign (p, rv)) ]
+                | Some (ptr, rebuild) ->
+                    let ptr = read_raw_derefs ptr in
+                    let tmp = fresh_place (deref ptr).ty in
+                    emit (Assign (tmp, Use (Copy (deref ptr), NoRetag)));
+                    flush ()
+                    @ [
+                        mk_statement (Assign (rebuild tmp, rv));
+                        mk_statement
+                          (Assign (deref ptr, Use (Move tmp, NoRetag)));
+                      ])
+          in
+          match st.kind with
+          | Assign (p, rv) when has_raw_deref p ->
+              assign p (visitor#visit_rvalue () rv)
+          | Call (call, on_unwind) when has_raw_deref call.dest ->
+              let call = visitor#visit_call () call in
+              let tmp = fresh_place call.dest.ty in
+              let call_st =
+                mk_statement (Call ({ call with dest = tmp }, on_unwind))
+              in
+              let pre = flush () in
+              pre @ [ call_st ] @ assign call.dest (Use (Move tmp, NoRetag))
+          | Drop (p, fn_ptr, kind, on_unwind) when has_raw_deref p ->
+              (* We do not model the drop glue: dropping a value behind a raw
+                 pointer reads it (see [InterpStatements]) *)
+              let p =
+                match split p with
+                | Some (ptr, _) -> deref (read_raw_derefs ptr)
+                | None -> [%internal_error] span
+              in
+              flush () @ [ mk_statement (Drop (p, fn_ptr, kind, on_unwind)) ]
+          | _ ->
+              let st = visitor#visit_statement () st in
+              flush () @ [ st ]
+        in
+        let body_body = map_statement update_statement body.body in
+        let body =
+          StructuredBody
+            {
+              body with
+              body = body_body;
+              locals =
+                {
+                  body.locals with
+                  locals = body.locals.locals @ List.rev !new_locals;
+                };
+            }
+        in
+        { f with body }
+    | _ -> f
+  in
+  let fun_decls = FunDeclId.Map.map update_fun crate.fun_decls in
+  let new_decls = List.rev_map snd !new_decls in
+  let fun_decls =
+    List.fold_left
+      (fun m (d : fun_decl) -> FunDeclId.Map.add d.def_id d m)
+      fun_decls new_decls
+  in
+  let declarations =
+    Option.map
+      (fun decls ->
+        List.map
+          (fun (d : fun_decl) -> FunGroup (NonRecGroup d.def_id))
+          new_decls
+        @ decls)
+      crate.declarations
+  in
+  let item_names =
+    List.map
+      (fun (d : fun_decl) -> (IdFun d.def_id, d.item_meta.name))
+      new_decls
+    @ crate.item_names
+  in
+  { crate with fun_decls; declarations; item_names }
+
+(** Charon desugars every use of a place [p[i]] into a fresh call to
+    [Index::index]. In [if let Some(x) = a[i] { ... }], the value matched on and
+    the value read in the branch come from two different calls: the symbolic
+    interpreter doesn't know that the second one is a [Some], and fails because
+    it can not expand an enumeration with several variants.
+
+    We replace [k = index(r, idx)], where [r = &p], with [k = copy k0] if [k0]
+    holds the result of an earlier [index(&p, idx)] and nothing which could
+    modify [p], [idx] or [k0] happened in between: we only allow the statements
+    which don't write through pointers nor call functions. The interpreter
+    additionally checks that the shared borrow [k0] is still valid.
+
+    Similarly, [decompose_raw_ptr_derefs] reads the value behind a raw pointer
+    [q] into a fresh local at every use of a field of [*q]: we replace
+    [k = copy *q] with [k = copy k0] if [k0 = copy *q] happened before and
+    nothing which could modify [q], [k0] or the value behind [q] happened in
+    between. The value behind [q] may be a local whose address is taken: we
+    forget the reads whenever such a local is modified. *)
+let reuse_index_results (crate : crate) (f : fun_decl) : fun_decl =
+  let index_pats =
+    List.map NameMatcher.parse_pattern
+      [
+        "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index";
+        "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index";
+      ]
+  in
+  let slice_index_pat =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index"
+  in
+  (* If the call is an [index] call: the borrow of the indexed place, the index
+     and the destination *)
+  let index_args (call : call) : (local_id * local_id * local_id) option =
+    let name_matches pat =
+      match call.func with
+      | FnOpRegular { kind = Fun fid; _ } -> (
+          match FunDeclId.Map.find_opt fid crate.fun_decls with
+          | Some d -> ExtractName.match_name crate pat d.item_meta.name
+          | None -> false)
+      | _ -> false
+    in
+    match (call.args, call.dest.kind) with
+    | ( [ Move { kind = PlaceLocal r; _ }; Copy { kind = PlaceLocal idx; _ } ],
+        PlaceLocal k )
+      when List.exists name_matches index_pats -> Some (r, idx, k)
+    | ( [ Copy { kind = PlaceLocal idx; _ }; Move { kind = PlaceLocal r; _ } ],
+        PlaceLocal k )
+      when name_matches slice_index_pat -> Some (r, idx, k)
+    | _ -> None
+  in
+  let rec root (p : place) : local_id option =
+    match p.kind with
+    | PlaceLocal l -> Some l
+    | PlaceProjection (p, _) -> root p
+    | PlaceGlobal _ -> None
+  in
+  (* The locals whose address is taken: assigning them may modify the values
+     behind raw pointers *)
+  let addr_taken = ref LocalId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_statement as super
+
+      method! visit_rvalue env rv =
+        (match rv with
+        | RvRef (p, _, _) | RawPtr (p, _, _) ->
+            Option.iter
+              (fun l -> addr_taken := LocalId.Set.add l !addr_taken)
+              (root p)
+        | _ -> ());
+        super#visit_rvalue env rv
+    end
+  in
+  (match f.body with
+  | StructuredBody body -> visitor#visit_block () body.body
+  | _ -> ());
+  let is_raw_ptr (ty : ty) =
+    match ty with
+    | TRawPtr _ -> true
+    | _ -> false
+  in
+  (* The facts we know: [`Ref (r, p)]: [r = &p]; [`Index (p, idx, k)]:
+     [k = index(&p, idx)]; [`Read (k, q)]: [k = copy *q] with [q] a raw pointer
+     (see [decompose_raw_ptr_derefs]) *)
+  let forget (l : local_id) facts =
+    List.filter
+      (function
+        | `Ref (r, p) -> r <> l && root p <> Some l
+        | `Index (p, idx, k) -> idx <> l && k <> l && root p <> Some l
+        | `Read (k, q) ->
+            k <> l && root q <> Some l && not (LocalId.Set.mem l !addr_taken))
+      facts
+  in
+  let rec block facts (b : block) =
+    let facts, statements = List.fold_left_map stmt facts b.statements in
+    (facts, { b with statements = List.concat statements })
+  and stmt facts (st : statement) =
+    match st.kind with
+    | Nop | PlaceMention _ | Assert _ -> (facts, [ st ])
+    | StorageLive l | StorageDead l -> (forget l facts, [ st ])
+    | Assign (({ kind = PlaceLocal l; _ } as dest), rv) -> (
+        let facts = forget l facts in
+        match rv with
+        | Use (Copy { kind = PlaceProjection (q, Deref); ty }, _)
+          when is_raw_ptr q.ty && root q <> Some l -> (
+            match
+              List.find_map
+                (function
+                  | `Read (k0, q') when q' = q -> Some k0
+                  | _ -> None)
+                facts
+            with
+            | Some k0 ->
+                let rv = Use (Copy { kind = PlaceLocal k0; ty }, NoRetag) in
+                (facts, [ { st with kind = Assign (dest, rv) } ])
+            | None -> (`Read (l, q) :: facts, [ st ]))
+        | RvRef (p, BShared, _) when root p <> Some l ->
+            (`Ref (l, p) :: facts, [ st ])
+        | Use _
+        | BinaryOp _
+        | UnaryOp _
+        | NullaryOp _
+        | Discriminant _
+        | Aggregate _ -> (facts, [ st ])
+        | _ -> ([], [ st ]))
+    | Call (call, _) -> (
+        match index_args call with
+        | None -> ([], [ st ])
+        | Some (r, idx, k) -> (
+            let p =
+              List.find_map
+                (function
+                  | `Ref (r', p) when r' = r -> Some p
+                  | _ -> None)
+                facts
+            in
+            let facts = forget k (forget r facts) in
+            let k0 =
+              List.find_map
+                (function
+                  | `Index (p', idx', k0) when Some p' = p && idx' = idx ->
+                      Some k0
+                  | _ -> None)
+                facts
+            in
+            match (p, k0) with
+            | _, Some k0 ->
+                (* The borrow [r] was moved by the call: we drop it *)
+                let k0 = { kind = PlaceLocal k0; ty = call.dest.ty } in
+                let rv = Use (Copy k0, NoRetag) in
+                ( facts,
+                  [
+                    { st with kind = Assign (call.dest, rv) };
+                    { st with kind = StorageDead r };
+                  ] )
+            | Some p, None -> (`Index (p, idx, k) :: facts, [ st ])
+            | None, None -> (facts, [ st ])))
+    | Switch (data, branches) ->
+        let results = List.map (block facts) branches in
+        (* Only the branches which fall through matter *)
+        let rec falls (b : block) =
+          match List.rev b.statements with
+          | {
+              kind = Return | Panic _ | Break _ | Continue _ | UndefinedBehavior;
+              _;
+            }
+            :: _ -> false
+          | { kind = Switch (_, branches); _ } :: _ ->
+              List.exists falls branches
+          | _ -> true
+        in
+        let falling =
+          List.filter_map
+            (fun (facts, b) -> if falls b then Some facts else None)
+            results
+        in
+        let facts =
+          match falling with
+          | [] -> []
+          | f0 :: fl -> List.filter (fun x -> List.for_all (List.mem x) fl) f0
+        in
+        (facts, [ { st with kind = Switch (data, List.map snd results) } ])
+    | Loop body -> ([], [ { st with kind = Loop (snd (block [] body)) } ])
+    | _ -> ([], [ st ])
+  in
+  match f.body with
+  | StructuredBody body ->
+      {
+        f with
+        body = StructuredBody { body with body = snd (block [] body.body) };
+      }
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
   let crate = anon_consts_to_calls crate in
+  let crate = decompose_raw_ptr_derefs crate in
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
@@ -2343,6 +2909,7 @@ let apply_passes (crate : crate) : crate =
         remove_shallow_borrows_storage_live_dead );
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
+      ("reuse_index_results", reuse_index_results);
       ("refresh_statement_ids", refresh_statement_ids);
     ]
   in

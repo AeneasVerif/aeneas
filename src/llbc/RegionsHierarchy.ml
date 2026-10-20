@@ -80,14 +80,49 @@ let top_level_regions (tys : ty list) : RegionId.Set.t =
   List.iter explore tys;
   !regions
 
+(** The region groups whose backward functions may access the heap in the
+    functions which manipulate raw pointers: the groups which appear at the
+    top-level of the types (see [top_level_regions]) and which are not ancestors
+    of such a group (the parents of a group end before it). For instance, in
+    [fn next<'b>(self: &'b mut Iter<'a>) -> Option<&'a T>], ['a] outlives ['b]
+    (the group of ['b] is a parent of the group of ['a]): the group of ['a] may
+    access the heap (it gives back the borrows of the values in the heap which
+    are returned), while the group of ['b] (which gives back the iterator) is
+    pure. If such a pure backward function needs to access the heap, the
+    translation fails. *)
+let stateful_groups (groups : region_groups) (tys : ty list) :
+    RegionGroupId.Set.t =
+  let top_level = top_level_regions tys in
+  let top_level_groups =
+    List.filter
+      (fun (g : region_group) ->
+        List.exists
+          (fun r ->
+            match r with
+            | RVar (Free rid) -> RegionId.Set.mem rid top_level
+            | _ -> false)
+          g.regions)
+      groups
+  in
+  let find id = List.find (fun (g : region_group) -> g.id = id) groups in
+  let rec ancestors (g : region_group) : RegionGroupId.id list =
+    g.parents @ List.concat_map (fun id -> ancestors (find id)) g.parents
+  in
+  let ancestors = List.concat_map ancestors top_level_groups in
+  RegionGroupId.Set.of_list
+    (List.filter_map
+       (fun (g : region_group) ->
+         if List.mem g.id ancestors then None else Some g.id)
+       top_level_groups)
+
 (** Compute the regions hierarchy of a signature.
 
-    If [merge_groups] is [true], we merge all the region groups into a single
-    one. We do so for the functions which access the heap (because they
-    manipulate raw pointers): their backward functions may have side effects,
-    and if two backward functions end the same region abstraction (for instance
-    the abstraction of a function call which borrowed from two inputs of the
-    function) they would perform those side effects twice. *)
+    If [merge_groups] is [true], we merge the region groups whose backward
+    functions may access the heap (see [stateful_groups]) into a single one. We
+    do so for the functions which access the heap (because they manipulate raw
+    pointers): if two backward functions end the same region abstraction (for
+    instance the abstraction of a function call which borrowed from two inputs
+    of the function) they would perform its side effects twice. *)
 let compute_regions_hierarchy_for_sig ~(merge_groups : bool)
     (span : Meta.span option) (crate : crate)
     (type_infos : TypesAnalysis.type_infos) (sg : bound_fun_sig) : region_groups
@@ -376,38 +411,17 @@ let compute_regions_hierarchy_for_sig ~(merge_groups : bool)
   in
   if not merge_groups then groups
   else
-    (* Merge the groups which appear at the top-level of the signature (i.e.,
-       not under a borrow): those are the groups whose backward functions may
-       access the heap *)
+    (* Merge the groups whose backward functions may access the heap. They are
+       not ancestors of each other (see [stateful_groups]). *)
     let { Types.inputs; output; _ } = sg.item_binder_value in
-    let top_level = top_level_regions (output :: inputs) in
-    let is_top_level (g : region_group) =
-      List.exists
-        (fun r ->
-          match r with
-          | RVar (Free rid) -> RegionId.Set.mem rid top_level
-          | _ -> false)
-        g.regions
+    let stateful = stateful_groups groups (output :: inputs) in
+    let is_merged id = RegionGroupId.Set.mem id stateful in
+    let merged =
+      List.filter (fun (g : region_group) -> is_merged g.id) groups
     in
-    let merged = List.filter is_top_level groups in
     match List.rev merged with
     | [] | [ _ ] -> groups
     | last :: _ ->
-        let merged_ids = List.map (fun (g : region_group) -> g.id) merged in
-        let is_merged id = List.mem id merged_ids in
-        (* The merged groups must not be ancestors of each other *)
-        let rec ancestors (id : RegionGroupId.id) : RegionGroupId.id list =
-          let g = List.find (fun (g : region_group) -> g.id = id) groups in
-          g.parents @ List.concat_map ancestors g.parents
-        in
-        [%cassert_opt_span] span
-          (List.for_all
-             (fun (g : region_group) ->
-               not (List.exists is_merged (ancestors g.id)))
-             merged)
-          "Unsupported: a function which accesses the heap (because it \
-           manipulates raw pointers) and whose signature contains borrows \
-           nested inside each other at the top-level";
         (* We put the merged group at the position of the last group we merge,
            so that the parents of the groups appear before it *)
         let merged_group : region_group =

@@ -89,6 +89,7 @@ package «tests» {}
 @[default_target] lean_lib LoopsNestedRec
 @[default_target] lean_lib LoopsRec
 @[default_target] lean_lib LoopsSequences
+@[default_target] lean_lib MatchIndex
 @[default_target] lean_lib MaybeUninit
 @[default_target] lean_lib MaybeUninitSpecs
 @[default_target] lean_lib MiniTree
@@ -98,6 +99,8 @@ package «tests» {}
 @[default_target] lean_lib NestedBorrows
 @[default_target] lean_lib NestedSharedBorrows
 @[default_target] lean_lib NoNestedBorrows
+@[default_target] lean_lib Nonnull
+@[default_target] lean_lib NonnullSpecs
 @[default_target] lean_lib OpaqueMutRegion
 @[default_target] lean_lib Options
 @[default_target] lean_lib Order
