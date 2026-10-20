@@ -11,7 +11,8 @@ private theorem pointsTo_mk_addr {T : Type} (q : ConstRawPtr T) (value : T) :
   ext h
   rw [RawPtr.pointsTo_holds, RawPtr.pointsTo_holds]
   exact exists_congr fun kind => exists_congr fun len => by
-    rw [Heap.singleton_eq_of_addr (q := (⟨q.allocId, q.offset⟩ : MutRawPtr T)) (r := q) rfl rfl]
+    rw [Heap.singleton_eq_of_addr (q := (⟨q.allocId, q.offset⟩ : MutRawPtr T).cellPtr)
+      (r := q.cellPtr) rfl rfl]
 
 private theorem pointsToRange_mk_addr {T : Type} (q : ConstRawPtr T) (values : List T) :
     ((⟨q.allocId, q.offset⟩ : MutRawPtr T) ↦* values) = (q ↦* values) := by
@@ -25,7 +26,8 @@ private theorem freeable_mk_addr {T : Type} (q : ConstRawPtr T) (count : Nat) (k
     (⟨q.allocId, q.offset⟩ : MutRawPtr T).freeable count kind = q.freeable count kind := by
   ext h
   rw [RawPtr.freeable_holds, RawPtr.freeable_holds,
-    Heap.header_eq_of_allocId (q := (⟨q.allocId, q.offset⟩ : MutRawPtr T)) (r := q) rfl]
+    Heap.header_eq_of_allocId (q := (⟨q.allocId, q.offset⟩ : MutRawPtr T).cellPtr)
+      (r := q.cellPtr) rfl]
 
 /-- `new_in_place` hands over the slots of `buffer`; its back function ends the `as_mut_ptr`
 borrow, turning the slots back into the slice. -/

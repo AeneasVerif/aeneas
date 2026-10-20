@@ -18,17 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace fn_ptr_generic
-
-/-- [core::mem::maybe_uninit::MaybeUninit]
-    Source: '/rustc/library/core/src/mem/maybe_uninit.rs', lines 355:0-355:24
-    Name pattern: [core::mem::maybe_uninit::MaybeUninit]
-    Visibility: public -/
-@[rust_type "core::mem::maybe_uninit::MaybeUninit"]
-axiom core.mem.maybe_uninit.MaybeUninit (T : Type _) : Type
 
 /-- [fn_ptr_generic::incr]:
     Source: 'tests/src/fn_ptr_generic.rs', lines 7:0-9:1 -/

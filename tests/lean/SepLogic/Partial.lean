@@ -87,7 +87,7 @@ example (p : MutRawPtr Nat) (Q : IPost Nat) : ¬ dispec emp (read p) Q := by
   have hSpec := hTriple emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.RawPtr.read, Result.guardedModify] at hSpec
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isValid_empty p hContains
+  exact Heap.not_isValid_empty p.cellPtr hContains.valid
 
 end
 

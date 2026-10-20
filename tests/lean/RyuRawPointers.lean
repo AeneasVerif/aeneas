@@ -21,7 +21,7 @@ set_option maxRecDepth 2048
 namespace ryu_raw_pointers
 
 /-- [ryu_raw_pointers::DIGIT_TABLE]
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 7:0-7:56 -/
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 10:0-10:56 -/
 @[global_simps, irreducible]
 def DIGIT_TABLE : Array Std.U8 20#usize :=
   Array.make 20#usize [
@@ -30,7 +30,7 @@ def DIGIT_TABLE : Array Std.U8 20#usize :=
     ]
 
 /-- [ryu_raw_pointers::write_exponent]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 11:0-20:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 14:0-23:1
     Visibility: public -/
 def write_exponent
   (k : Std.Isize) (result : MutRawPtr Std.U8) : Result Std.Usize := do
@@ -50,7 +50,7 @@ def write_exponent
   i2 + 1#usize
 
 /-- [ryu_raw_pointers::write_two_digits]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 23:0-27:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 26:0-30:1
     Visibility: public -/
 def write_two_digits
   (k : Std.Usize) (result : MutRawPtr Std.U8) : Result Unit := do
@@ -66,21 +66,58 @@ def write_two_digits
   MutRawPtr.write p2 i1
   as_ptr_back
 
+/-- [ryu_raw_pointers::mul_shift_all]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 34:0-38:1
+    Visibility: public -/
+def mul_shift_all
+  (m : Std.U64) (vp : MutRawPtr Std.U64) (vm : MutRawPtr Std.U64)
+  (mm_shift : Std.U32) :
+  Result Std.U64
+  := do
+  let i ← 4#u64 * m
+  let i1 ← i + 2#u64
+  MutRawPtr.write vp i1
+  let i2 ← i - 1#u64
+  let i3 ← lift (UScalar.cast .U64 mm_shift)
+  let i4 ← i2 - i3
+  MutRawPtr.write vm i4
+  ok i
+
+/-- [ryu_raw_pointers::d2d_bounds]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 42:0-56:1
+    Visibility: public -/
+def d2d_bounds
+  (m : Std.U64) (mm_shift : Std.U32) :
+  Result (Std.U64 × Std.U64 × Std.U64)
+  := do
+  let vp_uninit ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U64
+  let (p, as_mut_ptr_back) ←
+    core.mem.maybe_uninit.MaybeUninit.as_mut_ptr vp_uninit
+  let (p1, as_mut_ptr_back1) ←
+    core.mem.maybe_uninit.MaybeUninit.as_mut_ptr vp_uninit
+  let vr ← mul_shift_all m p p1 mm_shift
+  let vp_uninit1 ← as_mut_ptr_back
+  let vp ← core.mem.maybe_uninit.MaybeUninit.assume_init vp_uninit1
+  let vm_uninit ← as_mut_ptr_back1
+  let vm ← core.mem.maybe_uninit.MaybeUninit.assume_init vm_uninit
+  ok (vr, vp, vm)
+
 /-- [ryu_raw_pointers::Buffer]
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 29:0-31:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 58:0-60:1
     Visibility: public -/
 structure Buffer where
-  bytes : Array Std.U8 24#usize
+  bytes : Array (MaybeUninit Std.U8) 24#usize
 
 /-- [ryu_raw_pointers::{ryu_raw_pointers::Buffer}::new]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 34:4-36:5
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 63:4-66:5
     Visibility: public -/
 def Buffer.new : Result Buffer := do
-  let a := Array.repeat 24#usize 0#u8
-  ok { bytes := a }
+  let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U8
+  let bytes := Array.repeat 24#usize mu
+  ok { bytes }
 
 /-- [ryu_raw_pointers::{ryu_raw_pointers::Buffer}::format_exponent]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 38:4-43:5
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 68:4-73:5
     Visibility: public -/
 def Buffer.format_exponent
   (self : Buffer) (k : Std.Isize) :
@@ -88,12 +125,14 @@ def Buffer.format_exponent
   := do
   let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.bytes)
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
-  let n ← write_exponent k p
+  let p1 := RawPtr.cast Std.U8 p
+  let n ← write_exponent k p1
   let s1 ← as_mut_ptr_back
   let a := to_slice_mut_back s1
   let s2 ← lift (Array.to_slice a)
-  let (p1, as_ptr_back) ← Slice.as_ptr s2
-  let (s3, from_raw_parts_back) ← core.slice.raw.from_raw_parts p1 n
+  let (p2, as_ptr_back) ← Slice.as_ptr s2
+  let p3 := RawPtr.cast Std.U8 p2
+  let (s3, from_raw_parts_back) ← core.slice.raw.from_raw_parts p3 n
   let r := do
            from_raw_parts_back
            as_ptr_back
@@ -101,7 +140,7 @@ def Buffer.format_exponent
   ok (s3, r)
 
 /-- [ryu_raw_pointers::first_char_of_exponent]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 46:0-50:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 76:0-80:1
     Visibility: public -/
 def first_char_of_exponent (k : Std.Isize) : Result Std.U8 := do
   let buf ← Buffer.new

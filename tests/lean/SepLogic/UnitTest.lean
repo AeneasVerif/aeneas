@@ -297,7 +297,7 @@ example (p : MutRawPtr Nat) : ¬ (⦃ emp ⦄ read p ⦃ _ => emp⦄) := by
   have hSpec := hTriple emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.RawPtr.read, Result.guardedModify] at hSpec
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isValid_empty p hContains
+  exact Heap.not_isValid_empty p.cellPtr hContains.valid
 
 example (p : MutRawPtr Nat) (value : Nat) : ¬ (⦃ emp ⦄ write p value ⦃ _ => emp⦄) := by
   intro hTriple
@@ -319,7 +319,8 @@ example : ¬ ⦃ emp ⦄ (do
     RawPtr.read p) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, Std.alloc.alloc.Global.deallocate,
+  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc,
+    Std.alloc.alloc.Global.deallocate,
     RawPtr.read,
     Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_vis,
     Std.bind_tc_ok] at hSpec
@@ -330,7 +331,7 @@ example : ¬ ⦃ emp ⦄ (do
   obtain ⟨hContains', -⟩ := hSpec.vis_view
   simp only [] at hPre hContains'
   exact Heap.not_isLive_freeBlock hPre rfl
-    ((Heap.isLive_allocBlock_of_mem (Heap.mem_freeBlock hPre)).mp (Heap.isLive_of_isValid hContains'))
+    ((Heap.isLive_allocBlock_of_mem (Heap.mem_freeBlock hPre)).mp (Heap.isLive_of_isValid hContains'.valid))
 
 set_option linter.constructorNameAsVariable false in
 /-- Double free, with an allocation in between that must not reuse the freed id. -/
@@ -341,7 +342,8 @@ example : ¬ ⦃ emp ⦄ (do
     from_raw p) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, Std.alloc.alloc.Global.deallocate,
+  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc,
+    Std.alloc.alloc.Global.deallocate,
     RawPtr.read,
     Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_vis,
     Std.bind_tc_ok] at hSpec
@@ -352,7 +354,7 @@ example : ¬ ⦃ emp ⦄ (do
   obtain ⟨hContains', -⟩ := hSpec.vis_view
   simp only [] at hPre hContains'
   exact Heap.not_isLive_freeBlock hPre rfl
-    ((Heap.isLive_allocBlock_of_mem (Heap.mem_freeBlock hPre)).mp (Heap.isLive_of_isValid hContains'))
+    ((Heap.isLive_allocBlock_of_mem (Heap.mem_freeBlock hPre)).mp (Heap.isLive_of_isValid hContains'.valid))
 
 /-- A pointer into an empty slice does not alias the next allocation. -/
 example : ¬ ⦃ emp ⦄ (Aeneas.Std.bind (Aeneas.Std.Slice.as_ptr (Aeneas.Std.Slice.new Nat))
@@ -361,14 +363,15 @@ example : ¬ ⦃ emp ⦄ (Aeneas.Std.bind (Aeneas.Std.Slice.as_ptr (Aeneas.Std.S
       RawPtr.read p) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [Aeneas.Std.Slice.as_ptr, into_raw, Std.alloc.alloc.Global.allocate, RawPtr.read,
+  simp only [Aeneas.Std.Slice.as_ptr, into_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc, RawPtr.read,
     RawPtr.allocView, Result.guardedModify, Std.bind_tc_eq, Std.bind_vis, Std.bind_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := (Aeneas.Std.Slice.new Nat).val) (i := 0)
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅)
+    (values := (Aeneas.Std.Slice.new Nat).val.map Std.Pointee.toCell) (i := 0)
     (by simp) ((Heap.isLive_allocBlock_of_mem (Heap.mem_allocBlock _ _)).mp
-      (Heap.isLive_of_isValid hContains))
+      (Heap.isLive_of_isValid hContains.valid))
 
 /-- Freeing a pointer one past the end of a `Box`: `from_raw` needs the pointer that `into_raw`
 returned, and moving the value out already reads past the end of the block. -/
@@ -379,14 +382,15 @@ example : ¬ ⦃ emp ⦄ (do
     pure ()) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, RawPtr.add, RawPtr.read,
+  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc, RawPtr.add, RawPtr.read,
     Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_vis,
     Std.bind_tc_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [(1 : Nat)]) (i := 1) (by simp)
-    (by convert Heap.isLive_of_isValid hContains using 2 <;> simp [Heap.allocBlock_eq])
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [some (1 : Nat)]) (kind := .heap)
+    (i := 1) (T := Nat) (M := .Mut) (by simp)
+    ((Heap.isLive_congr (by simp) (by simp)).mp (Heap.isLive_of_isValid hContains.valid))
 
 /-- Deallocating the tail of a two-cell allocation: the pointer is not the start of the
 allocation. -/
@@ -396,7 +400,7 @@ example : ¬ ⦃ emp ⦄ (do
     Std.alloc.alloc.Global.mk.deallocate q 1) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [Std.alloc.alloc.Global.allocate, Std.alloc.alloc.Global.deallocate, RawPtr.add,
+  simp only [Std.alloc.alloc.Global.allocate, RawPtr.alloc, Std.alloc.alloc.Global.deallocate, RawPtr.add,
     Result.guardedModify, Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
@@ -409,7 +413,7 @@ example : ¬ ⦃ emp ⦄ (Aeneas.Std.bind (Aeneas.Std.core.ptr.from_mut (1 : Nat
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.core.ptr.from_mut, from_raw, Std.alloc.alloc.Global.deallocate, RawPtr.read,
-    RawPtr.allocView, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis,
+    RawPtr.allocView, RawPtr.alloc, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis,
     Std.bind_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
@@ -424,12 +428,11 @@ example (s : Aeneas.Std.Slice Nat) (_hs : s.val = [1]) :
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.Slice.as_mut_ptr, from_raw, Std.alloc.alloc.Global.deallocate, RawPtr.read,
-    RawPtr.allocView, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis,
+    RawPtr.allocView, RawPtr.alloc, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis,
     Std.bind_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hPre, -⟩ := hSpec.vis_view
-  simp only [Heap.read_snd] at hPre
   simpa using ((Heap.canDealloc_allocBlock_iff _ _ _ _ _).mp hPre).1
 
 /-- Freeing an empty allocation: its block has no cell, so there is nothing to move out. -/
@@ -437,12 +440,13 @@ example : ¬ ⦃ emp ⦄ (Aeneas.Std.bind (Aeneas.Std.Slice.as_mut_ptr (Aeneas.S
     fun (p, _) => from_raw p) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [Aeneas.Std.Slice.as_mut_ptr, from_raw, RawPtr.read, RawPtr.allocView,
+  simp only [Aeneas.Std.Slice.as_mut_ptr, from_raw, RawPtr.read, RawPtr.allocView, RawPtr.alloc,
     Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis, Std.bind_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := (Aeneas.Std.Slice.new Nat).val) (i := 0)
-    (by simp) (Heap.isLive_of_isValid hContains)
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅)
+    (values := (Aeneas.Std.Slice.new Nat).val.map Std.Pointee.toCell) (i := 0)
+    (by simp) (Heap.isLive_of_isValid hContains.valid)
 
 /-- Freeing the start of a two-element slice: the block has two cells, not one. -/
 example (s : Aeneas.Std.Slice Nat) (hs : s.val = [1, 2]) :
@@ -451,12 +455,11 @@ example (s : Aeneas.Std.Slice Nat) (hs : s.val = [1, 2]) :
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.Slice.as_mut_ptr, from_raw, Std.alloc.alloc.Global.deallocate, RawPtr.read,
-    RawPtr.allocView, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis,
+    RawPtr.allocView, RawPtr.alloc, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_eq, Std.bind_vis,
     Std.bind_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hPre, -⟩ := hSpec.vis_view
-  simp only [Heap.read_snd] at hPre
   simpa [hs] using ((Heap.canDealloc_allocBlock_iff _ _ _ _ _).mp hPre).2
 
 /-- Write after free. -/
@@ -466,7 +469,8 @@ example : ¬ ⦃ emp ⦄ (do
     write p 2) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, Std.alloc.alloc.Global.deallocate,
+  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc,
+    Std.alloc.alloc.Global.deallocate,
     RawPtr.read,
     Aeneas.Std.MutRawPtr.write, Result.guardedModify, Std.pure_tc_eq,
     Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
@@ -483,7 +487,8 @@ example : ¬ ⦃ emp ⦄ (do
     p.add 1#usize) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, Std.alloc.alloc.Global.deallocate,
+  simp only [into_raw, from_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc,
+    Std.alloc.alloc.Global.deallocate,
     RawPtr.read,
     RawPtr.add, Result.guardedModify, Std.pure_tc_eq, Std.bind_tc_vis,
     Std.bind_tc_ok] at hSpec
@@ -500,13 +505,14 @@ example : ¬ ⦃ emp ⦄ (do
     read q) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, Std.alloc.alloc.Global.allocate, RawPtr.add, Aeneas.Std.RawPtr.read,
+  simp only [into_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc, RawPtr.add, Aeneas.Std.RawPtr.read,
     Result.guardedModify, Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [(1 : Nat)]) (i := 1) (by simp)
-    (by convert Heap.isLive_of_isValid hContains using 2 <;> simp [Heap.allocBlock_eq])
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [some (1 : Nat)]) (kind := .heap)
+    (i := 1) (T := Nat) (M := .Mut) (by simp)
+    ((Heap.isLive_congr (by simp) (by simp)).mp (Heap.isLive_of_isValid hContains.valid))
 
 /-- Writing one past the end of a `Box`: the block has no cell there. -/
 example : ¬ ⦃ emp ⦄ (do
@@ -515,13 +521,14 @@ example : ¬ ⦃ emp ⦄ (do
     write q 0) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, Std.alloc.alloc.Global.allocate, RawPtr.add, Aeneas.Std.MutRawPtr.write,
+  simp only [into_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc, RawPtr.add, Aeneas.Std.MutRawPtr.write,
     Result.guardedModify, Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [(1 : Nat)]) (i := 1) (by simp)
-    (by convert Heap.isLive_of_isValid hContains using 2 <;> simp [Heap.allocBlock_eq])
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [some (1 : Nat)]) (kind := .heap)
+    (i := 1) (T := Nat) (M := .Mut) (by simp)
+    ((Heap.isLive_congr (by simp) (by simp)).mp (Heap.isLive_of_isValid hContains))
 
 /-- `write` takes a `MutRawPtr`: writing through a `ConstRawPtr` does not type-check. -/
 example : True := by
@@ -700,12 +707,13 @@ example : ¬ ⦃ emp ⦄ (do
     p.add 2#usize) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [into_raw, Std.alloc.alloc.Global.allocate, RawPtr.add,
+  simp only [into_raw, Std.alloc.alloc.Global.allocate, RawPtr.alloc, RawPtr.add,
     Result.guardedModify, Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hInBounds, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [(5 : Nat)]) (i := 1) (by simp)
-    (by convert hInBounds 1 (by simp) using 2 <;> simp [Heap.allocBlock_eq])
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := [some (5 : Nat)]) (kind := .heap)
+    (i := 1) (T := Nat) (M := .Mut) (by simp)
+    ((Heap.isLive_congr (by simp) (by simp)).mp (hInBounds 1 (by simp)))
 
 /-- `add 0` is allowed on any pointer, including into an empty allocation. -/
 example : ⦃ emp ⦄ (Aeneas.Std.bind (Aeneas.Std.Slice.as_ptr (Aeneas.Std.Slice.new Nat))
@@ -717,11 +725,12 @@ example : ¬ ⦃ emp ⦄ (Aeneas.Std.bind (Aeneas.Std.Slice.as_ptr (Aeneas.Std.S
     fun (p, _) => p.add 1#usize) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [Aeneas.Std.Slice.as_ptr, RawPtr.add, RawPtr.allocView, Result.guardedModify,
+  simp only [Aeneas.Std.Slice.as_ptr, RawPtr.add, RawPtr.allocView, RawPtr.alloc, Result.guardedModify,
     Std.bind_vis, Std.bind_ok] at hSpec
   obtain ⟨_, hSpec⟩ := hSpec.vis_view
   obtain ⟨hInBounds, -⟩ := hSpec.vis_view
-  exact Heap.not_isLive_allocBlock_of_le (h := ∅) (values := (Aeneas.Std.Slice.new Nat).val) (i := 0)
-    (by simp) (by convert hInBounds 0 (by simp) using 2 <;> simp [Heap.allocBlock_eq])
+  exact Heap.not_isLive_allocBlock_of_le (h := ∅)
+    (values := (Aeneas.Std.Slice.new Nat).val.map Std.Pointee.toCell) (i := 0)
+    (by simp) (by convert hInBounds 0 (by simp) using 2 <;> simp)
 
 end SepLogic

@@ -4,11 +4,11 @@ public import Mathlib.Data.Finmap
 
 /-! Block-based heap: a finite map from allocation ids to blocks. A block records how it was
 allocated (`AllocKind`), the type of its values, one `Cell` per value, and the right to deallocate
-it (`DeallocRight`). A heap is also a fragment of the memory: fragments combine (`∪`) cell by cell,
+it (`DeallocRight`). An owned cell holds a value, or is uninitialized (`none`). A heap is also a fragment of the memory: fragments combine (`∪`) cell by cell,
 so two fragments can own different cells of the same block. Deallocated blocks stay in the map as
 `freed`, so allocation ids are never reused.
-Supports interior pointers, stored pointers, provenance by allocation id.
-Not supported: uninitialized memory, byte-level representation/type punning,
+Supports interior pointers, stored pointers, uninitialized memory, provenance by allocation id.
+Not supported: byte-level representation/type punning,
 pointer-integer casts, higher-order store, the byte-level allocator API
 (`std::alloc::alloc`, `Layout`). -/
 
@@ -27,8 +27,8 @@ inductive AllocKind where
   deriving DecidableEq
 
 inductive Cell (α : Type u) where
-  /-- We own the value -/
-  | owned (x : α)
+  /-- We own the cell, which holds `x`, or is uninitialized if `x = none` -/
+  | owned (x : Option α)
   /-- Someone else owns it: useful for separation -/
   | notOwned
   /-- Given away by `borrow` (converting a raw pointer to a borrow): we hold the exclusive right
@@ -105,6 +105,9 @@ block, and `removeView` a whole `.view` block.
 | `removeView` | .view [owned*] freeable → [notOwned*] freed  | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
 | `borrow`     | owned → borrowed                             | `from_raw_parts`, `from_raw_parts_mut`        |
 | `endBorrow`  | borrowed → owned                             | end of `from_raw_parts`, `from_raw_parts_mut` |
+
+The owned cells of a block may be uninitialized (`owned none`): `write` initializes an owned cell
+of the right type, while reading an uninitialized cell is undefined behaviour (see `RawPtr.read`).
 -/
 
 namespace Cell
@@ -238,8 +241,9 @@ def Mem (a : AllocId) (h : Heap) : Prop := a ∈ h.allocs
 
 def Compatible (h₁ h₂ : Heap) : Prop := ∀ a, OptCompatible (h₁.lookup a) (h₂.lookup a)
 
-/-- The value at `q`, if `h` owns it. It does not depend on the type of `q`. -/
-private def cell? (h : Heap.{v}) (q : RawPtr T M) : Option (Σ α : Type v, α) :=
+/-- The content of the cell at `q` (`none` inside if uninitialized), if `h` owns it. It does not
+depend on the type of `q`. -/
+private def cell? (h : Heap.{v}) (q : RawPtr T M) : Option (Σ α : Type v, Option α) :=
   match h.lookup q.allocId with
   | some b =>
     match b.cells[q.offset]? with
@@ -248,8 +252,8 @@ private def cell? (h : Heap.{v}) (q : RawPtr T M) : Option (Σ α : Type v, α) 
   | _ => none
 
 /-- The block of `q`, of kind `kind` and `len` cells, owning only the cell of `q` (none of them if
-`len ≤ q.offset`). -/
-def singleton (q : RawPtr α M) (value : α) (kind : AllocKind) (len : Nat) : Heap :=
+`len ≤ q.offset`), which holds `value` (uninitialized if `value = none`). -/
+def singleton (q : RawPtr α M) (value : Option α) (kind : AllocKind) (len : Nat) : Heap :=
   ⟨Finmap.singleton q.allocId
     ⟨kind, α, (List.replicate len .notOwned).set q.offset (.owned value), .none⟩⟩
 
@@ -264,8 +268,14 @@ to deallocate it: the header of the block. -/
 def header (q : RawPtr α M) (kind : AllocKind) (len : Nat) : Heap :=
   ⟨Finmap.singleton q.allocId ⟨kind, α, List.replicate len .notOwned, .freeable⟩⟩
 
-/-- The block `a` holding `values`, all owned, and the right to deallocate it. -/
-def allocation (a : AllocId) (values : List α) (kind : AllocKind) : Heap :=
+/-- The block `a`, of kind `kind`, type `ty` and `len` cells, deallocated: it owns none of its cells
+but holds the `freed` right, so that no other fragment can own or borrow them. -/
+def freedBlock (a : AllocId) (ty : Type v) (kind : AllocKind) (len : Nat) : Heap :=
+  ⟨Finmap.singleton a ⟨kind, ty, List.replicate len .notOwned, .freed⟩⟩
+
+/-- The block `a` holding `values` (`none` for an uninitialized cell), all owned, and the right to
+deallocate it. -/
+def allocation (a : AllocId) (values : List (Option α)) (kind : AllocKind) : Heap :=
   ⟨Finmap.singleton a ⟨kind, α, values.map .owned, .freeable⟩⟩
 
 def IsLive (h : Heap) (q : RawPtr T M) : Prop := (h.cell? q).isSome
@@ -277,26 +287,29 @@ def freshAllocId (h : Heap) : AllocId :=
 def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
-/-- Creates a fresh block of kind `kind`: fresh memory is mutable in Rust. Use `alloc` or
-`newView`; the lemmas are stated on `allocBlock` and apply to both. -/
-def allocBlock (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
+/-- Creates a fresh block of kind `kind` holding `values` (`none` for an uninitialized cell): fresh
+memory is mutable in Rust. Use `alloc` or `newView`; the lemmas are stated on `allocBlock` and
+apply to both. -/
+def allocBlock (values : List (Option α)) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
   (⟨freshAllocId h, 0⟩, h.insert (freshAllocId h) ⟨kind, α, values.map .owned, .freeable⟩)
 
 /-- Allocates `values` with the global allocator (`Box::into_raw`, `Global::allocate`). -/
-abbrev alloc (values : List α) (h : Heap) : MutRawPtr α × Heap :=
+abbrev alloc (values : List (Option α)) (h : Heap) : MutRawPtr α × Heap :=
   allocBlock values .heap h
 
 /-- Creates a raw-pointer view of a place that holds `values` (`from_mut`, `as_ptr`,
 `as_mut_ptr`). -/
-abbrev newView (values : List α) (h : Heap) : MutRawPtr α × Heap :=
+abbrev newView (values : List (Option α)) (h : Heap) : MutRawPtr α × Heap :=
   allocBlock values .view h
 
+/-- `h` owns the cell of `q`, of type `α`, initialized or not. -/
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
   match h.cell? q with
   | none => False
   | some ⟨β, _⟩ => β = α
 
-def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
+/-- The content of the cell of `q`: `none` if it is uninitialized. -/
+def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : Option α × Heap :=
   match hlookup : h.cell? q with
   | none => by simp [IsValid, hlookup] at hValid
   | some ⟨β, value⟩ => by
@@ -312,12 +325,12 @@ def IsBorrowed (h : Heap) (q : RawPtr α M) : Prop :=
   | _ => False
 
 /-- Owns `value` at `q`, given that the block of `q` holds values of type `α`. -/
-private def setOwned (h : Heap) (q : RawPtr α M) (value : α)
+private def setOwned (h : Heap) (q : RawPtr α M) (value : Option α)
     (hTy : ∀ b, h.lookup q.allocId = some b → b.ty = α) : Heap :=
   match hlookup : h.lookup q.allocId with
   | some b =>
     h.insert q.allocId
-      ⟨b.kind, b.ty, b.cells.set q.offset (.owned (cast (hTy b hlookup).symm value)),
+      ⟨b.kind, b.ty, b.cells.set q.offset (.owned (cast (congrArg Option (hTy b hlookup).symm) value)),
         b.right⟩
   | _ => h
 
@@ -337,7 +350,8 @@ private theorem ty_of_isBorrowed {h : Heap} {q : RawPtr α M} (hBorrowed : IsBor
   rw [hlookup] at hBorrowed
   exact hBorrowed.1
 
-def write (q : RawPtr α M) (value : α) (h : Heap) (hValid : IsValid h q) : Unit × Heap :=
+/-- Writes `value` (`none` to deinitialize) to the cell of `q`, initialized or not. -/
+def write (q : RawPtr α M) (value : Option α) (h : Heap) (hValid : IsValid h q) : Unit × Heap :=
   ((), h.setOwned q value (ty_of_isValid hValid))
 
 /-- The guard of `dealloc` (kind `.heap`) and `removeView` (kind `.view`): `q` starts a block of
@@ -371,9 +385,9 @@ abbrev removeView (q : RawPtr α M) (n : Nat) (h : Heap) (hRemove : CanDealloc h
     Unit × Heap :=
   freeBlock q n .view h hRemove
 
-/-- Moves the value of `q` out into a borrow (`from_raw_parts`): the cell is `borrowed` until
+/-- Moves the content of `q` out into a borrow (`from_raw_parts`): the cell is `borrowed` until
 `endBorrow`, so every access through a raw pointer fails meanwhile. -/
-def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
+def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : Option α × Heap :=
   ((read q h hValid).1,
     match h.lookup q.allocId with
     | some b =>
@@ -381,7 +395,8 @@ def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
     | _ => h)
 
 /-- Ends the borrow of `q`. -/
-def endBorrow (q : RawPtr α M) (value : α) (h : Heap) (hBorrowed : IsBorrowed h q) : Unit × Heap :=
+def endBorrow (q : RawPtr α M) (value : Option α) (h : Heap) (hBorrowed : IsBorrowed h q) :
+    Unit × Heap :=
   ((), h.setOwned q value (ty_of_isBorrowed hBorrowed))
 
 end Heap
