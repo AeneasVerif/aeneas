@@ -178,6 +178,7 @@ def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
   .ok value
 
 /-- The pointer is a view of `r`; the back computation runs when the borrow ends. -/
+@[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0])]
 def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
   Aeneas.Std.bind (RawPtr.allocView [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 

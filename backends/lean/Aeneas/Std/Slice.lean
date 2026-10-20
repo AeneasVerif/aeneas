@@ -74,6 +74,7 @@ def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit 
   p.endView s.length
   Result.require (values = s.val)
 
+@[rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0])]
 def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
   Aeneas.Std.bind (RawPtr.allocView s.val) fun p =>
     .ok (p.cast_const, Slice.end_as_ptr s p.cast_const)
@@ -85,6 +86,7 @@ def Slice.end_as_mut_ptr {T : Type} (s : Slice T) (p : MutRawPtr T) : Result (Sl
   p.endView s.length
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0])]
 def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
   Aeneas.Std.bind (RawPtr.allocView s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
 
@@ -93,10 +95,12 @@ def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : U
     (s : Slice T) : Result Unit :=
   if s.length = len.val then p.endBorrowRange s.val else .fail .undef
 
+@[rust_fun "core::slice::raw::from_raw_parts" (statefulLifetimes := [0])]
 def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
     Result (Slice T × Result Unit) :=
   Aeneas.Std.bind (p.borrowSlice len) fun s => .ok (s, p.endBorrowRange s.val)
 
+@[rust_fun "core::slice::raw::from_raw_parts_mut" (statefulLifetimes := [0])]
 def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
     Result (Slice T × (Slice T → Result Unit)) :=
   Aeneas.Std.bind (p.borrowSlice len) fun s =>
