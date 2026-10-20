@@ -86,6 +86,23 @@ grind_pattern aligned_alignUp => alignUp x A
 lemma alignUp_zero (A : Nat) : alignUp 0 A = 0 := by
   cases A <;> simp [alignUp, Nat.div_eq_of_lt]
 
+@[simp, grind =]
+lemma alignUp_one (x : Nat) : alignUp x 1 = x := by
+  simp [alignUp]
+
+lemma alignUp_of_dvd {x A : Nat} (h : A ∣ x) : alignUp x A = x := by
+  rcases eq_or_ne A 0 with rfl | hA
+  · simp_all [alignUp]
+  · apply Nat.le_antisymm
+    · obtain ⟨k, rfl⟩ := h
+      rw [Nat.mul_comm]
+      have : (k * A + A - 1) / A = k := by
+        rw [show k * A + A - 1 = (A - 1) + k * A by omega]
+        rw [Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt (by omega)]
+        omega
+      simp [alignUp, this]
+    · exact le_alignUp x (by omega)
+
 @[simp]
 lemma alignUp_mono {x y : Nat} (hxy : x ≤ y) (A : Nat) : alignUp x A ≤ alignUp y A :=
   Nat.mul_le_mul_right A (Nat.div_le_div_right (by omega))

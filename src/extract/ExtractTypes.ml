@@ -2212,17 +2212,17 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
       | Some (Align n) -> ".aligned " ^ string_of_int n ^ " (by decide)"
       | Some (Pack n) -> ".packed " ^ string_of_int n ^ " (by decide)"
     in
-    let layout_meta =
+    let layout_flags =
       match
         TypeDeclId.Map.find_opt decl.def_id ctx.trans_ctx.type_ctx.type_decls
       with
       | Some { layout = (_, layout) :: _; _ } ->
-          "("
+          "{ repr := "
           ^ extract_layout_kind layout.repr
-          ^ ", "
+          ^ ", align := "
           ^ extract_layout_modifier layout.repr.align_modif
-          ^ ")"
-      | _ -> "(.reprRust, .reasonablyAligned)"
+          ^ " }"
+      | _ -> "{ repr := .reprRust, align := .reasonablyAligned }"
     in
     let print_field_ty (f : field) =
       F.pp_print_string fmt "HasLayout.xty ";
@@ -2241,7 +2241,7 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_open_vbox fmt ctx.indent_incr;
     F.pp_open_hovbox fmt ctx.indent_incr;
-    F.pp_print_string fmt "instance";
+    F.pp_print_string fmt "noncomputable instance";
     List.iter
       (fun tp ->
         F.pp_print_space fmt ();
@@ -2269,6 +2269,7 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_open_hovbox fmt ctx.indent_incr;
         F.pp_print_string fmt "rty := RichMType.mkTuple ";
         print_field_ty_list fields;
+        F.pp_print_string fmt (" " ^ layout_flags);
         F.pp_close_box fmt ();
         let xs = field_vars "x" fields in
         let vs = field_vars "v" fields in
@@ -2311,10 +2312,6 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
               F.pp_print_string fmt ")"
           | _ -> F.pp_print_string fmt ("(" ^ String.concat ", " retracted ^ ")")
         else F.pp_print_string fmt ("⟨" ^ String.concat ", " retracted ^ "⟩");
-        F.pp_close_box fmt ();
-        F.pp_print_space fmt ();
-        F.pp_open_hovbox fmt ctx.indent_incr;
-        F.pp_print_string fmt ("layout_meta := " ^ layout_meta);
         F.pp_close_box fmt ()
     | Enum variants ->
         F.pp_print_space fmt ();
@@ -2324,7 +2321,7 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
           (fun () -> F.pp_print_string fmt ", ")
           (fun (v : variant) -> print_field_ty_list v.fields)
           variants;
-        F.pp_print_string fmt "]";
+        F.pp_print_string fmt ("] " ^ layout_flags);
         F.pp_close_box fmt ();
         F.pp_print_space fmt ();
         F.pp_open_vbox fmt ctx.indent_incr;
@@ -2368,10 +2365,6 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
               v.fields;
             F.pp_close_box fmt ())
           variants;
-        F.pp_close_box fmt ();
-        F.pp_print_space fmt ();
-        F.pp_open_hovbox fmt ctx.indent_incr;
-        F.pp_print_string fmt ("layout_meta := " ^ layout_meta);
         F.pp_close_box fmt ()
     | Opaque -> [%internal_error] span);
     F.pp_close_box fmt ();
