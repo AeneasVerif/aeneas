@@ -7,6 +7,8 @@ public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
 public section
 
+open Aeneas SepLogic
+
 namespace Aeneas.Std
 
 open Result
@@ -74,5 +76,28 @@ def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
   let value ← RawPtr.read p
   alloc.alloc.Global.mk.deallocate p 1
   pure value
+
+@[step]
+theorem alloc.boxed.Box.into_raw.spec (value : T) :
+    ⦃ emp ⦄ alloc.boxed.Box.into_raw value ⦃ q => q ↦ value ∗ q.freeable⦄ := by
+  simpa only [alloc.boxed.Box.into_raw, ← RawPtr.pointsTo_eq_range, List.length_singleton] using
+    alloc.alloc.Global.allocate.spec alloc.alloc.Global.mk [value]
+
+/-- `q.freeable` is required: without it, `q` could be an interior pointer or point to a local
+behind a reference, and freeing it is undefined behaviour
+([`Box::from_raw`](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.from_raw)). -/
+@[step]
+theorem alloc.boxed.Box.from_raw.spec {value : T} (q : MutRawPtr T) :
+    ⦃ q ↦ value ∗ q.freeable ⦄ alloc.boxed.Box.from_raw q
+      ⦃ result => ⌜result = value⌝⦄ := by
+  unfold alloc.boxed.Box.from_raw
+  apply WP.ispec_bind (RawPtr.read.spec q value) (entails_refl _)
+  intro result
+  apply WP.ispec_bind (alloc.alloc.Global.deallocate.spec alloc.alloc.Global.mk q [value] 1 rfl)
+  · rw [← RawPtr.pointsTo_eq_range]
+    iframe
+  · intro _
+    apply (WP.ispec_ok _).2
+    iframe
 
 end Aeneas.Std
