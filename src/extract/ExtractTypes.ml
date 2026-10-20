@@ -2296,10 +2296,10 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
         let h_pat = if vs = [] then "_" else "h" in
         F.pp_print_string fmt
           ("retract := λ | ⟨.tuple [" ^ String.concat ", " vs ^ "], " ^ h_pat
-         ^ "⟩ => ");
+         ^ "⟩ => do return ");
         let retracted =
           List.mapi
-            (fun i _ -> "HasLayout.retract (h.field " ^ string_of_int i ^ ")")
+            (fun i _ -> "← HasLayout.retract (h.field " ^ string_of_int i ^ ")")
             fields
         in
         if is_tuple_struct then
@@ -2356,11 +2356,12 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_open_hovbox fmt ctx.indent_incr;
             F.pp_print_string fmt
               ("| ⟨.variant " ^ string_of_int d ^ " (.tuple ["
-             ^ String.concat ", " vs ^ "]), " ^ h_pat ^ "⟩ => " ^ cons_name);
+             ^ String.concat ", " vs ^ "]), " ^ h_pat ^ "⟩ => do return "
+             ^ cons_name);
             List.iteri
               (fun i _ ->
                 F.pp_print_string fmt
-                  (" (HasLayout.retract (h.vfield " ^ string_of_int i
+                  (" (← HasLayout.retract (h.vfield " ^ string_of_int i
                  ^ " rfl))"))
               v.fields;
             F.pp_close_box fmt ())

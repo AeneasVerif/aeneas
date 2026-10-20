@@ -27,7 +27,7 @@ def UnitStruct := Unit
 noncomputable instance : HasLayout UnitStruct where
   rty := RichMType.mkTuple [] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ _ => HasLayout.mkTuple []
-  retract := λ | ⟨.tuple [], _⟩ => ()
+  retract := λ | ⟨.tuple [], _⟩ => do return ()
 
 /-- [layouts::Newtype]
     Source: 'tests/src/layouts.rs', lines 6:0-6:28
@@ -37,7 +37,7 @@ def Newtype := Std.U32
 noncomputable instance : HasLayout Newtype where
   rty := RichMType.mkTuple [HasLayout.xty Std.U32] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ (x0 : Std.U32) => HasLayout.mkTuple [HasLayout.embed x0]
-  retract := λ | ⟨.tuple [v0], h⟩ => (HasLayout.retract (h.field 0) : Std.U32)
+  retract := λ | ⟨.tuple [v0], h⟩ => do return (← HasLayout.retract (h.field 0) : Std.U32)
 
 /-- [layouts::Point]
     Source: 'tests/src/layouts.rs', lines 8:0-11:1
@@ -49,7 +49,7 @@ structure Point where
 noncomputable instance : HasLayout Point where
   rty := RichMType.mkTuple [HasLayout.xty Std.I32, HasLayout.xty Std.U64] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ ⟨x0, x1⟩ => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
-  retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
+  retract := λ | ⟨.tuple [v0, v1], h⟩ => do return ⟨← HasLayout.retract (h.field 0), ← HasLayout.retract (h.field 1)⟩
 
 /-- [layouts::Pair]
     Source: 'tests/src/layouts.rs', lines 13:0-13:34
@@ -59,7 +59,7 @@ def Pair := Std.U8 × Bool
 noncomputable instance : HasLayout Pair where
   rty := RichMType.mkTuple [HasLayout.xty Std.U8, HasLayout.xty Bool] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ (x0, x1) => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
-  retract := λ | ⟨.tuple [v0, v1], h⟩ => (HasLayout.retract (h.field 0), HasLayout.retract (h.field 1))
+  retract := λ | ⟨.tuple [v0, v1], h⟩ => do return (← HasLayout.retract (h.field 0), ← HasLayout.retract (h.field 1))
 
 /-- [layouts::Triple]
     Source: 'tests/src/layouts.rs', lines 15:0-15:45
@@ -69,7 +69,7 @@ def Triple := Std.U8 × Std.U16 × Bool
 noncomputable instance : HasLayout Triple where
   rty := RichMType.mkTuple [HasLayout.xty Std.U8, HasLayout.xty Std.U16, HasLayout.xty Bool] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ (x0, x1, x2) => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1, HasLayout.embed x2]
-  retract := λ | ⟨.tuple [v0, v1, v2], h⟩ => (HasLayout.retract (h.field 0), HasLayout.retract (h.field 1), HasLayout.retract (h.field 2))
+  retract := λ | ⟨.tuple [v0, v1, v2], h⟩ => do return (← HasLayout.retract (h.field 0), ← HasLayout.retract (h.field 1), ← HasLayout.retract (h.field 2))
 
 /-- [layouts::Wrapper]
     Source: 'tests/src/layouts.rs', lines 17:0-20:1
@@ -82,7 +82,7 @@ noncomputable instance {T1 : Type} {T2 : Type} [HasLayout T1] [HasLayout T2] :
   HasLayout (Wrapper T1 T2) where
   rty := RichMType.mkTuple [HasLayout.xty T1, HasLayout.xty T2] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ ⟨x0, x1⟩ => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
-  retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
+  retract := λ | ⟨.tuple [v0, v1], h⟩ => do return ⟨← HasLayout.retract (h.field 0), ← HasLayout.retract (h.field 1)⟩
 
 /-- [layouts::Color]
     Source: 'tests/src/layouts.rs', lines 22:0-26:1
@@ -100,9 +100,9 @@ noncomputable instance : HasLayout Color where
     | Color.Green => HasLayout.mkVariant 1 (.tuple [])
     | Color.Blue => HasLayout.mkVariant 2 (.tuple [])
   retract := λ
-    | ⟨.variant 0 (.tuple []), _⟩ => Color.Red
-    | ⟨.variant 1 (.tuple []), _⟩ => Color.Green
-    | ⟨.variant 2 (.tuple []), _⟩ => Color.Blue
+    | ⟨.variant 0 (.tuple []), _⟩ => do return Color.Red
+    | ⟨.variant 1 (.tuple []), _⟩ => do return Color.Green
+    | ⟨.variant 2 (.tuple []), _⟩ => do return Color.Blue
 
 /-- [layouts::Shape]
     Source: 'tests/src/layouts.rs', lines 28:0-32:1
@@ -120,9 +120,9 @@ noncomputable instance : HasLayout Shape where
     | Shape.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
     | Shape.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
   retract := λ
-    | ⟨.variant 0 (.tuple []), _⟩ => Shape.Empty
-    | ⟨.variant 1 (.tuple [v0]), h⟩ => Shape.Circle (HasLayout.retract (h.vfield 0 rfl))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Shape.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 0 (.tuple []), _⟩ => do return Shape.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => do return Shape.Circle (← HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => do return Shape.Rect (← HasLayout.retract (h.vfield 0 rfl)) (← HasLayout.retract (h.vfield 1 rfl))
 
 /-- [layouts::Bazinga]
     Source: 'tests/src/layouts.rs', lines 34:0-39:1
@@ -143,10 +143,10 @@ noncomputable instance {T1 : Type} {T2 : Type} {T3 : Type} [HasLayout T1]
     | Bazinga.Foo3 x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
     | Bazinga.Foo4 x0 => HasLayout.mkVariant 3 (.tuple [HasLayout.embed x0])
   retract := λ
-    | ⟨.variant 0 (.tuple []), _⟩ => Bazinga.Foo1
-    | ⟨.variant 1 (.tuple [v0, v1]), h⟩ => Bazinga.Foo2 (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Bazinga.Foo3 (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
-    | ⟨.variant 3 (.tuple [v0]), h⟩ => Bazinga.Foo4 (HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 0 (.tuple []), _⟩ => do return Bazinga.Foo1
+    | ⟨.variant 1 (.tuple [v0, v1]), h⟩ => do return Bazinga.Foo2 (← HasLayout.retract (h.vfield 0 rfl)) (← HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => do return Bazinga.Foo3 (← HasLayout.retract (h.vfield 0 rfl)) (← HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 3 (.tuple [v0]), h⟩ => do return Bazinga.Foo4 (← HasLayout.retract (h.vfield 0 rfl))
 
 /-- [layouts::Scene]
     Source: 'tests/src/layouts.rs', lines 41:0-44:1
@@ -158,7 +158,7 @@ structure Scene where
 noncomputable instance : HasLayout Scene where
   rty := RichMType.mkTuple [HasLayout.xty Color, HasLayout.xty Shape] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ ⟨x0, x1⟩ => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
-  retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
+  retract := λ | ⟨.tuple [v0, v1], h⟩ => do return ⟨← HasLayout.retract (h.field 0), ← HasLayout.retract (h.field 1)⟩
 
 /-- [layouts::Repr1]
     Source: 'tests/src/layouts.rs', lines 47:0-51:1
@@ -176,9 +176,9 @@ noncomputable instance : HasLayout Repr1 where
     | Repr1.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
     | Repr1.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
   retract := λ
-    | ⟨.variant 0 (.tuple []), _⟩ => Repr1.Empty
-    | ⟨.variant 1 (.tuple [v0]), h⟩ => Repr1.Circle (HasLayout.retract (h.vfield 0 rfl))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Repr1.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 0 (.tuple []), _⟩ => do return Repr1.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => do return Repr1.Circle (← HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => do return Repr1.Rect (← HasLayout.retract (h.vfield 0 rfl)) (← HasLayout.retract (h.vfield 1 rfl))
 
 /-- [layouts::Repr2]
     Source: 'tests/src/layouts.rs', lines 54:0-58:1
@@ -196,9 +196,9 @@ noncomputable instance : HasLayout Repr2 where
     | Repr2.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
     | Repr2.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
   retract := λ
-    | ⟨.variant 0 (.tuple []), _⟩ => Repr2.Empty
-    | ⟨.variant 1 (.tuple [v0]), h⟩ => Repr2.Circle (HasLayout.retract (h.vfield 0 rfl))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Repr2.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 0 (.tuple []), _⟩ => do return Repr2.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => do return Repr2.Circle (← HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => do return Repr2.Rect (← HasLayout.retract (h.vfield 0 rfl)) (← HasLayout.retract (h.vfield 1 rfl))
 
 /-- [layouts::Repr3]
     Source: 'tests/src/layouts.rs', lines 61:0-65:1
@@ -216,9 +216,9 @@ noncomputable instance : HasLayout Repr3 where
     | Repr3.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
     | Repr3.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
   retract := λ
-    | ⟨.variant 0 (.tuple []), _⟩ => Repr3.Empty
-    | ⟨.variant 1 (.tuple [v0]), h⟩ => Repr3.Circle (HasLayout.retract (h.vfield 0 rfl))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Repr3.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 0 (.tuple []), _⟩ => do return Repr3.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => do return Repr3.Circle (← HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => do return Repr3.Rect (← HasLayout.retract (h.vfield 0 rfl)) (← HasLayout.retract (h.vfield 1 rfl))
 
 /-- [layouts::main]:
     Source: 'tests/src/layouts.rs', lines 67:0-71:1 -/
