@@ -13,6 +13,8 @@ To understand it, you need to consider three levels:
 Many of these files are part of the TCB, since they encode how Rust works :tm: and also formalize the guarantees of the [Reference chapter on layouts](https://doc.rust-lang.org/reference/type-layout.html).
 For easier reviewability, each file places all TCB-relevant definitions at the top of the file, followed by helper typeclasses, tactics, and lemmas below.
 
+The two most complicated files are `ReprC.lean`, which defines `repr(C)` and the enum layouts built on top of it. `Properties.lean` is also notheworthy for defining what *all* reprs mean, often using the definitions from `ReprC.lean`.
+
 ## File Overview (in Dependency Order)
 
 1. **`Prelims.lean`** — Arithmetic preliminaries: bounded maximum (`natMax`), alignment rounding (`alignUp`), and lemmas about powers of two (`isPowerOfTwo`).
