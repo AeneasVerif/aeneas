@@ -1797,12 +1797,23 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
 
   (* If we reached a loop: if we are *inside* a loop, we need to ignore the
        backward functions which are not associated to region abstractions.
+
+     Also note that we don't translate the backward functions which are
+     filtered (because they have no inputs and no outputs, see
+     {!compute_back_tys}): this is not only an optimization, as the
+     translation of those can fail. For instance, the backward function for
+     the static region often has no inputs and no outputs (because the static
+     region is often used only for shared borrows), but its body may contain
+     sub-abstractions which we don't support yet.
     *)
   let back_el =
-    List.map
-      (fun ((gid, _) : RegionGroupId.id * back_sg_info) ->
-        Some (translate_one_end ctx (Some gid)))
+    List.map2
+      (fun ((gid, _) : RegionGroupId.id * back_sg_info) back_ty ->
+        match back_ty with
+        | None -> None
+        | Some _ -> Some (translate_one_end ctx (Some gid)))
       (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
+      (compute_back_tys ctx.sg.fun_ty)
   in
 
   (* Compute whether the backward expressions should be evaluated straight

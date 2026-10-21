@@ -888,4 +888,288 @@ def copy_in_branch_static
             | some x1 => ok x1
   acc + x
 
+/-- [static::WithStaticRef]
+    Source: 'tests/src/static.rs', lines 531:0-531:43
+    Visibility: public -/
+@[reducible]
+def WithStaticRef := Str
+
+/-- [static::question_mark_static_ref]:
+    Source: 'tests/src/static.rs', lines 533:0-535:1
+    Visibility: public -/
+def question_mark_static_ref
+  (r : core.result.Result Std.U32 WithStaticRef) :
+  Result (core.result.Result Std.U32 WithStaticRef)
+  := do
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    ok (core.result.Result.Ok val)
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
+      Std.U32 (core.convert.FromSame WithStaticRef) residual
+
+/-- [static::StaticError]
+    Source: 'tests/src/static.rs', lines 537:0-540:1
+    Visibility: public -/
+@[discriminant isize]
+inductive StaticError where
+| Decode : StaticError
+| InvalidParams : Str → StaticError
+
+/-- [static::static_error_parse]:
+    Source: 'tests/src/static.rs', lines 542:0-548:1 -/
+def static_error_parse
+  (x : Std.U32) : Result (core.result.Result Std.U32 StaticError) := do
+  if x = 0#u32
+  then ok (core.result.Result.Err StaticError.Decode)
+  else ok (core.result.Result.Ok x)
+
+/-- [static::static_error_question_mark]:
+    Source: 'tests/src/static.rs', lines 550:0-553:1
+    Visibility: public -/
+def static_error_question_mark
+  (x : Std.U32) : Result (core.result.Result Std.U32 StaticError) := do
+  let r ← static_error_parse x
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    ok (core.result.Result.Ok val)
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
+      Std.U32 (core.convert.FromSame StaticError) residual
+
+/-- [static::static_error_match]:
+    Source: 'tests/src/static.rs', lines 555:0-560:1
+    Visibility: public -/
+def static_error_match
+  (x : Std.U32) : Result (core.result.Result Std.U32 StaticError) := do
+  let r ← static_error_parse x
+  match r with
+  | core.result.Result.Ok _ => ok r
+  | core.result.Result.Err _ => ok r
+
+/-- [static::static_error_with_region]:
+    Source: 'tests/src/static.rs', lines 562:0-566:1
+    Visibility: public -/
+def static_error_with_region
+  (r : core.result.Result Std.U8 WithStaticRef) :
+  Result (core.result.Result Std.U8 WithStaticRef)
+  := do
+  ok r
+
+/-- [static::static_error_with_mut_region]:
+    Source: 'tests/src/static.rs', lines 568:0-572:1
+    Visibility: public -/
+def static_error_with_mut_region
+  (r : core.result.Result Std.U8 WithStaticRef) :
+  Result ((core.result.Result Std.U8 WithStaticRef) × (core.result.Result
+    Std.U8 WithStaticRef → core.result.Result Std.U8 WithStaticRef))
+  := do
+  ok (r, fun r1 => r1)
+
+/-- [static::static_error_shared_ret]:
+    Source: 'tests/src/static.rs', lines 574:0-580:1
+    Visibility: public -/
+def static_error_shared_ret
+  (x : Std.U32) (b : Bool) :
+  Result (core.result.Result Std.U32 StaticError)
+  := do
+  if b
+  then ok (core.result.Result.Err (StaticError.InvalidParams (toStr "bad")))
+  else ok (core.result.Result.Ok x)
+
+/-- [static::static_error_outlives]:
+    Source: 'tests/src/static.rs', lines 582:0-584:1
+    Visibility: public -/
+def static_error_outlives
+  (r : core.result.Result Std.U8 Std.U8) :
+  Result (core.result.Result Std.U8 Std.U8)
+  := do
+  ok r
+
+/-- [static::static_error_raw_ptr]:
+    Source: 'tests/src/static.rs', lines 586:0-590:1
+    Visibility: public -/
+def static_error_raw_ptr
+  (r : core.result.Result (ConstRawPtr Std.U8) WithStaticRef) :
+  Result (core.result.Result (ConstRawPtr Std.U8) WithStaticRef)
+  := do
+  ok r
+
+/-- [static::static_error_get]:
+    Source: 'tests/src/static.rs', lines 594:0-600:1 -/
+def static_error_get
+  (v : Slice Std.U8) (i : Std.Usize) :
+  Result (core.result.Result Std.U8 StaticError)
+  := do
+  let i1 := Slice.len v
+  if i < i1
+  then let i2 ← Slice.index_usize v i
+       ok (core.result.Result.Ok i2)
+  else ok (core.result.Result.Err StaticError.Decode)
+
+/-- [static::static_error_loop_question_mark]: loop body 0:
+    Source: 'tests/src/static.rs', lines 605:4-610:1
+    Visibility: public -/
+@[rust_loop_body]
+def static_error_loop_question_mark_loop.body
+  (v : Slice Std.U8) (n : Std.Usize) (i : Std.Usize) (s : Std.U32) :
+  Result (ControlFlow (Std.Usize × Std.U32) (core.result.Result Std.U32
+    StaticError))
+  := do
+  if i < n
+  then
+    let r ← static_error_get v i
+    let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+    match cf with
+    | core.ops.control_flow.ControlFlow.Continue val =>
+      let i1 ← lift (UScalar.cast .U32 val)
+      let s1 ← s + i1
+      let i2 ← i + 1#usize
+      ok (cont (i2, s1))
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      let r1 ←
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
+          Std.U32 (core.convert.FromSame StaticError) residual
+      ok (done r1)
+  else ok (done (core.result.Result.Ok s))
+
+/-- [static::static_error_loop_question_mark]: loop 0:
+    Source: 'tests/src/static.rs', lines 605:4-610:1
+    Visibility: public -/
+@[rust_loop]
+def static_error_loop_question_mark_loop
+  (v : Slice Std.U8) (n : Std.Usize) (i : Std.Usize) (s : Std.U32) :
+  Result (core.result.Result Std.U32 StaticError)
+  := do
+  loop
+    (fun (i1, s1) => static_error_loop_question_mark_loop.body v n i1 s1)
+    (i, s)
+
+/-- [static::static_error_loop_question_mark]:
+    Source: 'tests/src/static.rs', lines 602:0-610:1
+    Visibility: public -/
+@[reducible]
+def static_error_loop_question_mark
+  (v : Slice Std.U8) (n : Std.Usize) :
+  Result (core.result.Result Std.U32 StaticError)
+  := do
+  static_error_loop_question_mark_loop v n 0#usize 0#u32
+
+/-- [static::static_error_loop_call]: loop body 0:
+    Source: 'tests/src/static.rs', lines 617:4-620:5
+    Visibility: public -/
+@[rust_loop_body]
+def static_error_loop_call_loop.body
+  (n : Std.U32) (r : core.result.Result Std.U8 WithStaticRef) (i : Std.U32) :
+  Result (ControlFlow ((core.result.Result Std.U8 WithStaticRef) × Std.U32)
+    (core.result.Result Std.U8 WithStaticRef))
+  := do
+  if i < n
+  then
+    let r1 ← static_error_with_region r
+    let i1 ← i + 1#u32
+    ok (cont (r1, i1))
+  else ok (done r)
+
+/-- [static::static_error_loop_call]: loop 0:
+    Source: 'tests/src/static.rs', lines 617:4-620:5
+    Visibility: public -/
+@[rust_loop]
+def static_error_loop_call_loop
+  (r : core.result.Result Std.U8 WithStaticRef) (n : Std.U32) (i : Std.U32) :
+  Result (core.result.Result Std.U8 WithStaticRef)
+  := do
+  loop
+    (fun (r1, i1) => static_error_loop_call_loop.body n r1 i1)
+    (r, i)
+
+/-- [static::static_error_loop_call]:
+    Source: 'tests/src/static.rs', lines 612:0-622:1
+    Visibility: public -/
+@[reducible]
+def static_error_loop_call
+  (r : core.result.Result Std.U8 WithStaticRef) (n : Std.U32) :
+  Result (core.result.Result Std.U8 WithStaticRef)
+  := do
+  static_error_loop_call_loop r n 0#u32
+
+/-- [static::CtxWithStaticRef]
+    Source: 'tests/src/static.rs', lines 626:0-629:1
+    Visibility: public -/
+structure CtxWithStaticRef where
+  «name» : Str
+  v : Std.U32
+
+/-- [static::ctx_with_static_ref_get_v]:
+    Source: 'tests/src/static.rs', lines 631:0-633:1
+    Visibility: public -/
+def ctx_with_static_ref_get_v
+  (c : CtxWithStaticRef) :
+  Result (Std.U32 × (Std.U32 → CtxWithStaticRef))
+  := do
+  let back := fun i => { c with v := i }
+  ok (c.v, back)
+
+/-- [static::swap_with_static_ref]:
+    Source: 'tests/src/static.rs', lines 635:0-637:1
+    Visibility: public -/
+def swap_with_static_ref
+  (x : WithStaticRef) (y : WithStaticRef) :
+  Result (WithStaticRef × WithStaticRef)
+  := do
+  let (x1, y1) := core.mem.swap x y
+  ok (x1, y1)
+
+/-- [static::shared_ref_static_error]:
+    Source: 'tests/src/static.rs', lines 639:0-643:1
+    Visibility: public -/
+def shared_ref_static_error
+  (r : core.result.Result Std.U32 StaticError) :
+  Result (core.result.Result Std.U32 StaticError)
+  := do
+  ok r
+
+/-- [static::MutRefWrapper]
+    Source: 'tests/src/static.rs', lines 647:0-647:47
+    Visibility: public -/
+@[reducible]
+def MutRefWrapper (T : Type _) := T
+
+/-- [static::mut_ref_wrapper_get_v]:
+    Source: 'tests/src/static.rs', lines 649:0-651:1
+    Visibility: public -/
+def mut_ref_wrapper_get_v
+  (c : MutRefWrapper CtxWithStaticRef) :
+  Result (Std.U32 × (Std.U32 → MutRefWrapper CtxWithStaticRef))
+  := do
+  let back := fun i => { c with v := i }
+  ok (c.v, back)
+
+/-- [static::shorten_static_str]:
+    Source: 'tests/src/static.rs', lines 654:0-656:1
+    Visibility: public -/
+def shorten_static_str (s : Str) : Result Str := do
+  ok s
+
+/-- [static::pick_static_ref]:
+    Source: 'tests/src/static.rs', lines 658:0-664:1
+    Visibility: public -/
+def pick_static_ref (x : Str) (w : WithStaticRef) (b : Bool) : Result Str := do
+  if b
+  then ok x
+  else ok w
+
+/-- [static::write_static_ref]:
+    Source: 'tests/src/static.rs', lines 666:0-669:1
+    Visibility: public -/
+def write_static_ref
+  (x : (Str × Std.U32)) (s : WithStaticRef) :
+  Result (Std.U32 × (Std.U32 → (Str × Std.U32)))
+  := do
+  let (_, i) := x
+  let back := fun i1 => (s, i1)
+  ok (i, back)
+
 end static
