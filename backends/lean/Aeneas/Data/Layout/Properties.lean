@@ -107,6 +107,8 @@ inductive IsReprPrimEnum (tagTy : IUScalarTy) :
       (n : Nat) (hn : n.isPowerOfTwo) :
       IsReprPrimEnum tagTy (.aligned n hn) ((ReprC.mkEnumPrimitive tagTy vs (f := f) cl).alignEnumUp n hn)
 
+/-! ## Lemmas and Helper Definitions -/
+
 @[simp, grind =]
 def satisfies : {ty : MType} → (l : Layout ty) → Prop
 | .int _, _ => True
@@ -122,8 +124,6 @@ def satisfies : {ty : MType} → (l : Layout ty) → Prop
 | .enum _ ⟨.reprC, m⟩, l => l.IsReprCEnum (.unsigned .Usize) m
 | .enum _ ⟨.reprC_prim prim, m⟩, l => l.IsReprCEnum prim m
 | .enum _ ⟨.reprPrim prim, m⟩, l => l.IsReprPrimEnum prim m
-
-/-! ## Lemmas -/
 
 grind_pattern IsReprCTuple.reasonablyAligned => ReprC.mkTuple ts (f := f) fl none init_off
 grind_pattern IsReprCTuple.packed => ReprC.mkTuple ts (f := f) fl (.some ⟨n, hn⟩) init_off

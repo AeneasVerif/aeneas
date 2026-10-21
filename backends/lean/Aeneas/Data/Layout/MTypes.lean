@@ -97,12 +97,6 @@ def inhabited : MType → Bool
   | .tuple ts _ => ts.attach.all (λ ⟨t, _⟩ ↦ t.inhabited)
   | .enum vs _ => vs.attach.any (λ ⟨v, _⟩ ↦ v.inhabited)
 
-inductive isTuple : MType → Prop where
-  | tuple ts : isTuple (.tuple ts ⟨.reprRust, .reasonablyAligned⟩)
-
-attribute [class] isTuple
-attribute [instance] isTuple.tuple
-
 end MType
 
 /-! ## Machine Values (`MVal`) and Validity (`MVal.valid_for`) -/
@@ -187,5 +181,15 @@ def vfield {d : Nat} {vs : List MVal} {ts vts : List MType} {f1 f2}
   ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i hi⟩
 
 end MVal.valid_for
+
+namespace MType
+
+inductive isTuple : MType → Prop where
+  | tuple ts : isTuple (.tuple ts ⟨.reprRust, .reasonablyAligned⟩)
+
+attribute [class] isTuple
+attribute [instance] isTuple.tuple
+
+end MType
 
 end Aeneas

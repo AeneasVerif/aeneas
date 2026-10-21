@@ -19,7 +19,7 @@ class TupleFlagsReasonable (f : TupleFlags) : Prop where
   out : f.repr = .reprTransparent → f.align = .reasonablyAligned
 
 /-! We talk about "Reasonable" types mostly because not all types have a layout, only reasonable ones.
-    Notably, we need to rule out enums with a galactic number of variants. -/
+    Notably, we need to rule out enums with a too-large number of variants. -/
 inductive Reasonable : MType → Prop where
   | int ty : Reasonable (.int ty)
   | tuple ts f :
@@ -121,12 +121,5 @@ instance {vs : List MType} {f}
     hr.out
 
 end MType
-
-namespace Layout.ReprC
-
-theorem mk_reasonablyAligned (ty : MType) [hr : ty.Reasonable] : (mk ty).ReasonablyAligned := by
-  induction hr <;> grind [mk, Layout.ReasonablyAligned.int]
-
-end Layout.ReprC
 
 end Aeneas

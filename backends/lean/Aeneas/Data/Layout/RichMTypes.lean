@@ -65,6 +65,12 @@ namespace RichMType
   @[expose, simp, grind =, reducible]
   def IsValidLayoutForRichMType {ty : RichMType} (l : Layout ty.1) : Prop := l.Valid ∧ LayoutInput.Satisfies _ l ty.2
 
+end RichMType
+
+/-! ## Helper Definitions for Proving Inhabitance -/
+
+namespace RichMType
+
   def example_layoutAux : {m : MType} → (li : LayoutInput m) → (init_off : Nat := 0) → Layout m
     | .int ty, .int, _ => .int ty.reasonablyAligned ty.reasonablyAligned_isReasonable
     | .tuple ts f, .tuple fl, init_off =>

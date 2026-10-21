@@ -23,7 +23,7 @@ def alignEnumUp {vs f} (l : Layout (.enum vs f)) (a : Nat) (ha : a.isPowerOfTwo)
 
 namespace ReprC
 
-/-! ## Shallow `#[repr(C)]` Tuple / Struct Layout (with Optional Packing) -/
+/-! ## `#[repr(C)]` Tuple / Struct Layout (with Optional Packing) -/
 
 /-- Effective alignment when capped by an optional `#[repr(packed(P))]` bound. -/
 @[simp, grind =]
@@ -113,16 +113,6 @@ def mkEnumPrimitive (tagTy : IUScalarTy) (vs : List MType) {f : EnumFlags}
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx]) :
     Layout (.enum vs f) :=
   mkEnumCore tagTy false vs cl
-
-/-! ## Deep `#[repr(C)]` Layout (`mk`) -/
-
-/-- Constructs the "deep `#[repr(C)]`" layout for an `MType` (which lays out all subthings according to `#[repr(C)]` as well). -/
-def mk : (ty : MType) → Layout ty
-  | .int ty => .int ty.reasonablyAligned ty.reasonablyAligned_isReasonable
-  | .tuple ts _ => mkTuple ts (λ idx h ↦ mk ts[idx]) none
-  | .enum vs _ => mkEnum (.unsigned .Usize) vs (λ idx h ↦ mk vs[idx])
-termination_by ty => sizeOf ty
-decreasing_by all_goals simp_wf; have := List.sizeOf_lt_of_mem (List.getElem_mem h); omega
 
 /-- All fields of a tuple layout are placed at byte offset `≥ min_off`
     (leaving `[0 ..< min_off)` untouched as prefix padding). -/
