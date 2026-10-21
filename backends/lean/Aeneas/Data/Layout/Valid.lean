@@ -76,7 +76,7 @@ structure EnumValid {vs : List MType}
     (encode_discriminant (Bytes.uninit sa.size) (variant_tags idx h)).le_defined bytes
 
 inductive Valid : {ty : MType} → Layout ty → Prop where
-  | int ty : Valid (.int : Layout (.int ty))
+  | int ty sa h : Valid (.int sa h : Layout (.int ty))
   | tuple ts f fo fl sa :
       (∀ idx (h : idx < ts.length), (fl idx h).Valid) →
       TupleValid ts.length fo (λ i hi ↦ (fl i hi).size) sa →
@@ -91,7 +91,7 @@ inductive Valid : {ty : MType} → Layout ty → Prop where
 @[grind →]
 lemma Valid.satisfies {ty : MType} {l : Layout ty} (hl : l.Valid) : l.satisfies :=
   match hl with
-  | .int _ => trivial
+  | .int _ _ _ => trivial
   | .tuple _ _ _ _ _ _ _ h_sat => h_sat
   | .enum _ _ _ _ _ _ _ _ h_sat => h_sat
 

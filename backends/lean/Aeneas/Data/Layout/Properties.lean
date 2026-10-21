@@ -18,7 +18,7 @@ structure TupleReasonablyAligned (n : Nat) (field_offs : (idx : Nat) → idx < n
 --- In other words, it is not repr(packed).
 --- This is a non-recursive property, since this does not affect the layout of the contained fields
 inductive ReasonablyAligned : {ty : MType} → Layout ty → Prop where
-  | int ty : ReasonablyAligned (.int : Layout (.int ty))
+  | int ty sa h : ReasonablyAligned (.int sa h : Layout (.int ty))
   | tuple ts f fo fl sa :
       TupleReasonablyAligned ts.length fo (λ i hi ↦ (fl i hi).size_and_align) sa →
       ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts f))

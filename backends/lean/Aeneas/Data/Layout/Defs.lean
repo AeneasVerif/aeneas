@@ -42,21 +42,17 @@ grind_pattern align_pos => sa.align
 
 end SizeAndAlign
 
-def SizeAndAlign.ValidForScalar (sa : SizeAndAlign) (ty : IUScalarTy) : Prop :=
+@[reducible, simp, grind =] def SizeAndAlign.ValidForScalar (sa : SizeAndAlign) (ty : IUScalarTy) : Prop :=
   sa.size = ty.numBits / 8
 
-def IUScalarTy.size (ty : IUScalarTy) : Nat := ty.numBits / 8
+@[reducible, simp, grind =] def IUScalarTy.size (ty : IUScalarTy) : Nat := ty.numBits / 8
 
-def IUScalarTy.reasonablyAligned (ty : IUScalarTy) : SizeAndAlign :=
+@[simp, grind →] lemma SizeAndAlign.ValidForScalar.size_eq (ty : IUScalarTy) (sa : SizeAndAlign) (h : sa.ValidForScalar ty) : sa.size = ty.size := h
+
+@[simp, grind =] def IUScalarTy.reasonablyAligned (ty : IUScalarTy) : SizeAndAlign :=
   ⟨ty.size, ty.size, SizeAndAlign.num_bytes_is_power_of_two, by simp⟩
 
-lemma IUScalarTy.reasonablyAligned_isReasonable {ty : IUScalarTy} : ty.reasonablyAligned.ValidForScalar ty := by rfl
-
-noncomputable def IUScalarTy.size_and_align (ty : IUScalarTy) : SizeAndAlign :=
-  @Classical.choose SizeAndAlign (·.ValidForScalar ty) ⟨_, ty.reasonablyAligned_isReasonable⟩
-
-@[simp, grind =] lemma IUScalarTy.knownSize {ty : IUScalarTy} : ty.size_and_align.size = ty.size :=
-  @Classical.choose_spec SizeAndAlign (·.ValidForScalar ty) ⟨_, ty.reasonablyAligned_isReasonable⟩
+@[simp, grind .] lemma IUScalarTy.reasonablyAligned_isReasonable {ty : IUScalarTy} : ty.reasonablyAligned.ValidForScalar ty := by rfl
 
 @[simp, grind →] lemma SizeAndAlign.sizeOneAlignOne (sa : SizeAndAlign) : sa.size = 1 → sa.align = 1 := by
   intros h
@@ -68,11 +64,7 @@ noncomputable def IUScalarTy.size_and_align (ty : IUScalarTy) : SizeAndAlign :=
   · apply Nat.pos_of_isPowerOfTwo
     apply sa.wf_align
 
-@[simp] lemma IUScalarTy.knownAlignI8 : (IUScalarTy.signed .I8).size_and_align.align = 1 := by simp [IUScalarTy.size]
-
-@[simp] lemma IUScalarTy.knownAlignU8 : (IUScalarTy.unsigned .U8).size_and_align.align = 1 := by simp [IUScalarTy.size]
-
-@[simp, grind =] def SizeAndAlign.zero_sized_minimally_aligned : SizeAndAlign :=
+@[simp, grind =, reducible, match_pattern] def SizeAndAlign.zero_sized_minimally_aligned : SizeAndAlign :=
   ⟨0, 1, by grind, by grind⟩
 
 /-! ## Core Layout Representation (`Discriminator`, `TagToWrite`, `Layout`) -/
@@ -91,7 +83,9 @@ structure TagToWrite where
 
 -- We leverage dependent types. For now, Lean seems to be able to handle it.
 inductive Layout : MType → Type 0 where
-  | int : Layout (.int ty)
+  | int (sa : SizeAndAlign) :
+      sa.ValidForScalar ty →
+      Layout (.int ty)
   | tuple
       (field_offs : (idx : Nat) → idx < ts.length → Nat)
       -- NB: Lean is sensitive to the specifics of this inductive definition.
@@ -112,12 +106,12 @@ namespace Layout
 
 @[implicit_reducible]
 def size : {ty : MType} → Layout ty → Nat
-  | .int ty, .int => ty.size
+  | _, .int sa _ => sa.size
   | _, .tuple _ _ sa => sa.size
   | _, .enum _ _ _ sa => sa.size
 
-noncomputable def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
-  | .int ty, .int => ty.size_and_align
+def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
+  | _, .int sa _ => sa
   | _, .tuple _ _ sa => sa
   | _, .enum _ _ _ sa => sa
 
@@ -127,11 +121,11 @@ noncomputable def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
 grind_pattern size_known => l.size_and_align
 grind_pattern size_known => l.size
 
-@[simp, grind =] lemma int_size (ty : IUScalarTy) : (@Layout.int ty).size = ty.size := rfl
+@[simp, grind =] lemma int_size (ty : IUScalarTy) sa h : (@Layout.int ty sa h).size = sa.size := rfl
 @[simp, grind =] lemma tuple_size {ts f} fo fl sa : (@Layout.tuple ts f fo fl sa).size = sa.size := rfl
 @[simp, grind =] lemma enum_size {vs f} vt vl d sa : (@Layout.enum vs f vt vl d sa).size = sa.size := rfl
 
-@[simp, grind =] lemma int_size_and_align (ty : IUScalarTy) : (@Layout.int ty).size_and_align = ty.size_and_align := rfl
+@[simp, grind =] lemma int_size_and_align (ty : IUScalarTy) sa h : (@Layout.int ty sa h).size_and_align = sa := rfl
 @[simp, grind =] lemma tuple_size_and_align ty f ts fo sa : (@Layout.tuple ty f ts fo sa).size_and_align = sa := rfl
 @[simp, grind =] lemma enum_size_and_align ty f vt vl d sa : (@Layout.enum ty f vt vl d sa).size_and_align = sa := rfl
 

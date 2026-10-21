@@ -49,7 +49,7 @@ lemma encode_bitvec_decode_bitvec (ty : IUScalarTy) (bytes_data : Vector Byte ty
   have hbit : 8 * i + r < ty.numBits := by have := mul_8_size_eq (ty := ty); omega
   simp only [encode_bitvec, Vector.getElem_ofFn, BitVec.getElem_extractLsb']
   change (decode_bitvec ty bytes_data)[8 * i + r] = bytes_data[i][r]
-  simp [IUScalarTy.size, decode_bitvec, show (8 * i + r) / 8 = i by omega, show (8 * i + r) % 8 = r by omega]; trivial
+  simp [IUScalarTy.size, decode_bitvec, show (8 * i + r) / 8 = i by omega, show (8 * i + r) % 8 = r by omega]
 
 @[grind ←]
 lemma decode_can_repr (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
@@ -147,9 +147,10 @@ namespace Layout
     which typically means Undefined Behavior. -/
 def decode : {ty : MType} → (l : Layout ty) → Bytes l.size → Option MVal
   -- Integers:
-  | .int st, .int, bytes => do
+  | .int st, .int sa h, bytes => do
     -- Fails if any byte is `Uninit`.
-    let bytes_data ← bytes.toData
+    let bytes : Bytes sa.size := bytes
+    let bytes_data ← (h.size_eq ▸ bytes).toData
     some (.int (Endianness.decode st bytes_data))
   -- Tuples (and structs, ...):
   -- Note in particular that `decode` ignores the bytes which are before, between, or after
@@ -179,8 +180,8 @@ def decode : {ty : MType} → (l : Layout ty) → Bytes l.size → Option MVal
 def encode : {ty : MType} → (l : Layout ty) → (val : MVal) → val.valid_for ty →
     Bytes l.size
   -- Integers:
-  | .int st, .int, .int i, h =>
-    (Endianness.encode st i (by grind)).map .init
+  | .int st, .int _ hs, .int i, h =>
+    (hs.size_eq ▸  Endianness.encode st i (by grind)).map .init
   -- Tuples (and structs, ...):
   -- `encode` always and deterministically makes padding bytes `Uninit`.
   -- (The generic properties defined below make this the only possible choice for `encode`.)

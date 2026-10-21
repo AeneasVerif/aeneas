@@ -100,7 +100,8 @@ grind_pattern encode_tuple_subslice =>
 
 theorem valid_decodeValid {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeValid := by
   induction hl with
-  | int st =>
+  | int st sa hs =>
+    rcases sa with ⟨sz, align, wf_align, wf_size⟩; dsimp only [SizeAndAlign.ValidForScalar] at hs; subst hs
     intro bytes val h_dec
     simp only [decode, Option.bind_eq_bind] at h_dec
     cases h_data : bytes.toData <;> grind
@@ -143,7 +144,8 @@ def Valid.decode {ty : MType} {l : Layout ty} (hl : l.Valid)
 
 theorem valid_decodeMono {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeMono := by
   induction hl with
-  | int st =>
+  | int st sa hs =>
+    rcases sa with ⟨sz, align, wf_align, wf_size⟩; dsimp only [SizeAndAlign.ValidForScalar] at hs; subst hs
     intro bytes1 bytes2 h_le
     simp only [decode, Option.bind_eq_bind]
     cases h_data1 : bytes1.toData <;> grind
@@ -167,7 +169,8 @@ theorem valid_decodeMono {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeM
 
 theorem valid_decodeEncode {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeEncode := by
   induction hl with
-  | int st =>
+  | int st sa hs =>
+    rcases sa with ⟨sz, align, wf_align, wf_size⟩; dsimp only [SizeAndAlign.ValidForScalar] at hs; subst hs
     intro val hv
     cases val with
     | tuple _ | variant _ _ => nomatch hv
@@ -199,7 +202,8 @@ theorem valid_decodeEncode {ty : MType} (l : Layout ty) (hl : l.Valid) : l.Decod
 
 theorem valid_encodeDecodeLeDefined {ty : MType} (l : Layout ty) (hl : l.Valid) : l.EncodeDecodeLeDefined := by
   induction hl with
-  | int st =>
+  | int st sa hs =>
+    rcases sa with ⟨sz, align, wf_align, wf_size⟩; dsimp only [SizeAndAlign.ValidForScalar] at hs; subst hs
     intro bytes val hv h_dec
     cases val with
     | tuple _ | variant _ _ => nomatch hv
@@ -209,7 +213,7 @@ theorem valid_encodeDecodeLeDefined {ty : MType} (l : Layout ty) (hl : l.Valid) 
       | none => grind
       | some bytes_data =>
         rw [h_data] at h_dec; simp at h_dec; subst h_dec
-        have h_eq : encode .int (.int (Endianness.decode st bytes_data)) hv = bytes := by
+        have h_eq : encode (.int ⟨_, align, wf_align, wf_size⟩ rfl) (.int (Endianness.decode st bytes_data)) hv = bytes := by
           ext k hk; grind [encode]
         grind
   | tuple ts f fo fl sa _ h_tuple _ ih =>

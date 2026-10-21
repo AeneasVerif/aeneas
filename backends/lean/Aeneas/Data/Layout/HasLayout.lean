@@ -57,7 +57,7 @@ macro "has_layout_embed_retract" : tactic =>
   ))
 
 @[grind =]
-noncomputable def valid_layouts_inhabitant (x : RichMType) [x.1.Reasonable] [x.2.Valid] [x.2.TransparentValid]: { l : Layout x.1 // x.IsValidLayoutForRichMType l} :=
+def valid_layouts_inhabitant (x : RichMType) [x.1.Reasonable] [x.2.Valid] [x.2.TransparentValid]: { l : Layout x.1 // x.IsValidLayoutForRichMType l} :=
   ⟨
     x.example_layout,
     RichMType.example_layout_IsValidLayoutForRichMType
@@ -127,7 +127,7 @@ def mkVariant {ts : List MType} {f} (d : Nat) (v : MVal)
 
 -- Instances for primitive scalars and standard types
 
-noncomputable instance {ty : Std.UScalarTy} : HasLayout (Std.UScalar ty) where
+instance {ty : Std.UScalarTy} : HasLayout (Std.UScalar ty) where
   rty := ⟨.int (.unsigned ty), .int⟩
   embed := λ x ↦ ⟨.int x.val, .int ⟨x, rfl⟩⟩
   retract := λ | ⟨.int n, _⟩ => some ⟨.ofNat ty.numBits n.toNat⟩
@@ -136,7 +136,7 @@ noncomputable instance {ty : Std.UScalarTy} : HasLayout (Std.UScalar ty) where
     | ⟨.int n, .int ⟨x, h_eq⟩⟩, rfl => by
       simp only [←h_eq, IUScalar.val, Std.UScalar.val, BitVec.ofNat_toNat, Int.toNat_natCast, BitVec.setWidth_eq]
 
-noncomputable instance {ty : Std.IScalarTy} : HasLayout (Std.IScalar ty) where
+instance {ty : Std.IScalarTy} : HasLayout (Std.IScalar ty) where
   rty := ⟨.int (.signed ty), .int ⟩
   embed := λ x ↦ ⟨.int x.val, .int ⟨x, rfl⟩⟩
   retract := λ | ⟨.int n, _⟩ => some ⟨.ofInt ty.numBits n⟩
@@ -145,13 +145,13 @@ noncomputable instance {ty : Std.IScalarTy} : HasLayout (Std.IScalar ty) where
     | ⟨.int n, .int ⟨x, h_eq⟩⟩, rfl => by
       simp only [←h_eq, IUScalar.val, Std.IScalar.val, BitVec.ofInt_toInt]
 
-noncomputable instance : HasLayout Unit where
+instance : HasLayout Unit where
   rty := RichMType.mkTuple [] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ _ ↦ mkTuple []
   retract := λ _ ↦ do return ()
 
 
-noncomputable instance : HasLayout Bool where
+instance : HasLayout Bool where
   rty := RichMType.mkEnum [[], []] { repr := .reprRust, align := .reasonablyAligned }
   embed := λ | true => mkVariant 0 (.tuple [])
              | false => mkVariant 1 (.tuple [])

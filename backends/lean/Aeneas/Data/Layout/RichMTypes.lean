@@ -23,7 +23,7 @@ inductive Satisfies : (m : MType) → Layout m → LayoutInput m → Prop where
 | enum vs f vt vli vl d sa :
   (∀ n (h : n < vs.length), Satisfies vs[n] (vl n h) (vli n h)) →
   Satisfies (.enum vs f) (.enum vt vl d sa) (.enum vli)
-| int i : Satisfies (.int i) .int .int
+| int i sa h : Satisfies (.int i) (.int sa h) .int
 
 inductive TransparentValid : (m : MType) → LayoutInput m → Prop where
 | tuple ts f fr :
@@ -132,8 +132,8 @@ namespace RichMType
   @[expose, simp, grind =, reducible]
   def IsValidLayoutForRichMType {ty : RichMType} (l : Layout ty.1) : Prop := l.Valid ∧ LayoutInput.Satisfies _ l ty.2
 
-  noncomputable def example_layoutAux : {m : MType} → (li : LayoutInput m) → (init_off : Nat := 0) → Layout m
-    | .int _, .int, _ => .int
+  def example_layoutAux : {m : MType} → (li : LayoutInput m) → (init_off : Nat := 0) → Layout m
+    | .int ty, .int, _ => .int ty.reasonablyAligned ty.reasonablyAligned_isReasonable
     | .tuple ts f, .tuple fl, init_off =>
       match f.align with
       | .reasonablyAligned => Layout.ReprC.mkTuple ts fl none init_off
@@ -153,7 +153,7 @@ namespace RichMType
       | .aligned n hn => base.alignEnumUp n hn
 
   @[expose, simp, grind =, reducible]
-  noncomputable def example_layout (ty : RichMType) : Layout ty.1 :=
+  def example_layout (ty : RichMType) : Layout ty.1 :=
     example_layoutAux ty.2 0
 
   private lemma example_layoutAux_isTuple_valid {t : MType} {li : LayoutInput t}
@@ -186,7 +186,7 @@ namespace RichMType
     cases h with
     | tuple ts tf fo fr fl _ h_fr => exact .tuple ts tf fo fr fl _ h_fr
     | enum vs ef vt vli vl d sa h_vl => exact .enum vs ef vt vli vl d sa h_vl
-    | int ti => exact .int ti
+    | int ti sa h => exact .int ti sa h
 
   private lemma alignEnumUp_satisfies {vs : List MType} {f : EnumFlags}
       {l : Layout (.enum vs f)} {li : LayoutInput (.enum vs f)}
@@ -215,7 +215,7 @@ namespace RichMType
     cases hr with
     | int i =>
       cases li
-      exact ⟨.int i, .int i⟩
+      exact ⟨.int i _ _, .int i _ _⟩
     | tuple ts f _ flagsr =>
       cases li with
       | tuple fl =>

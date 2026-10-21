@@ -146,7 +146,7 @@ lemma tupleMinOffset_zero {t : MType} (cl : Layout t) : TupleMinOffset 0 cl := b
     with an optional `max_align` cap for `#[repr(C, packed(N))]` and an optional initial
     cursor `init_off` (used e.g. for `#[repr(primitive)]` enum variants after the tag). -/
 @[grind =]
-noncomputable def mkTuple (ts : List MType) {f : TupleFlags}
+def mkTuple (ts : List MType) {f : TupleFlags}
     (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
     (max_align : Option { a : Nat // a.isPowerOfTwo } := none)
     (init_off : Nat := 0) :
@@ -204,11 +204,11 @@ lemma padVariantLayout_size {t : MType} (ht : t.isTuple) (cl : Layout t)
     - When `shift_payload = true` (`#[repr(C)]` / `#[repr(C, Int)]`), variants are shifted by `alignUp tagTy.size A`.
     - When `shift_payload = false` (`#[repr(Int)]`), we assume variants already place their fields at `≥ tagTy.size`
       (e.g. via `mkTuple ts fl max_align tagTy.size`), so `payload_off = 0` and only their outer `SizeAndAlign` is padded to `sa`. -/
-noncomputable def mkEnumCore (tagTy : IUScalarTy) (shift_payload : Bool) (vs : List MType) {f : EnumFlags}
+def mkEnumCore (tagTy : IUScalarTy) (shift_payload : Bool) (vs : List MType) {f : EnumFlags}
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx]) :
     Layout (.enum vs f) :=
   let fsa : (idx : Nat) → idx < vs.length → SizeAndAlign := λ idx h ↦ (cl idx h).size_and_align
-  let A := natMax vs.length (λ i hi ↦ (fsa i hi).align) tagTy.size_and_align.align
+  let A := natMax vs.length (λ i hi ↦ (fsa i hi).align) tagTy.reasonablyAligned.align
   let payload_off := if shift_payload then alignUp tagTy.size A else 0
   let min_sz := if shift_payload then 0 else tagTy.size
   let max_var_sz := natMax vs.length (λ i hi ↦ (fsa i hi).size) min_sz
@@ -221,7 +221,7 @@ noncomputable def mkEnumCore (tagTy : IUScalarTy) (shift_payload : Bool) (vs : L
 
 /-- `#[repr(C)]` (and `#[repr(C, Int)]`) layout for an enum given layouts for its tuple variants. -/
 @[grind =]
-noncomputable def mkEnum (tagTy : IUScalarTy := .unsigned .Usize) (vs : List MType) {f : EnumFlags}
+def mkEnum (tagTy : IUScalarTy := .unsigned .Usize) (vs : List MType) {f : EnumFlags}
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx]) :
     Layout (.enum vs f) :=
   mkEnumCore tagTy true vs cl
@@ -230,17 +230,16 @@ noncomputable def mkEnum (tagTy : IUScalarTy := .unsigned .Usize) (vs : List MTy
     given tuple variant layouts whose fields have already been laid out after the tag
     (e.g. via `mkTuple ts fl max_align tagTy.size`). -/
 @[grind =]
-noncomputable def mkEnumPrimitive (tagTy : IUScalarTy) (vs : List MType) {f : EnumFlags}
+def mkEnumPrimitive (tagTy : IUScalarTy) (vs : List MType) {f : EnumFlags}
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx]) :
     Layout (.enum vs f) :=
   mkEnumCore tagTy false vs cl
 
 /-! ## Deep `#[repr(C)]` Layout (`mk`) -/
 
-/-- Constructs the "deep `#[repr(C)]`"" layout for an `MType` (which lays out all subthings according to `#[repr(C)]` as well).
-    Only `noncomputable` because scalar alignments (`IUScalarTy.size_and_align`) are `noncomputable`. -/
-noncomputable def mk : (ty : MType) → Layout ty
-  | .int _ => .int
+/-- Constructs the "deep `#[repr(C)]`" layout for an `MType` (which lays out all subthings according to `#[repr(C)]` as well). -/
+def mk : (ty : MType) → Layout ty
+  | .int ty => .int ty.reasonablyAligned ty.reasonablyAligned_isReasonable
   | .tuple ts _ => mkTuple ts (λ idx h ↦ mk ts[idx]) none
   | .enum vs _ => mkEnum (.unsigned .Usize) vs (λ idx h ↦ mk vs[idx])
 termination_by ty => sizeOf ty
