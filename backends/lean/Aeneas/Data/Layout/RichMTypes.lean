@@ -4,6 +4,8 @@ public section
 
 namespace Aeneas
 
+/-! ## Definitions (`LayoutInput` and `RichMType`) -/
+
 inductive LayoutInput : MType → Type 0 where
 | tuple
     (field_layouts : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
@@ -37,13 +39,6 @@ inductive TransparentValid : (m : MType) → LayoutInput m → Prop where
   TransparentValid (.enum vs f) (.enum vli)
 | int i : TransparentValid (.int i) .int
 
-attribute [class] Layout.Valid
-attribute [instance] Layout.Valid.int
-
-attribute [class] TransparentValid
-attribute [instance] TransparentValid.enum
-attribute [instance] TransparentValid.int
-
 inductive Valid : (m : MType) → LayoutInput m → Prop where
 | tuple ts f fl :
   (∀ i (hi : i < ts.length), (fl i hi).Valid) →
@@ -52,6 +47,60 @@ inductive Valid : (m : MType) → LayoutInput m → Prop where
   (∀ i (hi : i < vs.length), Valid vs[i] (vli i hi)) →
   Valid (.enum vs f) (.enum vli)
 | int i : Valid (.int i) .int
+
+end LayoutInput
+
+@[expose, reducible]
+def RichMType := (m : MType) × LayoutInput m
+
+namespace RichMType
+
+  @[expose, simp, grind =, reducible] def mkTuple (ts : List ((m : MType) × Layout m)) (f : TupleFlags) : RichMType :=
+    ⟨ .tuple (ts.map (·.1)) f, .tuple (λ i hi ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) ts i hi) ▸ (ts[i]'(by grind)).2)) ⟩
+
+  @[expose, simp, grind =, reducible] def mkEnum (ts : List (List ((m : MType) × (Layout m)))) (f : EnumFlags) : RichMType :=
+    let tuples := ts.map (mkTuple · {repr := .reprRust, align := .reasonablyAligned}) ;
+    ⟨ .enum (tuples.map (·.1)) f, .enum (λ i hi ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) tuples i hi) ▸ (tuples[i]'(by grind)).2)) ⟩
+
+  @[expose, simp, grind =, reducible]
+  def IsValidLayoutForRichMType {ty : RichMType} (l : Layout ty.1) : Prop := l.Valid ∧ LayoutInput.Satisfies _ l ty.2
+
+  def example_layoutAux : {m : MType} → (li : LayoutInput m) → (init_off : Nat := 0) → Layout m
+    | .int ty, .int, _ => .int ty.reasonablyAligned ty.reasonablyAligned_isReasonable
+    | .tuple ts f, .tuple fl, init_off =>
+      match f.align with
+      | .reasonablyAligned => Layout.ReprC.mkTuple ts fl none init_off
+      | .packed n hn => Layout.ReprC.mkTuple ts fl (.some ⟨n, hn⟩) init_off
+      | .aligned n hn => (Layout.ReprC.mkTuple ts fl none init_off).alignTupleUp n hn
+    | .enum vs f, .enum v_inh, _ =>
+      let base : Layout (.enum vs f) :=
+        match f.repr with
+        | .reprRust | .reprC =>
+          Layout.ReprC.mkEnum (.unsigned .Usize) vs (λ idx h ↦ example_layoutAux (v_inh idx h) 0)
+        | .reprC_prim prim =>
+          Layout.ReprC.mkEnum prim vs (λ idx h ↦ example_layoutAux (v_inh idx h) 0)
+        | .reprPrim prim =>
+          Layout.ReprC.mkEnumPrimitive prim vs (λ idx h ↦ example_layoutAux (v_inh idx h) prim.size)
+      match f.align with
+      | .reasonablyAligned => base
+      | .aligned n hn => base.alignEnumUp n hn
+
+  @[expose, simp, grind =, reducible]
+  def example_layout (ty : RichMType) : Layout ty.1 :=
+    example_layoutAux ty.2 0
+
+end RichMType
+
+/-! ## Typeclass Instances and Lemmas -/
+
+namespace LayoutInput
+
+attribute [class] Layout.Valid
+attribute [instance] Layout.Valid.int
+
+attribute [class] TransparentValid
+attribute [instance] TransparentValid.enum
+attribute [instance] TransparentValid.int
 
 attribute [class] Valid
 attribute [instance] Valid.int
@@ -88,13 +137,7 @@ instance {x : (m : MType) × Layout m} {xs : List ((m : MType) × Layout m)}
 
 end Layout
 
-@[expose, reducible]
-def RichMType := (m : MType) × LayoutInput m
-
 namespace RichMType
-
-  @[expose, simp, grind =, reducible] def mkTuple (ts : List ((m : MType) × Layout m)) (f : TupleFlags) : RichMType :=
-    ⟨ .tuple (ts.map (·.1)) f, .tuple (λ i hi ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) ts i hi) ▸ (ts[i]'(by grind)).2)) ⟩
 
   instance {ts : List ((m : MType) × (Layout m))} {f} [h : MType.AllReasonable ts (·.1)] [hf : MType.TupleFlagsReasonable f] : (mkTuple ts f).1.Reasonable :=
     .tuple _ _ (by simp; apply h.out) hf
@@ -104,10 +147,6 @@ namespace RichMType
 
   instance {ts : List ((m : MType) × (Layout m))} {a} : (mkTuple ts {repr := .reprRust, align := a}).2.TransparentValid := by constructor; simp
   instance {ts : List ((m : MType) × (Layout m))} {a} : (mkTuple ts {repr := .reprC, align := a}).2.TransparentValid := by constructor; simp
-
-  @[expose, simp, grind =, reducible] def mkEnum (ts : List (List ((m : MType) × (Layout m)))) (f : EnumFlags) : RichMType :=
-    let tuples := ts.map (mkTuple · {repr := .reprRust, align := .reasonablyAligned}) ;
-    ⟨ .enum (tuples.map (·.1)) f, .enum (λ i hi ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) tuples i hi) ▸ (tuples[i]'(by grind)).2)) ⟩
 
   instance {ts : List (List ((m : MType) × (Layout m)))} {f}
     [hl : MType.ListLengthLe ts f.minMaxVariants]
@@ -128,33 +167,6 @@ namespace RichMType
       exact h.out i (by grind))
 
   instance {ts f} : (mkEnum ts f).2.TransparentValid := by constructor
-
-  @[expose, simp, grind =, reducible]
-  def IsValidLayoutForRichMType {ty : RichMType} (l : Layout ty.1) : Prop := l.Valid ∧ LayoutInput.Satisfies _ l ty.2
-
-  def example_layoutAux : {m : MType} → (li : LayoutInput m) → (init_off : Nat := 0) → Layout m
-    | .int ty, .int, _ => .int ty.reasonablyAligned ty.reasonablyAligned_isReasonable
-    | .tuple ts f, .tuple fl, init_off =>
-      match f.align with
-      | .reasonablyAligned => Layout.ReprC.mkTuple ts fl none init_off
-      | .packed n hn => Layout.ReprC.mkTuple ts fl (.some ⟨n, hn⟩) init_off
-      | .aligned n hn => (Layout.ReprC.mkTuple ts fl none init_off).alignTupleUp n hn
-    | .enum vs f, .enum v_inh, _ =>
-      let base : Layout (.enum vs f) :=
-        match f.repr with
-        | .reprRust | .reprC =>
-          Layout.ReprC.mkEnum (.unsigned .Usize) vs (λ idx h ↦ example_layoutAux (v_inh idx h) 0)
-        | .reprC_prim prim =>
-          Layout.ReprC.mkEnum prim vs (λ idx h ↦ example_layoutAux (v_inh idx h) 0)
-        | .reprPrim prim =>
-          Layout.ReprC.mkEnumPrimitive prim vs (λ idx h ↦ example_layoutAux (v_inh idx h) prim.size)
-      match f.align with
-      | .reasonablyAligned => base
-      | .aligned n hn => base.alignEnumUp n hn
-
-  @[expose, simp, grind =, reducible]
-  def example_layout (ty : RichMType) : Layout ty.1 :=
-    example_layoutAux ty.2 0
 
   private lemma example_layoutAux_isTuple_valid {t : MType} {li : LayoutInput t}
       (ht : t.isTuple) (h_valid : li.Valid) (init_off : Nat) :

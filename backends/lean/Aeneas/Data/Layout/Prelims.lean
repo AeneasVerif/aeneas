@@ -5,7 +5,17 @@ import all Init.Data.Nat.Power2.Basic
 
 namespace Aeneas
 
-/-! ## Powers of Two -/
+/-! ## Definitions -/
+
+def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
+  | 0, _, init => init
+  | n + 1, f, init => max (natMax n (λ i _ ↦ f i (by omega)) init) (f n (by omega))
+
+def alignUp (x A : Nat) : Nat := ((x + A - 1) / A) * A
+
+/-! ## Lemmas -/
+
+/-! ### Powers of Two -/
 
 @[simp, grind ←]
 lemma one_isPowerOfTwo : Nat.isPowerOfTwo 1 := by decide
@@ -28,11 +38,7 @@ lemma dvd_of_isPowerOfTwo_le {a b : Nat} (ha : a.isPowerOfTwo) (hb : b.isPowerOf
   rw [Nat.pow_le_pow_iff_right] at hle
   all_goals trivial
 
-/-! ## Bounded Maximum (`natMax`) -/
-
-def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
-  | 0, _, init => init
-  | n + 1, f, init => max (natMax n (λ i _ ↦ f i (by omega)) init) (f n (by omega))
+/-! ### Bounded Maximum (`natMax`) -/
 
 @[simp] lemma init_le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init, init ≤ natMax n f init
   | 0, _, _ => Nat.le_refl _
@@ -64,9 +70,7 @@ lemma natMax_isPowerOfTwo : ∀ n (f : (i : Nat) → i < n → Nat) init,
     by_cases h : natMax n (λ i _ ↦ f i (by omega)) init ≤ f n (by omega)
     all_goals (simp [natMax]; grind)
 
-/-! ## Alignment Rounding (`alignUp`) -/
-
-def alignUp (x A : Nat) : Nat := ((x + A - 1) / A) * A
+/-! ### Alignment Rounding (`alignUp`) -/
 
 @[simp]
 lemma le_alignUp (x : Nat) {A : Nat} (hA : 0 < A) : x ≤ alignUp x A := by

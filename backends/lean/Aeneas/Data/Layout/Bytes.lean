@@ -30,21 +30,6 @@ def le_defined (self other : AbstractByte) : Prop :=
   -- Nothing else is related.
   | _, _ => False
 
-@[simp, grind ←] theorem le_defined_uninit (b : AbstractByte) : AbstractByte.uninit.le_defined b := trivial
-@[simp, grind ←] theorem le_defined_refl (b : AbstractByte) : b.le_defined b := by cases b <;> simp [le_defined]
-
-@[simp, grind =] theorem le_defined_uninit_elim {a : AbstractByte} :
-    (AbstractByte.le_defined a .uninit) = (a = .uninit) := by
-  ext; constructor <;> intros h
-  · cases a; all_goals simp [le_defined] at h ⊢
-  · subst a; trivial
-
-@[simp, grind =] theorem le_defined_init_elim (b : AbstractByte) {d} :
-    (AbstractByte.le_defined (.init d) b) = (.init d = b) := by
-  ext; constructor <;> intros h
-  · cases b; all_goals (simp [le_defined] at h ⊢ <;> trivial)
-  · subst b; trivial
-
 end AbstractByte
 
 abbrev Bytes (n : Nat) := Vector AbstractByte n
@@ -68,6 +53,38 @@ def toData {n : Nat} (bytes : Bytes n) : Option (Vector Byte n) :=
   if h : ∀ (i : Nat) (_ : i < n), (bytes[i]).data.isSome
   then some (Vector.ofFn λ i ↦ (bytes[i.val]).data.get (h i.val i.isLt))
   else none
+
+end Bytes
+
+/-- On `Option`, `none <= _`, and `some v1 <= some v2` iff `v1 = v2`. -/
+def Option.le_defined {α : Type u} (self other : Option α) : Prop :=
+  match self, other with
+  | none, _ => True
+  | some l, some r => l = r
+  | _, _ => False
+
+/-! ## Lemmas -/
+
+namespace AbstractByte
+
+@[simp, grind ←] theorem le_defined_uninit (b : AbstractByte) : AbstractByte.uninit.le_defined b := trivial
+@[simp, grind ←] theorem le_defined_refl (b : AbstractByte) : b.le_defined b := by cases b <;> simp [le_defined]
+
+@[simp, grind =] theorem le_defined_uninit_elim {a : AbstractByte} :
+    (AbstractByte.le_defined a .uninit) = (a = .uninit) := by
+  ext; constructor <;> intros h
+  · cases a; all_goals simp [le_defined] at h ⊢
+  · subst a; trivial
+
+@[simp, grind =] theorem le_defined_init_elim (b : AbstractByte) {d} :
+    (AbstractByte.le_defined (.init d) b) = (.init d = b) := by
+  ext; constructor <;> intros h
+  · cases b; all_goals (simp [le_defined] at h ⊢ <;> trivial)
+  · subst b; trivial
+
+end AbstractByte
+
+namespace Bytes
 
 /-! ### Basic Lemmas on `Bytes` Operations -/
 
@@ -227,13 +244,6 @@ theorem foldl_write_subslice_overlay_le_defined {α : Type u} {n : Nat}
     · rw [h base (Bytes.uninit n)]; exact h_over j hj
 
 end Bytes
-
-/-- On `Option`, `none <= _`, and `some v1 <= some v2` iff `v1 = v2`. -/
-def Option.le_defined {α : Type u} (self other : Option α) : Prop :=
-  match self, other with
-  | none, _ => True
-  | some l, some r => l = r
-  | _, _ => False
 
 namespace Option.le_defined
 

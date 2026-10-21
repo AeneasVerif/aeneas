@@ -16,53 +16,10 @@ structure SizeAndAlign : Type 0 where
   wf_align : align.isPowerOfTwo
   wf_size : align ∣ size
 
-@[ext]
-lemma SizeAndAlign.ext {a b : SizeAndAlign} (h_size : a.size = b.size) (h_align : a.align = b.align) :
-    a = b := by
-  cases a; cases b; simp_all
-
-lemma SizeAndAlign.grind_wf_align (sa : SizeAndAlign) : sa.align.isPowerOfTwo := sa.wf_align
-grind_pattern SizeAndAlign.grind_wf_align => sa.align
-
-lemma SizeAndAlign.grind_wf_size (sa : SizeAndAlign) : sa.align ∣ sa.size := sa.wf_size
-grind_pattern SizeAndAlign.grind_wf_size => sa.size
-
-namespace SizeAndAlign
-
-lemma num_bytes_is_power_of_two {ty : IUScalarTy} : (ty.numBits / 8).isPowerOfTwo := by
-  rcases ty with ⟨ty⟩ | ⟨ty⟩ <;>
-    cases ty <;>
-    rcases System.Platform.numBits_eq with h | h <;>
-    simp [IUScalarTy.numBits, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h] <;>
-    decide
-
-lemma align_pos (sa : SizeAndAlign) : 0 < sa.align :=
-  Nat.pos_of_isPowerOfTwo sa.wf_align
-grind_pattern align_pos => sa.align
-
-end SizeAndAlign
+@[reducible, simp, grind =] def IUScalarTy.size (ty : IUScalarTy) : Nat := ty.numBits / 8
 
 @[reducible, simp, grind =] def SizeAndAlign.ValidForScalar (sa : SizeAndAlign) (ty : IUScalarTy) : Prop :=
   sa.size = ty.numBits / 8
-
-@[reducible, simp, grind =] def IUScalarTy.size (ty : IUScalarTy) : Nat := ty.numBits / 8
-
-@[simp, grind →] lemma SizeAndAlign.ValidForScalar.size_eq (ty : IUScalarTy) (sa : SizeAndAlign) (h : sa.ValidForScalar ty) : sa.size = ty.size := h
-
-@[simp, grind =] def IUScalarTy.reasonablyAligned (ty : IUScalarTy) : SizeAndAlign :=
-  ⟨ty.size, ty.size, SizeAndAlign.num_bytes_is_power_of_two, by simp⟩
-
-@[simp, grind .] lemma IUScalarTy.reasonablyAligned_isReasonable {ty : IUScalarTy} : ty.reasonablyAligned.ValidForScalar ty := by rfl
-
-@[simp, grind →] lemma SizeAndAlign.sizeOneAlignOne (sa : SizeAndAlign) : sa.size = 1 → sa.align = 1 := by
-  intros h
-  apply Nat.le_antisymm
-  · apply Nat.le_of_dvd
-    { omega }
-    rw [←h]
-    apply sa.wf_size
-  · apply Nat.pos_of_isPowerOfTwo
-    apply sa.wf_align
 
 @[simp, grind =, reducible, match_pattern] def SizeAndAlign.zero_sized_minimally_aligned : SizeAndAlign :=
   ⟨0, 1, by grind, by grind⟩
@@ -114,6 +71,68 @@ def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
   | _, .int sa _ => sa
   | _, .tuple _ _ sa => sa
   | _, .enum _ _ _ sa => sa
+
+end Layout
+
+/-! ## Lemmas and Helpers -/
+
+@[ext]
+lemma SizeAndAlign.ext {a b : SizeAndAlign} (h_size : a.size = b.size) (h_align : a.align = b.align) :
+    a = b := by
+  cases a; cases b; simp_all
+
+lemma SizeAndAlign.grind_wf_align (sa : SizeAndAlign) : sa.align.isPowerOfTwo := sa.wf_align
+grind_pattern SizeAndAlign.grind_wf_align => sa.align
+
+lemma SizeAndAlign.grind_wf_size (sa : SizeAndAlign) : sa.align ∣ sa.size := sa.wf_size
+grind_pattern SizeAndAlign.grind_wf_size => sa.size
+
+namespace SizeAndAlign
+
+lemma num_bytes_is_power_of_two {ty : IUScalarTy} : (ty.numBits / 8).isPowerOfTwo := by
+  rcases ty with ⟨ty⟩ | ⟨ty⟩ <;>
+    cases ty <;>
+    rcases System.Platform.numBits_eq with h | h <;>
+    simp [IUScalarTy.numBits, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h] <;>
+    decide
+
+lemma align_pos (sa : SizeAndAlign) : 0 < sa.align :=
+  Nat.pos_of_isPowerOfTwo sa.wf_align
+grind_pattern align_pos => sa.align
+
+end SizeAndAlign
+
+@[simp, grind →] lemma SizeAndAlign.ValidForScalar.size_eq (ty : IUScalarTy) (sa : SizeAndAlign) (h : sa.ValidForScalar ty) : sa.size = ty.size := h
+
+@[simp, grind =] def IUScalarTy.reasonablyAligned (ty : IUScalarTy) : SizeAndAlign :=
+  ⟨ty.size, ty.size, SizeAndAlign.num_bytes_is_power_of_two, by simp⟩
+
+@[simp, grind .] lemma IUScalarTy.reasonablyAligned_isReasonable {ty : IUScalarTy} : ty.reasonablyAligned.ValidForScalar ty := by rfl
+
+@[simp, grind →] lemma SizeAndAlign.sizeOneAlignOne (sa : SizeAndAlign) : sa.size = 1 → sa.align = 1 := by
+  intros h
+  apply Nat.le_antisymm
+  · apply Nat.le_of_dvd
+    { omega }
+    rw [←h]
+    apply sa.wf_size
+  · apply Nat.pos_of_isPowerOfTwo
+    apply sa.wf_align
+
+namespace Endianness
+
+@[simp, grind =] lemma mul_8_size_eq {ty : IUScalarTy} : 8 * ty.size = ty.numBits := by
+  rcases ty with ⟨t⟩ | ⟨t⟩ <;> cases t <;> rcases System.Platform.numBits_eq with h | h <;>
+    simp [IUScalarTy.size, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h]
+
+@[grind ←]
+lemma numBits_div_8_lt {ty : IUScalarTy} {k : Nat} (hk : k < ty.numBits) :
+    k / 8 < ty.size := by
+  have := mul_8_size_eq (ty := ty); omega
+
+end Endianness
+
+namespace Layout
 
 @[simp, grind =] lemma size_known (l : Layout ty) : l.size_and_align.size = l.size :=
   by cases l <;> simp [size, size_and_align]

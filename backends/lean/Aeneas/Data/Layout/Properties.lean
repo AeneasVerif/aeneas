@@ -64,6 +64,81 @@ structure Aligned (n : Nat) {ty : MType} (l : Layout ty) : Prop where
   n_wf : n.isPowerOfTwo
   aligned : l.size_and_align.align ≥ n
 
+/-! ## `IsReprC` and Flag Satisfaction -/
+
+@[grind]
+inductive IsReprCTuple (init_off : Nat) :
+    TupleAlignmentModifier → {t : MType} → Layout t → Prop where
+  | reasonablyAligned (ts : List MType) (f : TupleFlags)
+      (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
+      IsReprCTuple init_off .reasonablyAligned (ReprC.mkTuple ts (f := f) fl none init_off)
+  | packed (ts : List MType) (f : TupleFlags)
+      (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
+      (n : Nat) (hn : n.isPowerOfTwo) :
+      IsReprCTuple init_off (.packed n hn) (ReprC.mkTuple ts (f := f) fl (.some ⟨n, hn⟩) init_off)
+  | aligned (ts : List MType) (f : TupleFlags)
+      (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
+      (n : Nat) (hn : n.isPowerOfTwo) :
+      IsReprCTuple init_off (.aligned n hn) ((ReprC.mkTuple ts (f := f) fl none init_off).alignTupleUp n hn)
+
+@[grind]
+inductive IsReprCEnum (tagTy : IUScalarTy) :
+    EnumAlignmentModifier → {t : MType} → Layout t → Prop where
+  | reasonablyAligned (vs : List MType) (f : EnumFlags)
+      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
+      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple 0 .reasonablyAligned (cl idx h)) :
+      IsReprCEnum tagTy .reasonablyAligned (ReprC.mkEnum tagTy vs (f := f) cl)
+  | aligned (vs : List MType) (f : EnumFlags)
+      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
+      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple 0 .reasonablyAligned (cl idx h))
+      (n : Nat) (hn : n.isPowerOfTwo) :
+      IsReprCEnum tagTy (.aligned n hn) ((ReprC.mkEnum tagTy vs (f := f) cl).alignEnumUp n hn)
+
+@[grind]
+inductive IsReprPrimEnum (tagTy : IUScalarTy) :
+    EnumAlignmentModifier → {t : MType} → Layout t → Prop where
+  | reasonablyAligned (vs : List MType) (f : EnumFlags)
+      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
+      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple tagTy.size .reasonablyAligned (cl idx h)) :
+      IsReprPrimEnum tagTy .reasonablyAligned (ReprC.mkEnumPrimitive tagTy vs (f := f) cl)
+  | aligned (vs : List MType) (f : EnumFlags)
+      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
+      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple tagTy.size .reasonablyAligned (cl idx h))
+      (n : Nat) (hn : n.isPowerOfTwo) :
+      IsReprPrimEnum tagTy (.aligned n hn) ((ReprC.mkEnumPrimitive tagTy vs (f := f) cl).alignEnumUp n hn)
+
+@[simp, grind =]
+def satisfies : {ty : MType} → (l : Layout ty) → Prop
+| .int _, _ => True
+| .tuple _ ⟨.reprRust, .reasonablyAligned⟩, l => l.ReasonablyAligned
+| .tuple _ ⟨.reprRust, .packed n _⟩, l => Packed n l
+| .tuple _ ⟨.reprRust, .aligned n _⟩, l => l.ReasonablyAligned ∧ l.Aligned n
+| .tuple _ ⟨.reprTransparent, .reasonablyAligned⟩, l => l.Transparent
+| .tuple _ ⟨.reprTransparent, .packed _ _⟩, _ => False
+| .tuple _ ⟨.reprTransparent, .aligned _ _⟩, _ => False
+| .tuple _ ⟨.reprC, m⟩, l => l.IsReprCTuple 0 m
+| .enum _ ⟨.reprRust, .reasonablyAligned⟩, l => l.ReasonablyAligned
+| .enum _ ⟨.reprRust, .aligned n _⟩, l => l.ReasonablyAligned ∧ l.Aligned n
+| .enum _ ⟨.reprC, m⟩, l => l.IsReprCEnum (.unsigned .Usize) m
+| .enum _ ⟨.reprC_prim prim, m⟩, l => l.IsReprCEnum prim m
+| .enum _ ⟨.reprPrim prim, m⟩, l => l.IsReprPrimEnum prim m
+
+/-! ## Lemmas -/
+
+grind_pattern IsReprCTuple.reasonablyAligned => ReprC.mkTuple ts (f := f) fl none init_off
+grind_pattern IsReprCTuple.packed => ReprC.mkTuple ts (f := f) fl (.some ⟨n, hn⟩) init_off
+grind_pattern IsReprCTuple.aligned => (ReprC.mkTuple ts (f := f) fl none init_off).alignTupleUp n hn
+
+grind_pattern IsReprCEnum.reasonablyAligned => ReprC.mkEnum tagTy vs (f := f) cl
+grind_pattern IsReprCEnum.reasonablyAligned => ReprC.mkEnumCore tagTy true vs (f := f) cl
+grind_pattern IsReprCEnum.aligned => (ReprC.mkEnum tagTy vs (f := f) cl).alignEnumUp n hn
+grind_pattern IsReprCEnum.aligned => (ReprC.mkEnumCore tagTy true vs (f := f) cl).alignEnumUp n hn
+
+grind_pattern IsReprPrimEnum.reasonablyAligned => ReprC.mkEnumPrimitive tagTy vs (f := f) cl
+grind_pattern IsReprPrimEnum.reasonablyAligned => ReprC.mkEnumCore tagTy false vs (f := f) cl
+grind_pattern IsReprPrimEnum.aligned => (ReprC.mkEnumPrimitive tagTy vs (f := f) cl).alignEnumUp n hn
+grind_pattern IsReprPrimEnum.aligned => (ReprC.mkEnumCore tagTy false vs (f := f) cl).alignEnumUp n hn
+
 @[grind .]
 lemma Transparent_ReasonablyAligned ty (l : Layout ty) : l.Transparent → l.ReasonablyAligned
   | .tuple_zero_sized ts f fo fl h =>
@@ -247,78 +322,7 @@ lemma mkEnumPrimitive_reasonablyAligned (tagTy : IUScalarTy)
 
 end ReprC
 
-/-! ## `IsReprC` and Flag Satisfaction -/
-
-@[grind]
-inductive IsReprCTuple (init_off : Nat) :
-    TupleAlignmentModifier → {t : MType} → Layout t → Prop where
-  | reasonablyAligned (ts : List MType) (f : TupleFlags)
-      (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
-      IsReprCTuple init_off .reasonablyAligned (ReprC.mkTuple ts (f := f) fl none init_off)
-  | packed (ts : List MType) (f : TupleFlags)
-      (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
-      (n : Nat) (hn : n.isPowerOfTwo) :
-      IsReprCTuple init_off (.packed n hn) (ReprC.mkTuple ts (f := f) fl (.some ⟨n, hn⟩) init_off)
-  | aligned (ts : List MType) (f : TupleFlags)
-      (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
-      (n : Nat) (hn : n.isPowerOfTwo) :
-      IsReprCTuple init_off (.aligned n hn) ((ReprC.mkTuple ts (f := f) fl none init_off).alignTupleUp n hn)
-
-grind_pattern IsReprCTuple.reasonablyAligned => ReprC.mkTuple ts (f := f) fl none init_off
-grind_pattern IsReprCTuple.packed => ReprC.mkTuple ts (f := f) fl (.some ⟨n, hn⟩) init_off
-grind_pattern IsReprCTuple.aligned => (ReprC.mkTuple ts (f := f) fl none init_off).alignTupleUp n hn
-
-@[grind]
-inductive IsReprCEnum (tagTy : IUScalarTy) :
-    EnumAlignmentModifier → {t : MType} → Layout t → Prop where
-  | reasonablyAligned (vs : List MType) (f : EnumFlags)
-      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
-      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple 0 .reasonablyAligned (cl idx h)) :
-      IsReprCEnum tagTy .reasonablyAligned (ReprC.mkEnum tagTy vs (f := f) cl)
-  | aligned (vs : List MType) (f : EnumFlags)
-      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
-      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple 0 .reasonablyAligned (cl idx h))
-      (n : Nat) (hn : n.isPowerOfTwo) :
-      IsReprCEnum tagTy (.aligned n hn) ((ReprC.mkEnum tagTy vs (f := f) cl).alignEnumUp n hn)
-
-grind_pattern IsReprCEnum.reasonablyAligned => ReprC.mkEnum tagTy vs (f := f) cl
-grind_pattern IsReprCEnum.reasonablyAligned => ReprC.mkEnumCore tagTy true vs (f := f) cl
-grind_pattern IsReprCEnum.aligned => (ReprC.mkEnum tagTy vs (f := f) cl).alignEnumUp n hn
-grind_pattern IsReprCEnum.aligned => (ReprC.mkEnumCore tagTy true vs (f := f) cl).alignEnumUp n hn
-
-@[grind]
-inductive IsReprPrimEnum (tagTy : IUScalarTy) :
-    EnumAlignmentModifier → {t : MType} → Layout t → Prop where
-  | reasonablyAligned (vs : List MType) (f : EnumFlags)
-      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
-      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple tagTy.size .reasonablyAligned (cl idx h)) :
-      IsReprPrimEnum tagTy .reasonablyAligned (ReprC.mkEnumPrimitive tagTy vs (f := f) cl)
-  | aligned (vs : List MType) (f : EnumFlags)
-      (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
-      (hcl : ∀ idx (h : idx < vs.length), IsReprCTuple tagTy.size .reasonablyAligned (cl idx h))
-      (n : Nat) (hn : n.isPowerOfTwo) :
-      IsReprPrimEnum tagTy (.aligned n hn) ((ReprC.mkEnumPrimitive tagTy vs (f := f) cl).alignEnumUp n hn)
-
-grind_pattern IsReprPrimEnum.reasonablyAligned => ReprC.mkEnumPrimitive tagTy vs (f := f) cl
-grind_pattern IsReprPrimEnum.reasonablyAligned => ReprC.mkEnumCore tagTy false vs (f := f) cl
-grind_pattern IsReprPrimEnum.aligned => (ReprC.mkEnumPrimitive tagTy vs (f := f) cl).alignEnumUp n hn
-grind_pattern IsReprPrimEnum.aligned => (ReprC.mkEnumCore tagTy false vs (f := f) cl).alignEnumUp n hn
-
-@[simp, grind =]
-def satisfies : {ty : MType} → (l : Layout ty) → Prop
-| .int _, _ => True
-| .tuple _ ⟨.reprRust, .reasonablyAligned⟩, l => l.ReasonablyAligned
-| .tuple _ ⟨.reprRust, .packed n _⟩, l => Packed n l
-| .tuple _ ⟨.reprRust, .aligned n _⟩, l => l.ReasonablyAligned ∧ l.Aligned n
-| .tuple _ ⟨.reprTransparent, .reasonablyAligned⟩, l => l.Transparent
-| .tuple _ ⟨.reprTransparent, .packed _ _⟩, _ => False
-| .tuple _ ⟨.reprTransparent, .aligned _ _⟩, _ => False
-| .tuple _ ⟨.reprC, m⟩, l => l.IsReprCTuple 0 m
-| .enum _ ⟨.reprRust, .reasonablyAligned⟩, l => l.ReasonablyAligned
-| .enum _ ⟨.reprRust, .aligned n _⟩, l => l.ReasonablyAligned ∧ l.Aligned n
-| .enum _ ⟨.reprC, m⟩, l => l.IsReprCEnum (.unsigned .Usize) m
-| .enum _ ⟨.reprC_prim prim, m⟩, l => l.IsReprCEnum prim m
-| .enum _ ⟨.reprPrim prim, m⟩, l => l.IsReprPrimEnum prim m
+/-! ## `IsReprC` and Flag Satisfaction Lemmas -/
 
 @[grind →]
 lemma IsReprCTuple.reasonablyAligned_of {init_off : Nat} {t : MType} {l : Layout t}

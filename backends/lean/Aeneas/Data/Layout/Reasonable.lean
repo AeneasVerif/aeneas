@@ -5,11 +5,39 @@ public import Aeneas.Data.Layout.GaloisConnection
 
 namespace Aeneas
 
+/-! ## Definitions -/
+
 @[simp, grind =]
 def EnumFlags.maxVariants (f : EnumFlags) : Nat :=
   match f.repr with
   | .reprRust | .reprC => Std.Usize.max
   | .reprC_prim prim | .reprPrim prim => 2 ^ prim.numBits
+
+namespace MType
+
+class TupleFlagsReasonable (f : TupleFlags) : Prop where
+  out : f.repr = .reprTransparent → f.align = .reasonablyAligned
+
+/-! We talk about "Reasonable" types mostly because not all types have a layout, only reasonable ones.
+    Notably, we need to rule out enums with a galactic number of variants. -/
+inductive Reasonable : MType → Prop where
+  | int ty : Reasonable (.int ty)
+  | tuple ts f :
+      (∀ idx (h : idx < ts.length), ts[idx].Reasonable) →
+      TupleFlagsReasonable f →
+      Reasonable (.tuple ts f)
+  | enum vs f :
+      vs.length ≤ f.maxVariants →
+      (∀ idx (h : idx < vs.length), vs[idx].isTuple) →
+      (∀ idx (h : idx < vs.length), vs[idx].Reasonable) →
+      Reasonable (.enum vs f)
+
+attribute [class] Reasonable
+attribute [instance] Reasonable.int
+
+end MType
+
+/-! ## Typeclass Synthesis Helpers and Lemmas -/
 
 @[simp, reducible]
 def IUScalarTy.minMaxVariants : IUScalarTy → Nat
@@ -36,29 +64,9 @@ lemma EnumFlags.minMaxVariants_le_maxVariants (f : EnumFlags) : f.minMaxVariants
 
 namespace MType
 
-class TupleFlagsReasonable (f : TupleFlags) : Prop where
-  out : f.repr = .reprTransparent → f.align = .reasonablyAligned
-
 instance {f} : TupleFlagsReasonable ⟨.reprC, f⟩ := by constructor; simp
 instance {f} : TupleFlagsReasonable ⟨.reprRust, f⟩ := by constructor; simp
 instance : TupleFlagsReasonable ⟨.reprTransparent, .reasonablyAligned⟩ := by constructor; simp
-
-/-! We talk about "Reasonable" types mostly because not all types have a layout, only reasonable ones.
-    Notably, we need to rule out enums with a galactic number of variants. -/
-inductive Reasonable : MType → Prop where
-  | int ty : Reasonable (.int ty)
-  | tuple ts f :
-      (∀ idx (h : idx < ts.length), ts[idx].Reasonable) →
-      TupleFlagsReasonable f →
-      Reasonable (.tuple ts f)
-  | enum vs f :
-      vs.length ≤ f.maxVariants →
-      (∀ idx (h : idx < vs.length), vs[idx].isTuple) →
-      (∀ idx (h : idx < vs.length), vs[idx].Reasonable) →
-      Reasonable (.enum vs f)
-
-attribute [class] Reasonable
-attribute [instance] Reasonable.int
 
 class AllReasonable {α : Type} (l : List α) (f : α → MType) : Prop where
   out : ∀ idx (h : idx < l.length), (f l[idx]).Reasonable

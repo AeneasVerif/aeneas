@@ -18,9 +18,6 @@ def IUScalarTy.numBits (ty : IUScalarTy) : Nat :=
   | .signed ty => ty.numBits
   | .unsigned ty => ty.numBits
 
-@[simp, grind =] lemma IUScalarTy.numBits_signed (ty : Std.IScalarTy) : (IUScalarTy.signed ty).numBits = ty.numBits := rfl
-@[simp, grind =] lemma IUScalarTy.numBits_unsigned (ty : Std.UScalarTy) : (IUScalarTy.unsigned ty).numBits = ty.numBits := rfl
-
 @[expose, implicit_reducible]
 def IUScalar (ty : IUScalarTy) : Type :=
   match ty with
@@ -43,9 +40,6 @@ namespace IUScalar
   match ty with
   | .signed _ => ⟨bv⟩
   | .unsigned _ => ⟨bv⟩
-
-@[simp, grind =] lemma bv_fromBv {ty : IUScalarTy} (bv : BitVec ty.numBits) : (fromBv bv).bv = bv := by
-  cases ty <;> rfl
 
 end IUScalar
 
@@ -103,6 +97,12 @@ def inhabited : MType → Bool
   | .tuple ts _ => ts.attach.all (λ ⟨t, _⟩ ↦ t.inhabited)
   | .enum vs _ => vs.attach.any (λ ⟨v, _⟩ ↦ v.inhabited)
 
+inductive isTuple : MType → Prop where
+  | tuple ts : isTuple (.tuple ts ⟨.reprRust, .reasonablyAligned⟩)
+
+attribute [class] isTuple
+attribute [instance] isTuple.tuple
+
 end MType
 
 /-! ## Machine Values (`MVal`) and Validity (`MVal.valid_for`) -/
@@ -121,7 +121,16 @@ inductive valid_for : (v : MVal) → (ty : MType) → Prop where
       valid_for v ts[dv] →
       valid_for (.variant dv v) (.enum ts f)
 
-namespace valid_for
+end MVal
+
+/-! ## Lemmas and Projections -/
+
+@[simp, grind =] lemma IUScalarTy.numBits_signed (ty : Std.IScalarTy) : (IUScalarTy.signed ty).numBits = ty.numBits := rfl
+@[simp, grind =] lemma IUScalarTy.numBits_unsigned (ty : Std.UScalarTy) : (IUScalarTy.unsigned ty).numBits = ty.numBits := rfl
+@[simp, grind =] lemma IUScalar.bv_fromBv {ty : IUScalarTy} (bv : BitVec ty.numBits) : (IUScalar.fromBv bv).bv = bv := by
+  cases ty <;> rfl
+
+namespace MVal.valid_for
 
 attribute [simp] int tuple enum
 attribute [grind ←] int tuple enum
@@ -177,17 +186,6 @@ def vfield {d : Nat} {vs : List MVal} {ts vts : List MType} {f1 f2}
     { v : MVal // v.valid_for (vts[i]'(by grind)) } :=
   ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i hi⟩
 
-end valid_for
-end MVal
-
-namespace MType
-
-inductive isTuple : MType → Prop where
-  | tuple ts : isTuple (.tuple ts ⟨.reprRust, .reasonablyAligned⟩)
-
-attribute [class] isTuple
-attribute [instance] isTuple.tuple
-
-end MType
+end MVal.valid_for
 
 end Aeneas

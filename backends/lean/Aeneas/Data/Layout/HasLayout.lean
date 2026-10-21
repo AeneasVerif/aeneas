@@ -16,45 +16,8 @@ namespace Aeneas
 
 /-! ## The `HasLayout` Type Class -/
 
-macro "has_layout_retract_embed" : tactic =>
-  let rty := Lean.mkIdent `Aeneas.HasLayout.rty
-  let embed := Lean.mkIdent `Aeneas.HasLayout.embed
-  let retract := Lean.mkIdent `Aeneas.HasLayout.retract
-  `(tactic| (
-    intro x
-    cases x
-    repeat cases ‹_ × _›
-    all_goals simp [-$rty:ident, -$embed:ident, -$retract:ident]
-  ))
-
-macro "has_layout_embed_retract" : tactic =>
-  let rty := Lean.mkIdent `Aeneas.HasLayout.rty
-  let embed := Lean.mkIdent `Aeneas.HasLayout.embed
-  let retract := Lean.mkIdent `Aeneas.HasLayout.retract
-  let retract_iff := Lean.mkIdent `Aeneas.HasLayout.retract_eq_some_iff
-  `(tactic| (
-    intro ⟨v, h⟩ x h_ret
-    have h' := h
-    dsimp only [RichMType.mkTuple, RichMType.mkEnum, List.map] at h'
-    cases h'
-    all_goals (
-      repeat' (
-        first
-        | exact False.elim (MVal.valid_for.empty_elim ‹_›)
-        | (cases ‹Nat› <;> dsimp (config := { iota := false, beta := false, zeta := false, proj := false }) only [Nat.zero_eq, Nat.succ_eq_add_one, List.getElem_cons_succ, List.getElem_cons_zero] at *)
-      )
-      all_goals (
-        try cases ‹MVal.valid_for _ (.tuple _ _)›
-        repeat cases ‹List.Forall₂ _ _ _›
-        simp [-$rty:ident, -$embed:ident, -$retract:ident, Option.bind_eq_some_iff, $retract_iff:ident, Subtype.ext_iff] at h_ret
-        repeat' (first | cases ‹∃ _, _› | cases ‹_ ∧ _› | cases ‹_ ∨ _›)
-        all_goals (
-          try subst x
-          simp [-$rty:ident, -$embed:ident, -$retract:ident, *]
-        )
-      )
-    )
-  ))
+syntax "has_layout_retract_embed" : tactic
+syntax "has_layout_embed_retract" : tactic
 
 @[grind =]
 def valid_layouts_inhabitant (x : RichMType) [x.1.Reasonable] [x.2.Valid] [x.2.TransparentValid]: { l : Layout x.1 // x.IsValidLayoutForRichMType l} :=
@@ -80,6 +43,60 @@ class HasLayout (α : Type u) where
 
 namespace HasLayout
 
+@[expose, simp, grind =] def ty (α : Type u) [h : HasLayout α] : MType := h.rty.1
+
+noncomputable def the_layout (α : Type u) [h : HasLayout α] : { l : Layout (ty α) // h.valid_layout l } := Classical.choice (Nonempty.intro h.valid_layout_inhab)
+
+@[expose, reducible] noncomputable def xty (α : Type u) [h : HasLayout α] : ((m : MType) × Layout m) := ⟨ty α, the_layout α⟩
+
+end HasLayout
+
+/-! ## Tactics, Lemmas, and Instances -/
+
+macro_rules
+  | `(tactic| has_layout_retract_embed) =>
+    let rty := Lean.mkIdent `Aeneas.HasLayout.rty
+    let embed := Lean.mkIdent `Aeneas.HasLayout.embed
+    let retract := Lean.mkIdent `Aeneas.HasLayout.retract
+    `(tactic| (
+      intro x
+      cases x
+      repeat cases ‹_ × _›
+      all_goals simp [-$rty:ident, -$embed:ident, -$retract:ident]
+    ))
+
+macro_rules
+  | `(tactic| has_layout_embed_retract) =>
+    let rty := Lean.mkIdent `Aeneas.HasLayout.rty
+    let embed := Lean.mkIdent `Aeneas.HasLayout.embed
+    let retract := Lean.mkIdent `Aeneas.HasLayout.retract
+    let retract_iff := Lean.mkIdent `Aeneas.HasLayout.retract_eq_some_iff
+    `(tactic| (
+      intro ⟨v, h⟩ x h_ret
+      have h' := h
+      dsimp only [RichMType.mkTuple, RichMType.mkEnum, List.map] at h'
+      cases h'
+      all_goals (
+        repeat' (
+          first
+          | exact False.elim (MVal.valid_for.empty_elim ‹_›)
+          | (cases ‹Nat› <;> dsimp (config := { iota := false, beta := false, zeta := false, proj := false }) only [Nat.zero_eq, Nat.succ_eq_add_one, List.getElem_cons_succ, List.getElem_cons_zero] at *)
+        )
+        all_goals (
+          try cases ‹MVal.valid_for _ (.tuple _ _)›
+          repeat cases ‹List.Forall₂ _ _ _›
+          simp [-$rty:ident, -$embed:ident, -$retract:ident, Option.bind_eq_some_iff, $retract_iff:ident, Subtype.ext_iff] at h_ret
+          repeat' (first | cases ‹∃ _, _› | cases ‹_ ∧ _› | cases ‹_ ∨ _›)
+          all_goals (
+            try subst x
+            simp [-$rty:ident, -$embed:ident, -$retract:ident, *]
+          )
+        )
+      )
+    ))
+
+namespace HasLayout
+
 instance {α : Type u} [h : HasLayout α] : ((HasLayout.rty α).1).Reasonable :=
   h.reasonable
 
@@ -88,12 +105,6 @@ instance {α : Type u} [h : HasLayout α] : (HasLayout.rty α).2.Valid :=
 
 instance {α : Type u} [h : HasLayout α] : (HasLayout.rty α).2.TransparentValid :=
   h.transparent_valid
-
-@[expose, simp, grind =] def ty (α : Type u) [h : HasLayout α] : MType := h.rty.1
-
-noncomputable def the_layout (α : Type u) [h : HasLayout α] : { l : Layout (ty α) // h.valid_layout l } := Classical.choice (Nonempty.intro h.valid_layout_inhab)
-
-@[expose, reducible] noncomputable def xty (α : Type u) [h : HasLayout α] : ((m : MType) × Layout m) := ⟨ty α, the_layout α⟩
 
 instance {α : Type u} [h : HasLayout α] : ((xty α).1).Reasonable :=
   h.reasonable

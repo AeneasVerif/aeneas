@@ -30,9 +30,6 @@ namespace Layout
 def disj_range (r1 r2 : Nat × Nat) : Prop :=
   ∀ n, r1.1 ≤ n → n < r1.2 → r2.1 ≤ n → n < r2.2 → False
 
-@[grind →] theorem disj_range_def r1 r2 :
-  disj_range r1 r2 → ∀ n, r1.1 ≤ n → n < r1.2 → r2.1 ≤ n → n < r2.2 → False := λ x ↦ x
-
 @[grind]
 structure TupleValid (n : Nat) (field_offs : (idx : Nat) → idx < n → Nat)
     (field_sizes : (idx : Nat) → idx < n → Nat) (sa : SizeAndAlign) where
@@ -87,6 +84,11 @@ inductive Valid : {ty : MType} → Layout ty → Prop where
       EnumValid vt vl dc sa →
       (@Layout.enum vs f vt vl dc sa).satisfies →
       Valid (.enum vt vl dc sa : Layout (.enum vs f))
+
+/-! ## Lemmas -/
+
+@[grind →] theorem disj_range_def r1 r2 :
+  disj_range r1 r2 → ∀ n, r1.1 ≤ n → n < r1.2 → r2.1 ≤ n → n < r2.2 → False := λ x ↦ x
 
 @[grind →]
 lemma Valid.satisfies {ty : MType} {l : Layout ty} (hl : l.Valid) : l.satisfies :=

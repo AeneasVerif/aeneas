@@ -8,17 +8,8 @@ namespace Aeneas
 
 namespace Endianness
 
-@[simp, grind =] lemma mul_8_size_eq {ty : IUScalarTy} : 8 * ty.size = ty.numBits := by
-  rcases ty with ⟨t⟩ | ⟨t⟩ <;> cases t <;> rcases System.Platform.numBits_eq with h | h <;>
-    simp [IUScalarTy.size, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h]
-
 def encode_bitvec {w : Nat} (sz : Nat) (bv : BitVec w) (_ : w ≤ 8 * sz := by simp only [Aeneas.Endianness.mul_8_size_eq]; omega) : Vector Byte sz :=
   Vector.ofFn λ i ↦ BitVec.extractLsb' (8 * i.val) 8 bv
-
-@[grind ←]
-lemma numBits_div_8_lt {ty : IUScalarTy} {k : Nat} (hk : k < ty.numBits) :
-    k / 8 < ty.size := by
-  have := mul_8_size_eq (ty := ty); omega
 
 def decode_bitvec (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) : BitVec ty.numBits :=
   BitVec.ofFn λ k ↦
@@ -34,51 +25,6 @@ def decode (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) : ℤ :=
   match ty with
   | .unsigned _ => ((decode_bitvec _ bytes_data).toNat : ℤ)
   | .signed _ => (decode_bitvec _ bytes_data).toInt
-
-@[simp, grind =]
-lemma decode_bitvec_encode_bitvec (ty : IUScalarTy) (bv : BitVec ty.numBits) :
-    decode_bitvec ty (encode_bitvec ty.size bv) = bv := by
-  ext k hk
-  simp [decode_bitvec, encode_bitvec]
-  congr 1; simp; omega
-
-@[simp, grind =]
-lemma encode_bitvec_decode_bitvec (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
-    encode_bitvec ty.size (decode_bitvec ty bytes_data) = bytes_data := by
-  ext i hi r hr
-  have hbit : 8 * i + r < ty.numBits := by have := mul_8_size_eq (ty := ty); omega
-  simp only [encode_bitvec, Vector.getElem_ofFn, BitVec.getElem_extractLsb']
-  change (decode_bitvec ty bytes_data)[8 * i + r] = bytes_data[i][r]
-  simp [IUScalarTy.size, decode_bitvec, show (8 * i + r) / 8 = i by omega, show (8 * i + r) % 8 = r by omega]
-
-@[grind ←]
-lemma decode_can_repr (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
-    ty.can_repr (decode ty bytes_data) :=
-  match ty with
-  | .unsigned _ => ⟨⟨decode_bitvec _ bytes_data⟩, rfl⟩
-  | .signed _ => ⟨⟨decode_bitvec _ bytes_data⟩, rfl⟩
-
-@[grind =]
-lemma decode_encode (ty : IUScalarTy) (i : ℤ) (h : ty.can_repr i) :
-    decode ty (encode ty i h) = i := by
-  obtain ⟨s, rfl⟩ := h
-  cases ty with
-  | unsigned u =>
-    simp only [decode, encode, decode_bitvec_encode_bitvec, IUScalar.val, Std.UScalar.val,
-               Int.toNat_natCast, BitVec.ofNat_toNat, BitVec.setWidth_eq]
-  | signed st =>
-    simp only [decode, encode, decode_bitvec_encode_bitvec, IUScalar.val, Std.IScalar.val,
-               BitVec.ofInt_toInt]
-
-@[simp, grind =]
-lemma encode_decode (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
-    encode ty (decode ty bytes_data) (decode_can_repr ty bytes_data) = bytes_data := by
-  cases ty with
-  | unsigned u =>
-    simp only [encode, decode, IUScalarTy.numBits, Int.toNat_natCast, BitVec.ofNat_toNat,
-               BitVec.setWidth_eq, encode_bitvec_decode_bitvec]
-  | signed st =>
-    simp only [encode, decode, BitVec.ofInt_toInt, encode_bitvec_decode_bitvec]
 
 end Endianness
 
@@ -102,43 +48,11 @@ def decode_discriminant {n : Nat} (bytes : Bytes n) : Discriminator → Option N
         decode_discriminant bytes (matcher bv)
       else none
 
-@[simp, grind =] lemma decode_discriminant_known {n : Nat} (bytes : Bytes n) (v : Nat) :
-    decode_discriminant bytes (.known v) = some v := rfl
-@[simp, grind =] lemma decode_discriminant_invalid {n : Nat} (bytes : Bytes n) :
-    decode_discriminant bytes .invalid = none := rfl
-
 /-- Writes the tag described by the tagger into `bytes`. -/
 def encode_discriminant {n : Nat} (bytes : Bytes n) (tagger : List TagToWrite) : Bytes n :=
   tagger.foldl (init := bytes) λ acc tag ↦
     let tag_bytes_data := Endianness.encode_bitvec tag.ty.size tag.data.bv
     acc.write_subslice_at_index tag.offset (tag_bytes_data.map .init)
-
-@[grind ←]
-lemma decode_discriminant_mono {n : Nat} {bs1 bs2 : Bytes n} (h_le : bs1.le_defined bs2) :
-    ∀ d : Discriminator, Option.le_defined (decode_discriminant bs1 d) (decode_discriminant bs2 d)
-  | .known _ => rfl
-  | .invalid => trivial
-  | .read offset value_type matcher => by
-    unfold decode_discriminant; dsimp only
-    split
-    case isFalse => trivial
-    case isTrue h =>
-      dsimp only [Option.bind_eq_bind]
-      cases h_data : (bs1.subslice_with_length offset value_type.size h).toData with
-      | none => simp
-      | some bytes_data =>
-        have h_sub_eq := Bytes.eq_of_toData_some_le_defined h_data (Bytes.subslice_le_defined h_le _ _ h)
-        rw [← h_sub_eq, h_data]
-        exact decode_discriminant_mono h_le _
-
-@[grind ←]
-lemma encode_discriminant_le_defined {n : Nat} (payload bytes : Bytes n) (tags : List TagToWrite)
-    (h_pay : payload.le_defined bytes)
-    (h_tag : (encode_discriminant (Bytes.uninit n) tags).le_defined bytes) :
-    (encode_discriminant payload tags).le_defined bytes :=
-  Bytes.foldl_write_subslice_overlay_le_defined tags (·.offset)
-    (λ tag ↦ (Endianness.encode_bitvec tag.ty.size tag.data.bv).map .init)
-    payload bytes h_pay h_tag
 
 namespace Layout
 
@@ -231,5 +145,88 @@ def EncodeDecodeLeDefined {ty : MType} (l : Layout ty) : Prop :=
     decode l bytes = some val → (encode l val hv).le_defined bytes
 
 end Layout
+
+/-! ## Lemmas -/
+
+namespace Endianness
+
+@[simp, grind =]
+lemma decode_bitvec_encode_bitvec (ty : IUScalarTy) (bv : BitVec ty.numBits) :
+    decode_bitvec ty (encode_bitvec ty.size bv) = bv := by
+  ext k hk
+  simp [decode_bitvec, encode_bitvec]
+  congr 1; simp; omega
+
+@[simp, grind =]
+lemma encode_bitvec_decode_bitvec (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
+    encode_bitvec ty.size (decode_bitvec ty bytes_data) = bytes_data := by
+  ext i hi r hr
+  have hbit : 8 * i + r < ty.numBits := by have := mul_8_size_eq (ty := ty); omega
+  simp only [encode_bitvec, Vector.getElem_ofFn, BitVec.getElem_extractLsb']
+  change (decode_bitvec ty bytes_data)[8 * i + r] = bytes_data[i][r]
+  simp [IUScalarTy.size, decode_bitvec, show (8 * i + r) / 8 = i by omega, show (8 * i + r) % 8 = r by omega]
+
+@[grind ←]
+lemma decode_can_repr (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
+    ty.can_repr (decode ty bytes_data) :=
+  match ty with
+  | .unsigned _ => ⟨⟨decode_bitvec _ bytes_data⟩, rfl⟩
+  | .signed _ => ⟨⟨decode_bitvec _ bytes_data⟩, rfl⟩
+
+@[grind =]
+lemma decode_encode (ty : IUScalarTy) (i : ℤ) (h : ty.can_repr i) :
+    decode ty (encode ty i h) = i := by
+  obtain ⟨s, rfl⟩ := h
+  cases ty with
+  | unsigned u =>
+    simp only [decode, encode, decode_bitvec_encode_bitvec, IUScalar.val, Std.UScalar.val,
+               Int.toNat_natCast, BitVec.ofNat_toNat, BitVec.setWidth_eq]
+  | signed st =>
+    simp only [decode, encode, decode_bitvec_encode_bitvec, IUScalar.val, Std.IScalar.val,
+               BitVec.ofInt_toInt]
+
+@[simp, grind =]
+lemma encode_decode (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
+    encode ty (decode ty bytes_data) (decode_can_repr ty bytes_data) = bytes_data := by
+  cases ty with
+  | unsigned u =>
+    simp only [encode, decode, IUScalarTy.numBits, Int.toNat_natCast, BitVec.ofNat_toNat,
+               BitVec.setWidth_eq, encode_bitvec_decode_bitvec]
+  | signed st =>
+    simp only [encode, decode, BitVec.ofInt_toInt, encode_bitvec_decode_bitvec]
+
+end Endianness
+
+@[simp, grind =] lemma decode_discriminant_known {n : Nat} (bytes : Bytes n) (v : Nat) :
+    decode_discriminant bytes (.known v) = some v := rfl
+@[simp, grind =] lemma decode_discriminant_invalid {n : Nat} (bytes : Bytes n) :
+    decode_discriminant bytes .invalid = none := rfl
+
+@[grind ←]
+lemma decode_discriminant_mono {n : Nat} {bs1 bs2 : Bytes n} (h_le : bs1.le_defined bs2) :
+    ∀ d : Discriminator, Option.le_defined (decode_discriminant bs1 d) (decode_discriminant bs2 d)
+  | .known _ => rfl
+  | .invalid => trivial
+  | .read offset value_type matcher => by
+    unfold decode_discriminant; dsimp only
+    split
+    case isFalse => trivial
+    case isTrue h =>
+      dsimp only [Option.bind_eq_bind]
+      cases h_data : (bs1.subslice_with_length offset value_type.size h).toData with
+      | none => simp
+      | some bytes_data =>
+        have h_sub_eq := Bytes.eq_of_toData_some_le_defined h_data (Bytes.subslice_le_defined h_le _ _ h)
+        rw [← h_sub_eq, h_data]
+        exact decode_discriminant_mono h_le _
+
+@[grind ←]
+lemma encode_discriminant_le_defined {n : Nat} (payload bytes : Bytes n) (tags : List TagToWrite)
+    (h_pay : payload.le_defined bytes)
+    (h_tag : (encode_discriminant (Bytes.uninit n) tags).le_defined bytes) :
+    (encode_discriminant payload tags).le_defined bytes :=
+  Bytes.foldl_write_subslice_overlay_le_defined tags (·.offset)
+    (λ tag ↦ (Endianness.encode_bitvec tag.ty.size tag.data.bv).map .init)
+    payload bytes h_pay h_tag
 
 end Aeneas
