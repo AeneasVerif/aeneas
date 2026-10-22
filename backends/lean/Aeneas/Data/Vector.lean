@@ -90,7 +90,7 @@ theorem getElem_setSlice!_same {α} {n} [Inhabited α] (s : Vector α n) (s' : L
   (s.setSlice! i s')[j] = s[j] := by
   cases h.1 <;> simp_lists [getElem_setSlice!_prefix, getElem_setSlice!_suffix]
 
-def Inhabited_getElem_eq_getElem! {α} {n} [Inhabited α] (l : Vector α n) (i : ℕ) (hi : i < n) :
+theorem Inhabited_getElem_eq_getElem! {α} {n} [Inhabited α] (l : Vector α n) (i : ℕ) (hi : i < n) :
   l[i] = l[i]! := by
   simp only [getElem_eq_toArray_getElem, size_toArray, hi, Array.Inhabited_getElem_eq_getElem!,
     getElem!_eq_toArray_getElem!]
@@ -111,7 +111,7 @@ theorem getElem!_set! {α : Type u}
   simp_lists
 
 @[simp, simp_lists_safe]
-theorem getElem_set! {α : Type u}
+theorem getElem_set!' {α : Type u}
   [Inhabited α] {n i j : ℕ} {x : α} {xs : Vector α n}
   (hi : i < n ∧ j = i) :
   (xs.set! i x)[j] = x := by
@@ -130,7 +130,7 @@ theorem getElem!_set!_ne {α : Type u}
   simp_lists
 
 @[simp, simp_lists_safe]
-theorem getElem_set!_ne {α : Type u}
+theorem getElem_set!_ne' {α : Type u}
   [Inhabited α] {n i j : ℕ} {x : α} {xs : Vector α n}
   (h : i ≠ j ∧ j < n) :
   (xs.set! i x)[j] = xs[j] := by
@@ -205,8 +205,7 @@ theorem set!_comm' {α} {i j : Nat} (h : j < i)
   (v : Vector α n) (x y : α) :
   (v.set! i x).set! j y = (v.set! j y).set! i x := by
   cases v; rename_i a h; cases a; simp
-  rw [List.set_comm']
-  assumption
+  rwa [List.set_comm']
 
 @[simp_lists_safe]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :

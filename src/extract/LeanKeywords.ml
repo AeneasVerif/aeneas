@@ -123,6 +123,7 @@ let lean_keywords : string list =
     "initialize_simps_projections";
     "initialize_simps_projections?";
     "insert_to_additive_translation";
+    "insert_to_dual_translation";
     "instance";
     "instance_wanted";
     "irreducible_def";
@@ -138,7 +139,6 @@ let lean_keywords : string list =
     "let_impl_detail";
     "let_tmp";
     "library_note";
-    "library_note2";
     "local";
     "logNamedError";
     "logNamedErrorAt";
@@ -154,6 +154,7 @@ let lean_keywords : string list =
     "meta";
     "mk_iff_of_inductive_prop";
     "mod_cast";
+    "monotonicity_by";
     "mut";
     "mutual";
     "name";
@@ -183,6 +184,8 @@ let lean_keywords : string list =
     "proof_wanted";
     "protected";
     "public";
+    "recall";
+    "recall?";
     "recommended_spelling";
     "register_builtin_option";
     "register_error_explanation";
@@ -246,6 +249,7 @@ let lean_keywords : string list =
     "throwNamedErrorAt";
     "to";
     "to_additive_name_hint";
+    "to_dual_for";
     "to_dual_insert_cast";
     "to_dual_insert_cast_fun";
     "to_dual_name_hint";

@@ -34,7 +34,7 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
   | VaTraitConstValue (trait_ref, const_id) ->
       let name =
         Charon.GAstUtils.get_assoc_const_name env.crate
-          trait_ref.trait_decl_ref.binder_value.id const_id
+          trait_ref.trait_decl_ref.id const_id
       in
       trait_ref_to_string env trait_ref ^ "." ^ name
   | VaDiscriminant sv ->

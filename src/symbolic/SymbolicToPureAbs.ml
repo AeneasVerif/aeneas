@@ -12,7 +12,7 @@ let log = Logging.symbolic_to_pure_abs_log
 (** Explore an abstraction value and compute the type of the value consumed upon
     ending the loans. *)
 let rec tavalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (av : V.tavalue) : ty option =
   match av.value with
   | AAdt adt_v ->
@@ -35,7 +35,7 @@ let rec tavalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
         Some (ctx_translate_fwd_ty ctx av.ty)
 
 and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (av : V.tavalue) (adt_v : V.adt_avalue) :
     ty option =
   let _, out =
@@ -57,8 +57,8 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
   Option.map snd out
 
 and aloan_content_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
-    (_abs_regions : T.RegionId.Set.t) (ty : T.ty) (lc : V.aloan_content) :
-    ty option =
+    (_abs_regions : T.region_set) (ty : T.ty) (lc : V.aloan_content) : ty option
+    =
   let _ = filter in
   match lc with
   | AMutLoan (pm, _, child) ->
@@ -79,7 +79,7 @@ and aloan_content_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
       (* This case only happens with nested borrows *)
       [%craise] ctx.span "Unimplemented"
 
-and aproj_to_consumed_ty_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
+and aproj_to_consumed_ty_aux (ctx : bs_ctx) (_abs_regions : T.region_set)
     (aproj : V.aproj) (_ty : T.ty) : ty option =
   match aproj with
   | V.AProjLoans { proj; consumed; borrows } ->
@@ -89,7 +89,7 @@ and aproj_to_consumed_ty_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
   | V.AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty | AProjBorrows _ ->
       [%craise] ctx.span "Unreachable"
 
-let tavalue_to_consumed_ty (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
+let tavalue_to_consumed_ty (ctx : bs_ctx) (abs_regions : T.region_set)
     (abs_level : abs_level) (av : V.tavalue) : ty option =
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* Check if the value was generated from a loan projector: if yes, and if
@@ -113,7 +113,7 @@ let tavalue_to_consumed_ty (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
       None
 
 let rec tavalue_to_given_back_ty_aux ~(filter : bool) (ctx : bs_ctx)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (av : V.tavalue) : ty option =
   match av.value with
   | AAdt adt_v ->
@@ -131,7 +131,7 @@ let rec tavalue_to_given_back_ty_aux ~(filter : bool) (ctx : bs_ctx)
       else Some (translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty)
 
 and adt_avalue_to_given_back_ty_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (av : V.tavalue) (adt_v : V.adt_avalue)
     (ctx : bs_ctx) : ty option =
   let _, out =
@@ -176,7 +176,7 @@ and aproj_to_given_back_ty_aux (aproj : V.aproj) (ty : T.ty) (ctx : bs_ctx) :
   | V.AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty | AProjLoans _ ->
       [%craise] ctx.span "Unreachable"
 
-let tavalue_to_given_back_ty (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
+let tavalue_to_given_back_ty (ctx : bs_ctx) (abs_regions : T.region_set)
     (abs_level : abs_level) (v : V.tavalue) : ty option =
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* Check if the value was generated from a borrow projector: if yes, and if
@@ -236,7 +236,7 @@ let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
   else Some (mk_arrows inputs (mk_simpl_tuple_ty outputs))
 
 let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (ev : V.tevalue) : proj_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
@@ -258,7 +258,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
 
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid abs_regions
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' abs_regions
     | _ -> false
   in
   let ty_has_mut_region =
@@ -363,12 +363,12 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
   else UnknownProj
 
 let abs_fvar_id_to_tpat (ctx : bs_ctx)
-    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
+    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.region_set)
     ~(filter : bool) (fid : V.abs_fvar_id) (ty : T.ty) : bs_ctx * tpat option =
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' rids
     | _ -> false
   in
   if TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region ty
@@ -418,7 +418,7 @@ let bound_borrows_loans_to_string (ctx : bs_ctx) (bound : bound_borrows_loans) :
     want to eliminate it) we register it in [fvar_to_none] for sanity purposes.
 *)
 let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
-    (rids : T.RegionId.Set.t) (abs_level : abs_level) (output : V.tevalue) :
+    (rids : T.region_set) (abs_level : abs_level) (output : V.tevalue) :
     bs_ctx * bound_borrows_loans * tpat =
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   let span = ctx.span in
@@ -427,7 +427,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   let symbolic = ref NormSymbProjMap.empty in
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' rids
     | _ -> false
   in
   let fresh_fvar ctx (ty : T.ty) : bs_ctx * texpr * tpat =
@@ -539,12 +539,12 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   (ctx, bound, pat)
 
 let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
-    (rids : T.RegionId.Set.t) (pat : V.tepat) : bs_ctx * tpat =
+    (rids : T.region_set) (pat : V.tepat) : bs_ctx * tpat =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' rids
     | _ -> false
   in
   let rec to_pat ~(filter : bool) (ctx : bs_ctx) (pat : V.tepat) :
@@ -604,18 +604,18 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     monad?).
 
     [bound_inputs]: see the doc of [bound_inputs] *)
-let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
+let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
     (bound_inputs : bound_borrows_loans)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (abs_level : abs_level)
     (input : V.tevalue) : bs_ctx * bool * texpr =
   [%ldebug
     "- rids: "
-    ^ T.RegionId.Set.to_string None rids
+    ^ T.region_set_to_string rids
     ^ "\n- input: "
     ^ tevalue_to_string ctx input];
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   let span = ctx.span in
-  let rec to_texpr_aux ~(filter : bool) (rids : T.RegionId.Set.t)
+  let rec to_texpr_aux ~(filter : bool) (rids : T.region_set)
       (current_level : abs_level) (ctx : bs_ctx) (input : V.tevalue) :
       bs_ctx * bool * texpr option =
     [%ldebug
@@ -859,18 +859,18 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         let r, _, _ = TypesUtils.ty_as_ref input.ty in
         let keep_region (r : T.region) =
           match r with
-          | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+          | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' rids
           | _ -> false
         in
         let filter = if keep_region r then false else filter in
         to_texpr ~filter rids ctx inner
-  and to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
+  and to_texpr ~(filter : bool) (rids : T.region_set) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
     let e = to_texpr_aux ~filter rids 0 ctx input in
     [%ldebug
       let _, _, e = e in
       "- rids: "
-      ^ T.RegionId.Set.to_string None rids
+      ^ T.region_set_to_string rids
       ^ "\n- input:\n"
       ^ tevalue_to_string ctx input
       ^ "\n\n- resulting expr:\n"
@@ -890,8 +890,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     We need this to fix the order of the *inputs*: the *avalues* act as a
     function signature, while the order of the borrows inside the *evalues* is
     arbitrary. *)
-let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
-    (avl : V.tavalue list) : bound_borrows_loans * fvar list =
+let register_inputs (ctx : bs_ctx) (rids : T.region_set) (avl : V.tavalue list)
+    : bound_borrows_loans * fvar list =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let concrete = ref V.BorrowId.Map.empty in
@@ -900,7 +900,7 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
   let fvars = ref [] in
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' rids
     | _ -> false
   in
   let fresh_fvar (ty : T.ty) : texpr =
@@ -976,7 +976,7 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
     function signature. The signature should be contained within the abstraction
     continuation. *)
 let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
-    (rids : T.RegionId.Set.t) (avl : V.tavalue list) : texpr list =
+    (rids : T.region_set) (avl : V.tavalue list) : texpr list =
   [%ltrace
     "- bound_outputs:\n"
     ^ bound_borrows_loans_to_string ctx bound_outputs
@@ -987,7 +987,7 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
   let outputs = ref [] in
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' rids
     | _ -> false
   in
   let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
@@ -1108,10 +1108,9 @@ let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
           abs
       | _ -> [%internal_error] ctx.span)
 
-let rec tevalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
-    (current_level : abs_level) (mp : mplace option) (ev : V.tevalue)
-    (ctx : bs_ctx) : bs_ctx * tpat option =
+let rec tevalue_to_given_back_aux ~(filter : bool) (abs_regions : T.region_set)
+    (abs_level : abs_level) (current_level : abs_level) (mp : mplace option)
+    (ev : V.tevalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   let (ctx, value) : _ * tpat option =
     match ev.value with
     | EAdt adt_v ->
@@ -1149,10 +1148,9 @@ let rec tevalue_to_given_back_aux ~(filter : bool)
   (* Return *)
   (ctx, value)
 
-and adt_evalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
-    (current_level : abs_level) (av : V.tevalue) (adt_v : V.adt_evalue)
-    (ctx : bs_ctx) : bs_ctx * tpat option =
+and adt_evalue_to_given_back_aux ~(filter : bool) (abs_regions : T.region_set)
+    (abs_level : abs_level) (current_level : abs_level) (av : V.tevalue)
+    (adt_v : V.adt_evalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   let ctx, out =
     gtranslate_adt_fields ~project_borrows:true (tevalue_to_string ctx)
       (tpat_to_string ctx)
@@ -1231,9 +1229,8 @@ and eproj_to_given_back_aux (_abs_level : abs_level)
       (ctx, Some pat)
   | EEmpty | EProjLoans _ | EProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
-let tevalue_to_given_back (abs_regions : T.RegionId.Set.t)
-    (abs_level : abs_level) (mp : mplace option) (v : V.tevalue) (ctx : bs_ctx)
-    : bs_ctx * tpat option =
+let tevalue_to_given_back (abs_regions : T.region_set) (abs_level : abs_level)
+    (mp : mplace option) (v : V.tevalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).

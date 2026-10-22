@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -29,7 +30,8 @@ namespace vec_iter
 @[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<&'a alloc::vec::Vec<@T>, &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 axiom SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-  {T : Type} (A : Type) : alloc.vec.Vec T → Result (core.slice.iter.Iter T)
+  {T : Type _} (A : Type _) :
+  alloc.vec.Vec T → Result (core.slice.iter.Iter T)
 
 /-- [vec_iter::sum_by_value]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 6:4-8:5
@@ -97,7 +99,7 @@ def sum_by_ref_loop
 def sum_by_ref (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
   let iter ←
     SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-      Global v
+      alloc.alloc.Global v
   sum_by_ref_loop iter 0#u32
 
 /-- [vec_iter::sum_step_by]: loop body 0:

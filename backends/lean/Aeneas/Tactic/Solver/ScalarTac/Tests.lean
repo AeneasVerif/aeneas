@@ -179,7 +179,7 @@ example (x : I8) : x.toNat = x.val.toNat := by scalar_tac
 example (x y : U32)
     (h : 2 * x.val + 1 + y.val ≤ (U32.max : Int)) :
   2 * x.val + 1 ≤ (U32.max : Int) := by
-  try assumption
+  fail_if_success assumption
   scalar_tac
 
 example (d k : ℕ) (hdn : d < k) :

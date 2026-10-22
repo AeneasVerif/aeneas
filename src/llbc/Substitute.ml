@@ -7,6 +7,40 @@ open Types
 open Values
 open LlbcAst
 
+(** Visitor to erase the static region *)
+let erase_static_visitor =
+  object
+    inherit [_] map_ty
+    method! visit_RStatic _ = RErased
+  end
+
+(** Erase the regions in a type.
+
+    This shadows {!Charon.Substitute.erase_regions}: the difference is that we
+    also erase the static region (the types of the values in the environment
+    should have all their regions erased). *)
+let erase_regions (ty : ty) : ty =
+  erase_static_visitor#visit_ty () (Charon.Substitute.erase_regions ty)
+
+(** Shadows {!Charon.Substitute.generic_args_erase_regions} (we also erase the
+    static region) *)
+let generic_args_erase_regions (generics : generic_args) : generic_args =
+  erase_static_visitor#visit_generic_args ()
+    (Charon.Substitute.generic_args_erase_regions generics)
+
+(** Shadows {!Charon.Substitute.erase_regions_substitute_types} (we also erase
+    the static region) *)
+let erase_regions_substitute_types (subst : subst) (ty : ty) : ty =
+  erase_static_visitor#visit_ty ()
+    (Charon.Substitute.erase_regions_substitute_types subst ty)
+
+(** Shadows {!Charon.Substitute.type_decl_get_instantiated_field_etypes} (we
+    also erase the static region) *)
+let type_decl_get_instantiated_field_etypes (def : type_decl)
+    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+  List.map erase_regions
+    (type_decl_get_instantiated_field_types def opt_variant_id generics)
+
 (* Fails if the variable is bound *)
 let expect_free_var span (var : 'id de_bruijn_var) : 'id =
   match var with
@@ -40,9 +74,9 @@ let fresh_regions_with_substs_from_vars (region_vars : region_param list)
 let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> constant_expr_kind)
-    (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
+    (tr_sb_subst : TraitClauseId.id -> region_args -> trait_ref_kind)
     (tr_sb_self : trait_ref_kind) (sg : bound_fun_sig)
-    (regions_hierarchy : region_var_groups) : inst_fun_sig =
+    (regions_hierarchy : region_groups) : inst_fun_sig =
   let { item_binder_params = generics; item_binder_value = sg } = sg in
   let r_sb_subst id = RVar (Free (r_id_subst id)) in
   let subst =
@@ -51,20 +85,25 @@ let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
   in
   let inputs = List.map (ty_substitute subst) sg.inputs in
   let output = ty_substitute subst sg.output in
-  let subst_abs_region_group (rg : region_var_group) : abs_region_group =
+  let subst_region (r : region) : region =
+    match r with
+    | RVar (Free rid) -> RVar (Free (r_id_subst rid))
+    | _ -> r
+  in
+  let subst_abs_region_group (rg : region_group) : abs_region_group =
     let id = asubst rg.id in
-    let regions = List.map r_id_subst rg.regions in
+    let regions = List.map subst_region rg.regions in
     let parents = List.map asubst rg.parents in
     ({ id; regions; parents } : abs_region_group)
   in
   let abs_regions_hierarchy =
     List.map subst_abs_region_group regions_hierarchy
   in
-  let subst_region_group (rg : region_var_group) : region_var_group =
+  let subst_region_group (rg : region_group) : region_group =
     let id = rg.id in
-    let regions = List.map r_id_subst rg.regions in
+    let regions = List.map subst_region rg.regions in
     let parents = rg.parents in
-    ({ id; regions; parents } : region_var_group)
+    ({ id; regions; parents } : region_group)
   in
   let regions_hierarchy = List.map subst_region_group regions_hierarchy in
   let trait_type_constraints =
@@ -180,13 +219,14 @@ let generic_args_of_params_erase_regions (span : Meta.span option)
   let regions = List.map (fun _ -> RErased) generics.regions in
   (* Erase the free regions in the trait clauses, but keep the bound regions.
      A trait clause may be higher-ranked (e.g. [for<'a> Trait<&'a _>]), in which
-     case its [trait_decl_ref] carries bound regions in [binder_regions]: we
+     case its [poly_trait_ref] carries bound regions in [binder_regions]: we
      preserve those (and their uses inside the binder) rather than erasing them.
      Lifetime constraints over the bound regions (e.g. [for<'a> 'a : 'b]) are not
      supported and are rejected elsewhere (outlives guards). *)
   let trait_refs =
     List.map
-      (st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
+      (st_substitute_visitor#visit_region_binder
+         st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
       generics.trait_refs
   in
   { generics with regions; trait_refs }

@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -24,7 +25,7 @@ namespace drop_bug
 
 /-- [drop_bug::wipe_slice]:
     Source: 'tests/src/drop_bug.rs', lines 20:0-24:1 -/
-axiom wipe_slice {T : Type} : Slice T → Result (Slice T)
+axiom wipe_slice {T : Type _} : Slice T → Result (Slice T)
 
 /-- [drop_bug::Inner]
     Source: 'tests/src/drop_bug.rs', lines 26:0-28:1 -/

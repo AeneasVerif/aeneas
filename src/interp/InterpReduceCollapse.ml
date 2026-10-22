@@ -81,7 +81,7 @@ let get_non_marked_shared_loans span (ctx : eval_ctx) :
             if pm = PNone then
               let pred (r : region) =
                 match r with
-                | RVar (Free rid) -> RegionId.Set.mem rid env
+                | (RVar (Free _) | RStatic) as r' -> RegionSet.mem r' env
                 | _ -> false
               in
               if
@@ -97,12 +97,10 @@ let get_non_marked_shared_loans span (ctx : eval_ctx) :
       method! visit_abs _ abs = super#visit_abs abs.regions.owned abs
     end
   in
-  collect_loans#visit_eval_ctx RegionId.Set.empty ctx;
+  collect_loans#visit_eval_ctx RegionSet.empty ctx;
   (!non_marked_loans, !non_marked_projs)
 
-type borrow_or_proj =
-  | Borrow of borrow_id
-  | Proj of RegionId.Set.t * symbolic_proj
+type borrow_or_proj = Borrow of borrow_id | Proj of region_set * symbolic_proj
 
 (** Attempts to eliminate remaining markers over shared borrows.
 
@@ -169,13 +167,13 @@ let eliminate_shared_borrow_markers (span : Meta.span)
           method! visit_abs _ abs = super#visit_abs abs.regions.owned abs
         end
       in
-      update_borrows#visit_eval_ctx RegionId.Set.empty ctx
+      update_borrows#visit_eval_ctx RegionSet.empty ctx
   | Some shared_borrows ->
       (* We need to register the borrows out of which we eliminate the markers.
          For now, we can't register the addition of shared borrows at arbitrary
          positions. TODO: generalize. *)
-      let update_avalue (regions : RegionId.Set.t) (offset : int ref)
-          (aid : abs_id) (i : int) (av : tavalue) : tavalue =
+      let update_avalue (regions : region_set) (offset : int ref) (aid : abs_id)
+          (i : int) (av : tavalue) : tavalue =
         match av.value with
         | ABorrow (ASharedBorrow (pm, bid, sid)) ->
             let pm =
@@ -234,7 +232,7 @@ let eliminate_shared_borrow_markers (span : Meta.span)
             }
         end
       in
-      update_borrows#visit_eval_ctx RegionId.Set.empty ctx
+      update_borrows#visit_eval_ctx RegionSet.empty ctx
 
 (** Eliminate the markers of ended loans/borrows
 
@@ -768,6 +766,22 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             match AbsId.Set.elements abs_ids1 with
             | [] -> None
             | abs_id1 :: _ ->
+                (* The loan and its corresponding borrow may be in the same
+                   abstraction. This can only happen with abstractions owning
+                   the static region: because we "promote" abstractions to the
+                   static region when merging them with abstractions owning
+                   the static region, there may be cycles between the
+                   abstractions owning the static region. When merging those,
+                   the loan/borrow pairs for which the borrow is in the left
+                   abstraction and the loan in the right abstraction are not
+                   eliminated (see
+                   {!InterpAbs.merge_abstractions_merge_loan_borrow_pairs}).
+
+                   TODO: find a solution *)
+                [%cassert] span (abs_id0 <> abs_id1)
+                  "Unimplemented: found a loan and its corresponding borrow in \
+                   the same region abstraction (this can happen in some \
+                   situations involving the 'static lifetime)";
                 [%ltrace
                   "merging abstraction " ^ AbsId.to_string abs_id1 ^ " into "
                   ^ AbsId.to_string abs_id0 ^ ":" ^ "\n- abs "
@@ -1309,6 +1323,42 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
   InterpAbs.merge_into_first_abstraction span abs_kind ~can_end ~with_abs_conts
     (Some merge_funs) ctx aid0 aid1
 
+(** Check whether a non-frozen region abstraction contains a shared loan whose
+    shared value contains concrete borrows.
+
+    The collapse doesn't support this case: when computing the maps from
+    abstractions to borrows/loans (see
+    {!InterpMatchCtxs.compute_abs_borrows_loans_maps}) we can't register such
+    borrows. We use this function to fail early with a recoverable error in
+    {!collapse_ctx}. *)
+let ctx_has_borrows_in_shared_loans_of_non_frozen_abs (ctx : eval_ctx) : bool =
+  let frozen = ctx_get_frozen_abs_set ctx in
+  let has_borrows =
+    object
+      inherit [_] iter_tvalue
+      method! visit_borrow_content _ _ = raise Found
+    end
+  in
+  let visitor =
+    object
+      inherit [_] iter_tavalue as super
+
+      method! visit_aloan_content env lc =
+        (match lc with
+        | ASharedLoan (_, _, sv, _) -> has_borrows#visit_tvalue () sv
+        | _ -> ());
+        super#visit_aloan_content env lc
+    end
+  in
+  try
+    env_iter_abs
+      (fun abs ->
+        if not (AbsId.Set.mem abs.abs_id frozen) then
+          List.iter (visitor#visit_tavalue ()) abs.avalues)
+      ctx.env;
+    false
+  with Found -> true
+
 let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
     ?(shared_borrows_seq :
@@ -1316,6 +1366,14 @@ let collapse_ctx config (span : Meta.span)
       None) (fresh_abs_kind : abs_kind) ~(recoverable : bool)
     ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
+  (* The collapse doesn't support shared loans whose shared value contains
+     borrows in the abstractions it may modify: we check this here so that the
+     error is recoverable (if it is allowed, the caller can then decide not to
+     join, for instance by duplicating the code after a branching). *)
+  [%cassert_recover] recoverable span
+    (not (ctx_has_borrows_in_shared_loans_of_non_frozen_abs ctx))
+    "Joining region abstractions containing shared loans whose shared value \
+     contains borrows is not supported yet";
   let merge_funs =
     mk_collapse_ctx_merge_duplicate_funs span fresh_abs_kind ~recoverable
       ~with_abs_conts ctx
@@ -1335,8 +1393,7 @@ let add_shared_borrows (span : Meta.span)
       ((abs_id, i, pm, borrow_or_proj, ty) :
         abs_id * int * proj_marker * borrow_or_proj * ty) : unit =
     let abs = ctx_lookup_abs !ctx abs_id in
-    let rid = RegionId.Set.choose abs.regions.owned in
-    let r : region = RVar (Free rid) in
+    let r : region = abs_pick_region span abs in
     let rec update_avalues (i : int) (avl : tavalue list) : tavalue list =
       if i = 0 then
         let nv : tavalue =
@@ -1357,10 +1414,18 @@ let add_shared_borrows (span : Meta.span)
                  NormSymbProj.Set.mem proj loan_projs);
               (* Substitute the regions with the one we picked *)
               let proj_ty =
-                Substitute.ty_subst_rids span
-                  (fun rid' ->
-                    if RegionId.Set.mem rid' regions' then rid else rid')
-                  proj.proj_ty
+                let visitor =
+                  object
+                    inherit [_] map_ty
+
+                    method! visit_region _ r' =
+                      match r' with
+                      | (RVar (Free _) | RStatic) when RegionSet.mem r' regions'
+                        -> r
+                      | _ -> r'
+                  end
+                in
+                visitor#visit_ty () proj.proj_ty
               in
               let proj = { proj with proj_ty } in
               let value = ASymbolic (pm, AProjBorrows { proj; loans = [] }) in
@@ -1383,7 +1448,7 @@ let add_shared_borrows (span : Meta.span)
 
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
-    (sequence : (abs_id * abs_id * abs_id) list)
+    (sequence : (abs_id * abs_id * abs_id) list) (static_aids : AbsId.Set.t)
     (shared_borrows_seq :
       (abs_id * int * proj_marker * borrow_or_proj * ty) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx0 : eval_ctx) :
@@ -1412,7 +1477,7 @@ let collapse_ctx_following_sequence (span : Meta.span)
       let abs1 = get_id abs1 in
       (* Attempt to merge - note that some region might be missing, because
          it appears only in one environment and not the other *)
-      match (ctx_lookup_abs_opt !ctx abs0, ctx_lookup_abs_opt !ctx abs1) with
+      (match (ctx_lookup_abs_opt !ctx abs0, ctx_lookup_abs_opt !ctx abs1) with
       | Some _, Some _ ->
           (* Merge and register the new id *)
           [%ldebug
@@ -1442,7 +1507,26 @@ let collapse_ctx_following_sequence (span : Meta.span)
           [%ldebug
             "Could not find left abstraction " ^ AbsId.to_string abs0
             ^ " and right abstraction " ^ AbsId.to_string abs1
-            ^ " in context:\n" ^ eval_ctx_to_string !ctx])
+            ^ " in context:\n" ^ eval_ctx_to_string !ctx]);
+      (* If, in the original sequence, the result of the merge ends up in an
+         abstraction owning the static region, make sure the corresponding
+         abstraction in the current context owns the static region: merging
+         an abstraction owning the static region with other abstractions
+         promotes their regions to the static region (see
+         [InterpAbs.merge_into_first_abstraction]), but the abstraction which
+         owned the static region might be absent from the current context.
+
+         This is sound: it is always sound to force a (non-frozen) region
+         abstraction to live longer (we're just adding constraints: we might
+         get stuck because we need to end it but can't). *)
+      if AbsId.Set.mem nabs static_aids then
+        match AbsId.Map.find_opt nabs !nabs_map with
+        | Some nabs' -> (
+            match ctx_lookup_abs_opt !ctx nabs' with
+            | Some abs when not (abs_owns_static abs) ->
+                ctx := InterpAbs.ctx_promote_abs_to_static span !ctx nabs'
+            | _ -> ())
+        | None -> ())
     sequence;
   let ctx = !ctx in
   [%ldebug "ctx after applying the merge sequence:\n" ^ eval_ctx_to_string ctx];
@@ -1467,12 +1551,12 @@ let collapse_ctx_following_sequence (span : Meta.span)
   ctx
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
-    (sequence : (abs_id * abs_id * abs_id) list)
+    (sequence : (abs_id * abs_id * abs_id) list) (static_aids : AbsId.Set.t)
     (shared_borrows_seq :
       (abs_id * int * proj_marker * borrow_or_proj * ty) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
     eval_ctx =
   try
-    collapse_ctx_following_sequence span ~with_abs_conts sequence
+    collapse_ctx_following_sequence span ~with_abs_conts sequence static_aids
       shared_borrows_seq fresh_abs_kind ctx
   with ValueMatchFailure _ -> [%internal_error] span

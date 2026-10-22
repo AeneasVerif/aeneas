@@ -83,7 +83,7 @@ theorem getElem_setSlice!_same {α} (s : Array α) (s' : List α) (i j : ℕ)
   (s.setSlice! i s')[j] = s[j] := by
   cases h.1 <;> simp_lists [getElem_setSlice!_prefix, getElem_setSlice!_suffix]
 
-def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
+theorem Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
   l[i] = l[i]! := by
   have : l.toList[i] = l.toList[i]! :=
     List.Inhabited_getElem_eq_getElem! l.toList i (by simpa using hi)
@@ -110,13 +110,7 @@ theorem getElem_set! {α : Type u}
   simp only [set!_eq_setIfInBounds, ← getElem_toList, toList_setIfInBounds]
   simp_lists
 
-@[simp, simp_lists_safe]
-theorem getElem!_set!_ne {α : Type u}
-  [Inhabited α] {i j : ℕ} {x : α} {xs : Array α}
-  (h : i ≠ j) :
-  (xs.set! i x)[j]! = xs[j]! := by
-  simp only [set!_eq_setIfInBounds, ← getElem!_toList, toList_setIfInBounds]
-  simp_lists
+attribute [simp, simp_lists_safe] getElem!_set!_ne
 
 @[simp, simp_lists_safe]
 theorem getElem_set!_ne {α : Type u}
@@ -170,8 +164,7 @@ theorem getElem!_range_zero {n i : Nat}  (hi : n ≤ i) : (Array.range n)[i]! = 
 theorem set!_comm' {α} {i j : Nat} (h : j < i) (a : Array α) (x y : α) :
   (a.set! i x).set! j y = (a.set! j y).set! i x := by
   cases a; simp
-  rw [List.set_comm']
-  assumption
+  rwa [List.set_comm']
 
 @[simp_lists_safe]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :

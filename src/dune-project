@@ -21,3 +21,27 @@
   "Sidney Congard")
 
 (license Apache-2.0)
+
+(package
+ (name aeneas)
+ (synopsis "Compiler from Rust to pure code")
+ (description "")
+ (depends
+   calendar
+   core_unix
+   domainslib
+   easy_logging
+   logs
+   menhir
+   ocamlgraph
+   ppx_deriving
+   ppx_deriving_yojson
+   ppxlib
+   progress
+   unionFind
+   visitors
+   yojson
+   zarith
+   (ocamlformat :with-test)
+ )
+)

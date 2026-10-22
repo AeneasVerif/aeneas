@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -22,7 +23,9 @@ namespace generic_unit_output
 /-- [generic_unit_output::set_and_return]:
     Source: 'tests/src/generic_unit_output.rs', lines 12:0-15:1 -/
 def set_and_return
-  {T : Type} (r : Std.U32) (x : Std.U32) (t : T) : Result (T × Std.U32) := do
+  {T : Type _} (r : Std.U32) (x : Std.U32) (t : T) :
+  Result (T × Std.U32)
+  := do
   ok (t, x)
 
 /-- [generic_unit_output::call_with_unit]:

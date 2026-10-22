@@ -189,15 +189,69 @@ let get_symbolic_tvalue (span : Meta.span) (v : tvalue) : symbolic_value =
   | VSymbolic v -> v
   | _ -> [%internal_error] span
 
+(** Helper to introduce a shared borrow to a value which lives as long as the
+    static region (for instance, when evaluating a reference to a global, or a
+    string literal).
+
+    Given a value [v] and its type with regions [rty], generate a fresh borrow
+    id [l], push a fresh region abstraction owning the static region and
+    containing a shared loan [SL l v] to the context, and output the shared
+    borrow [SB l].
+
+    Remark: as the region abstraction owns the static region, we can not end it
+    unless it becomes empty (i.e., if the shared borrows to [l] disappear from
+    the context) or we are synthesizing the backward function for the static
+    region (see [Contexts.abs_is_endable]). *)
+let push_value_to_static_shared_loan (span : Meta.span) (ctx : eval_ctx)
+    (v : tvalue) (rty : rty) : eval_ctx * tvalue =
+  [%sanity_check] span (Substitute.erase_regions rty = v.ty);
+  let bid = ctx.fresh_borrow_id () in
+  let sid = ctx.fresh_shared_borrow_id () in
+  (* Create the region abstraction *)
+  let loan : tavalue =
+    let child = mk_aignored span rty None in
+    {
+      value = ALoan (ASharedLoan (PNone, bid, v, child));
+      ty = TRef (RStatic, rty, RShared);
+    }
+  in
+  (* The abstraction doesn't have any computational content *)
+  let cont : abs_cont =
+    {
+      output = Some (mk_etuple ~borrow_proj:true []);
+      input = Some (mk_etuple ~borrow_proj:false []);
+    }
+  in
+  let abs : abs =
+    {
+      abs_id = ctx.fresh_abs_id ();
+      kind = Static;
+      can_end = true;
+      parents = AbsId.Set.empty;
+      regions = { owned = RegionSet.singleton RStatic };
+      ended_subabs = AbsLevelSet.empty;
+      avalues = [ loan ];
+      cont = Some cont;
+    }
+  in
+  let ctx = { ctx with env = EAbs abs :: ctx.env } in
+  (* Create the shared borrow *)
+  let borrow : tvalue =
+    {
+      value = VBorrow (VSharedBorrow (bid, sid));
+      ty = TRef (RErased, v.ty, RShared);
+    }
+  in
+  (ctx, borrow)
+
 (** Create a loans projector value from a symbolic value.
 
     Checks if the projector will actually project some regions. If not, returns
-    {!Values.AIgnored} ([_]).
-
-    TODO: update to handle 'static *)
-let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+    {!Values.AIgnored} ([_]). *)
+let mk_aproj_loans_value_from_symbolic_value
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
     (svalue : symbolic_value) (proj_ty : ty) : tavalue =
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_regions_in_set type_infos proj_regions proj_ty then
     let av =
       ASymbolic
         ( PNone,
@@ -217,7 +271,7 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
     }
 
 let mk_eproj_loans_value_from_symbolic_value env
-    (type_infos : TypesAnalysis.type_infos) (proj_regions : RegionId.Set.t)
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
     (svalue : symbolic_value) (proj_ty : ty) : tevalue =
   if ty_has_mut_borrow_for_region_in_set type_infos proj_regions proj_ty then
     let av =
@@ -238,20 +292,69 @@ let mk_eproj_loans_value_from_symbolic_value env
       ty = svalue.sv_ty;
     }
 
+(** Given a fresh symbolic value [sv] (typically introduced for the value of a
+    global), if its type contains borrows living in the static region (for
+    instance because it is an ADT with fields of type [&'static T]), push a
+    fresh region abstraction owning the static region and containing a loan
+    projector over [sv].
+
+    This is similar to what we do for the input values of a function: this way,
+    when we expand [sv] we can introduce the loans corresponding to the static
+    shared borrows it contains (otherwise those borrows would be dangling).
+
+    We only support shared static borrows. *)
+let push_static_loans_proj_for_symbolic_value (span : Meta.span)
+    (ctx : eval_ctx) (sv : symbolic_value) : eval_ctx =
+  let type_infos = ctx.type_ctx.type_infos in
+  let static_regions = RegionSet.singleton RStatic in
+  if not (ty_has_regions_in_set type_infos static_regions sv.sv_ty) then ctx
+  else begin
+    [%cassert] span
+      (not
+         (ty_has_mut_borrow_for_region_in_set type_infos static_regions sv.sv_ty))
+      "Unimplemented: constants and globals whose value contains mutable \
+       borrows with the 'static lifetime (only shared 'static borrows are \
+       supported)";
+    let loan_proj =
+      mk_aproj_loans_value_from_symbolic_value type_infos static_regions sv
+        sv.sv_ty
+    in
+    (* The abstraction doesn't have any computational content *)
+    let cont : abs_cont =
+      {
+        output = Some (mk_etuple ~borrow_proj:true []);
+        input = Some (mk_etuple ~borrow_proj:false []);
+      }
+    in
+    let abs : abs =
+      {
+        abs_id = ctx.fresh_abs_id ();
+        kind = Static;
+        can_end = true;
+        parents = AbsId.Set.empty;
+        regions = { owned = static_regions };
+        ended_subabs = AbsLevelSet.empty;
+        avalues = [ loan_proj ];
+        cont = Some cont;
+      }
+    in
+    { ctx with env = EAbs abs :: ctx.env }
+  end
+
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
-    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
-    aproj =
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
+    (svalue : symbolic_value) (proj_ty : ty) : aproj =
   [%sanity_check] span (ty_is_rty proj_ty);
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_regions_in_set type_infos proj_regions proj_ty then
     AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
 
 let mk_eproj_borrows_from_symbolic_value (span : Meta.span)
-    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
-    eproj =
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
+    (svalue : symbolic_value) (proj_ty : ty) : eproj =
   [%sanity_check] span (ty_is_rty proj_ty);
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_regions_in_set type_infos proj_regions proj_ty then
     EProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else EEmpty
 
@@ -380,8 +483,20 @@ let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
 
 let region_is_owned (abs : abs) (r : region) : bool =
   match r with
-  | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
+  | (RVar (Free _) | RStatic) as r' -> RegionSet.mem r' abs.regions.owned
   | _ -> false
+
+(** Pick a region owned by an abstraction (we use this when we need to introduce
+    types for values inserted in the abstraction, and the choice of the region
+    doesn't matter).
+
+    We pick in priority the smallest region variable. *)
+let abs_pick_region (span : Meta.span) (abs : abs) : region =
+  match
+    RegionId.Set.min_elt_opt (region_set_get_region_ids abs.regions.owned)
+  with
+  | Some rid -> RVar (Free rid)
+  | None -> [%silent_unwrap] span (RegionSet.choose_opt abs.regions.owned)
 
 let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
   object
@@ -806,6 +921,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     const_generic_vars_map;
     env = [ EFrame ];
     ended_regions = RegionId.Set.empty;
+    can_end_static = false;
     fresh_symbolic_value_id;
     fresh_fun_call_id;
     fresh_dummy_var_id;
@@ -935,6 +1051,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
               name = None;
               variance = VaUnknown;
               mutability = LtUnknown;
+              late_bound = false;
             })
           fresh_regions
       in
@@ -980,9 +1097,54 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
       }
     in
     let regions_hierarchy =
-      RegionsHierarchy.compute_regions_hierarchy_for_sig span ctx.crate sg
+      RegionsHierarchy.compute_regions_hierarchy_for_sig span ctx.crate
+        ctx.type_ctx.type_infos sg
     in
     (generics.trait_type_constraints, regions_hierarchy)
+  in
+
+  (* The region group of the static region may contain region variables which
+     outlive the static region (e.g., ['a : 'static]): we merge those regions
+     with the static region, by substituting them with 'static. *)
+  let regions_hierarchy, (trait_type_constraints, inputs, output) =
+    let static_rids =
+      List.fold_left
+        (fun rids (rg : region_group) ->
+          if List.mem RStatic rg.regions then
+            RegionId.Set.union rids
+              (region_set_get_region_ids (RegionSet.of_list rg.regions))
+          else rids)
+        RegionId.Set.empty regions_hierarchy
+    in
+    if RegionId.Set.is_empty static_rids then
+      (regions_hierarchy, (trait_type_constraints, inputs, output))
+    else
+      let regions_hierarchy =
+        List.map
+          (fun (rg : region_group) ->
+            if List.mem RStatic rg.regions then
+              { rg with regions = [ RStatic ] }
+            else rg)
+          regions_hierarchy
+      in
+      let visitor =
+        object
+          inherit [_] map_ty
+
+          method! visit_RVar _ var =
+            match var with
+            | Free rid when RegionId.Set.mem rid static_rids -> RStatic
+            | _ -> RVar var
+        end
+      in
+      let trait_type_constraints =
+        List.map
+          (visitor#visit_region_binder visitor#visit_trait_type_constraint ())
+          trait_type_constraints
+      in
+      let inputs = List.map (visitor#visit_ty ()) inputs in
+      let output = visitor#visit_ty () output in
+      (regions_hierarchy, (trait_type_constraints, inputs, output))
   in
 
   (* Compute the instantiated function signature *)
@@ -999,7 +1161,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
   let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
-  let subst_abs_region_group (rg : region_var_group) : abs_region_group =
+  let subst_abs_region_group (rg : region_group) : abs_region_group =
     let id = asubst rg.id in
     let parents = List.map asubst rg.parents in
     ({ id; regions = rg.regions; parents } : abs_region_group)

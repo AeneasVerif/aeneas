@@ -20,13 +20,13 @@ rebuild() {
 PINNED_COMMIT="$(tail -1 charon-pin)"
 if [ ! -e ./charon ]; then
     if [[ "$FORCE" == "1" ]]; then
-        git clone https://github.com/AeneasVerif/charon
+        git clone https://github.com/AeneasVerif/charon --recurse-submodules
         cd charon && git checkout "$PINNED_COMMIT" && rebuild
         exit 0
     else
         echo 'Error: `charon` not found. Please clone the charon repository into `./charon` at the commit specified '\
              'in `./charon-pin`, or make a symlink to an existing clone of charon:'
-        echo '  $ git clone https://github.com/AeneasVerif/charon'
+        echo '  $ git clone https://github.com/AeneasVerif/charon --recurse-submodules'
         echo '  $ cd charon && git checkout '"$PINNED_COMMIT"' && make test'
         echo 'To do this automatically, run `make setup-charon`.'
         exit 1

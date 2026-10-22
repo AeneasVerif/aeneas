@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -21,17 +22,17 @@ namespace options
 
 /-- [options::test_unwrap_or]:
     Source: 'tests/src/options.rs', lines 5:0-7:1 -/
-def test_unwrap_or {T : Type} (x : Option T) (default : T) : Result T := do
+def test_unwrap_or {T : Type _} (x : Option T) (default : T) : Result T := do
   ok (core.option.Option.unwrap_or x default)
 
 /-- [options::test_expect]:
     Source: 'tests/src/options.rs', lines 9:0-11:1 -/
-def test_expect {T : Type} (x : Option T) (msg : Str) : Result T := do
+def test_expect {T : Type _} (x : Option T) (msg : Str) : Result T := do
   core.option.Option.expect x msg
 
 /-- [options::test_is_some]:
     Source: 'tests/src/options.rs', lines 13:0-15:1 -/
-def test_is_some {T : Type} (x : Option T) : Result Bool := do
+def test_is_some {T : Type _} (x : Option T) : Result Bool := do
   ok (core.option.Option.is_some x)
 
 /-- [options::test_map_some::{closure}]

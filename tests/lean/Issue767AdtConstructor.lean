@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -72,7 +73,7 @@ def P.Insts.CoreOpsFunctionFnOnceTupleU32Enum : core.ops.function.FnOnce
 /-- [issue_767_adt_constructor::make_tuple_struct_with_constructor]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 12:0-14:1 -/
 def make_tuple_struct_with_constructor
-  (T : Type) (x : Option Std.U32) : Result (Option Struct) := do
+  (T : Type _) (x : Option Std.U32) : Result (Option Struct) := do
   core.option.Option.map P.Insts.CoreOpsFunctionFnOnceTupleU32Struct x
     (Struct.constructor)
 

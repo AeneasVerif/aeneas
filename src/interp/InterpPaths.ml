@@ -59,46 +59,131 @@ type projection_access = {
   lookup_shared_borrows : bool;
 }
 
-(* Projects a value with a `projection_elem`. Returns the projected value and a
-   continuation that propagates any changes to the projected value back
-   to the original one.
+(** A path starts either at a local or at a shared loan (the latter case is
+    needed to manipulate shared loans inside abstractions). *)
+type path_root = LocalRoot of LocalId.id | SharedLoanRoot of loan_id
 
-   The optional loan id we output is the id of the shared loan immediately above
-   the value, if there is one. We need this when creating shared references:
-   we introduce a shared loan if and only if there is not already one (TODO:
-   make this cleaner).
-*)
+type path_elem =
+  | PathField of VariantId.id option * FieldId.id
+  | PathDerefBox
+  | PathDerefMut
+
+type path = { root : path_root; projection : path_elem list }
+
+let path_exploration : exploration_kind =
+  { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
+
+let shared_loan_value (span : Meta.span) (lid : loan_id) (ctx : eval_ctx) :
+    tvalue =
+  match ctx_lookup_loan span path_exploration lid ctx with
+  | _, Concrete (VSharedLoan (_, v)) -> v
+  | _, Abstract (ASharedLoan (pm, _, v, _)) ->
+      [%sanity_check] span (pm = PNone);
+      v
+  | _ -> [%craise] span "Expected a shared loan at path root"
+
+let read_path_root (span : Meta.span) (root : path_root) (ctx : eval_ctx) :
+    tvalue =
+  match root with
+  | LocalRoot var_id -> ctx_lookup_var_value span ctx var_id
+  | SharedLoanRoot lid -> shared_loan_value span lid ctx
+
+let project_path_elem (span : Meta.span) (pe : path_elem) (v : tvalue) : tvalue
+    =
+  match (pe, v.value, v.ty) with
+  | PathField (variant_id, field_id), VAdt adt, TAdt _ ->
+      [%sanity_check] span (variant_id = adt.variant_id);
+      [%unwrap_with_span] span
+        (FieldId.nth_opt adt.fields field_id)
+        "Field index out of bounds"
+  | ( PathDerefBox,
+      VAdt { variant_id = None; fields = [ v ] },
+      TAdt { builtin = Some TBox; _ } ) -> v
+  | PathDerefMut, VBorrow (VMutBorrow (_, v)), _ -> v
+  | _ -> [%craise] span "Invalid path projection"
+
+(** Update the projected value and reconstruct its parent. *)
+let update_path_elem (span : Meta.span) (pe : path_elem) (v : tvalue)
+    (update : tvalue -> tvalue) : tvalue =
+  let value =
+    match (pe, v.value, v.ty) with
+    | PathField (variant_id, field_id), VAdt adt, TAdt _ ->
+        [%sanity_check] span (variant_id = adt.variant_id);
+        let fv =
+          [%unwrap_with_span] span
+            (FieldId.nth_opt adt.fields field_id)
+            "Field index out of bounds"
+        in
+        let updated = update fv in
+        VAdt
+          { adt with fields = FieldId.update_nth adt.fields field_id updated }
+    | ( PathDerefBox,
+        VAdt { variant_id = None; fields = [ bv ] },
+        TAdt { builtin = Some TBox; _ } ) ->
+        VAdt { variant_id = None; fields = [ update bv ] }
+    | PathDerefMut, VBorrow (VMutBorrow (bid, bv)), _ ->
+        VBorrow (VMutBorrow (bid, update bv))
+    | _ -> [%craise] span "Invalid path projection"
+  in
+  { v with value }
+
+let read_path (span : Meta.span) (path : path) (ctx : eval_ctx) : tvalue =
+  List.fold_left
+    (fun v pe -> project_path_elem span pe v)
+    (read_path_root span path.root ctx)
+    path.projection
+
+let write_path (span : Meta.span) (path : path) (nv : tvalue) (ctx : eval_ctx) :
+    eval_ctx =
+  let rec write (projection : path_elem list) (v : tvalue) : tvalue =
+    match projection with
+    | [] ->
+        [%cassert] span
+          (erase_regions nv.ty = erase_regions v.ty)
+          "New value doesn't have the same type as its destination";
+        nv
+    | pe :: projection -> update_path_elem span pe v (write projection)
+  in
+  let updated = write path.projection (read_path_root span path.root ctx) in
+  match path.root with
+  | LocalRoot var_id -> ctx_update_var_value span ctx var_id updated
+  | SharedLoanRoot lid -> (
+      match ctx_lookup_loan span path_exploration lid ctx with
+      | _, Concrete (VSharedLoan _) ->
+          update_loan span path_exploration lid (VSharedLoan (lid, updated)) ctx
+      | _, Abstract (ASharedLoan (pm, _, _, av)) ->
+          [%sanity_check] span (pm = PNone);
+          update_aloan span path_exploration lid
+            (ASharedLoan (pm, lid, updated, av))
+            ctx
+      | _ -> [%craise] span "Expected a shared loan at path root")
+
+let extend_path (path : path) (pe : path_elem) : path =
+  { path with projection = path.projection @ [ pe ] }
+
+(** Resolve a projection to its value and path. The optional loan identifier
+    indicates that the value is immediately beneath a shared loan. *)
 let rec project_value (span : Meta.span) (access : projection_access)
-    (ek : exploration_kind) (current_place : place) (ctx : eval_ctx)
-    (pe : projection_elem) (v : tvalue) :
-    (loan_id option * tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue))
-    path_access_result =
+    (current_place : place) (ctx : eval_ctx) (pe : projection_elem) (v : tvalue)
+    (path : path) : (loan_id option * tvalue * path) path_access_result =
   match (pe, v.value, v.ty) with
   | Field (opt_variant_id, field_id), VAdt adt, TAdt { builtin = None; _ } ->
-  begin
       (* Check consistency *)
       [%sanity_check] span (opt_variant_id = adt.variant_id);
-      (* Actually project *)
-      let fv = FieldId.nth adt.fields field_id in
-      let backward (ctx, updated) =
-        (* Update the field value *)
-        let nvalues = FieldId.update_nth adt.fields field_id updated in
-        let value = VAdt { adt with fields = nvalues } in
-        (ctx, { v with value })
+      let fv =
+        [%unwrap_with_span] span
+          (FieldId.nth_opt adt.fields field_id)
+          "Field index out of bounds"
       in
-      Ok (None, fv, backward)
-    end
+      Ok (None, fv, extend_path path (PathField (opt_variant_id, field_id)))
   (* Tuples *)
-  | Field (None, field_id), VAdt adt, TAdt { builtin = Some TTuple; _ } -> begin
-      let fv = FieldId.nth adt.fields field_id in
-      let backward (ctx, updated) =
-        (* Update the field value *)
-        let nvalues = FieldId.update_nth adt.fields field_id updated in
-        let value = VAdt { adt with fields = nvalues } in
-        (ctx, { v with value })
+  | Field (None, field_id), VAdt adt, TAdt { builtin = Some TTuple; _ } ->
+      let fv =
+        [%unwrap_with_span] span
+          (FieldId.nth_opt adt.fields field_id)
+          "Field index out of bounds"
       in
-      Ok (None, fv, backward)
-    end
+      Ok (None, fv, extend_path path (PathField (None, field_id)))
   | Field _, VBottom, _ ->
       (* If we reach Bottom, it may mean we need to expand an uninitialized
        * enumeration value *)
@@ -123,75 +208,23 @@ let rec project_value (span : Meta.span) (access : projection_access)
        * it shouldn't happen due to user code, and we leverage it
        * when implementing box dereferencement for the concrete
        * interpreter *)
-      let backward (ctx, updated) =
-        let value = VAdt { variant_id = None; fields = [ updated ] } in
-        (ctx, { v with value })
-      in
-      Ok (None, fv, backward)
+      Ok (None, fv, extend_path path PathDerefBox)
     end
   (* Borrows *)
   | Deref, VBorrow bc, _ ->
-      (* Compute the projected value to explore and a backward function to update the result *)
+      (* Resolve shared dereferences to the loan, not to the borrow's ancestors. *)
       let res : _ path_access_result =
         match bc with
         | VSharedBorrow _ when not access.lookup_shared_borrows ->
             Error (FailBorrow bc)
-        | VSharedBorrow (bid, _) -> begin
-            (* Lookup the loan content, and explore from there *)
-            match ctx_lookup_loan span ek bid ctx with
-            | _, Concrete (VMutLoan _) ->
-                [%craise] span "Expected a shared loan"
-            | _, Concrete (VSharedLoan (bid, sv)) ->
-                (* Return the shared value *)
-                Ok
-                  ( Some bid,
-                    sv,
-                    fun (ctx, updated) ->
-                      let ctx =
-                        update_loan span ek bid (VSharedLoan (bid, updated)) ctx
-                      in
-                      (ctx, v) )
-            | ( _,
-                Abstract
-                  ( AMutLoan _
-                  | AEndedMutLoan _
-                  | AEndedSharedLoan _
-                  | AIgnoredMutLoan _
-                  | AEndedIgnoredMutLoan _
-                  | AIgnoredSharedLoan _ ) ) ->
-                [%craise] span "Expected a shared (abstraction) loan"
-            | _, Abstract (ASharedLoan (pm, bid, sv, _av)) -> begin
-                (* Sanity check: projection markers can only appear when we're doing a join *)
-                [%sanity_check] span (pm = PNone);
-                (* Return the shared value *)
-                Ok
-                  ( Some bid,
-                    sv,
-                    fun (ctx, updated) ->
-                      let av =
-                        match ctx_lookup_loan span ek bid ctx with
-                        | _, Abstract (ASharedLoan (_, _, _, av)) -> av
-                        | _ -> [%craise] span "Unexpected"
-                      in
-                      let ctx =
-                        update_aloan span ek bid
-                          (ASharedLoan (pm, bid, updated, av))
-                          ctx
-                      in
-                      (ctx, v) )
-              end
-          end
+        | VSharedBorrow (bid, _) ->
+            let sv = shared_loan_value span bid ctx in
+            Ok (Some bid, sv, { root = SharedLoanRoot bid; projection = [] })
         | VReservedMutBorrow (bid, sid) ->
             Error (FailReservedMutBorrow (bid, sid))
         | VMutBorrow _ when not access.enter_mut_borrows ->
             Error (FailBorrow bc)
-        | VMutBorrow (bid, bv) ->
-            Ok
-              ( None,
-                bv,
-                fun (ctx, updated) ->
-                  let value = VBorrow (VMutBorrow (bid, updated)) in
-                  (ctx, { v with value }) )
+        | VMutBorrow (_, bv) -> Ok (None, bv, extend_path path PathDerefMut)
       in
       res
   | _, VLoan lc, _ -> begin
@@ -213,15 +246,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
              - we can also use it to expand bottom values, but bottom values
                can not appear inside of shared loans
           *)
-          match project_value span access ek current_place ctx pe sv with
-          | Error err -> Error err
-          | Ok (lid, fv, backward) ->
-              let backward (ctx, updated) =
-                let ctx, updated = backward (ctx, updated) in
-                let value = VLoan (VSharedLoan (bids, updated)) in
-                (ctx, { v with value })
-              in
-              Ok (lid, fv, backward)
+          let path = { root = SharedLoanRoot bids; projection = [] } in
+          project_value span access current_place ctx pe sv path
         end
     end
   | _, VBottom, _ -> [%craise] span "Can not apply a projection to the ⊥ value"
@@ -235,70 +261,22 @@ let rec project_value (span : Meta.span) (access : projection_access)
 (** Generic function to access (read/write) the value inside a place, provided
     the place **does not refer to a global** (globals are handled elsewhere).
 
-    We return the read value and a backward function that propagates any changes
-    to the projected value back to the original local. *)
+    We always read the value, and return its path without updating the context.
+*)
 let rec access_place (span : Meta.span) (access : projection_access)
-    (ek : exploration_kind) (ctx : eval_ctx) (p : place) :
-    (loan_id option * tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue))
-    path_access_result =
+    (ctx : eval_ctx) (p : place) :
+    (loan_id option * tvalue * path) path_access_result =
   match p.kind with
   | PlaceLocal var_id ->
       (* Lookup the variable's value *)
       let v = ctx_lookup_var_value span ctx var_id in
-      let backward (ctx, updated) =
-        let ctx = ctx_update_var_value span ctx var_id updated in
-        (* TODO: we shouldn't have to erase the regions, but sometimes the
-           'static regions are missing from the destination place *)
-        let updated_ty = erase_regions updated.ty in
-        let v_ty = erase_regions v.ty in
-        (* Type checking *)
-        if updated_ty <> v.ty then (
-          [%ltrace
-            "Not the same type:\n- nv.ty: "
-            ^ ty_to_string ctx updated_ty
-            ^ "\n- v.ty: " ^ ty_to_string ctx v_ty];
-          [%craise] span
-            "Assertion failed: new value doesn't have the same type as its \
-             destination");
-        (ctx, updated)
-      in
-      Ok (None, v, backward)
+      Ok (None, v, { root = LocalRoot var_id; projection = [] })
   | PlaceProjection (p', pe) -> begin
-      match access_place span access ek ctx p' with
+      match access_place span access ctx p' with
       | Error err -> Error err
-      | Ok (_, v, backward) -> begin
-          match project_value span access ek p' ctx pe v with
-          | Error err -> Error err
-          | Ok (lid, pv, new_back) -> begin
-              let backward = Core.Fn.compose backward new_back in
-              Ok (lid, pv, backward)
-            end
-        end
+      | Ok (_, v, path) -> project_value span access p' ctx pe v path
     end
   | PlaceGlobal _ -> [%craise] span "Unexpected access to a global"
-
-(** Generic function to access (read/write) the value at a given place, provided
-    the place **does not refer to a global** (globals are handled elsewhere).
-
-    We return the value we read at the place and the (eventually) updated
-    environment, if we managed to access the place, or the precise reason why we
-    failed. *)
-let access_update_place (span : Meta.span) (access : projection_access)
-    (* Function to (eventually) update the value we find *)
-      (update : tvalue -> tvalue) (p : place) (ctx : eval_ctx) :
-    (eval_ctx * loan_id option * tvalue) path_access_result =
-  (* For looking up/updating shared loans *)
-  let ek : exploration_kind =
-    { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
-  in
-  (* Apply the projection *)
-  match access_place span access ek ctx p with
-  | Error err -> Error err
-  | Ok (lid, v, backward) ->
-      let nv = update v in
-      (* Update the ctx with the updated value *)
-      let ctx, _ = backward (ctx, nv) in
-      Ok (ctx, lid, v)
 
 type access_kind =
   | Read  (** We can go inside borrows and loans *)
@@ -335,33 +313,30 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
 let try_read_place (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : (loan_id option * tvalue) path_access_result =
   let access = access_kind_to_projection_access access in
-  (* The update function is the identity *)
-  let update v = v in
-  match access_update_place span access update p ctx with
+  match access_place span access ctx p with
   | Error err -> Error err
-  | Ok (_ctx1, lid, read_value) ->
-      (* Note that we ignore the new environment: it should be the same as the
-         original one. *)
-      Ok (lid, read_value)
+  | Ok (lid, read_value, _) -> Ok (lid, read_value)
+
+let eval_place (span : Meta.span) (access : access_kind) (p : place)
+    (ctx : eval_ctx) : loan_id option * tvalue * path =
+  let access = access_kind_to_projection_access access in
+  match access_place span access ctx p with
+  | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
+  | Ok res -> res
 
 let read_place (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : loan_id option * tvalue =
-  match try_read_place span access p ctx with
-  | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
-  | Ok (lid, v) -> (lid, v)
+  let lid, v, _ = eval_place span access p ctx in
+  (lid, v)
 
 (** Attempt to update the value at a given place, provided the place **does not
     refer to a global** (globals are handled elsewhere). *)
 let try_write_place (span : Meta.span) (access : access_kind) (p : place)
     (nv : tvalue) (ctx : eval_ctx) : eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
-  (* The update function substitutes the value with the new value *)
-  let update _ = nv in
-  match access_update_place span access update p ctx with
+  match access_place span access ctx p with
   | Error err -> Error err
-  | Ok (ctx, _, _) ->
-      (* We ignore the read value *)
-      Ok ctx
+  | Ok (_, _, path) -> Ok (write_path span path nv ctx)
 
 let write_place (span : Meta.span) (access : access_kind) (p : place)
     (nv : tvalue) (ctx : eval_ctx) : eval_ctx =
@@ -581,8 +556,8 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   (* Move the current value in the place outside of this place and into
    * a temporary dummy variable *)
   let access = Write in
-  let _, v = read_place span access p ctx in
-  let ctx = write_place span access p (mk_bottom span v.ty) ctx in
+  let _, v, path = eval_place span access p ctx in
+  let ctx = write_path span path (mk_bottom span v.ty) ctx in
   let dummy_id = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function: while there are loans to end in the

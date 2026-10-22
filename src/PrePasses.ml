@@ -54,7 +54,6 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
 
       method! visit_RBody _ _ = RErased
       method! visit_RVar _ _ = RErased
-      method! visit_RStatic _ = RErased
     end
   in
 
@@ -987,17 +986,16 @@ let filter_marker_traits (crate : crate) : crate =
   if TraitDeclId.Set.is_empty filtered_ids then crate
   else
     let is_filtered_id id = TraitDeclId.Set.mem id filtered_ids in
-    let is_filtered_ref (tr : trait_ref) : bool =
-      is_filtered_id tr.trait_decl_ref.binder_value.id
+    let is_filtered_ref (tr : poly_trait_ref) : bool =
+      is_filtered_id tr.binder_value.trait_decl_ref.id
     in
     let is_filtered_clause (clause : trait_param) : bool =
       is_filtered_id clause.trait.binder_value.id
     in
     let check_not_filtered_type_constraint
         (c : trait_type_constraint region_binder) : unit =
-      if is_filtered_id c.binder_value.trait_ref.trait_decl_ref.binder_value.id
-      then
-        let span = c.binder_value.trait_ref.trait_decl_ref.binder_value in
+      if is_filtered_id c.binder_value.trait_ref.trait_decl_ref.id then
+        let span = c.binder_value.trait_ref.trait_decl_ref in
         [%craise_opt_span] None
           ("Unexpected trait type constraint referencing a filtered marker \
             trait (id: "
@@ -1166,7 +1164,9 @@ let filter_marker_traits (crate : crate) : crate =
                 List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
               in
               let parent_refs =
-                List.map (self#visit_trait_ref env) parent_refs
+                List.map
+                  (self#visit_region_binder self#visit_trait_ref env)
+                  parent_refs
               in
               let types =
                 AssocTypeId.Map.map
@@ -1237,160 +1237,6 @@ let filter_type_aliases (crate : crate) : crate =
            (fun decl -> not (decl_group_is_single_alias decl))
            (Option.get crate.declarations));
   }
-
-(** Whenever we write a string literal in Rust, rustc actually introduces a
-    constant of type [&str]. Generally speaking, because [str] is unsized, it
-    doesn't make sense to manipulate values of type [str] directly. But in the
-    context of Aeneas, it is reasonable to decompose those literals into: a
-    string stored in a local variable, then a borrow of this variable.
-
-    Remark: the new statements all have the id 0: this pass requires to refresh
-    the ids later. *)
-let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
-  (* Map  *)
-  let body =
-    match f.body with
-    | StructuredBody body ->
-        let new_locals = ref [] in
-        let _, gen =
-          LocalId.mk_stateful_generator_starting_at_id
-            (LocalId.of_int (List.length body.locals.locals))
-        in
-        let fresh_local ty =
-          let local =
-            {
-              index = gen ();
-              local_ty = ty;
-              name = None;
-              span = f.item_meta.span;
-              drop_flag_for = None;
-            }
-          in
-          new_locals := local :: !new_locals;
-          local.index
-        in
-
-        (* Function to decompose a constant literal *)
-        let decompose_rvalue (span : Meta.span) (lv : place) (rv : rvalue) :
-            statement list =
-          let new_statements = ref [] in
-
-          (* Visit the rvalue *)
-          let visitor =
-            object
-              inherit [_] map_statement as super
-
-              (* We have to visit all the constant operands.
-                 As we might need to replace them with borrows, while borrows
-                 are rvalues (i.e., not operands) we have to introduce two
-                 intermediate statements: the string initialization, then
-                 the borrow, that we can finally move.
-              *)
-              method! visit_Constant env (cv : constant_expr) =
-                match (cv.kind, cv.ty) with
-                | ( CStr str,
-                    TRef
-                      (_, (TAdt { builtin = Some TStr; _ } as str_ty), ref_kind)
-                  ) ->
-                    (* We need to introduce intermediate assignments *)
-                    (* First the string initialization *)
-                    let local_id =
-                      let local_id = fresh_local str_ty in
-                      let new_cv : constant_expr =
-                        { kind = CStr str; ty = str_ty }
-                      in
-                      let st =
-                        {
-                          span;
-                          statement_id = StatementId.zero;
-                          kind =
-                            Assign
-                              ( { kind = PlaceLocal local_id; ty = str_ty },
-                                Use (Constant new_cv, NoRetag) );
-                          comments_before = [];
-                        }
-                      in
-                      new_statements := st :: !new_statements;
-                      local_id
-                    in
-                    let str_len =
-                      Constant
-                        {
-                          kind =
-                            CInteger
-                              (UnsignedInteger
-                                 (Usize, Z.of_int (String.length str)));
-                          ty = TScalar (TInteger (Unsigned Usize));
-                        }
-                    in
-                    (* Then the borrow *)
-                    let local_id =
-                      let nlocal_id = fresh_local cv.ty in
-                      let bkind =
-                        match ref_kind with
-                        | RMut -> BMut
-                        | RShared -> BShared
-                      in
-                      let rv =
-                        RvRef
-                          ( { kind = PlaceLocal local_id; ty = str_ty },
-                            bkind,
-                            str_len )
-                      in
-                      let lv = { kind = PlaceLocal nlocal_id; ty = cv.ty } in
-                      let st =
-                        {
-                          span;
-                          statement_id = StatementId.zero;
-                          kind = Assign (lv, rv);
-                          comments_before = [];
-                        }
-                      in
-                      new_statements := st :: !new_statements;
-                      nlocal_id
-                    in
-                    (* Finally we can move the value *)
-                    Move { kind = PlaceLocal local_id; ty = cv.ty }
-                | _ -> super#visit_Constant env cv
-            end
-          in
-
-          let rv = visitor#visit_rvalue () rv in
-
-          (* Construct the sequence *)
-          let assign =
-            {
-              span;
-              statement_id = StatementId.zero;
-              kind = Assign (lv, rv);
-              comments_before = [];
-            }
-          in
-          (* Note that the new statements are in reverse order *)
-          let statements = assign :: !new_statements in
-          List.rev statements
-        in
-
-        (* Visit all the statements and decompose the literals *)
-        let decompose_in_statement (st : statement) : statement list =
-          match st.kind with
-          | Assign (lv, rv) -> decompose_rvalue st.span lv rv
-          | _ -> [ st ]
-        in
-        let body_body = map_statement decompose_in_statement body.body in
-        StructuredBody
-          {
-            body with
-            body = body_body;
-            locals =
-              {
-                body.locals with
-                locals = body.locals.locals @ List.rev !new_locals;
-              };
-          }
-    | other -> other
-  in
-  { f with body }
 
 (** Refresh the statement ids to make sure they are unique *)
 let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
@@ -1520,7 +1366,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           let local =
             {
               index = gen ();
-              local_ty = ty;
+              (* The types of the locals must have erased regions (this
+                 includes the static region) *)
+              local_ty = TypesUtils.ty_erase_regions ty;
               name = None;
               span = f.item_meta.span;
               drop_flag_for = None;
@@ -1644,109 +1492,6 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
     | other -> other
   in
   { f with body }
-
-(** We do not support static regions yet.
-
-    In order to support some printing functions, for now we update their
-    signature to replace ['static] with a region variable. This should be fine
-    as a temporary measure as we can pretend these functions copy the input
-    string they receive (the static references are references to strings).
-
-    TODO: remove once https://github.com/AeneasVerif/aeneas/issues/727 is fixed
-*)
-let replace_static (crate : crate) : crate =
-  (* We update the uses of: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
-  let pat =
-    NameMatcher.parse_pattern "core::fmt::{core::fmt::Arguments<'a>}::from_str"
-  in
-
-  (* Find the function [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
-     - we want to update its signature to replace 'static with a lifetime variable
-     - we want to update its uses
-  *)
-  let in_set (d : fun_decl) : bool =
-    ExtractName.match_name crate pat d.item_meta.name
-  in
-  let decl_opt = ref None in
-  let in_set (_ : FunDeclId.id) (d : fun_decl) =
-    if in_set d then (
-      decl_opt := Some d;
-      true)
-    else false
-  in
-
-  if not (FunDeclId.Map.exists in_set crate.fun_decls) then crate
-  else (* The function [from_str] is used in the crate *)
-    let d = Option.get !decl_opt in
-
-    (* Update the signature *)
-    let generics =
-      {
-        d.generics with
-        regions =
-          d.generics.regions
-          @ [
-              {
-                index = RegionId.of_int 1;
-                name = Some "'b";
-                variance = VaUnknown;
-                mutability = LtUnknown;
-              };
-            ];
-      }
-    in
-    let signature =
-      let visitor =
-        object
-          inherit [_] map_ty
-          method! visit_RStatic _ = RVar (Free (RegionId.of_int 1))
-        end
-      in
-      visitor#visit_fun_sig () d.signature
-    in
-
-    let d = { d with generics; signature } in
-    [%ltrace
-      let env = Print.crate_to_fmt_env crate in
-      "Updated declaration:\n" ^ Print.fun_decl_to_string env "" " " d];
-    let crate =
-      { crate with fun_decls = FunDeclId.Map.add d.def_id d crate.fun_decls }
-    in
-
-    (* Update the uses of this definition *)
-    let update (f : fun_decl) : fun_decl =
-      match f.body with
-      | StructuredBody body ->
-          let visitor =
-            object
-              inherit [_] map_statement
-
-              method! visit_Call _ call on_unwind =
-                match call.func with
-                | FnOpRegular { kind = Fun id as kind; generics }
-                  when id = d.def_id ->
-                    let func =
-                      FnOpRegular
-                        {
-                          kind;
-                          generics =
-                            {
-                              generics with
-                              regions = generics.regions @ [ RErased ];
-                            };
-                        }
-                    in
-                    Call ({ call with func }, on_unwind)
-                | _ -> Call (call, on_unwind)
-            end
-          in
-
-          let body = { body with body = visitor#visit_block () body.body } in
-          { f with body = StructuredBody body }
-      | _ -> f
-    in
-    let fun_decls = FunDeclId.Map.map update crate.fun_decls in
-    { crate with fun_decls }
 
 (** Charon introduces vtables for the traits which support dyn. We do not want
     to translate the corresponding type and global declarations. Moreover, the
@@ -2032,8 +1777,9 @@ let simplify_trait_calls (crate : crate) : crate =
               (* There should be a single trait ref implementing [TryFrom] *)
               match generics.trait_refs with
               | [ trait_ref ] -> (
+                  [%sanity_check] span (trait_ref.binder_regions = []);
                   (* There are two cases depending on whether this is an impl or not *)
-                  match trait_ref.kind with
+                  match trait_ref.binder_value.kind with
                   | TraitImpl { id = impl_id; generics = impl_generics } ->
                       (* Lookup the impl to retrieve the method id *)
                       let impl =
@@ -2173,7 +1919,9 @@ let simplify_trait_calls (crate : crate) : crate =
     match TraitImplId.Map.find_opt id crate.trait_impls with
     | None -> ()
     | Some impl ->
-        List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
+        List.iter
+          (visitor#visit_region_binder visitor#visit_trait_ref ())
+          impl.implied_trait_refs;
         TraitMethodId.Map.iter
           (fun _ (x : fun_decl_ref binder) ->
             visitor#visit_fun_decl_id () x.binder_value.id)
@@ -2403,7 +2151,9 @@ let anon_consts_to_calls (crate : crate) : crate =
           let local =
             {
               index = gen ();
-              local_ty = ty;
+              (* The types of the locals must have erased regions (this
+                 includes the static region) *)
+              local_ty = TypesUtils.ty_erase_regions ty;
               name = None;
               span = f.item_meta.span;
               drop_flag_for = None;
@@ -2555,7 +2305,13 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
           let index = RegionId.of_int !next_index in
           incr next_index;
           new_regions :=
-            { index; name = None; variance = VaUnknown; mutability = LtUnknown }
+            {
+              index;
+              name = None;
+              variance = VaUnknown;
+              mutability = LtUnknown;
+              late_bound = false;
+            }
             :: !new_regions;
           RVar (Free index)
       end
@@ -2585,7 +2341,6 @@ let apply_passes (crate : crate) : crate =
       ("remove_useless_joins", remove_useless_joins);
       ( "remove_shallow_borrows_storage_live_dead",
         remove_shallow_borrows_storage_live_dead );
-      ("decompose_str_borrows", decompose_str_borrows);
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
       ("refresh_statement_ids", refresh_statement_ids);
@@ -2636,7 +2391,6 @@ let apply_passes (crate : crate) : crate =
   let crate = strip_unnecessary_target_suffixes crate in
   let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
-  let crate = replace_static crate in
   let crate = remove_vtables crate in
   let crate = rename_type_vars crate in
   let crate = simplify_trait_calls crate in

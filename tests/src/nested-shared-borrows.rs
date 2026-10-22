@@ -4,6 +4,9 @@
 //! Regression tests for:
 //! - https://github.com/AeneasVerif/aeneas/issues/1099
 //! - https://github.com/AeneasVerif/aeneas/issues/1170
+//! - https://github.com/AeneasVerif/aeneas/issues/1393
+#![feature(register_tool)]
+#![register_tool(verify)]
 
 // ============================================================
 // Issue #1099: `&&u8` (shared borrow of a shared borrow) + `?`
@@ -48,4 +51,54 @@ impl<'a> S<'a> {
         let y = f(x)?;
         Ok(y)
     }
+}
+
+#[verify::test]
+pub fn shared_reborrow_same_tuple() {
+    let y = (0, 0);
+    let mut x = ((1, 2), &y);
+    x.1 = &x.0;
+    let xr = &x;
+    let x11r = &(*(*xr).1).1;
+    assert!(*x11r == 2);
+    assert!(xr.0 .0 == 1);
+    assert!(xr.1 .0 == 1);
+}
+
+#[verify::test]
+pub fn shared_reborrow_same_box() {
+    let y = (0, 0);
+    let mut x = Box::new(((1, 2), &y));
+    x.1 = &x.0;
+    let xr = &x;
+    let x11r = &(*(*xr).1).1;
+    assert!(*x11r == 2);
+    assert!(xr.0 .0 == 1);
+}
+
+#[verify::test]
+pub fn shared_reborrow_inside_mut_borrow() {
+    let y = (0, 0);
+    let mut x = ((1, 2), &y);
+    let xm = &mut x;
+    xm.1 = &xm.0;
+    let xr = &xm;
+    let x11r = &(*(**xr).1).1;
+    assert!(*x11r == 2);
+    assert!(xr.0 .0 == 1);
+    // Break the self-reference before ending the enclosing mutable borrow.
+    xm.1 = &y;
+}
+
+pub fn shared_reborrow_from_input<'a>(x: &'a ((u32, u32), &'a (u32, u32))) -> &'a u32 {
+    &(*x.1).1
+}
+
+#[verify::test]
+pub fn shared_reborrow_from_input_test() {
+    let y = (0, 0);
+    let mut x = ((1, 2), &y);
+    x.1 = &x.0;
+    let r = shared_reborrow_from_input(&x);
+    assert!(*r == 2);
 }

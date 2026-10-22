@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ namespace loops_adts
     Source: 'tests/src/loops-adts.rs', lines 3:0-6:1
     Visibility: public -/
 @[discriminant isize]
-inductive List (T : Type) where
+inductive List (T : Type _) where
 | Cons : T → List T → List T
 | Nil : List T
 
@@ -32,7 +33,7 @@ inductive List (T : Type) where
     Visibility: public -/
 @[rust_loop]
 def nth_shared_loop
-  {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
+  {T : Type _} (ls : List T) (i : Std.U32) : Result (Option T) := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -46,7 +47,8 @@ partial_fixpoint
     Source: 'tests/src/loops-adts.rs', lines 8:0-18:1
     Visibility: public -/
 @[reducible]
-def nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
+def nth_shared
+  {T : Type _} (ls : List T) (i : Std.U32) : Result (Option T) := do
   nth_shared_loop ls i
 
 /-- [loops_adts::nth_mut]: loop 0:
@@ -54,7 +56,7 @@ def nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
     Visibility: public -/
 @[rust_loop]
 def nth_mut_loop
-  {T : Type} (ls : List T) (i : Std.U32) :
+  {T : Type _} (ls : List T) (i : Std.U32) :
   Result ((Option T) × (Option T → List T))
   := do
   match ls with
@@ -80,7 +82,7 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def nth_mut
-  {T : Type} (ls : List T) (i : Std.U32) :
+  {T : Type _} (ls : List T) (i : Std.U32) :
   Result ((Option T) × (Option T → List T))
   := do
   nth_mut_loop ls i

@@ -140,7 +140,8 @@ type pure_builtin_fun_id =
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
           with mutable borrows - TODO: remove *)
   | GetTarget
-      (** Returns the compilation target as a string.
+      (** Returns the compilation target as a pure string, i.e., a value of type
+          [TPureString].
 
           Used to translate multi-target dispatch bodies: [TargetDispatchBody]
           bodies generate a call to [get_target] and dispatch on the result. The
@@ -711,6 +712,9 @@ and literal_type =
   | TChar
   | TPureNat  (** Natural number *)
   | TPureInt  (** Mathematical (unbounded) integer *)
+  | TPureString
+      (** Pure string (e.g., [String] in Lean), as opposed to, e.g., the Rust
+          [str] type ([TBuiltin TStr]) *)
 
 and literal =
   | VScalar of integer_value
@@ -721,6 +725,7 @@ and literal =
   | VStr of string
   | VPureNat of big_int
   | VPureInt of big_int
+  | VPureString of string  (** A literal of type [TPureString] *)
 
 and type_param = { index : type_var_id; name : string }
 [@@deriving

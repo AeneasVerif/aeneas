@@ -16,7 +16,7 @@ register_grind_attr' agrindExt agrind
     with `nla := true` (the default). Use `agrind -nla` to disable. -/
 register_grind_attr' agrindNlaExt agrind_nla
 
-open Lean Lean.Meta
+open _root_.Lean Lean.Meta
 
 /-- Configuration for the `agrind` tactic, extending `Lean.Grind.Config` with
     Aeneas-specific options. -/

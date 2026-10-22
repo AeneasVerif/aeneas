@@ -14,14 +14,14 @@ public section
 
 namespace Aeneas.Std.WP
 
-open Std Result
+open Aeneas.Std Result
 open Aeneas.Data.Coinductive
 open Lean.Order
 
-@[expose] def Post α := (α -> Prop)
-@[expose] def Pre := Prop
+@[expose, implicit_reducible] def Post α := (α -> Prop)
+@[expose, implicit_reducible] def Pre := Prop
 
-@[expose] def Wp α := Post α → Pre
+@[expose, implicit_reducible] def Wp α := Post α → Pre
 
 @[expose] def wp_return (x:α) : Wp α := fun p => p x
 
@@ -180,7 +180,7 @@ TODO: use https://github.com/leanprover/lean4/pull/11355
 -/
 namespace Aeneas
 
-open Std WP Result
+open Aeneas.Std WP Result
 
 /-!
 # Hoare triple notation and elaboration
@@ -558,7 +558,7 @@ end Aeneas
 namespace Aeneas.Std.WP
 
 section
-  variable (U32 : Type) [HAdd U32 U32 (Result U32)]
+  variable (U32 : Type _) [HAdd U32 U32 (Result U32)]
   variable (x y : U32)
 
   #elab x + y ⦃ _ => True ⦄
@@ -676,7 +676,7 @@ namespace Aeneas.Std.WP
 # mvcgen
 -/
 
-open Std Result
+open Aeneas.Std Result
 open Std.Do
 
 -- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.
@@ -709,7 +709,7 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
     · cbv
     · simp
       rename_i i k
-      cases i <;> cbv
+      cases i; cbv
     · cbv
 
 
