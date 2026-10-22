@@ -758,6 +758,12 @@ theorem isLive_of_isValid {α : Type v} {h : Heap} {q : RawPtr α M}
   obtain ⟨x, hCell⟩ := cell?_of_isValid hValid
   simp [IsLive, hCell]
 
+/-- Liveness only depends on the address: not on the type or the mutability of the pointer. -/
+theorem isLive_congr {h : Heap} {l : RawPtr T M} {l' : RawPtr T' M'}
+    (hId : l.allocId = l'.allocId) (hOffset : l.offset = l'.offset) :
+    IsLive h l ↔ IsLive h l' := by
+  simp only [IsLive, cell?, hId, hOffset]
+
 theorem mem_of_isValid {α : Type v} {h : Heap} {q : RawPtr α M}
     (hValid : IsValid h q) : q.allocId ∈ h :=
   mem_of_isLive (isLive_of_isValid hValid)
@@ -854,6 +860,35 @@ theorem write_union_left {α : Type v} {h₁ h₂ : Heap}
       Prod.map id (· ∪ h₂) (h₁.write q value hValid) := by
   obtain ⟨b, hLookup, hTy, -⟩ := lookup_of_isValid hValid
   exact congrArg (Prod.mk ()) (setOwned_union_left hLookup hTy _ _)
+
+/-- `IsLive` in terms of the block of the cell. -/
+private theorem isLive_iff_lookup {h : Heap} {l : RawPtr T M} :
+    IsLive h l ↔
+      ∃ b : Block, h.lookup l.allocId = some b ∧ ∃ x, b.cells[l.offset]? = some (.owned x) := by
+  constructor
+  · intro hLive
+    obtain ⟨c, hCell⟩ := Option.isSome_iff_exists.mp hLive
+    obtain ⟨b, hLookup, x, hx, -⟩ := lookup_of_cell? hCell
+    exact ⟨b, hLookup, x, hx⟩
+  · rintro ⟨b, hLookup, x, hx⟩
+    simp [IsLive, cell?, hLookup, hx]
+
+/-- `write` neither kills nor creates live cells. -/
+theorem isLive_write_iff {α : Type v} {h : Heap} {q : RawPtr α M} {value : α}
+    (hValid : IsValid h q) {l : RawPtr T M'} :
+    IsLive (h.write q value hValid).2 l ↔ IsLive h l := by
+  obtain ⟨b, hLookup, -, x, hx⟩ := lookup_of_isValid hValid
+  rw [isLive_iff_lookup, isLive_iff_lookup]
+  simp only [write, setOwned_of_lookup hLookup]
+  by_cases ha : l.allocId = q.allocId
+  · rw [ha, lookup_insert, hLookup]
+    simp only [Option.some.injEq, exists_eq_left', List.getElem?_set]
+    by_cases ho : q.offset = l.offset
+    · rw [← ho]
+      obtain ⟨hLt, hGet⟩ := List.getElem?_eq_some_iff.mp hx
+      simpa [hLt] using ⟨x, hGet⟩
+    · simp [ho]
+  · rw [lookup_insert_ne _ _ ha]
 
 /-- After `setOwned` at `q`, the block of `q` owns the cell of `q` and keeps its header. -/
 private theorem lookup_setOwned {α : Type v} {h : Heap} {q : RawPtr α M} {value : α}
@@ -1381,6 +1416,21 @@ theorem not_isLive_borrow {α : Type v} {h : Heap} {q : RawPtr α M} (hValid : I
   rw [borrow_snd_of_lookup hValid hLookup]
   simp only [IsLive, cell?, lookup_insert, List.getElem?_set]
   split <;> simp_all
+
+/-- `borrow` kills the borrowed cell, and no other: every cell live after it was live before. -/
+theorem isLive_of_isLive_borrow {α : Type v} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q)
+    {l : RawPtr T M'} (hLive : IsLive (h.borrow q hValid).2 l) : IsLive h l := by
+  obtain ⟨b, hLookup, -⟩ := lookup_of_isValid hValid
+  rw [isLive_iff_lookup, borrow_snd_of_lookup hValid hLookup] at hLive
+  rw [isLive_iff_lookup]
+  by_cases ha : l.allocId = q.allocId
+  · rw [ha, lookup_insert] at hLive
+    rw [ha, hLookup]
+    simp only [Option.some.injEq, exists_eq_left', List.getElem?_set] at hLive ⊢
+    by_cases ho : q.offset = l.offset
+    · simp [ho] at hLive
+    · simpa [ho] using hLive
+  · rwa [lookup_insert_ne _ _ ha] at hLive
 
 /-- A borrowed cell can be given back. -/
 theorem isBorrowed_borrow {α : Type v} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
