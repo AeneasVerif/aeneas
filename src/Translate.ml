@@ -1774,11 +1774,16 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     ^ "\n- full_dest_dir: " ^ full_dest_dir ^ "\n- extract_filebasename: "
     ^ extract_filebasename];
 
+  (* Create a directory and its missing parents, with *default* permissions *)
+  let rec mkdir_p dir =
+    if not (Sys.file_exists dir) then (
+      mkdir_p (Filename.dirname dir);
+      Sys.mkdir dir 0o777)
+  in
   let mkdir_if dest_dir =
     if not (Sys.file_exists dest_dir) then (
       log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
-      (* Create a directory with *default* permissions *)
-      Core_unix.mkdir_p dest_dir)
+      mkdir_p dest_dir)
   in
 
   (* Create the directory, if necessary *)

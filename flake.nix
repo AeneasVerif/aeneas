@@ -61,13 +61,6 @@
                             --replace "Fl_dynload.load_packages [pkg]" "()"
                         '';
                       });
-
-                      core_unix = oPrev.core_unix.overrideAttrs (old: {
-                        # Work around a compilation error in `musl` when using
-                        # GCC 14, where a `struct msghdr` field is incorrectly
-                        # initialized with `NULL` instead of `0`.
-                        env.NIX_CFLAGS_COMPILE = (old.env.NIX_CFLAGS_COMPILE or "") + " -Wno-error=int-conversion";
-                      });
                     });
                   };
                 })
@@ -124,7 +117,6 @@
                 charon-ml
               ] ++ (with ocamlPackages; [
                 calendar
-                core_unix
                 ppx_deriving
                 ppx_deriving_yojson
                 visitors
@@ -214,8 +206,8 @@
           src = ./tests/test_runner;
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = (with ocamlPackages; [
-            core_unix
             ppx_deriving
+            re
           ]);
         };
 
