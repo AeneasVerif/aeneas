@@ -73,10 +73,21 @@ def core.slice.iter.IteratorSliceIter.next
     ok (some x, it)
   else ok (none, it)
 
-/-- `DoubleEndedIterator::next_back` on `slice::Iter`: yields the last element and drops it.
+/-- `DoubleEndedIterator::next_back` on `slice::Iter`.
 
-    The iterator already carries the whole slice plus a front index, so consuming from the
-    back shortens the slice rather than needing a second index. -/
+The standard library generates this impl with the `iterator!` macro
+(`library/core/src/slice/iter/macros.rs`):
+```rust
+fn next_back(&mut self) -> Option<&'a T> {
+    if is_empty!(self) { None } else { Some(self.next_back_unchecked()) }
+}
+```
+where `is_empty!` is `self.ptr == self.end`, and `next_back_unchecked` decrements `end` by one
+and returns the element it now points to.
+
+The model represents the remaining elements as `slice[i..slice.length]`: `ptr` corresponds
+to `i` and `end` to `slice.length`. Decrementing `end` is therefore truncating the slice by
+one, and `i` is left untouched, as `ptr` is. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>}::next_back"]
 def core.slice.iter.IteratorSliceIter.next_back
