@@ -12,7 +12,7 @@ def core.fmt.Error := Unit
 
 /- TODO: -/
 @[rust_type "core::fmt::Formatter"]
-axiom core.fmt.Formatter : Type
+noncomputable opaque core.fmt.Formatter : Type
 
 @[rust_trait "core::fmt::Debug"]
 structure core.fmt.Debug (T : Type u) where
