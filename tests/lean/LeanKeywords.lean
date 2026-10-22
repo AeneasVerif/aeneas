@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -73,7 +74,7 @@ def make_variant (x : Std.U32) : Result Keyword := do
 /-- [lean_keywords::type_variable]:
     Source: 'tests/src/lean-keywords.rs', lines 56:0-58:1
     Visibility: public -/
-def type_variable {«end» : Type} (x : «end») : Result «end» := do
+def type_variable {«end» : Type _} (x : «end») : Result «end» := do
   ok x
 
 /-- [lean_keywords::field]:

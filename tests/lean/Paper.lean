@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -33,13 +34,15 @@ def test_incr : Result Unit := do
   massert (x = 1#i32)
 
 /- Unit test for [paper::test_incr] -/
-#assert (test_incr).reducesTo ()
+#guard (test_incr).reducesTo ()
 
 /-- [paper::choose]:
     Source: 'tests/src/paper.rs', lines 19:0-25:1
     Visibility: public -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
+  {T : Type _} (b : Bool) (x : T) (y : T) :
+  Result (T × (T → (T × T)))
+  := do
   if b
   then let back := fun x1 => (x1, y)
        ok (x, back)
@@ -58,13 +61,13 @@ def test_choose : Result Unit := do
   massert (y = 0#i32)
 
 /- Unit test for [paper::test_choose] -/
-#assert (test_choose).reducesTo ()
+#guard (test_choose).reducesTo ()
 
 /-- [paper::List]
     Source: 'tests/src/paper.rs', lines 40:0-43:1
     Visibility: public -/
 @[discriminant isize]
-inductive List (T : Type) where
+inductive List (T : Type _) where
 | Cons : T → List T → List T
 | Nil : List T
 
@@ -72,7 +75,7 @@ inductive List (T : Type) where
     Source: 'tests/src/paper.rs', lines 47:0-60:1
     Visibility: public -/
 def list_nth_mut
-  {T : Type} (l : List T) (i : Std.U32) : Result (T × (T → List T)) := do
+  {T : Type _} (l : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match l with
   | List.Cons x tl =>
     if i = 0#u32
@@ -110,7 +113,7 @@ def test_nth : Result Unit := do
   massert (i = 7#i32)
 
 /- Unit test for [paper::test_nth] -/
-#assert (test_nth).reducesTo ()
+#guard (test_nth).reducesTo ()
 
 /-- [paper::call_choose]:
     Source: 'tests/src/paper.rs', lines 82:0-88:1

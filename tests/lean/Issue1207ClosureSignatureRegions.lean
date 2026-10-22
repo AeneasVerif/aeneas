@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -29,7 +30,7 @@ namespace issue_1207_closure_signature_regions
 @[rust_fun
   "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
 axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-  {B : Type} {I : Type} {F : Type} {Clause0_Item : Type}
+  {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
   (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
   Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
   core.ops.function.FnMut F Clause0_Item B) :
@@ -42,8 +43,8 @@ axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
     Visibility: public -/
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
 axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
-  core.iter.traits.iterator.Iterator Self Clause0_Item)
+  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
+  (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
   Self → F → Result (core.iter.adapters.map.Map Self F)
@@ -52,7 +53,7 @@ axiom core.iter.traits.iterator.Iterator.map.default
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 8:0-8:24
     Visibility: public -/
 @[reducible]
-def Holder (F : Type) := F
+def Holder (F : Type _) := F
 
 /-- [issue_1207_closure_signature_regions::make::{closure}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
@@ -70,46 +71,6 @@ def make (x : Std.U8) : Result make.closure := do
 def make.closure.Insts.CoreOpsFunctionFnTupleU8.call
   (c : make.closure) (_ : Unit) : Result Std.U8 := do
   ok c
-
-/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-def make.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-  (state : make.closure) (_ : Unit) : Result (Std.U8 × make.closure) := do
-  let i ← make.closure.Insts.CoreOpsFunctionFnTupleU8.call state ()
-  ok (i, state)
-
-/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-def make.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-  (c : make.closure) (_ : Unit) : Result Std.U8 := do
-  let (i, _) ← make.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut c ()
-  ok i
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-@[reducible]
-def make.closure.Insts.CoreOpsFunctionFnOnceTupleU8 : core.ops.function.FnOnce
-  make.closure Unit Std.U8 := {
-  call_once := make.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-@[reducible]
-def make.closure.Insts.CoreOpsFunctionFnMutTupleU8 : core.ops.function.FnMut
-  make.closure Unit Std.U8 := {
-  FnOnceInst := make.closure.Insts.CoreOpsFunctionFnOnceTupleU8
-  call_mut := make.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-@[reducible]
-def make.closure.Insts.CoreOpsFunctionFnTupleU8 : core.ops.function.Fn
-  make.closure Unit Std.U8 := {
-  FnMutInst := make.closure.Insts.CoreOpsFunctionFnMutTupleU8
-  call := make.closure.Insts.CoreOpsFunctionFnTupleU8.call
-}
 
 /-- [issue_1207_closure_signature_regions::iter_of::{closure}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
@@ -191,45 +152,5 @@ def nested (x : Std.U8) : Result (Holder nested.closure) := do
 def nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
   (c : nested.closure) (_ : Unit) : Result Std.U8 := do
   ok c
-
-/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-def nested.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-  (state : nested.closure) (_ : Unit) : Result (Std.U8 × nested.closure) := do
-  let i ← nested.closure.Insts.CoreOpsFunctionFnTupleU8.call state ()
-  ok (i, state)
-
-/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-def nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-  (c : nested.closure) (_ : Unit) : Result Std.U8 := do
-  let (i, _) ← nested.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut c ()
-  ok i
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-@[reducible]
-def nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8 :
-  core.ops.function.FnOnce nested.closure Unit Std.U8 := {
-  call_once := nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-@[reducible]
-def nested.closure.Insts.CoreOpsFunctionFnMutTupleU8 : core.ops.function.FnMut
-  nested.closure Unit Std.U8 := {
-  FnOnceInst := nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8
-  call_mut := nested.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-@[reducible]
-def nested.closure.Insts.CoreOpsFunctionFnTupleU8 : core.ops.function.Fn
-  nested.closure Unit Std.U8 := {
-  FnMutInst := nested.closure.Insts.CoreOpsFunctionFnMutTupleU8
-  call := nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
-}
 
 end issue_1207_closure_signature_regions

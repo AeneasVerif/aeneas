@@ -170,7 +170,7 @@ private theorem MulRange_imp_pred (r : MulRange) (i : Nat)
     simp [hk, Nat.mul_assoc, ← Nat.pow_add_one]
 
 @[simp]
-def foldWhile'_step {α : Type u} (r : MulRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
+theorem foldWhile'_step {α : Type u} (r : MulRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
   (hi : r.start ≤ i ∧ ∃ k, i = r.start * r.mul ^ k)
   (h : i < r.stop) :
   foldWhile' r f i init hi =
@@ -182,7 +182,7 @@ def foldWhile'_step {α : Type u} (r : MulRange) (f : α → (a : Nat) → a ∈
   simp [*]
 
 @[simp]
-def foldWhile'_id {α : Type u} (r : MulRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
+theorem foldWhile'_id {α : Type u} (r : MulRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
   (hi : r.start ≤ i ∧ ∃ k, i = r.start * r.mul ^ k) (h : ¬ i < r.stop) :
   foldWhile' r f i init hi = init
   := by
@@ -190,7 +190,7 @@ def foldWhile'_id {α : Type u} (r : MulRange) (f : α → (a : Nat) → a ∈ r
   simp [*]
 
 @[simp]
-def foldWhile_step {α : Type u} (stop mul : Nat) (f : α → Nat → α) (i : Nat)
+theorem foldWhile_step {α : Type u} (stop mul : Nat) (f : α → Nat → α) (i : Nat)
   (init : α) (hMul) (hi : 0 < i) (h : i < stop) :
   foldWhile stop mul hMul f i hi init =
     foldWhile stop mul hMul f (i * mul)
@@ -200,7 +200,7 @@ def foldWhile_step {α : Type u} (stop mul : Nat) (f : α → Nat → α) (i : N
   simp [*]
 
 @[simp]
-def foldWhile_id {α : Type u} (stop mul : Nat) (f : α → Nat → α) (i : Nat)
+theorem foldWhile_id {α : Type u} (stop mul : Nat) (f : α → Nat → α) (i : Nat)
   (init : α) (hMul) (hi : 0 < i) (h : ¬ i < stop) :
   foldWhile stop mul hMul f i hi init = init := by
   conv => lhs; unfold foldWhile

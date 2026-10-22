@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -21,13 +22,13 @@ namespace as_mut
 
 /-- [as_mut::use_box_as_mut]:
     Source: 'tests/src/as_mut.rs', lines 2:0-4:1 -/
-def use_box_as_mut {T : Type} (x : T) : Result (T × (T → T)) := do
+def use_box_as_mut {T : Type _} (x : T) : Result (T × (T → T)) := do
   ok (alloc.boxed.AsMutBox.as_mut x)
 
 /-- [as_mut::use_as_mut]:
     Source: 'tests/src/as_mut.rs', lines 6:0-8:1 -/
 def use_as_mut
-  {S : Type} {T : Type} (coreconvertAsMutInst : core.convert.AsMut T S) 
+  {S : Type _} {T : Type _} (coreconvertAsMutInst : core.convert.AsMut T S)
   (x : T) :
   Result (S × (S → T))
   := do

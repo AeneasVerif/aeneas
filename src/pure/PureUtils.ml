@@ -259,6 +259,7 @@ let compute_literal_type (cv : literal) : ty =
   | VStr _ -> TAdt (TBuiltin TStr, empty_generic_args)
   | VPureNat _ -> TLiteral TPureNat
   | VPureInt _ -> TLiteral TPureInt
+  | VPureString _ -> TLiteral TPureString
   | VByteStr _ -> [%craise_opt_span] None "Byte string literals are unsupported"
 
 let fvar_get_id (v : fvar) : fvar_id = v.id
@@ -1713,11 +1714,11 @@ let mk_massert_texpr (span : Meta.span) (scrut : texpr) : texpr =
     has type [bool], where [feature] is a target feature such as ["avx2"]. *)
 let mk_target_feature_enabled_texpr (span : Meta.span) (feature : string) :
     texpr =
-  let str_ty = TAdt (TBuiltin TStr, empty_generic_args) in
+  let str_ty = TLiteral TPureString in
   let id = FunOrOp (Fun (Pure TargetFeatureEnabled)) in
   let qualif = Qualif { id; generics = empty_generic_args } in
   let qualif = { e = qualif; ty = mk_arrow str_ty mk_bool_ty } in
-  [%add_loc] mk_app span qualif { e = Const (VStr feature); ty = str_ty }
+  [%add_loc] mk_app span qualif { e = Const (VPureString feature); ty = str_ty }
 
 let append_generic_args (g0 : generic_args) (g1 : generic_args) : generic_args =
   {
@@ -2445,6 +2446,34 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   in
   visitor#visit_texpr () e;
 
+  (* Repeatedly explore the needed trait clauses to make sure we include
+     all their parameters in the set. We compute a fixed point as theoretically
+     trait clauses can depend on other trait clauses, though this can not
+     currently be the case with Charon's handling of traits. *)
+  let rec close_clauses (visited : TraitClauseId.Set.t) : unit =
+    let to_visit =
+      List.filter
+        (fun (clause : trait_param) ->
+          TraitClauseId.Set.mem clause.clause_id !clause_ids
+          && not (TraitClauseId.Set.mem clause.clause_id visited))
+        generic.trait_clauses
+    in
+    if to_visit <> [] then begin
+      List.iter
+        (fun (clause : trait_param) ->
+          visitor#visit_generic_args () clause.generics)
+        to_visit;
+      let visited =
+        List.fold_left
+          (fun visited (clause : trait_param) ->
+            TraitClauseId.Set.add clause.clause_id visited)
+          visited to_visit
+      in
+      close_clauses visited
+    end
+  in
+  close_clauses TraitClauseId.Set.empty;
+
   (* Filter *)
   let { types; const_generics; trait_clauses } : generic_params = generic in
   let types =
@@ -2479,13 +2508,10 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   let const_generics =
     List.filter_map (fun (b, x) -> if b then Some x else None) const_generics
   in
-  (* WARNING: the indices and generics inside the trait clause are not correct!
-     We update them below. *)
   let trait_clauses =
     List.filter_map (fun (b, x) -> if b then Some x else None) trait_clauses
   in
 
-  (* Reindex the generic params *)
   let generics : generic_params = { types; const_generics; trait_clauses } in
   (generics, filter)
 

@@ -296,6 +296,12 @@ type abs_kind =
   | Join
       (** The abstraction was introduced after joining contexts, typically after
           an [if then else] or a [match] *)
+  | Static
+      (** An abstraction owning the static region, introduced to hold the shared
+          loans of values which live as long as the static region (for instance,
+          when evaluating a reference to a global, or a string literal).
+          Similarly to [Identity], this abstraction doesn't have any
+          computational content. *)
 [@@deriving show, eq, ord]
 
 module AbsBVarId = IdGen ()
@@ -356,6 +362,9 @@ class ['self] iter_env_base =
     method visit_region_id_set : 'env -> region_id_set -> unit =
       fun env ids -> RegionId.Set.iter (self#visit_region_id env) ids
 
+    method visit_region_set : 'env -> region_set -> unit =
+      fun env rs -> RegionSet.iter (self#visit_region env) rs
+
     method visit_abs_id : 'env -> abs_id -> unit = fun _ _ -> ()
 
     method visit_abs_id_set : 'env -> abs_id_set -> unit =
@@ -413,6 +422,9 @@ class ['self] map_env_base =
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
       fun env ids -> RegionId.Set.map (self#visit_region_id env) ids
+
+    method visit_region_set : 'env -> region_set -> region_set =
+      fun env rs -> RegionSet.map (self#visit_region env) rs
 
     method visit_abs_id : 'env -> abs_id -> abs_id = fun _ x -> x
 
@@ -1125,7 +1137,7 @@ and abs_fun =
     When calling a function, we lose information about the borrow graph: part of
     it is thus "abstracted" away. *)
 and evalue =
-  | ELet of region_id_set * tepat * tevalue * tevalue
+  | ELet of region_set * tepat * tevalue * tevalue
       (** Because let-bindings are used to bind expressions refering to
           different sets of regions, we need to precise the regions projected in
           the bound expression.
@@ -1530,7 +1542,10 @@ and abs = {
 }
 
 and abs_regions = {
-  owned : region_id_set;  (** Regions owned by the abstraction *)
+  owned : region_set;
+      (** Regions owned by the abstraction.
+
+          Note that this set may contain the static region. *)
 }
 
 (** A binder used in an environment, to map a variable to a value *)

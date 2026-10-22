@@ -1,7 +1,7 @@
 module
 public import Lean
 public meta import Mathlib.Control.Monad.Cont
-public import Aeneas.Std
+public import Aeneas.Std.Primitives
 public section
 
 /-! # New `do` Elaborator
@@ -343,10 +343,10 @@ meta partial def elabDoElem (elem : DoElem) (rest : List DoElem) : ElabM Expr :=
   | `(doElem| let $pat:term ← $rhs)  => elabDoLetArrowPat pat rhs rest
   | `(doElem| let $x:ident $[: $ty?]? := $rhs) => elabDoLetId x ty? rhs rest
   | `(doElem| let $pat:term := $rhs)  => elabDoLetPat pat rhs rest
-  | `(doElem| if $cond:term then $thenSeq:doSeq
-              $[else if $econds:term then $eseqs:doSeq]*
+  | `(doElem| if $cond:doIfCond then $thenSeq:doSeq
+              $[else if $econds:doIfCond then $eseqs:doSeq]*
               else $elseSeq:doSeq) =>
-    let branches : Array (Term × TSyntax ``doSeq) :=
+    let branches : Array (TSyntax ``doIfCond × TSyntax ``doSeq) :=
       #[(cond, thenSeq)] ++ econds.zip eseqs
     elabDoIfChain branches elseSeq rest
   | `(doElem| $expr:term)            => elabDoExpr expr rest
@@ -463,9 +463,9 @@ meta partial def elabDoLetPat (pat : Term) (rhs : Term)
   -- For `.prod` the head is `Std.uncurry`, so `headBeta` is a no-op.
   return (mkApp k val).headBeta
 
-/-- Elaborate an `if/else-if/…/else` chain as nested `ite`s. `rest` is bound
-    once outside the chain. -/
-meta partial def elabDoIfChain (branches : Array (Term × TSyntax ``doSeq))
+/-- Elaborate an `if/else-if/…/else` chain as nested `ite`s (`dite`s for `if h : c`).
+    `rest` is bound once outside the chain. -/
+meta partial def elabDoIfChain (branches : Array (TSyntax ``doIfCond × TSyntax ``doSeq))
     (elseSeq : TSyntax ``doSeq) (rest : List DoElem) : ElabM Expr := do
   let elabAtType (ty : Expr) : ElabM Expr := do
     let some α := ty.getAppArgs[0]?
@@ -473,9 +473,24 @@ meta partial def elabDoIfChain (branches : Array (Term × TSyntax ``doSeq))
     withReader (fun ctx => { ctx with expectedAlpha := α }) do
       let mut result ← elabDoSeqCore (← getDoElems elseSeq)
       for (c, s) in branches.toList.reverse do
-        let thenExpr ← elabDoSeqCore (← getDoElems s)
-        let propExpr ← elabIfCondition c
-        result ← mkIteExpr propExpr thenExpr result
+        match c with
+        | `(doIfCond| $cond:term) =>
+          let thenExpr ← elabDoSeqCore (← getDoElems s)
+          let propExpr ← elabIfCondition cond
+          result ← mkIteExpr propExpr thenExpr result
+        | `(doIfCond| $h : $cond) =>
+          let propExpr ← elabIfCondition cond
+          let hId? : Option Ident := match h with
+            | `($x:ident) => some x
+            | _ => none
+          let hName := hId?.map (·.getId) |>.getD `_
+          let thenExpr ← ElabM.withLocalDeclD hName propExpr fun hFv => do
+            if let some x := hId? then Term.addLocalVarInfo x hFv
+            mkLambdaFVars #[hFv] (← elabDoSeqCore (← getDoElems s))
+          let elseExpr ← ElabM.withLocalDeclD hName (mkNot propExpr) fun hFv =>
+            mkLambdaFVars #[hFv] result
+          result ← mkAppOptM ``dite #[none, some propExpr, none, some thenExpr, some elseExpr]
+        | _ => throwError "elabDoIfChain: unsupported `if` condition{indentD c}"
       return result
   elabMonadicAsDoElem elabAtType rest
 

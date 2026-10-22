@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -22,7 +23,7 @@ namespace vec
 /-- [vec::use_extend_from_slice]:
     Source: 'tests/src/vec.rs', lines 5:0-7:1 -/
 def use_extend_from_slice
-  {T : Type} (corecloneCloneInst : core.clone.Clone T) (v : alloc.vec.Vec T)
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (v : alloc.vec.Vec T)
   (s : Slice T) :
   Result (alloc.vec.Vec T)
   := do
@@ -31,14 +32,14 @@ def use_extend_from_slice
 /-- [vec::use_alloc_with_capacity]:
     Source: 'tests/src/vec.rs', lines 9:0-11:1 -/
 def use_alloc_with_capacity
-  (T : Type) (n : Std.Usize) : Result (alloc.vec.Vec T) := do
+  (T : Type _) (n : Std.Usize) : Result (alloc.vec.Vec T) := do
   ok (alloc.vec.Vec.with_capacity T n)
 
 /-- [vec::from_elem]:
     Source: 'tests/src/vec.rs', lines 13:0-15:1 -/
 def from_elem
-  {T : Type} (corecloneCloneInst : core.clone.Clone T) (x : T) (n : Std.Usize)
-  :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (x : T)
+  (n : Std.Usize) :
   Result (alloc.vec.Vec T)
   := do
   alloc.vec.from_elem corecloneCloneInst x n

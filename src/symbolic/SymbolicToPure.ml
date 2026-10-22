@@ -196,6 +196,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     consts;
     types;
     methods = _;
+    is_unsafe = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -288,6 +289,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     consts;
     types = _;
     methods;
+    is_unsafe = _;
+    is_negative = _;
     vtable = _;
   } =
     trait_impl
@@ -305,7 +308,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_trait_refs =
-    List.map (translate_fwd_trait_ref span ctx) implied_trait_refs
+    List.map
+      (translate_region_binder (translate_fwd_trait_ref span ctx))
+      implied_trait_refs
   in
   let consts =
     List.map

@@ -3260,7 +3260,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         in
         let ty () =
           F.pp_print_space fmt ();
-          F.pp_print_string fmt (type_keyword decl.item_meta.span)
+          F.pp_print_string fmt (type_keyword ~poly:false decl.item_meta.span)
         in
         extract_trait_decl_item ctx fmt item_name ty)
       decl.types;
@@ -3769,7 +3769,7 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_space fmt ());
           F.pp_print_string fmt ")%return."
       | Lean ->
-          F.pp_print_string fmt "#assert";
+          F.pp_print_string fmt "#guard";
           F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
           let fun_name =

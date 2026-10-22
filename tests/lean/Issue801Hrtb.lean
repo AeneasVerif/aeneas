@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -21,12 +22,12 @@ namespace issue_801_hrtb
 
 /-- Trait declaration: [issue_801_hrtb::T]
     Source: 'tests/src/issue-801-hrtb.rs', lines 4:0-6:1 -/
-structure T (Self : Type) (X : Type) where
+structure T (Self : Type _) (X : Type _) where
   dummy : Result X
 
 /-- [issue_801_hrtb::test]:
     Source: 'tests/src/issue-801-hrtb.rs', lines 8:0-10:1 -/
-def test {P : Type} (TPSharedU8Inst : T P Std.U8) : Result Std.U8 := do
+def test {P : Type _} (TPSharedU8Inst : T P Std.U8) : Result Std.U8 := do
   TPSharedU8Inst.dummy
 
 end issue_801_hrtb

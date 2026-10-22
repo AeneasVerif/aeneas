@@ -83,6 +83,7 @@ We define `CoIndN F n`, the type of depth-`n` approximations of the coinductive 
 -/
 
 /-- The `n`-step approximation of the coinductive fixpoint of `F`. -/
+@[implicit_reducible]
 def CoIndN : Nat → Type u
   | 0 => PUnit
   | n + 1 => F (CoIndN n)

@@ -54,3 +54,29 @@ fn call_choose(b: bool, x: &mut u32, y: &mut u32) {
     let z = if b { x } else { y };
     *z = *z + 1;
 }
+
+struct SharedBool {
+    value: bool,
+}
+
+fn shared_bool_scrutinee(k: &SharedBool, x: u32, y: u32) -> u32 {
+    let f = if k.value { x } else { y };
+    if x >= f {
+        1
+    } else {
+        0
+    }
+}
+
+fn shared_integer_scrutinee(n: &u8, x: u32, y: u32) -> u32 {
+    let m = *n;
+    let f = match m {
+        0 => x,
+        _ => y,
+    };
+    if x >= f {
+        1
+    } else {
+        0
+    }
+}
