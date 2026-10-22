@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ namespace hashmap
     Source: 'tests/src/hashmap.rs', lines 24:0-27:1
     Visibility: public -/
 @[discriminant isize]
-inductive AList (T : Type) where
+inductive AList (T : Type _) where
 | Cons : Std.Usize → T → AList T → AList T
 | Nil : AList T
 
@@ -36,7 +37,7 @@ structure Fraction where
 /-- [hashmap::HashMap]
     Source: 'tests/src/hashmap.rs', lines 46:0-58:1
     Visibility: public -/
-structure HashMap (T : Type) where
+structure HashMap (T : Type _) where
   num_entries : Std.Usize
   max_load_factor : Fraction
   max_load : Std.Usize

@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ namespace drop
     Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop_body]
 def fill_loop.body
-  {T : Type} (corecloneCloneInst : core.clone.Clone T) (value : T)
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (value : T)
   (iter : core.ops.range.Range Std.Usize) (s : Slice T) :
   Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Slice T)) (Slice
     T))
@@ -43,7 +44,7 @@ def fill_loop.body
     Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop]
 def fill_loop
-  {T : Type} (corecloneCloneInst : core.clone.Clone T)
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
   (iter : core.ops.range.Range Std.Usize) (s : Slice T) (value : T) :
   Result (Slice T)
   := do
@@ -54,7 +55,7 @@ def fill_loop
 /-- [drop::fill]:
     Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
 def fill
-  {T : Type} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
   (value : T) :
   Result (Slice T)
   := do

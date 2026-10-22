@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -27,7 +28,7 @@ namespace rust_borrow_check_issues
     Name pattern: [core::mem::drop]
     Visibility: public -/
 @[rust_fun "core::mem::drop"]
-axiom core.mem.drop {T : Type} : T → Result Unit
+axiom core.mem.drop {T : Type _} : T → Result Unit
 
 /-- [core::option::{core::option::Option<T>}::as_mut]:
     Source: '/rustc/library/core/src/option.rs', lines 766:4-766:52
@@ -35,7 +36,7 @@ axiom core.mem.drop {T : Type} : T → Result Unit
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::as_mut"]
 axiom core.option.Option.as_mut
-  {T : Type} : Option T → Result ((Option T) × (Option T → Option T))
+  {T : Type _} : Option T → Result ((Option T) × (Option T → Option T))
 
 /-- [rust_borrow_check_issues::unnecessary_error]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 13:0-32:1 -/
@@ -50,12 +51,11 @@ def unnecessary_error_2 (b0 : Bool) (b1 : Bool) : Result Unit := do
   let i ← if b0
             then ok 0#u32
             else ok 1#u32
-  let _ ←
-    if b1
-    then do
-         core.mem.drop 2#u32
-         ok (true, 2#u32)
-    else ok (false, 0#u32)
+  let _ ← if b1
+            then do
+                 core.mem.drop 2#u32
+                 ok 2#u32
+            else ok 0#u32
   let _ ← 2#u32 + 1#u32
   core.mem.drop i
 
@@ -125,7 +125,7 @@ def conditional : Result Unit := do
 /-- [rust_borrow_check_issues::unwrap_option_mut]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 82:0-87:1 -/
 def unwrap_option_mut
-  {T : Type} (x : Option T) : Result (T × (T → Option T)) := do
+  {T : Type _} (x : Option T) : Result (T × (T → Option T)) := do
   match x with
   | none => fail panic
   | some x1 => ok (x1, some)
@@ -167,8 +167,8 @@ def conditional_with_indirection : Result Unit := do
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 102:4-106:5 -/
 @[rust_loop_body]
 def conditional_with_indirection_2_loop.body
-  (p : Option X) (back : Option X → Option X) (b0 : Bool) :
-  Result (ControlFlow ((Option X) × (Option X → Option X) × Bool) Unit)
+  (b0 : Bool) (p : Option X) (back : Option X → Option X) :
+  Result (ControlFlow ((Option X) × (Option X → Option X)) Unit)
   := do
   match p with
   | none => ok (done ())
@@ -181,8 +181,8 @@ def conditional_with_indirection_2_loop.body
         fun o1 =>
           let o2 := unwrap_option_mut_back (X.mk o1)
           let o3 := as_mut_back o2
-          back o3, true))
-    else ok (cont (p, back, false))
+          back o3))
+    else ok (cont (p, back))
 
 /-- [rust_borrow_check_issues::conditional_with_indirection_2]: loop 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 102:4-106:5 -/
@@ -190,9 +190,8 @@ def conditional_with_indirection_2_loop.body
 def conditional_with_indirection_2_loop
   (p : Option X) (back : Option X → Option X) (b0 : Bool) : Result Unit := do
   loop
-    (fun (p1, back1, b01) => conditional_with_indirection_2_loop.body p1 back1
-      b01)
-    (p, back, b0)
+    (fun (p1, back1) => conditional_with_indirection_2_loop.body b0 p1 back1)
+    (p, back)
 
 /-- [rust_borrow_check_issues::conditional_with_indirection_2]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 99:0-107:1 -/

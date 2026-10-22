@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -21,7 +22,7 @@ namespace defaulted_method
 
 /-- Trait declaration: [defaulted_method::Trait]
     Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 -/
-structure Trait (Self : Type) where
+structure Trait (Self : Type _) where
   provided_method : Self → Result Std.U32
   required_method : Self → Result Std.U32
 
@@ -29,7 +30,7 @@ structure Trait (Self : Type) where
     Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
 @[trait_default]
 def Trait.provided_method.default
-  {Self : Type} (TraitInst : Trait Self) (self : Self) : Result Std.U32 := do
+  {Self : Type _} (TraitInst : Trait Self) (self : Self) : Result Std.U32 := do
   TraitInst.required_method self
 
 /-- [defaulted_method::NoOverride]

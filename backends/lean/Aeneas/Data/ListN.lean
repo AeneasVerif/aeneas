@@ -8,7 +8,7 @@ module
 ## Why do we need this?
 
 We use `ListN` to define `Slice`, `Array` and `Vec` (see `Aeneas/Std/SliceDef.lean`,
-`Aeneas/Std/Array/Array.lean` and `Aeneas/Std/Vec.lean`).
+`Aeneas/Std/Array/Array.lean` and `Aeneas/Std/Alloc/Vec.lean`).
 
 The reason is that we need to be able to use those types in *positive* positions of
 inductive definitions, i.e., we want definitions such as:

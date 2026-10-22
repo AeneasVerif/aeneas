@@ -211,7 +211,7 @@ let compute_contexts (crate : crate) : decls_ctx =
         method! visit_fn_ptr env fn_ptr =
           (match fn_ptr.kind with
           | TraitMethod (trait_ref, method_id) ->
-              let trait_decl_id = trait_ref.trait_decl_ref.binder_value.id in
+              let trait_decl_id = trait_ref.trait_decl_ref.id in
               add_trait_method_id trait_decl_id method_id
           | _ -> ());
           super#visit_fn_ptr env fn_ptr
@@ -266,7 +266,7 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   in
   let inst_sg = instantiate_fun_sig (Some span) ctx generics tr_self sg in
   let region_groups =
-    List.map (fun (g : region_var_group) -> g.id) inst_sg.regions_hierarchy
+    List.map (fun (g : region_group) -> g.id) inst_sg.regions_hierarchy
   in
   let ctx = { ctx with region_groups } in
   (* Return *)
@@ -325,7 +325,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
     let avalues =
       List.map
         (fun (sv : symbolic_value) ->
-          mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
+          mk_aproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+            abs.regions.owned sv sv.sv_ty)
         input_svs
     in
     (* The continuation expression *)
@@ -403,12 +404,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   let ret_rty = ret_inst_sg.output in
 
-  (* We need to find the parents regions/abstractions of the region we
-     will end - this will allow us to, first, mark the other return
-     regions as non-endable, and, second, end those parent regions in
-     proper order. *)
+  (* We need to find the ancestor regions/abstractions of the region group we
+     will end - this will allow us to, first, mark the return regions which are
+     neither ancestors nor in the current group as non-endable (except when
+     synthesizing the backward function of the static region group: see below),
+     and, second, end the ancestor regions in proper order. *)
   let parent_rgs =
-    list_ancestor_region_groups inst_sg.regions_hierarchy back_id
+    RegionsHierarchy.list_ancestor_region_groups inst_sg.regions_hierarchy
+      back_id
   in
   let parent_input_abs_ids =
     RegionGroupId.mapi
@@ -418,6 +421,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   let parent_input_abs_ids =
     List.filter_map (fun x -> x) parent_input_abs_ids
+  in
+  (* Are we synthesizing the backward function of the static region group? *)
+  let is_static_rg =
+    List.mem RStatic
+      (RegionGroupId.nth inst_sg.regions_hierarchy back_id).regions
   in
 
   (* Insert the return value in the return abstractions (by applying
@@ -448,9 +456,47 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
        We take care of allowing to end only the regions which should end (note
        that this is important for soundness: this is part of the borrow checking).
        Also see the documentation of the [can_end] field of [abs] for more
-       information. *)
+       information.
+
+       Remark: we need to distinguish two notions:
+       - the regions which *may* end when we end the current region group:
+         those are the regions of the current group and the regions which are
+         shorter than them
+       - the ancestors of the current region group (its parents, transitively),
+         which *must* end first: ending an abstraction always starts by ending
+         its parents, hence, recursively, its ancestors.
+
+       For a region group which doesn't contain the static region, the two
+       notions coincide: the ancestors are given by the transitive closure of
+       the outlives relation given by the signature, which is exactly the
+       information which tells us which regions are shorter.
+
+       The static region, however, outlives all the other regions: all the
+       regions *may* end when we end the static region. But this doesn't mean
+       they *have to* end first: whether ending the static region requires
+       ending another region depends on how the borrows flow in the body of the
+       function, which we can't know by looking only at the signature. For
+       instance, with the signature
+       [fn f<'b>(x: &'static str, y: &'b str) -> (&'static str, &'b str)],
+       the regions ['static] and ['b] are independent if the body is
+       [{ (x, y) }], while if the body is [{ (x, x) }], ending ['static]
+       requires ending ['b] (because the static borrow was coerced to a borrow
+       of region ['b], ending the static loan requires ending this borrow -
+       note that ['b] doesn't need to end *as an ancestor*, i.e., before we
+       start ending the static region).
+
+       This is why the static region group doesn't always have all the other
+       region groups as parents: it only has them when the signature may
+       require them to end first (this is a conservative check), or when some
+       region variables outlive ['static] and are thus merged into the static
+       region group (see {!RegionsHierarchy.compute_regions_hierarchy_for_sig}).
+       In the other cases, we don't make the other regions end first, but we
+       allow them to end, so that the symbolic execution can end them if the
+       body of the function requires it. *)
     let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
-    let region_can_end rid = RegionGroupId.Set.mem rid parent_and_current_rgs in
+    let region_can_end rid =
+      is_static_rg || RegionGroupId.Set.mem rid parent_and_current_rgs
+    in
     [%sanity_check] span (region_can_end back_id);
     let ctx =
       create_push_abstractions_from_abs_region_groups
@@ -480,8 +526,26 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 
-  (* Set the abstrations as endable *)
-  let ctx = InterpBorrowsCore.update_endable ctx target_abs_ids ~can_end:true in
+  (* Set the abstractions as endable. If we are synthesizing the backward
+     function for the static region, we allow ending all the input
+     abstractions, even if we only end the ancestor abstractions (and the
+     current abstraction) explicitly below: see the remark above about the
+     regions which *may* end and the ancestors which *must* end first. *)
+  let endable_abs_ids =
+    if is_static_rg then
+      List.map
+        (fun (rg : abs_region_group) -> rg.id)
+        inst_sg.abs_regions_hierarchy
+    else target_abs_ids
+  in
+  let ctx =
+    InterpBorrowsCore.update_endable ctx endable_abs_ids ~can_end:true
+  in
+
+  (* If we are synthesizing the backward function for the static region, we
+     need to allow ending the region abstractions which own the static region
+     (see [abs_is_endable]) *)
+  let ctx = if is_static_rg then { ctx with can_end_static = true } else ctx in
 
   (* Actually end them *)
   let ctx, cc =
@@ -524,6 +588,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
 
   let regions_hierarchy =
     RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span) ctx.crate
+      ctx.type_ctx.type_infos
       (bound_fun_sig_of_decl fdef)
   in
 

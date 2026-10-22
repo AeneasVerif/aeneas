@@ -29,7 +29,7 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
        Charon should do it for us. *)
     let regions_hierarchy =
       RegionsHierarchy.compute_regions_hierarchy_for_sig (Some ctx.span)
-        ctx.decls_ctx.crate
+        ctx.decls_ctx.crate ctx.decls_ctx.type_ctx.type_infos
         (LlbcAstUtils.bound_fun_sig_of_decl ctx.fun_decl)
     in
     List.map
@@ -37,7 +37,12 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
         let rg = RegionGroupId.nth regions_hierarchy gid in
         let region_names =
           List.map
-            (fun rid -> (T.RegionId.nth ctx.fun_decl.generics.regions rid).name)
+            (fun (r : T.region) ->
+              match r with
+              | RVar (Free rid) ->
+                  (T.RegionId.nth ctx.fun_decl.generics.regions rid).name
+              | RStatic -> Some "'static"
+              | _ -> [%internal_error] ctx.span)
             rg.regions
         in
         let name =
@@ -215,6 +220,7 @@ let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
       match Collections.List.last name with
       | PeIdent (s, _) -> s
       | PeImpl _ -> "impl"
+      | PeBuiltin (b, _) -> TypesUtils.builtin_path_elem_ident b
       | _ ->
           (* We shouldn't get there *)
           [%craise] decl.item_meta.span "Unexpected")
@@ -276,7 +282,7 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
     (List.length targets >= 2)
     "TargetDispatchBody must have at least 2 targets";
 
-  let str_ty = TAdt (TBuiltin TStr, empty_generic_args) in
+  let str_ty = TLiteral TPureString in
 
   (* Translate the input symbolic values to pure expressions *)
   let input_exprs =
@@ -318,7 +324,9 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
   let tgt_expr = mk_texpr_from_fvar tgt_fvar in
 
   let mk_eq_scrut (target_name : string) : texpr =
-    let str_lit : texpr = { e = Const (VStr target_name); ty = str_ty } in
+    let str_lit : texpr =
+      { e = Const (VPureString target_name); ty = str_ty }
+    in
     let bool_ty = TLiteral TBool in
     let eq_qualif : qualif =
       { id = FunOrOp (Binop (Eq str_ty)); generics = empty_generic_args }
@@ -376,7 +384,12 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
     ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg];
   (* We have to treat unsized casts separately *)
   match call.call_id with
-  | S.Unop (Cast (CastUnsize (ty0, ty1, _))) ->
+  | S.Unop (Cast (CastUnsize (ty1, _))) ->
+      let ty0 =
+        match call.args with
+        | [ arg ] -> arg.ty
+        | _ -> [%internal_error] ctx.span
+      in
       translate_cast_unsize call e ty0 ty1 ctx
   | _ -> translate_function_call_aux call e ctx
 
@@ -442,7 +455,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                     (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls)
               | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
-                    trait_ref.trait_decl_ref.binder_value.id method_id
+                    trait_ref.trait_decl_ref.id method_id
             in
             name ^ "_back"
           in
@@ -559,13 +572,23 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Cast kind) -> begin
+        let arg_ty =
+          match call.args with
+          | [ arg ] -> arg.ty
+          | _ -> [%internal_error] ctx.span
+        in
         let kind, can_fail =
           match kind with
-          | CastScalar (src_ty, tgt_ty) ->
+          | CastScalar tgt_ty ->
+              let src_ty =
+                match arg_ty with
+                | TScalar src_ty -> src_ty
+                | _ -> [%internal_error] ctx.span
+              in
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
-          | CastRawPtr (src_ty, tgt_ty) ->
+          | CastRawPtr tgt_ty ->
               (* We only support casts between pointers to literal types for now *)
               let get_ty (ty : T.ty) =
                 match ty with
@@ -583,12 +606,18 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                         literal types; found: "
                       ^ Charon.Print.cast_kind_to_string env kind)
               in
-              let src_ty, src_mut = get_ty src_ty in
+              let src_ty, src_mut = get_ty arg_ty in
               let tgt_ty, tgt_mut = get_ty tgt_ty in
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
-          | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
+          | CastPtrExposeProvenance ->
+              [%craise] ctx.span "Unsupported: pointer to address casts"
+          | CastPtrWithExposedProvenance _ ->
+              [%craise] ctx.span "Unsupported: address to pointer casts"
+          | CastFnDefToFnPtr | CastFnPtrToUnsafe ->
+              [%craise] ctx.span "TODO: function casts"
+          | CastSubtype _ -> [%craise] ctx.span "Unsupported: subtype casts"
           | CastUnsize _ ->
               (* We shouldn't get there: this case should have been detected before
                and handled in [translate_cast_unsize] *)
@@ -882,7 +911,7 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
   | V.Loop _ | V.Join ->
       translate_end_abstraction_join_or_loop ectx abs abs_level e ctx
   | V.WithCont -> translate_end_abstraction_with_cont ectx abs abs_level e ctx
-  | V.Identity | V.CopySymbolicValue ->
+  | V.Identity | V.CopySymbolicValue | V.Static ->
       translate_end_abs_identity ectx abs abs_level e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
@@ -1768,12 +1797,23 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
 
   (* If we reached a loop: if we are *inside* a loop, we need to ignore the
        backward functions which are not associated to region abstractions.
+
+     Also note that we don't translate the backward functions which are
+     filtered (because they have no inputs and no outputs, see
+     {!compute_back_tys}): this is not only an optimization, as the
+     translation of those can fail. For instance, the backward function for
+     the static region often has no inputs and no outputs (because the static
+     region is often used only for shared borrows), but its body may contain
+     sub-abstractions which we don't support yet.
     *)
   let back_el =
-    List.map
-      (fun ((gid, _) : RegionGroupId.id * back_sg_info) ->
-        Some (translate_one_end ctx (Some gid)))
+    List.map2
+      (fun ((gid, _) : RegionGroupId.id * back_sg_info) back_ty ->
+        match back_ty with
+        | None -> None
+        | Some _ -> Some (translate_one_end ctx (Some gid)))
       (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
+      (compute_back_tys ctx.sg.fun_ty)
   in
 
   (* Compute whether the backward expressions should be evaluated straight

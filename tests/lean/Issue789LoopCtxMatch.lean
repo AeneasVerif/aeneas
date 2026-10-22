@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -52,12 +53,12 @@ def the_loop_loop.body
       { start := n }
   if done1
   then let a := to_slice_mut_back s2
-       ok (done (i, a, next_in1, true))
+       ok (done (i, a, next_in1, done1))
   else
     let b ← core.slice.Slice.is_empty next_in1
     if b
     then let a := to_slice_mut_back s2
-         ok (done (i, a, next_in1, false))
+         ok (done (i, a, next_in1, done1))
     else let a := to_slice_mut_back s2
          ok (cont ({ x := i, y := a }, next_in1))
 

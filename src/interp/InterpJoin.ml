@@ -47,7 +47,7 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
        *instances* of the same loans, exactly as when copying a shared value
        (see [InterpExpressions.copy_value])
   *)
-  let mk_value_with_fresh_sids_no_shared_loans (rids : RegionId.Set.t)
+  let mk_value_with_fresh_sids_no_shared_loans (rids : region_set)
       (nrid : RegionId.id) (v : tvalue) : tvalue =
     (* Remove the shared loans *)
     let v = value_remove_shared_loans v in
@@ -55,7 +55,8 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     Substitute.tvalue_subst_ids
       {
         (Substitute.no_abs_id_subst span) with
-        r_subst = (fun r -> if RegionId.Set.mem r rids then nrid else r);
+        r_subst =
+          (fun r -> if RegionSet.mem (RVar (Free r)) rids then nrid else r);
         ssubst =
           (fun id ->
             let nid = ctx.fresh_symbolic_value_id () in
@@ -146,7 +147,9 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
       | None -> Identity
     in
     let can_end = true in
-    let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
+    let regions : abs_regions =
+      { owned = RegionSet.singleton (RVar (Free nrid)) }
+    in
     let cont : abs_cont option =
       if with_abs_conts then
         Some
@@ -297,7 +300,7 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
     in
 
     (* Introduce the fresh regions *)
-    let push_abs (nrid : RegionId.id) =
+    let push_abs (nr : region) =
       let rty = ty in
 
       (* Create the symbolic borrow *)
@@ -331,15 +334,14 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
         | None -> WithCont
       in
       let can_end = true in
-      let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
+      let regions : abs_regions = { owned = RegionSet.singleton nr } in
       let cont : abs_cont option =
         if with_abs_conts then
           (* Create the symbolic borrow. We introduce borrows/loans only if the
              region projects *mutable* borrows/loans. *)
           if
             ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
-              (RegionId.Set.singleton nrid)
-              rty
+              (RegionSet.singleton nr) rty
           then
             let borrow : tevalue =
               let value =
@@ -385,7 +387,16 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
       fresh_absl := fresh_abs :: !fresh_absl
     in
 
-    List.iter push_abs fresh_regions;
+    List.iter (fun rid -> push_abs (RVar (Free rid))) fresh_regions;
+    (* The static region is not refreshed: if the type contains it (note that it
+       may be hidden in ADTs, see {!TypesUtils.adt_has_hidden_static}) we also
+       need to introduce an abstraction which reborrows the static part of the
+       symbolic value. *)
+    if
+      ty_has_regions_in_set ctx.type_ctx.type_infos
+        (RegionSet.singleton RStatic)
+        ty
+    then push_abs RStatic;
 
     let nsv : symbolic_value = { sv_id = nsid; sv_ty = ty } in
     sid_subst := (sv, nsv) :: !sid_subst;
@@ -1242,8 +1253,7 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
                    (TypesUtils.ty_has_borrows (Some span)
                       ctx.type_ctx.type_infos ty))
                 "Not implemented";
-              let rid = RegionId.Set.choose abs.regions.owned in
-              let ref_ty = TRef (RVar (Free rid), ty, RShared) in
+              let ref_ty = TRef (abs_pick_region span abs, ty, RShared) in
               let child = ValuesUtils.mk_aignored span ty None in
               let av = ALoan (ASharedLoan (PNone, lid, copy_value sv, child)) in
               let av : tavalue = { value = av; ty = ref_ty } in
@@ -1478,10 +1488,29 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     ^ SymbolicValueId.Map.to_string (Some "  ") (tvalue_to_string src_ctx)
         joined_symbolic_to_tgt_value];
 
+  (* Compute the set of abstractions resulting from the merges which end up in
+     an abstraction owning the static region (see
+     [collapse_ctx_no_markers_following_sequence]) *)
+  let static_aids =
+    let final_static =
+      AbsId.Set.of_list
+        (List.filter_map
+           (fun (abs : abs) ->
+             if abs_owns_static abs then Some abs.abs_id else None)
+           (AbsId.Map.values (ctx_get_abs joined_ctx_not_projected)))
+    in
+    (* Propagate backward: if the result of a merge ends up in an abstraction
+       owning the static region, so do the merged abstractions *)
+    List.fold_left
+      (fun s (a0, a1, a2) ->
+        if AbsId.Set.mem a2 s then AbsId.Set.add a0 (AbsId.Set.add a1 s) else s)
+      final_static (List.rev merge_seq)
+  in
+
   (* Apply the sequence of merges to the projected context *)
   let joined_ctx =
-    collapse_ctx_no_markers_following_sequence span merge_seq add_borrows_seq
-      ~with_abs_conts:true fresh_abs_kind joined_ctx
+    collapse_ctx_no_markers_following_sequence span merge_seq static_aids
+      add_borrows_seq ~with_abs_conts:true fresh_abs_kind joined_ctx
   in
   [%ltrace
     "After collapsing the context: joined_ctx:\n"

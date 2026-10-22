@@ -8,11 +8,11 @@ inductive Mutability where
 | Mut | Const
 
 -- We don't really use raw pointers for now
-structure RawPtr (T : Type) (M : Mutability) where
+structure RawPtr (T : Type _) (M : Mutability) where
   v : T
 
-abbrev MutRawPtr (T : Type) := RawPtr T .Mut
-abbrev ConstRawPtr (T : Type) := RawPtr T .Const
+abbrev MutRawPtr (T : Type _) := RawPtr T .Mut
+abbrev ConstRawPtr (T : Type _) := RawPtr T .Const
 
 inductive ScalarKind where
 | Signed (ty : IScalarTy)
