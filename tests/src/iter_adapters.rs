@@ -354,8 +354,43 @@ pub fn test_range_inclusive_empty() {
 // TakeWhile
 // ============================================================================
 
-// Not `#[verify::test]`: a closure predicate is noncomputable, and a named `fn` one
-// aborts under `-checks` (TypesAnalysis.ml:968).
+/// Yields while the predicate holds, then stops at the first element that fails it.
+#[verify::test]
+pub fn test_take_while_stops_at_first_false() {
+    let v: [u32; 4] = [1, 2, 30, 4];
+    let mut it = v.iter().take_while(|x| **x < 10);
+    assert!(*it.next().unwrap() == 1);
+    assert!(*it.next().unwrap() == 2);
+    assert!(it.next().is_none());
+}
+
+/// Once the predicate has failed, `flag` latches: the iterator stays exhausted
+/// even though the underlying slice still has elements passing the predicate.
+#[verify::test]
+pub fn test_take_while_latches() {
+    let v: [u32; 3] = [30, 1, 2];
+    let mut it = v.iter().take_while(|x| **x < 10);
+    assert!(it.next().is_none());
+    assert!(it.next().is_none());
+}
+
+/// Every element passes: the adapter yields the whole slice, then `none`.
+#[verify::test]
+pub fn test_take_while_all_pass() {
+    let v: [u32; 3] = [1, 2, 3];
+    let mut it = v.iter().take_while(|x| **x < 10);
+    assert!(*it.next().unwrap() == 1);
+    assert!(*it.next().unwrap() == 2);
+    assert!(*it.next().unwrap() == 3);
+    assert!(it.next().is_none());
+}
+
+#[verify::test]
+pub fn test_take_while_empty() {
+    let v: [u32; 0] = [];
+    let mut it = v.iter().take_while(|x| **x < 10);
+    assert!(it.next().is_none());
+}
 
 pub fn take_while_lt_ten(v: &[u32]) -> Option<u32> {
     let mut it = v.iter().take_while(|x| **x < 10);
