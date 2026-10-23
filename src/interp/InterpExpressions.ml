@@ -1181,8 +1181,8 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           | Cmp ->
               [%sanity_check] span (int_ty1 = int_ty2);
               TScalar (TInteger (Signed I8))
-          (* These return `(int, bool)` / a pointer which isn't a literal type *)
-          | AddChecked | SubChecked | MulChecked | Offset ->
+          (* These return `(int, bool)` which isn't a literal type *)
+          | AddChecked | SubChecked | MulChecked ->
               [%craise] span "Unimplemented binary operation"
           | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
