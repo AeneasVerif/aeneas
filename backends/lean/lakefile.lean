@@ -20,13 +20,3 @@ private def notCI : Bool := run_io
   -- Precompiling modules triggers issues in CI so we deactivate this.
   precompileModules := notCI
 }
-
-/-- Generate the `.ml` file listing the definitions supported by the standard library. -/
-lean_exe extract where
-  root := `AeneasExtract
-  supportInterpreter := true
-
-/-- Extract the Lean tokens that are not permitted as standalone identifiers. -/
-lean_exe extract_lean_keywords where
-  root := `ExtractLeanKeywords
-  supportInterpreter := true
