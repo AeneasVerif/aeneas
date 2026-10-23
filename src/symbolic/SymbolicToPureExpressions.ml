@@ -700,8 +700,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   let ty0 = ty_as_integer ctx.span arg0.ty in
                   let ty1 = ty_as_integer ctx.span arg1.ty in
                   Shr (om, ty0, ty1)
-              | Expressions.Offset ->
-                  [%craise] ctx.span "Not supported: `binop::offset`"
               | Expressions.Cmp -> Cmp (get_single_int_ty ())
             in
             (ctx, Binop binop, effect_info, args, [], dest)
