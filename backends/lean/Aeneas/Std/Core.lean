@@ -13,6 +13,7 @@ public import Aeneas.Std.Core.Fmt
 public import Aeneas.Std.Core.FmtWithSlice
 public import Aeneas.Std.Core.Hash
 public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Core.IterLemmas
 public import Aeneas.Std.Core.Marker
 public import Aeneas.Std.Core.Ops
 public import Aeneas.Std.Core.Panic
