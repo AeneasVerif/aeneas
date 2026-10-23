@@ -20,8 +20,25 @@ set_option maxRecDepth 2048
 
 namespace iter_adapters
 
+/-- Trait implementation: [core::iter::range::{impl core::iter::traits::double_ended::DoubleEndedIterator<A> for core::ops::range::RangeInclusive<A>}]
+    Source: '/rustc/library/core/src/iter/range.rs', lines 1626:0-1626:60
+    Name pattern: [core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, @A>] -/
+@[reducible, rust_trait_impl
+  "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, @A>"]
+def
+  core.ops.range.RangeInclusive.Insts.CoreIterTraitsDouble_endedDoubleEndedIterator
+  {A : Type _} (StepInst : core.iter.range.Step A) :
+  core.iter.traits.double_ended.DoubleEndedIterator
+  (core.ops.range.RangeInclusive A) A := {
+  iteratorInst :=
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst
+  next_back :=
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_back
+    StepInst
+}
+
 /-- [iter_adapters::test_enumerate_slice]:
-    Source: 'tests/src/iter_adapters.rs', lines 14:0-24:1
+    Source: 'tests/src/iter_adapters.rs', lines 15:0-25:1
     Visibility: public -/
 def test_enumerate_slice : Result Unit := do
   let s ←
@@ -58,7 +75,7 @@ def test_enumerate_slice : Result Unit := do
 #guard (test_enumerate_slice).reducesTo ()
 
 /-- [iter_adapters::test_enumerate_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 28:0-32:1
+    Source: 'tests/src/iter_adapters.rs', lines 29:0-33:1
     Visibility: public -/
 def test_enumerate_empty : Result Unit := do
   let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
@@ -76,7 +93,7 @@ def test_enumerate_empty : Result Unit := do
 #guard (test_enumerate_empty).reducesTo ()
 
 /-- [iter_adapters::test_take_2]:
-    Source: 'tests/src/iter_adapters.rs', lines 40:0-46:1
+    Source: 'tests/src/iter_adapters.rs', lines 41:0-47:1
     Visibility: public -/
 def test_take_2 : Result Unit := do
   let s ←
@@ -106,7 +123,7 @@ def test_take_2 : Result Unit := do
 #guard (test_take_2).reducesTo ()
 
 /-- [iter_adapters::test_take_0]:
-    Source: 'tests/src/iter_adapters.rs', lines 50:0-54:1
+    Source: 'tests/src/iter_adapters.rs', lines 51:0-55:1
     Visibility: public -/
 def test_take_0 : Result Unit := do
   let s ←
@@ -125,7 +142,7 @@ def test_take_0 : Result Unit := do
 #guard (test_take_0).reducesTo ()
 
 /-- [iter_adapters::test_take_more_than_available]:
-    Source: 'tests/src/iter_adapters.rs', lines 58:0-65:1
+    Source: 'tests/src/iter_adapters.rs', lines 59:0-66:1
     Visibility: public -/
 def test_take_more_than_available : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
@@ -158,7 +175,7 @@ def test_take_more_than_available : Result Unit := do
 #guard (test_take_more_than_available).reducesTo ()
 
 /-- [iter_adapters::test_range_u8]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 75:4-77:5
+    Source: 'tests/src/iter_adapters.rs', lines 76:4-78:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u8_loop.body
@@ -173,7 +190,7 @@ def test_range_u8_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u8]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 75:4-77:5
+    Source: 'tests/src/iter_adapters.rs', lines 76:4-78:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u8_loop
@@ -183,7 +200,7 @@ def test_range_u8_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u8]:
-    Source: 'tests/src/iter_adapters.rs', lines 73:0-79:1
+    Source: 'tests/src/iter_adapters.rs', lines 74:0-80:1
     Visibility: public -/
 def test_range_u8 : Result Unit := do
   let count ← test_range_u8_loop { start := 0#u8, «end» := 5#u8 } 0#u32
@@ -193,7 +210,7 @@ def test_range_u8 : Result Unit := do
 #guard (test_range_u8).reducesTo ()
 
 /-- [iter_adapters::test_range_u16]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 85:4-87:5
+    Source: 'tests/src/iter_adapters.rs', lines 86:4-88:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u16_loop.body
@@ -208,7 +225,7 @@ def test_range_u16_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u16]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 85:4-87:5
+    Source: 'tests/src/iter_adapters.rs', lines 86:4-88:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u16_loop
@@ -220,7 +237,7 @@ def test_range_u16_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u16]:
-    Source: 'tests/src/iter_adapters.rs', lines 83:0-89:1
+    Source: 'tests/src/iter_adapters.rs', lines 84:0-90:1
     Visibility: public -/
 def test_range_u16 : Result Unit := do
   let count ← test_range_u16_loop { start := 0#u16, «end» := 4#u16 } 0#u32
@@ -230,7 +247,7 @@ def test_range_u16 : Result Unit := do
 #guard (test_range_u16).reducesTo ()
 
 /-- [iter_adapters::test_range_u32]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 95:4-97:5
+    Source: 'tests/src/iter_adapters.rs', lines 96:4-98:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u32_loop.body
@@ -245,7 +262,7 @@ def test_range_u32_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u32]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 95:4-97:5
+    Source: 'tests/src/iter_adapters.rs', lines 96:4-98:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u32_loop
@@ -257,7 +274,7 @@ def test_range_u32_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u32]:
-    Source: 'tests/src/iter_adapters.rs', lines 93:0-99:1
+    Source: 'tests/src/iter_adapters.rs', lines 94:0-100:1
     Visibility: public -/
 def test_range_u32 : Result Unit := do
   let count ← test_range_u32_loop { start := 0#u32, «end» := 3#u32 } 0#u32
@@ -267,7 +284,7 @@ def test_range_u32 : Result Unit := do
 #guard (test_range_u32).reducesTo ()
 
 /-- [iter_adapters::test_range_u64]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 105:4-107:5
+    Source: 'tests/src/iter_adapters.rs', lines 106:4-108:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u64_loop.body
@@ -282,7 +299,7 @@ def test_range_u64_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u64]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 105:4-107:5
+    Source: 'tests/src/iter_adapters.rs', lines 106:4-108:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u64_loop
@@ -294,7 +311,7 @@ def test_range_u64_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u64]:
-    Source: 'tests/src/iter_adapters.rs', lines 103:0-109:1
+    Source: 'tests/src/iter_adapters.rs', lines 104:0-110:1
     Visibility: public -/
 def test_range_u64 : Result Unit := do
   let count ← test_range_u64_loop { start := 0#u64, «end» := 4#u64 } 0#u64
@@ -304,7 +321,7 @@ def test_range_u64 : Result Unit := do
 #guard (test_range_u64).reducesTo ()
 
 /-- [iter_adapters::test_range_usize]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 115:4-117:5
+    Source: 'tests/src/iter_adapters.rs', lines 116:4-118:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_usize_loop.body
@@ -320,7 +337,7 @@ def test_range_usize_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_usize]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 115:4-117:5
+    Source: 'tests/src/iter_adapters.rs', lines 116:4-118:5
     Visibility: public -/
 @[rust_loop]
 def test_range_usize_loop
@@ -332,7 +349,7 @@ def test_range_usize_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_usize]:
-    Source: 'tests/src/iter_adapters.rs', lines 113:0-119:1
+    Source: 'tests/src/iter_adapters.rs', lines 114:0-120:1
     Visibility: public -/
 def test_range_usize : Result Unit := do
   let count ←
@@ -343,7 +360,7 @@ def test_range_usize : Result Unit := do
 #guard (test_range_usize).reducesTo ()
 
 /-- [iter_adapters::test_range_empty]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 125:4-127:5
+    Source: 'tests/src/iter_adapters.rs', lines 126:4-128:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_empty_loop.body
@@ -358,7 +375,7 @@ def test_range_empty_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_empty]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 125:4-127:5
+    Source: 'tests/src/iter_adapters.rs', lines 126:4-128:5
     Visibility: public -/
 @[rust_loop]
 def test_range_empty_loop
@@ -368,7 +385,7 @@ def test_range_empty_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 123:0-129:1
+    Source: 'tests/src/iter_adapters.rs', lines 124:0-130:1
     Visibility: public -/
 def test_range_empty : Result Unit := do
   let count ← test_range_empty_loop { start := 5#u8, «end» := 5#u8 } 0#u32
@@ -378,7 +395,7 @@ def test_range_empty : Result Unit := do
 #guard (test_range_empty).reducesTo ()
 
 /-- [iter_adapters::test_array_into_iter]:
-    Source: 'tests/src/iter_adapters.rs', lines 137:0-144:1
+    Source: 'tests/src/iter_adapters.rs', lines 138:0-145:1
     Visibility: public -/
 def test_array_into_iter : Result Unit := do
   let s ←
@@ -401,7 +418,7 @@ def test_array_into_iter : Result Unit := do
 #guard (test_array_into_iter).reducesTo ()
 
 /-- [iter_adapters::test_slice_into_iter]:
-    Source: 'tests/src/iter_adapters.rs', lines 148:0-157:1
+    Source: 'tests/src/iter_adapters.rs', lines 149:0-158:1
     Visibility: public -/
 def test_slice_into_iter : Result Unit := do
   let s ←
@@ -427,7 +444,7 @@ def test_slice_into_iter : Result Unit := do
 #guard (test_slice_into_iter).reducesTo ()
 
 /-- [iter_adapters::test_enumerate_step_by]:
-    Source: 'tests/src/iter_adapters.rs', lines 165:0-172:1
+    Source: 'tests/src/iter_adapters.rs', lines 166:0-173:1
     Visibility: public -/
 def test_enumerate_step_by : Result Unit := do
   let s ←
@@ -460,7 +477,7 @@ def test_enumerate_step_by : Result Unit := do
 #guard (test_enumerate_step_by).reducesTo ()
 
 /-- [iter_adapters::test_enumerate_take]:
-    Source: 'tests/src/iter_adapters.rs', lines 176:0-184:1
+    Source: 'tests/src/iter_adapters.rs', lines 177:0-185:1
     Visibility: public -/
 def test_enumerate_take : Result Unit := do
   let s ←
@@ -499,7 +516,7 @@ def test_enumerate_take : Result Unit := do
 #guard (test_enumerate_take).reducesTo ()
 
 /-- [iter_adapters::test_take_exhausted_then_next]:
-    Source: 'tests/src/iter_adapters.rs', lines 188:0-197:1
+    Source: 'tests/src/iter_adapters.rs', lines 189:0-198:1
     Visibility: public -/
 def test_take_exhausted_then_next : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
@@ -526,8 +543,132 @@ def test_take_exhausted_then_next : Result Unit := do
 /- Unit test for [iter_adapters::test_take_exhausted_then_next] -/
 #guard (test_take_exhausted_then_next).reducesTo ()
 
+/-- [iter_adapters::test_signed_backward_checked_boundaries]:
+    Source: 'tests/src/iter_adapters.rs', lines 207:0-214:1
+    Visibility: public -/
+def test_signed_backward_checked_boundaries : Result Unit := do
+  let o ← core.iter.range.StepI8.backward_checked 0#i8 1#usize
+  let i ← core.option.Option.unwrap o
+  massert (i = (-1)#i8)
+  let o1 ← core.iter.range.StepI8.backward_checked 5#i8 7#usize
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = (-2)#i8)
+  let o2 ← core.iter.range.StepI8.backward_checked (-128)#i8 0#usize
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = (-128)#i8)
+  let o3 ← core.iter.range.StepI8.backward_checked 127#i8 255#usize
+  let i3 ← core.option.Option.unwrap o3
+  massert (i3 = (-128)#i8)
+  let o4 ← core.iter.range.StepI8.backward_checked (-128)#i8 1#usize
+  let b := core.option.Option.is_none o4
+  massert b
+  let o5 ← core.iter.range.StepI8.backward_checked 127#i8 256#usize
+  let b1 := core.option.Option.is_none o5
+  massert b1
+
+/- Unit test for [iter_adapters::test_signed_backward_checked_boundaries] -/
+#guard (test_signed_backward_checked_boundaries).reducesTo ()
+
+/-- [iter_adapters::test_range_rev_negative]: loop body 0:
+    Source: 'tests/src/iter_adapters.rs', lines 220:4-222:5
+    Visibility: public -/
+@[rust_loop_body]
+def test_range_rev_negative_loop.body
+  (iter : core.iter.adapters.rev.Rev (core.ops.range.Range Std.I32))
+  (value : Std.I32) :
+  Result (ControlFlow ((core.iter.adapters.rev.Rev (core.ops.range.Range
+    Std.I32)) × Std.I32) Std.I32)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.ops.range.Range.Insts.DoubleEndedIterator core.iter.range.StepI32)
+      iter
+  match o with
+  | none => ok (done value)
+  | some i =>
+    let i1 ← value * 10#i32
+    let value1 ← i1 + i
+    ok (cont (iter1, value1))
+
+/-- [iter_adapters::test_range_rev_negative]: loop 0:
+    Source: 'tests/src/iter_adapters.rs', lines 220:4-222:5
+    Visibility: public -/
+@[rust_loop]
+def test_range_rev_negative_loop
+  (iter : core.iter.adapters.rev.Rev (core.ops.range.Range Std.I32))
+  (value : Std.I32) :
+  Result Std.I32
+  := do
+  loop
+    (fun (iter1, value1) => test_range_rev_negative_loop.body iter1 value1)
+    (iter, value)
+
+/-- [iter_adapters::test_range_rev_negative]:
+    Source: 'tests/src/iter_adapters.rs', lines 218:0-224:1
+    Visibility: public -/
+def test_range_rev_negative : Result Unit := do
+  let iter ←
+    core.iter.traits.iterator.Iterator.rev.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepI32)
+      (core.ops.range.Range.Insts.DoubleEndedIterator core.iter.range.StepI32)
+      { start := (-3)#i32, «end» := 0#i32 }
+  let value ← test_range_rev_negative_loop iter 0#i32
+  massert (value = (-123)#i32)
+
+/- Unit test for [iter_adapters::test_range_rev_negative] -/
+#guard (test_range_rev_negative).reducesTo ()
+
+/-- [iter_adapters::test_range_rev_positive]: loop body 0:
+    Source: 'tests/src/iter_adapters.rs', lines 230:4-232:5
+    Visibility: public -/
+@[rust_loop_body]
+def test_range_rev_positive_loop.body
+  (iter : core.iter.adapters.rev.Rev (core.ops.range.Range Std.I32))
+  (value : Std.I32) :
+  Result (ControlFlow ((core.iter.adapters.rev.Rev (core.ops.range.Range
+    Std.I32)) × Std.I32) Std.I32)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.ops.range.Range.Insts.DoubleEndedIterator core.iter.range.StepI32)
+      iter
+  match o with
+  | none => ok (done value)
+  | some i =>
+    let i1 ← value * 10#i32
+    let value1 ← i1 + i
+    ok (cont (iter1, value1))
+
+/-- [iter_adapters::test_range_rev_positive]: loop 0:
+    Source: 'tests/src/iter_adapters.rs', lines 230:4-232:5
+    Visibility: public -/
+@[rust_loop]
+def test_range_rev_positive_loop
+  (iter : core.iter.adapters.rev.Rev (core.ops.range.Range Std.I32))
+  (value : Std.I32) :
+  Result Std.I32
+  := do
+  loop
+    (fun (iter1, value1) => test_range_rev_positive_loop.body iter1 value1)
+    (iter, value)
+
+/-- [iter_adapters::test_range_rev_positive]:
+    Source: 'tests/src/iter_adapters.rs', lines 228:0-234:1
+    Visibility: public -/
+def test_range_rev_positive : Result Unit := do
+  let iter ←
+    core.iter.traits.iterator.Iterator.rev.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepI32)
+      (core.ops.range.Range.Insts.DoubleEndedIterator core.iter.range.StepI32)
+      { start := 1#i32, «end» := 4#i32 }
+  let value ← test_range_rev_positive_loop iter 0#i32
+  massert (value = 321#i32)
+
+/- Unit test for [iter_adapters::test_range_rev_positive] -/
+#guard (test_range_rev_positive).reducesTo ()
+
 /-- [iter_adapters::test_range_single_element]:
-    Source: 'tests/src/iter_adapters.rs', lines 206:0-210:1
+    Source: 'tests/src/iter_adapters.rs', lines 238:0-242:1
     Visibility: public -/
 def test_range_single_element : Result Unit := do
   let (o, it) ←
@@ -543,7 +684,7 @@ def test_range_single_element : Result Unit := do
 #guard (test_range_single_element).reducesTo ()
 
 /-- [iter_adapters::test_range_u8_near_max]:
-    Source: 'tests/src/iter_adapters.rs', lines 214:0-218:1
+    Source: 'tests/src/iter_adapters.rs', lines 246:0-250:1
     Visibility: public -/
 def test_range_u8_near_max : Result Unit := do
   let (o, it) ←
@@ -559,7 +700,7 @@ def test_range_u8_near_max : Result Unit := do
 #guard (test_range_u8_near_max).reducesTo ()
 
 /-- [iter_adapters::test_range_u8_start_gt_end]:
-    Source: 'tests/src/iter_adapters.rs', lines 222:0-225:1
+    Source: 'tests/src/iter_adapters.rs', lines 254:0-257:1
     Visibility: public -/
 def test_range_u8_start_gt_end : Result Unit := do
   let (o, _) ←
@@ -572,7 +713,7 @@ def test_range_u8_start_gt_end : Result Unit := do
 #guard (test_range_u8_start_gt_end).reducesTo ()
 
 /-- [iter_adapters::test_range_u8_start_eq_end]:
-    Source: 'tests/src/iter_adapters.rs', lines 229:0-232:1
+    Source: 'tests/src/iter_adapters.rs', lines 261:0-264:1
     Visibility: public -/
 def test_range_u8_start_eq_end : Result Unit := do
   let (o, _) ←
@@ -585,7 +726,7 @@ def test_range_u8_start_eq_end : Result Unit := do
 #guard (test_range_u8_start_eq_end).reducesTo ()
 
 /-- [iter_adapters::test_range_u16_boundary]:
-    Source: 'tests/src/iter_adapters.rs', lines 236:0-242:1
+    Source: 'tests/src/iter_adapters.rs', lines 268:0-274:1
     Visibility: public -/
 def test_range_u16_boundary : Result Unit := do
   let (o, it) ←
@@ -610,7 +751,7 @@ def test_range_u16_boundary : Result Unit := do
 #guard (test_range_u16_boundary).reducesTo ()
 
 /-- [iter_adapters::test_range_u32_boundary]:
-    Source: 'tests/src/iter_adapters.rs', lines 246:0-251:1
+    Source: 'tests/src/iter_adapters.rs', lines 278:0-283:1
     Visibility: public -/
 def test_range_u32_boundary : Result Unit := do
   let (o, it) ←
@@ -631,7 +772,7 @@ def test_range_u32_boundary : Result Unit := do
 #guard (test_range_u32_boundary).reducesTo ()
 
 /-- [iter_adapters::test_range_u64_boundary]:
-    Source: 'tests/src/iter_adapters.rs', lines 255:0-261:1
+    Source: 'tests/src/iter_adapters.rs', lines 287:0-293:1
     Visibility: public -/
 def test_range_u64_boundary : Result Unit := do
   let (o, it) ←
@@ -656,7 +797,7 @@ def test_range_u64_boundary : Result Unit := do
 #guard (test_range_u64_boundary).reducesTo ()
 
 /-- [iter_adapters::test_range_usize_start_gt_end]:
-    Source: 'tests/src/iter_adapters.rs', lines 265:0-268:1
+    Source: 'tests/src/iter_adapters.rs', lines 297:0-300:1
     Visibility: public -/
 def test_range_usize_start_gt_end : Result Unit := do
   let (o, _) ←
@@ -669,7 +810,7 @@ def test_range_usize_start_gt_end : Result Unit := do
 #guard (test_range_usize_start_gt_end).reducesTo ()
 
 /-- [iter_adapters::test_step_by_larger_than_range]:
-    Source: 'tests/src/iter_adapters.rs', lines 272:0-276:1
+    Source: 'tests/src/iter_adapters.rs', lines 304:0-308:1
     Visibility: public -/
 def test_step_by_larger_than_range : Result Unit := do
   let it ←
@@ -691,7 +832,7 @@ def test_step_by_larger_than_range : Result Unit := do
 #guard (test_step_by_larger_than_range).reducesTo ()
 
 /-- [iter_adapters::test_step_by_exact_range]:
-    Source: 'tests/src/iter_adapters.rs', lines 280:0-284:1
+    Source: 'tests/src/iter_adapters.rs', lines 312:0-316:1
     Visibility: public -/
 def test_step_by_exact_range : Result Unit := do
   let it ←
@@ -713,7 +854,7 @@ def test_step_by_exact_range : Result Unit := do
 #guard (test_step_by_exact_range).reducesTo ()
 
 /-- [iter_adapters::test_step_by_one]:
-    Source: 'tests/src/iter_adapters.rs', lines 288:0-295:1
+    Source: 'tests/src/iter_adapters.rs', lines 320:0-327:1
     Visibility: public -/
 def test_step_by_one : Result Unit := do
   let it ←
@@ -750,7 +891,7 @@ def test_step_by_one : Result Unit := do
 #guard (test_step_by_one).reducesTo ()
 
 /-- [iter_adapters::test_step_by_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 299:0-302:1
+    Source: 'tests/src/iter_adapters.rs', lines 331:0-334:1
     Visibility: public -/
 def test_step_by_empty : Result Unit := do
   let it ←
@@ -767,7 +908,7 @@ def test_step_by_empty : Result Unit := do
 #guard (test_step_by_empty).reducesTo ()
 
 /-- [iter_adapters::test_step_by_odd_range]:
-    Source: 'tests/src/iter_adapters.rs', lines 306:0-312:1
+    Source: 'tests/src/iter_adapters.rs', lines 338:0-344:1
     Visibility: public -/
 def test_step_by_odd_range : Result Unit := do
   let it ←
@@ -799,7 +940,7 @@ def test_step_by_odd_range : Result Unit := do
 #guard (test_step_by_odd_range).reducesTo ()
 
 /-- [iter_adapters::test_step_by_u8_near_max]:
-    Source: 'tests/src/iter_adapters.rs', lines 316:0-322:1
+    Source: 'tests/src/iter_adapters.rs', lines 348:0-354:1
     Visibility: public -/
 def test_step_by_u8_near_max : Result Unit := do
   let it ←
@@ -830,8 +971,60 @@ def test_step_by_u8_near_max : Result Unit := do
 /- Unit test for [iter_adapters::test_step_by_u8_near_max] -/
 #guard (test_step_by_u8_near_max).reducesTo ()
 
+/-- [iter_adapters::test_range_inclusive_rev_negative]: loop body 0:
+    Source: 'tests/src/iter_adapters.rs', lines 364:4-366:5
+    Visibility: public -/
+@[rust_loop_body]
+def test_range_inclusive_rev_negative_loop.body
+  (iter : core.iter.adapters.rev.Rev (core.ops.range.RangeInclusive Std.I32))
+  (value : Std.I32) :
+  Result (ControlFlow ((core.iter.adapters.rev.Rev
+    (core.ops.range.RangeInclusive Std.I32)) × Std.I32) Std.I32)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.ops.range.RangeInclusive.Insts.CoreIterTraitsDouble_endedDoubleEndedIterator
+      core.iter.range.StepI32) iter
+  match o with
+  | none => ok (done value)
+  | some i =>
+    let i1 ← value * 10#i32
+    let value1 ← i1 + i
+    ok (cont (iter1, value1))
+
+/-- [iter_adapters::test_range_inclusive_rev_negative]: loop 0:
+    Source: 'tests/src/iter_adapters.rs', lines 364:4-366:5
+    Visibility: public -/
+@[rust_loop]
+def test_range_inclusive_rev_negative_loop
+  (iter : core.iter.adapters.rev.Rev (core.ops.range.RangeInclusive Std.I32))
+  (value : Std.I32) :
+  Result Std.I32
+  := do
+  loop
+    (fun (iter1, value1) => test_range_inclusive_rev_negative_loop.body iter1
+      value1)
+    (iter, value)
+
+/-- [iter_adapters::test_range_inclusive_rev_negative]:
+    Source: 'tests/src/iter_adapters.rs', lines 362:0-368:1
+    Visibility: public -/
+def test_range_inclusive_rev_negative : Result Unit := do
+  let ri ← core.ops.range.RangeInclusive.new (-3)#i32 (-1)#i32
+  let iter ←
+    core.iter.traits.iterator.Iterator.rev.trait_default
+      (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator
+      core.iter.range.StepI32)
+      (core.ops.range.RangeInclusive.Insts.CoreIterTraitsDouble_endedDoubleEndedIterator
+      core.iter.range.StepI32) ri
+  let value ← test_range_inclusive_rev_negative_loop iter 0#i32
+  massert (value = (-123)#i32)
+
+/- Unit test for [iter_adapters::test_range_inclusive_rev_negative] -/
+#guard (test_range_inclusive_rev_negative).reducesTo ()
+
 /-- [iter_adapters::test_range_inclusive_basic]:
-    Source: 'tests/src/iter_adapters.rs', lines 330:0-336:1
+    Source: 'tests/src/iter_adapters.rs', lines 372:0-378:1
     Visibility: public -/
 def test_range_inclusive_basic : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 1#usize 3#usize
@@ -860,7 +1053,7 @@ def test_range_inclusive_basic : Result Unit := do
 #guard (test_range_inclusive_basic).reducesTo ()
 
 /-- [iter_adapters::test_range_inclusive_singleton]:
-    Source: 'tests/src/iter_adapters.rs', lines 340:0-344:1
+    Source: 'tests/src/iter_adapters.rs', lines 382:0-386:1
     Visibility: public -/
 def test_range_inclusive_singleton : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 7#usize 7#usize
@@ -879,7 +1072,7 @@ def test_range_inclusive_singleton : Result Unit := do
 #guard (test_range_inclusive_singleton).reducesTo ()
 
 /-- [iter_adapters::test_range_inclusive_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 348:0-351:1
+    Source: 'tests/src/iter_adapters.rs', lines 390:0-393:1
     Visibility: public -/
 def test_range_inclusive_empty : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 5#usize 3#usize
