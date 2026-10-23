@@ -625,3 +625,6 @@ let max_recdepth = ref 2048
 (** If [false], evaluate [drop(p)] as [p := bottom]. Otherwise, evaluate it as a
     no-op (which means that we do not borrow-check the drops). *)
 let drop_as_no_op = ref true
+
+(** Generate [HasLayout] instances for extracted types in Lean *)
+let generate_has_layout = ref false
