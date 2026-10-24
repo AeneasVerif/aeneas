@@ -60,6 +60,7 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FormatCompat
   FunsAnalysis
   GitVersion
   Identifiers

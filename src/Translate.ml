@@ -1291,6 +1291,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
+  FormatCompat.use_byte_width fmt;
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
   EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace

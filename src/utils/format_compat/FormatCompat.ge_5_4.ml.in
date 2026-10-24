@@ -1,0 +1,8 @@
+(** Starting from OCaml 5.4, [Format] measures the width of strings by counting
+    unicode scalar values instead of bytes. We restore the byte-based
+    measurement so that the generated files don't depend on the OCaml version
+    (lines containing unicode characters would otherwise be split differently). *)
+let use_byte_width (fmt : Format.formatter) : unit =
+  let out = Format.pp_get_formatter_out_functions fmt () in
+  Format.pp_set_formatter_out_functions fmt
+    { out with out_width = (fun _ ~pos:_ ~len -> len) }
