@@ -255,7 +255,7 @@ let outer_loans_in_value (v : tvalue) : bool =
   with Found -> true
 
 let symbolic_value_is_greedily_expandable (span : Meta.span option)
-    (type_decls : type_decl TypeDeclId.Map.t)
+    (type_decls : type_decl TypeDeclId.HashMap.t)
     (type_infos : TypesAnalysis.type_infos) (sv : symbolic_value) : bool =
   if ty_has_borrows span type_infos sv.sv_ty then
     (* Ignore arrays and slices, as we can't expand them *)
@@ -264,7 +264,7 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
     | TRef _ -> true
     | TAdt { id; builtin = None; _ } ->
         (* Lookup the type of the ADT to check if we can expand it *)
-        let def = TypeDeclId.Map.find id type_decls in
+        let def = TypeDeclId.HashMap.find id type_decls in
         begin
           match def.kind with
           | Struct _ | Enum [] ->
@@ -283,7 +283,7 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
   else false
 
 let find_first_expandable_sv_with_borrows (span : Meta.span option)
-    (type_decls : type_decl TypeDeclId.Map.t)
+    (type_decls : type_decl TypeDeclId.HashMap.t)
     (type_infos : TypesAnalysis.type_infos) (v : tvalue) : symbolic_value option
     =
   (* The visitor *)

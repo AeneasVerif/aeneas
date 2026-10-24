@@ -1623,7 +1623,9 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
   let extract_as_unit =
     match (backend (), supd.struct_id) with
     | HOL4, TAdtId adt_id ->
-        let d = TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls in
+        let d =
+          TypeDeclId.HashMap.find adt_id ctx.trans_ctx.type_ctx.type_decls
+        in
         d.kind = Struct []
     | _ -> false
   in
@@ -3576,7 +3578,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      * Extract the items
      *)
     let trait_decl_id = impl.impl_trait.trait_decl_id in
-    let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.crate.trait_decls in
+    let trait_decl =
+      TraitDeclId.HashMap.find trait_decl_id ctx.crate.trait_decls
+    in
 
     (* The constants *)
     List.iter

@@ -1631,7 +1631,7 @@ let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
         (* This is a trait impl method: check if the impl is a blanket impl *)
         let trait_impl =
           [%silent_unwrap] meta.span
-            (TraitImplId.Map.find_opt impl_id ctx.crate.trait_impls)
+            (TraitImplId.HashMap.find_opt impl_id ctx.crate.trait_impls)
         in
         let args = trait_impl.impl_trait.generics in
         begin
@@ -1721,14 +1721,15 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
     (trait_impl_id : trait_impl_id) : string =
   let trait_impl =
     [%unwrap_opt_span] None
-      (TraitImplId.Map.find_opt trait_impl_id ctx.crate.trait_impls)
+      (TraitImplId.HashMap.find_opt trait_impl_id ctx.crate.trait_impls)
       "Missing trait impl, probably because of an error which happened before"
   in
   [%ldebug "trait_impl: " ^ name_to_string ctx trait_impl.item_meta.name];
   let span = trait_impl.item_meta.span in
   let trait_decl =
     [%unwrap_with_span] span
-      (TraitDeclId.Map.find_opt trait_impl.impl_trait.id ctx.crate.trait_decls)
+      (TraitDeclId.HashMap.find_opt trait_impl.impl_trait.id
+         ctx.crate.trait_decls)
       "Missing trait declaration, probably because of an error which happened \
        before"
   in
@@ -1807,7 +1808,7 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
               match self with
               | TAdt { id; generics; builtin = None } -> (
                   (* Lookup the ADT *)
-                  match TypeDeclId.Map.find_opt id ctx.crate.type_decls with
+                  match TypeDeclId.HashMap.find_opt id ctx.crate.type_decls with
                   | None ->
                       [%save_error] span
                         "Missing type declaration, probably because of an \
@@ -1903,7 +1904,7 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     (* *)
     let trait_id = clause_trait.id in
     (* The declaration may be missing because of an error *)
-    match TraitDeclId.Map.find_opt trait_id ctx.crate.trait_decls with
+    match TraitDeclId.HashMap.find_opt trait_id ctx.crate.trait_decls with
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
         let args = clause_trait.generics in
@@ -2030,7 +2031,7 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBuiltin (TRawPtr _) -> "p"
           | TAdtId adt_id ->
               let def =
-                TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+                TypeDeclId.HashMap.find adt_id ctx.trans_ctx.type_ctx.type_decls
               in
               (* Derive the var name from the last ident of the type name
                  Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"

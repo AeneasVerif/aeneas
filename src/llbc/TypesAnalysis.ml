@@ -571,7 +571,7 @@ let analyze_type_declaration_group (span : Meta.span option) (crate : crate)
     List.map
       (fun id ->
         [%unwrap_opt_span] None
-          (TypeDeclId.Map.find_opt id crate.type_decls)
+          (TypeDeclId.HashMap.find_opt id crate.type_decls)
           ("Internal error: please report an issue. Missing type declaration \
             of id: " ^ TypeDeclId.to_string id))
       ids
@@ -676,7 +676,7 @@ type region_kind = RkMarked | RkOutlives | RkStatic | RkDefault
       where struct Wrapper<'a, T>(&'a mut T)
       (the outlive projection projects the region of the borrows inside the ADT) *)
 let compute_outlive_proj_ty (span : Meta.span option)
-    (type_decls : type_decl TypeDeclId.Map.t) (regions : RegionId.Set.t)
+    (type_decls : type_decl TypeDeclId.HashMap.t) (regions : RegionId.Set.t)
     (ty : ty) : RegionId.Set.t =
   (* The method is as follows:
 
@@ -755,7 +755,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                    to check which regions outlive the projected regions. *)
                 let decl =
                   [%silent_unwrap_opt_span] span
-                    (TypeDeclId.Map.find_opt id type_decls)
+                    (TypeDeclId.HashMap.find_opt id type_decls)
                 in
                 let { regions; types; const_generics; trait_refs } =
                   adt.generics
@@ -976,7 +976,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
       in the referent [T]. We track the borrow regions we have dived into to
       check these. *)
 let check_no_bound_free_implied_bounds (span : Meta.span option)
-    (type_decls : type_decl TypeDeclId.Map.t) (tys : ty list) : unit =
+    (type_decls : type_decl TypeDeclId.HashMap.t) (tys : ty list) : unit =
   let is_bound (r : region) =
     match r with
     | RVar (Bound _) -> true
@@ -1030,7 +1030,7 @@ let check_no_bound_free_implied_bounds (span : Meta.span option)
                (constraints between its lifetime/type parameters). *)
             (match builtin with
             | None -> (
-                match TypeDeclId.Map.find_opt id type_decls with
+                match TypeDeclId.HashMap.find_opt id type_decls with
                 | None -> ()
                 | Some decl ->
                     let subst =
@@ -1069,7 +1069,7 @@ let check_no_bound_free_implied_bounds (span : Meta.span option)
     well as the types appearing in the (possibly higher-ranked) trait clauses.
 *)
 let check_fun_decl_no_bound_free_implied_bounds
-    (type_decls : type_decl TypeDeclId.Map.t) (f : fun_decl) : unit =
+    (type_decls : type_decl TypeDeclId.HashMap.t) (f : fun_decl) : unit =
   let span = Some f.item_meta.span in
   let ({ inputs; output; _ } : fun_sig) = f.signature in
   (* The types mentioned in the (possibly higher-ranked) trait clauses. *)

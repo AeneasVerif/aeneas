@@ -401,7 +401,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       | T.Fun fid ->
           let fdecl =
             [%unwrap_opt_span] span
-              (FunDeclId.Map.find_opt fid decls_ctx.fun_ctx.fun_decls)
+              (FunDeclId.HashMap.find_opt fid decls_ctx.fun_ctx.fun_decls)
               "Could not lookup a function declaration"
           in
           let sigs = translate_fun_sigs_from_decl decls_ctx fdecl in

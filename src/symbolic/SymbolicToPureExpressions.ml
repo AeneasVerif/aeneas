@@ -452,7 +452,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               match fid with
               | Fun fid ->
                   compute_back_fun_name ctx
-                    (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls)
+                    (FunDeclId.HashMap.find fid ctx.fun_ctx.llbc_fun_decls)
               | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
                     trait_ref.trait_decl_ref.id method_id
@@ -724,7 +724,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   let ctx, call_e =
     match call.call_id with
     | S.Fun (Fun fid, _)
-      when (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls).item_meta
+      when (FunDeclId.HashMap.find fid ctx.fun_ctx.llbc_fun_decls).item_meta
              .diagnostic_item = Some "box_new" ->
         let ctx, back_funs_bodies =
           List.fold_left_map
@@ -762,7 +762,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
       when List.exists
              (TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos)
              call.generics.types -> (
-        match FunDeclId.Map.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls with
+        match
+          FunDeclId.HashMap.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls
+        with
         | None -> call_e
         | Some fun_decl ->
             (* Check if the function is [core::result::{core::result::Result<@T, @E>}::unwrap] *)

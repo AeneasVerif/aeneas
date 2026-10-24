@@ -14,7 +14,7 @@ let match_name_with_generics_find_opt =
   TranslateCore.match_name_with_generics_find_opt
 
 type type_ctx = {
-  llbc_type_decls : T.type_decl TypeDeclId.Map.t;
+  llbc_type_decls : T.type_decl TypeDeclId.HashMap.t;
   type_decls : type_decl TypeDeclId.Map.t;
       (** We use this for type-checking (for sanity checks) when translating
           values and functions. This map is empty when we translate the types,
@@ -41,7 +41,7 @@ type fun_sig_named_outputs = {
 [@@deriving show]
 
 type fun_ctx = {
-  llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
+  llbc_fun_decls : A.fun_decl A.FunDeclId.HashMap.t;
   fun_infos : modules_funs_info;
 }
 [@@deriving show]
@@ -472,11 +472,11 @@ let ctx_get_effect_info (ctx : bs_ctx) : fun_effect_info =
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
-  TypeDeclId.Map.find id ctx.type_ctx.llbc_type_decls
+  TypeDeclId.HashMap.find id ctx.type_ctx.llbc_type_decls
 
 let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
     A.fun_decl =
-  A.FunDeclId.Map.find id ctx.fun_ctx.llbc_fun_decls
+  A.FunDeclId.HashMap.find id ctx.fun_ctx.llbc_fun_decls
 
 let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.type_decls

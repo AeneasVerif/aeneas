@@ -587,7 +587,7 @@ let () =
       exit 1
   | Ok m ->
       (* Clear short names to make printing more deterministic. *)
-      let m = { m with short_names = [] } in
+      let m = { m with short_names = Meta.AnyDeclIdHashMap.of_list [] } in
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
       if !print_llbc then
@@ -625,7 +625,7 @@ let () =
         in
         (* Filter the definitions *)
         let type_decls =
-          Types.TypeDeclId.Map.filter
+          Types.TypeDeclId.HashMap.filter
             (fun _ (d : Types.type_decl) ->
               let names_map = ExtractBuiltin.builtin_types_map () in
               (not d.item_meta.is_local)
@@ -633,7 +633,7 @@ let () =
             type_decls
         in
         let fun_decls =
-          LlbcAst.FunDeclId.Map.filter
+          LlbcAst.FunDeclId.HashMap.filter
             (fun _ (d : LlbcAst.fun_decl) ->
               let names_map = ExtractBuiltin.builtin_funs_map () in
               (not d.item_meta.is_local)
@@ -646,7 +646,7 @@ let () =
             fun_decls
         in
         let global_decls =
-          LlbcAst.GlobalDeclId.Map.filter
+          LlbcAst.GlobalDeclId.HashMap.filter
             (fun _ (d : LlbcAst.global_decl) ->
               let globals_map = ExtractBuiltin.builtin_globals_map () in
               (not d.item_meta.is_local)
@@ -654,7 +654,7 @@ let () =
             global_decls
         in
         let trait_decls =
-          LlbcAst.TraitDeclId.Map.filter
+          LlbcAst.TraitDeclId.HashMap.filter
             (fun _ (d : LlbcAst.trait_decl) ->
               let names_map = ExtractBuiltin.builtin_trait_decls_map () in
               (not d.item_meta.is_local)
@@ -666,7 +666,8 @@ let () =
             (fun (d : LlbcAst.trait_impl) ->
               let names_map = ExtractBuiltin.builtin_trait_impls_map () in
               match
-                LlbcAst.TraitDeclId.Map.find_opt d.impl_trait.id m.trait_decls
+                LlbcAst.TraitDeclId.HashMap.find_opt d.impl_trait.id
+                  m.trait_decls
               with
               | None -> None (* Just ignore it *)
               | Some trait_decl ->
@@ -677,7 +678,7 @@ let () =
                             d.impl_trait.generics names_map)
                   then Some (d, trait_decl)
                   else None)
-            (LlbcAst.TraitImplId.Map.values trait_impls)
+            (LlbcAst.TraitImplId.HashMap.values trait_impls)
         in
         (* Print *)
         let fmt_env = Print.crate_to_fmt_env m in
@@ -690,7 +691,7 @@ let () =
               in
               "Type decl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.type_decl_to_string fmt_env d)
-            (Types.TypeDeclId.Map.values type_decls)
+            (Types.TypeDeclId.HashMap.values type_decls)
         in
         let fun_decls =
           List.map
@@ -709,7 +710,7 @@ let () =
                 with _ -> "UNKNOWN"
               in
               "Fun decl (pattern: [" ^ pattern ^ "]]):\n" ^ d)
-            (LlbcAst.FunDeclId.Map.values fun_decls)
+            (LlbcAst.FunDeclId.HashMap.values fun_decls)
         in
         let global_decls =
           List.map
@@ -720,7 +721,7 @@ let () =
               in
               "Global decl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.global_decl_to_string fmt_env "" "  " d)
-            (LlbcAst.GlobalDeclId.Map.values global_decls)
+            (LlbcAst.GlobalDeclId.HashMap.values global_decls)
         in
         let trait_decls =
           List.map
@@ -731,7 +732,7 @@ let () =
               in
               "Trait decl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.trait_decl_to_string fmt_env "" "  " d)
-            (LlbcAst.TraitDeclId.Map.values trait_decls)
+            (LlbcAst.TraitDeclId.HashMap.values trait_decls)
         in
         let trait_impls =
           List.map

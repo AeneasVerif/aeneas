@@ -33,7 +33,7 @@ let analyze_type_declarations (crate : crate)
         let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
         let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
         let decl_id_to_string (id : TypeDeclId.id) : string =
-          match TypeDeclId.Map.find_opt id crate.type_decls with
+          match TypeDeclId.HashMap.find_opt id crate.type_decls with
           | None -> show_type_decl_id id
           | Some d ->
               Print.name_to_string fmt_env d.item_meta.name
@@ -143,7 +143,7 @@ let compute_contexts (crate : crate) : decls_ctx =
 
   let type_decls = crate.type_decls in
   let to_extract =
-    TypeDeclId.Map.filter
+    TypeDeclId.HashMap.filter
       (fun id (d : type_decl) ->
         (* Charon introduces declarations for the builtin types (tuples, [Box],
            [str]): we handle those separately, and don't extract them *)
@@ -159,7 +159,7 @@ let compute_contexts (crate : crate) : decls_ctx =
 
   let fun_decls = crate.fun_decls in
   let to_extract =
-    FunDeclId.Map.filter
+    FunDeclId.HashMap.filter
       (fun id _ -> FunDeclId.Set.mem id !fun_decl_ids)
       fun_decls
   in
@@ -167,19 +167,19 @@ let compute_contexts (crate : crate) : decls_ctx =
   let fun_ctx = { fun_decls; fun_infos; to_extract } in
 
   let global_decls_to_extract =
-    GlobalDeclId.Map.filter
+    GlobalDeclId.HashMap.filter
       (fun id _ -> GlobalDeclId.Set.mem id !global_decl_ids)
       crate.global_decls
   in
 
   let trait_decls_to_extract =
-    TraitDeclId.Map.filter
+    TraitDeclId.HashMap.filter
       (fun id _ -> TraitDeclId.Set.mem id !trait_decl_ids)
       crate.trait_decls
   in
 
   let trait_impls_to_extract =
-    TraitImplId.Map.filter
+    TraitImplId.HashMap.filter
       (fun id _ -> TraitImplId.Set.mem id !trait_impl_ids)
       crate.trait_impls
   in
@@ -219,11 +219,11 @@ let compute_contexts (crate : crate) : decls_ctx =
     in
     List.iter
       (visitor#visit_fun_decl ())
-      (FunDeclId.Map.values fun_ctx.to_extract);
+      (FunDeclId.HashMap.values fun_ctx.to_extract);
     List.iter
       (visitor#visit_global_decl ())
-      (GlobalDeclId.Map.values global_decls_to_extract);
-    TraitDeclId.Map.iter
+      (GlobalDeclId.HashMap.values global_decls_to_extract);
+    TraitDeclId.HashMap.iter
       (fun trait_decl_id (trait_decl : trait_decl) ->
         TraitMethodId.Map.iter
           (fun method_id (_method : trait_method binder) ->
@@ -231,14 +231,15 @@ let compute_contexts (crate : crate) : decls_ctx =
           trait_decl.methods)
       trait_decls_to_extract;
 
-    TraitDeclId.Map.mapi
+    TraitDeclId.HashMap.filter_map
       (fun trait_decl_id (trait_decl : trait_decl) ->
         match TraitDeclId.Map.find_opt trait_decl_id !trait_method_ids with
-        | None -> TraitMethodId.Map.empty
+        | None -> Some TraitMethodId.Map.empty
         | Some method_ids ->
-            TraitMethodId.Map.filter
-              (fun method_id _ -> TraitMethodId.Set.mem method_id method_ids)
-              trait_decl.methods)
+            Some
+              (TraitMethodId.Map.filter
+                 (fun method_id _ -> TraitMethodId.Set.mem method_id method_ids)
+                 trait_decl.methods))
       crate.trait_decls
   in
 
@@ -696,7 +697,7 @@ module Test = struct
   let test_unit_function (crate : crate) (decls_ctx : decls_ctx)
       (fid : FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = FunDeclId.Map.find fid crate.fun_decls in
+    let fdef = FunDeclId.HashMap.find fid crate.fun_decls in
     let body = [%add_loc] body_as_body_exn fdef.body in
     let span = fdef.item_meta.span in
 
@@ -747,7 +748,7 @@ module Test = struct
   (** Test all the unit functions in a list of function definitions *)
   let test_unit_functions (crate : crate) : unit =
     let unit_funs =
-      FunDeclId.Map.filter
+      FunDeclId.HashMap.filter
         (fun _ -> fun_decl_is_transparent_unit)
         crate.fun_decls
     in
@@ -755,5 +756,5 @@ module Test = struct
     let test_unit_fun _ (def : fun_decl) : unit =
       test_unit_function crate decls_ctx def.def_id
     in
-    FunDeclId.Map.iter test_unit_fun unit_funs
+    FunDeclId.HashMap.iter test_unit_fun unit_funs
 end

@@ -333,7 +333,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
      their initialization functions), that are translated later, at the same time
      as the "regular" functions) *)
   let global_decls =
-    let num_decls = GlobalDeclId.Map.cardinal crate.global_decls in
+    let num_decls = GlobalDeclId.HashMap.cardinal crate.global_decls in
     ProgressBar.with_reporter num_decls "Translated globals: " (fun report ->
         List.filter_map
           (fun (global : global_decl) ->
@@ -359,7 +359,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ^ compute_local_uses_error_message trans_ctx
                     (IdGlobal global.def_id));
               None)
-          (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
+          (GlobalDeclId.HashMap.values trans_ctx.global_decls_to_extract))
   in
   let global_decls_map =
     GlobalDeclId.Map.of_list
@@ -394,7 +394,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
               ^ Errors.raw_span_to_string fdef.item_meta.span
               ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id));
             None)
-        (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract)
+        (FunDeclId.HashMap.values trans_ctx.fun_ctx.to_extract)
     in
 
     let method_sigs =
@@ -409,7 +409,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       in
       let translate_trait_methods (trait_decl : LlbcAst.trait_decl) =
         let methods =
-          TraitDeclId.Map.find trait_decl.def_id
+          TraitDeclId.HashMap.find trait_decl.def_id
             trans_ctx.trait_methods_to_extract
         in
         List.map
@@ -420,7 +420,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       let entries =
         List.concat
           (List.map translate_trait_methods
-             (TraitDeclId.Map.values trans_ctx.trait_decls_to_extract))
+             (TraitDeclId.HashMap.values trans_ctx.trait_decls_to_extract))
       in
       FunOrMethodId.Map.of_list entries
     in
@@ -437,7 +437,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
      We do it in two steps: the opaque functions first, then the transparent functions.
   *)
   let pure_translations =
-    let funs = FunDeclId.Map.values trans_ctx.fun_ctx.to_extract in
+    let funs = FunDeclId.HashMap.values trans_ctx.fun_ctx.to_extract in
     (* Split between opaque and transparent *)
     let opaque, transparent =
       List.partition
@@ -529,7 +529,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Translate the trait declarations *)
   let trait_decls =
-    let num_decls = TraitDeclId.Map.cardinal crate.trait_decls in
+    let num_decls = TraitDeclId.HashMap.cardinal crate.trait_decls in
     ProgressBar.with_reporter num_decls "Translated trait declarations: "
       (fun report ->
         List.filter_map
@@ -556,12 +556,12 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ^ compute_local_uses_error_message trans_ctx
                     (IdTraitDecl d.def_id));
               None)
-          (TraitDeclId.Map.values trans_ctx.trait_decls_to_extract))
+          (TraitDeclId.HashMap.values trans_ctx.trait_decls_to_extract))
   in
 
   (* Translate the trait implementations *)
   let trait_impls =
-    let num_decls = TraitImplId.Map.cardinal crate.trait_impls in
+    let num_decls = TraitImplId.HashMap.cardinal crate.trait_impls in
     ProgressBar.with_reporter num_decls "Translated trait impls: "
       (fun report ->
         List.filter_map
@@ -588,7 +588,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ^ compute_local_uses_error_message trans_ctx
                     (IdTraitImpl d.def_id));
               None)
-          (TraitImplId.Map.values trans_ctx.trait_impls_to_extract))
+          (TraitImplId.HashMap.values trans_ctx.trait_impls_to_extract))
   in
 
   (* Apply the micro-passes *)
@@ -991,7 +991,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : GlobalDeclId.id) : unit =
   let global_decls = ctx.trans_ctx.crate.global_decls in
-  let global = GlobalDeclId.Map.find id global_decls in
+  let global = GlobalDeclId.HashMap.find id global_decls in
   let global_init =
     Option.get (Charon.GAstUtils.init_fun_id_of_global global)
   in
@@ -1069,7 +1069,7 @@ let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
   let builtin_info =
     let open ExtractBuiltin in
     let trait_impl =
-      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+      TraitImplId.HashMap.find trait_impl.def_id ctx.crate.trait_impls
     in
     match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
       trait_impl.impl_trait.generics

@@ -203,7 +203,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
       | PAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
           (* Detect if this is an enumeration or not *)
           let tdef =
-            TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+            TypeDeclId.HashMap.find adt_id ctx.trans_ctx.type_ctx.type_decls
           in
           let is_enum = TypesUtils.type_decl_is_enum tdef in
           (* We deconstruct the ADT with a single let-binding in two situations:
@@ -298,7 +298,7 @@ let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
         } ->
         (* Lookup the def *)
         let decl =
-          TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+          TypeDeclId.HashMap.find adt_id ctx.trans_ctx.type_ctx.type_decls
         in
         (* Check if the def will be extracted as a tuple *)
         if
@@ -1708,7 +1708,7 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
               (* This is a struct *)
               (* Retrieve the definiton, to find how many fields there are *)
               let adt_decl =
-                TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+                TypeDeclId.HashMap.find adt_id ctx.trans_ctx.type_ctx.type_decls
               in
               let fields =
                 match adt_decl.kind with
@@ -3706,7 +3706,7 @@ let inline_anon_const_initializers_visitor (ctx : ctx) (def : fun_decl) =
         | Some
             { src = GlobalInitializerFun gref; body = Some body; signature; _ }
           when match
-                 GlobalDeclId.Map.find_opt gref.id ctx.crate.global_decls
+                 GlobalDeclId.HashMap.find_opt gref.id ctx.crate.global_decls
                with
                | Some g -> LlbcAstUtils.global_decl_is_anon_const g
                | None -> false ->

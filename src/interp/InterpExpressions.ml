@@ -1419,7 +1419,7 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
      of a symbolic value, because we need to compute its type *)
   let decl =
     [%unwrap_with_span] span
-      (TypeDeclId.Map.find_opt adt_id ctx.type_ctx.type_decls)
+      (TypeDeclId.HashMap.find_opt adt_id ctx.type_ctx.type_decls)
       "Could not lookup the definition of the type we're reading the \
        discriminant from"
   in
