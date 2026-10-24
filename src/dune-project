@@ -28,7 +28,6 @@
  (description "")
  (depends
    calendar
-   core_unix
    domainslib
    easy_logging
    logs

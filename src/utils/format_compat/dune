@@ -1,0 +1,15 @@
+;; Select the implementation of [FormatCompat] depending on the OCaml version.
+
+(rule
+ (target FormatCompat.ml)
+ (enabled_if
+  (>= %{ocaml_version} 5.4))
+ (action
+  (copy# FormatCompat.ge_5_4.ml.in %{target})))
+
+(rule
+ (target FormatCompat.ml)
+ (enabled_if
+  (< %{ocaml_version} 5.4))
+ (action
+  (copy# FormatCompat.lt_5_4.ml.in %{target})))

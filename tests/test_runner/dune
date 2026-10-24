@@ -1,8 +1,8 @@
 (executable
  (public_name test_runner)
- (libraries core_unix core_unix.filename_unix core_unix.sys_unix re str unix)
+ (libraries re str unix)
  (preprocess
-  (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv))
+  (pps ppx_deriving.show ppx_deriving.ord))
  (name run_test)
  (modules Backend Input Utils run_test))
 
