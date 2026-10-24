@@ -235,7 +235,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (match builtin with
         | None ->
             (* Lookup the type declaration *)
-            let decl = TypeDeclId.Map.find_opt id crate.type_decls in
+            let decl = TypeDeclId.HashMap.find_opt id crate.type_decls in
             let decl =
               [%unwrap_opt_span] span decl
                 "A type declaration used here is missing from the crate \

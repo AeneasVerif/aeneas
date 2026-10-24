@@ -42,10 +42,10 @@ let global_decl_is_anon_const (g : global_decl) : bool =
 (** Is a function the initializer of an anonymous constant (i.e., a promoted
     constant)? *)
 let fun_decl_is_anon_const_initializer
-    (global_decls : global_decl GlobalDeclId.Map.t) (f : fun_decl) : bool =
+    (global_decls : global_decl GlobalDeclId.HashMap.t) (f : fun_decl) : bool =
   match f.src with
   | GlobalInitializerFun gref -> (
-      match GlobalDeclId.Map.find_opt gref.id global_decls with
+      match GlobalDeclId.HashMap.find_opt gref.id global_decls with
       | Some g -> global_decl_is_anon_const g
       | None -> false)
   | _ -> false
@@ -59,8 +59,9 @@ let fun_decl_is_anon_const_initializer
     Remark: the list of functions also contains the list of opaque global
     bodies. *)
 let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
-    (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_decls : fun_decl FunDeclId.Map.t) : type_decl list * fun_decl list =
+    (type_decls : type_decl TypeDeclId.HashMap.t)
+    (fun_decls : fun_decl FunDeclId.HashMap.t) : type_decl list * fun_decl list
+    =
   let open ExtractBuiltin in
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
@@ -77,14 +78,14 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
        || not (NameMatcherMap.mem ctx d.item_meta.name (builtin_types_map ())))
   in
   (* Note that by checking the function bodies we also the globals *)
-  ( List.filter is_opaque_type (TypeDeclId.Map.values type_decls),
-    List.filter is_opaque_fun (FunDeclId.Map.values fun_decls) )
+  ( List.filter is_opaque_type (TypeDeclId.HashMap.values type_decls),
+    List.filter is_opaque_fun (FunDeclId.HashMap.values fun_decls) )
 
 (** Return true if the crate contains opaque declarations, ignoring the builtin
     definitions. *)
 let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
-    (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_decls : fun_decl FunDeclId.Map.t) : bool =
+    (type_decls : type_decl TypeDeclId.HashMap.t)
+    (fun_decls : fun_decl FunDeclId.HashMap.t) : bool =
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 

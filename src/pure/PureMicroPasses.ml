@@ -359,7 +359,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     let fun_name = f.name in
     let fun_size =
       if !Config.diagnose_micro_passes then
-        match LlbcAst.FunDeclId.Map.find_opt f.def_id crate.fun_decls with
+        match LlbcAst.FunDeclId.HashMap.find_opt f.def_id crate.fun_decls with
         | Some d -> LlbcAstUtils.compute_fun_decl_size d
         | None -> 0
       else 0

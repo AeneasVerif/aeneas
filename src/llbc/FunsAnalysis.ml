@@ -55,7 +55,7 @@ let lookup_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
     fun_info option =
   Option.bind (fun_or_method_id_of_fn_ptr kind) (lookup_fun_info infos)
 
-let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
+let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.HashMap.t) :
     modules_funs_info =
   let fmt_env = Charon.Print.crate_to_fmt_env m in
   let infos = ref { infos = FunOrMethodId.Map.empty } in
@@ -73,7 +73,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       { can_fail = true; stateful = false; can_diverge = false; is_rec = false }
   in
 
-  TraitDeclId.Map.iter
+  TraitDeclId.HashMap.iter
     (fun trait_decl_id (trait_decl : trait_decl) ->
       Types.TraitMethodId.Map.iter
         (fun method_id _ -> register_trait_method_info trait_decl_id method_id)
@@ -163,7 +163,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
                    Check the builtin globals map first (for opaque builtins like
                    [u32::MAX]), then fall back to the initializer function's info. *)
-                let global = GlobalDeclId.Map.find gref.id m.global_decls in
+                let global = GlobalDeclId.HashMap.find gref.id m.global_decls in
                 let open ExtractBuiltin in
                 let builtin_info =
                   NameMatcherMap.find_opt name_matcher_ctx global.item_meta.name
@@ -262,7 +262,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let funs =
       List.map
         (fun id ->
-          [%silent_unwrap_opt_span] None (FunDeclId.Map.find_opt id funs_map))
+          [%silent_unwrap_opt_span] None
+            (FunDeclId.HashMap.find_opt id funs_map))
         funs
     in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
@@ -282,7 +283,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
            let fmt_env = Charon.Print.crate_to_fmt_env m in
            let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
            let decl_id_to_string (id : FunDeclId.id) : string =
-             match FunDeclId.Map.find_opt id m.fun_decls with
+             match FunDeclId.HashMap.find_opt id m.fun_decls with
              | None -> show_fun_decl_id id
              | Some d ->
                  Charon.Print.name_to_string fmt_env d.item_meta.name

@@ -27,4 +27,4 @@ let borrow_check_crate (crate : crate) (marked_ids : Contexts.marked_ids) : unit
         ()
     | _ -> ()
   in
-  List.iter borrow_check_fun (FunDeclId.Map.values crate.fun_decls)
+  List.iter borrow_check_fun (FunDeclId.HashMap.values crate.fun_decls)

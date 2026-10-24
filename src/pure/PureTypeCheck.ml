@@ -74,7 +74,7 @@ let get_adt_field_types (span : Meta.span)
 type tc_ctx = {
   decls_ctx : Contexts.decls_ctx;
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)
-  global_decls : A.global_decl A.GlobalDeclId.Map.t;
+  global_decls : A.global_decl A.GlobalDeclId.HashMap.t;
       (** The global declarations *)
   fenv : ty FVarId.Map.t;  (** Environment from variables to types *)
   benv : ty BVarId.Map.t list;  (** Environment from variables to types *)

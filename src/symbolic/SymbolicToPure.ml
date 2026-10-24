@@ -148,7 +148,7 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
           ^ Contexts.compute_local_uses_error_message ctx (IdType d.def_id));
         None)
-    (TypeDeclId.Map.values ctx.type_ctx.to_extract)
+    (TypeDeclId.HashMap.values ctx.type_ctx.to_extract)
 
 let translate_binder (span : span option) (translate_inside : 'a -> 'b)
     (x : 'a T.binder) : 'b binder =
@@ -249,7 +249,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (T.AssocConstId.Map.to_list consts)
   in
   let methods_to_extract =
-    TraitDeclId.Map.find def_id ctx.trait_methods_to_extract
+    TraitDeclId.HashMap.find def_id ctx.trait_methods_to_extract
   in
   let methods =
     List.map
@@ -341,7 +341,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     let decl_id = trait_impl.impl_trait.id in
     let trait_decl =
       [%silent_unwrap_opt_span] span
-        (TraitDeclId.Map.find_opt decl_id ctx.crate.trait_decls)
+        (TraitDeclId.HashMap.find_opt decl_id ctx.crate.trait_decls)
     in
     match_name_with_generics_find_opt ctx trait_decl.item_meta.name
       llbc_impl_trait.generics

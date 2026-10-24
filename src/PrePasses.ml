@@ -104,7 +104,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
             | Fun fid ->
                 let fun_decl =
                   [%silent_unwrap_opt_span] (Some st.span)
-                    (FunDeclId.Map.find_opt fid crate.fun_decls)
+                    (FunDeclId.HashMap.find_opt fid crate.fun_decls)
                 in
                 match_name impl_pat fun_decl.item_meta.name
             | _ -> false)
@@ -164,7 +164,7 @@ let update_array_default (crate : crate) : crate =
   let matches_default_array (impl : trait_impl) : constant_expr option =
     let trait_decl =
       [%silent_unwrap_opt_span] (Some impl.item_meta.span)
-        (TraitDeclId.Map.find_opt impl.impl_trait.id crate.trait_decls)
+        (TraitDeclId.HashMap.find_opt impl.impl_trait.id crate.trait_decls)
     in
     if not (match_name impl_pat trait_decl.item_meta.name) then None
     else
@@ -189,7 +189,7 @@ let update_array_default (crate : crate) : crate =
      their default methods, together with the array length [N]. *)
   let impls = ref TraitImplId.Map.empty in
   let methods = ref FunDeclId.Map.empty in
-  TraitImplId.Map.iter
+  TraitImplId.HashMap.iter
     (fun _ (impl : trait_impl) ->
       match matches_default_array impl with
       | None -> ()
@@ -242,7 +242,7 @@ let update_array_default (crate : crate) : crate =
     in
     let merged_impl =
       [%silent_unwrap_opt_span] None
-        (TraitImplId.Map.find_opt merged_impl_id crate.trait_impls)
+        (TraitImplId.HashMap.find_opt merged_impl_id crate.trait_impls)
     in
     let merged_method =
       let meth = List.hd (TraitMethodId.Map.values merged_impl.methods) in
@@ -284,7 +284,7 @@ let update_array_default (crate : crate) : crate =
       {
         crate with
         trait_impls =
-          TraitImplId.Map.filter_map
+          TraitImplId.HashMap.filter_map
             (fun id impl ->
               if id = merged_impl.def_id then Some merged_impl
               else if TraitImplId.Map.mem id impls then None
@@ -346,7 +346,7 @@ let update_array_default (crate : crate) : crate =
     let crate =
       {
         crate with
-        fun_decls = FunDeclId.Map.filter_map visit_fun crate.fun_decls;
+        fun_decls = FunDeclId.HashMap.filter_map visit_fun crate.fun_decls;
         declarations =
           Some
             (filter_ids_visitor#visit_declaration_groups ()
@@ -902,7 +902,7 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
      deduplication bugs.
   *)
   let fun_base_counts =
-    FunDeclId.Map.fold
+    FunDeclId.HashMap.fold
       (fun _ (f : fun_decl) acc ->
         match f.src with
         | TargetDependentFun _ -> acc
@@ -910,7 +910,7 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
       crate.fun_decls NameMap.empty
   in
   let fun_decls =
-    FunDeclId.Map.map
+    FunDeclId.HashMap.map
       (fun (f : fun_decl) ->
         match f.src with
         | TargetDependentFun _ -> f
@@ -921,12 +921,12 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
   in
   (* --- Types: strip PeTarget when the base name is unique --- *)
   let type_base_counts =
-    TypeDeclId.Map.fold
+    TypeDeclId.HashMap.fold
       (fun _ (td : type_decl) acc -> add_name acc td.item_meta.name)
       crate.type_decls NameMap.empty
   in
   let type_decls =
-    TypeDeclId.Map.map
+    TypeDeclId.HashMap.map
       (fun (td : type_decl) ->
         let name = get_name type_base_counts td.item_meta.name in
         { td with item_meta = { td.item_meta with name } })
@@ -973,7 +973,7 @@ let filter_marker_traits (crate : crate) : crate =
   in
   (* Collect the trait decl ids to filter *)
   let filtered_ids =
-    TraitDeclId.Map.fold
+    TraitDeclId.HashMap.fold
       (fun id (decl : trait_decl) acc ->
         if
           List.exists
@@ -1004,7 +1004,7 @@ let filter_marker_traits (crate : crate) : crate =
     in
     (* Remove the trait decls and their impls from declarations and maps *)
     let filtered_impl_ids =
-      TraitImplId.Map.fold
+      TraitImplId.HashMap.fold
         (fun id (impl : trait_impl) acc ->
           if is_filtered_id impl.impl_trait.id then TraitImplId.Set.add id acc
           else acc)
@@ -1027,14 +1027,14 @@ let filter_marker_traits (crate : crate) : crate =
       | _ -> false
     in
     let filtered_global_ids =
-      GlobalDeclId.Map.fold
+      GlobalDeclId.HashMap.fold
         (fun id (decl : global_decl) acc ->
           if global_source_is_filtered decl.src then GlobalDeclId.Set.add id acc
           else acc)
         crate.global_decls GlobalDeclId.Set.empty
     in
     let filtered_fun_ids =
-      FunDeclId.Map.fold
+      FunDeclId.HashMap.fold
         (fun id (decl : fun_decl) acc ->
           let initializer_is_filtered =
             match fun_decl_global_initializer decl with
@@ -1104,22 +1104,22 @@ let filter_marker_traits (crate : crate) : crate =
         (Option.get crate.declarations)
     in
     let trait_decls =
-      TraitDeclId.Map.filter
+      TraitDeclId.HashMap.filter
         (fun id _ -> not (is_filtered_id id))
         crate.trait_decls
     in
     let trait_impls =
-      TraitImplId.Map.filter
+      TraitImplId.HashMap.filter
         (fun id _ -> not (TraitImplId.Set.mem id filtered_impl_ids))
         crate.trait_impls
     in
     let global_decls =
-      GlobalDeclId.Map.filter
+      GlobalDeclId.HashMap.filter
         (fun id _ -> not (GlobalDeclId.Set.mem id filtered_global_ids))
         crate.global_decls
     in
     let fun_decls =
-      FunDeclId.Map.filter
+      FunDeclId.HashMap.filter
         (fun id _ -> not (FunDeclId.Set.mem id filtered_fun_ids))
         crate.fun_decls
     in
@@ -1212,11 +1212,11 @@ let filter_type_aliases (crate : crate) : crate =
      happen. *)
   let decl_group_is_single_alias = function
     | TypeGroup (NonRecGroup id) ->
-        type_decl_is_alias (TypeDeclId.Map.find id crate.type_decls)
+        type_decl_is_alias (TypeDeclId.HashMap.find id crate.type_decls)
     | TypeGroup (RecGroup ids) ->
         List.iter
           (fun id ->
-            let ty = TypeDeclId.Map.find id crate.type_decls in
+            let ty = TypeDeclId.HashMap.find id crate.type_decls in
             if type_decl_is_alias ty then
               [%craise] ty.item_meta.span
                 "found a type alias within a recursive group; this is \
@@ -1228,7 +1228,7 @@ let filter_type_aliases (crate : crate) : crate =
   {
     crate with
     type_decls =
-      TypeDeclId.Map.filter
+      TypeDeclId.HashMap.filter
         (fun _id ty -> not (type_decl_is_alias ty))
         crate.type_decls;
     declarations =
@@ -1295,7 +1295,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
         let is_from_str_call (st : statement) : bool =
           match st.kind with
           | Call ({ func = FnOpRegular { kind = Fun fid; _ }; _ }, _) -> (
-              match FunDeclId.Map.find_opt fid crate.fun_decls with
+              match FunDeclId.HashMap.find_opt fid crate.fun_decls with
               | Some decl -> is_from_str decl
               | None -> false)
           | _ -> false
@@ -1507,7 +1507,7 @@ let remove_vtables (crate : crate) : crate =
     match src with
     | VTableShimFun -> true
     | GlobalInitializerFun global -> (
-        match GlobalDeclId.Map.find_opt global.id crate.global_decls with
+        match GlobalDeclId.HashMap.find_opt global.id crate.global_decls with
         | Some global -> global_src_is_vtable global.src
         | None -> false)
     | _ -> false
@@ -1532,7 +1532,7 @@ let remove_vtables (crate : crate) : crate =
         | GlobalGroup g -> (
             (* Filter the vtables *)
             let keep (id : global_decl_id) : bool =
-              match GlobalDeclId.Map.find_opt id crate.global_decls with
+              match GlobalDeclId.HashMap.find_opt id crate.global_decls with
               | None -> true
               | Some d -> not (global_src_is_vtable d.src)
             in
@@ -1545,7 +1545,7 @@ let remove_vtables (crate : crate) : crate =
         | FunGroup g -> (
             (* Filter the vtables *)
             let keep (id : fun_decl_id) : bool =
-              match FunDeclId.Map.find_opt id crate.fun_decls with
+              match FunDeclId.HashMap.find_opt id crate.fun_decls with
               | None -> true
               | Some d -> not (fun_src_is_vtable d.src)
             in
@@ -1558,7 +1558,7 @@ let remove_vtables (crate : crate) : crate =
         | TypeGroup g -> (
             (* Filter the vtables *)
             let keep (id : type_decl_id) : bool =
-              match TypeDeclId.Map.find_opt id crate.type_decls with
+              match TypeDeclId.HashMap.find_opt id crate.type_decls with
               | None -> true
               | Some d -> not (type_src_is_vtable d.src)
             in
@@ -1577,7 +1577,7 @@ let remove_vtables (crate : crate) : crate =
             match g with
             | RecGroup ids ->
                 let keep (id : type_decl_id) : bool =
-                  match TypeDeclId.Map.find_opt id crate.type_decls with
+                  match TypeDeclId.HashMap.find_opt id crate.type_decls with
                   | None -> true
                   | Some d -> not (type_src_is_vtable d.src)
                 in
@@ -1614,7 +1614,9 @@ let remove_vtables (crate : crate) : crate =
                   match ids with
                   | [ id ] ->
                       let is_rec =
-                        match TraitDeclId.Map.find_opt id crate.trait_decls with
+                        match
+                          TraitDeclId.HashMap.find_opt id crate.trait_decls
+                        with
                         | None ->
                             (* don't know so by default we consider it to be recursive *)
                             true
@@ -1652,25 +1654,25 @@ let remove_vtables (crate : crate) : crate =
 
   (* *)
   let type_decls =
-    TypeDeclId.Map.filter
+    TypeDeclId.HashMap.filter
       (fun _ (d : type_decl) -> not (type_src_is_vtable d.src))
       crate.type_decls
   in
 
   let global_decls =
-    GlobalDeclId.Map.filter
+    GlobalDeclId.HashMap.filter
       (fun _ (d : global_decl) -> not (global_src_is_vtable d.src))
       crate.global_decls
   in
 
   let fun_decls =
-    FunDeclId.Map.filter
+    FunDeclId.HashMap.filter
       (fun _ (d : fun_decl) -> not (fun_src_is_vtable d.src))
       crate.fun_decls
   in
 
   let trait_decls =
-    TraitDeclId.Map.map
+    TraitDeclId.HashMap.map
       (fun (d : trait_decl) ->
         (* Remove the vtable *)
         { d with vtable = None })
@@ -1761,7 +1763,7 @@ let simplify_trait_calls (crate : crate) : crate =
       (call : call) (on_unwind : block) : statement_kind =
     match call.func with
     | FnOpRegular { kind = Fun fid; generics } -> (
-        match FunDeclId.Map.find_opt fid crate.fun_decls with
+        match FunDeclId.HashMap.find_opt fid crate.fun_decls with
         | Some d
           when List.length generics.trait_refs > 0 && List.length call.args > 0
           ->
@@ -1784,7 +1786,8 @@ let simplify_trait_calls (crate : crate) : crate =
                       (* Lookup the impl to retrieve the method id *)
                       let impl =
                         [%unwrap_with_span] span
-                          (TraitImplId.Map.find_opt impl_id crate.trait_impls)
+                          (TraitImplId.HashMap.find_opt impl_id
+                             crate.trait_impls)
                           "Internal error"
                       in
                       (* The TryFrom trait has a single method (try_from) *)
@@ -1878,7 +1881,7 @@ let simplify_trait_calls (crate : crate) : crate =
         used_funs := FunDeclId.Set.add id !used_funs
     end
   in
-  FunDeclId.Map.iter
+  FunDeclId.HashMap.iter
     (fun _ (f : fun_decl) ->
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
@@ -1891,11 +1894,11 @@ let simplify_trait_calls (crate : crate) : crate =
       | _ -> ())
     crate.fun_decls;
 
-  GlobalDeclId.Map.iter
+  GlobalDeclId.HashMap.iter
     (fun _ (d : global_decl) -> visitor#visit_constant_expr () d.value)
     crate.global_decls;
 
-  TraitDeclId.Map.iter
+  TraitDeclId.HashMap.iter
     (fun _ (d : trait_decl) ->
       TraitMethodId.Map.iter
         (fun _ (d : trait_method binder) ->
@@ -1907,7 +1910,7 @@ let simplify_trait_calls (crate : crate) : crate =
     crate.trait_decls;
 
   (* Add the local trait impls *)
-  TraitImplId.Map.iter
+  TraitImplId.HashMap.iter
     (fun _ (d : trait_impl) ->
       if d.item_meta.is_local then visitor#visit_trait_impl_id () d.def_id)
     crate.trait_impls;
@@ -1916,7 +1919,7 @@ let simplify_trait_calls (crate : crate) : crate =
   while !impls_to_explore <> [] do
     let id = List.hd !impls_to_explore in
     impls_to_explore := List.tl !impls_to_explore;
-    match TraitImplId.Map.find_opt id crate.trait_impls with
+    match TraitImplId.HashMap.find_opt id crate.trait_impls with
     | None -> ()
     | Some impl ->
         List.iter
@@ -1988,7 +1991,7 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
         ( _,
           TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None },
           _ ) -> (
-        match TypeDeclId.Map.find_opt id crate.type_decls with
+        match TypeDeclId.HashMap.find_opt id crate.type_decls with
         | Some decl -> (
             match decl.src with
             | ClosureType _ -> Some rid
@@ -2053,7 +2056,7 @@ let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
       let region = RVar (Free rp.index) in
       let updated = ref false in
       let is_closure_ty (id : TypeDeclId.id) : bool =
-        match TypeDeclId.Map.find_opt id crate.type_decls with
+        match TypeDeclId.HashMap.find_opt id crate.type_decls with
         | Some { src = ClosureType _; _ } -> true
         | _ -> false
       in
@@ -2132,7 +2135,7 @@ let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
 let anon_consts_to_calls (crate : crate) : crate =
   (* Retrieve the anonymous constants and their initializers *)
   let anon_consts =
-    GlobalDeclId.Map.filter_map
+    GlobalDeclId.HashMap.filter_map
       (fun _ (g : global_decl) ->
         match g.global_kind with
         | AnonConst -> Charon.GAstUtils.init_fun_id_of_global g
@@ -2169,7 +2172,7 @@ let anon_consts_to_calls (crate : crate) : crate =
              the global is one *)
           let call_initializer (gref : global_decl_ref) (ty : ty) : place option
               =
-            match GlobalDeclId.Map.find_opt gref.id anon_consts with
+            match GlobalDeclId.HashMap.find_opt gref.id anon_consts with
             | Some init_id ->
                 let dest = { kind = PlaceLocal (fresh_local ty); ty } in
                 let call =
@@ -2239,7 +2242,7 @@ let anon_consts_to_calls (crate : crate) : crate =
         { f with body }
     | _ -> f
   in
-  { crate with fun_decls = FunDeclId.Map.map update_fun crate.fun_decls }
+  { crate with fun_decls = FunDeclId.HashMap.map update_fun crate.fun_decls }
 
 (** The anonymous constants (i.e., the promoted constants) are replaced with
     calls to their initializers by [anon_consts_to_calls]. The output type of
@@ -2270,7 +2273,7 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_fn_ptr env (fn_ptr : fn_ptr) =
         match fn_ptr.kind with
         | Fun fid -> (
-            match FunDeclId.Map.find_opt fid crate.fun_decls with
+            match FunDeclId.HashMap.find_opt fid crate.fun_decls with
             | Some callee when is_anon_const_initializer callee ->
                 let n = count_erased callee.signature.output in
                 let regions =
@@ -2369,10 +2372,10 @@ let apply_passes (crate : crate) : crate =
       in
       { f with body = ErrorBody { span = f.item_meta.span; msg } }
   in
-  let fun_decls : fun_decl FunDeclId.Map.t =
-    let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
+  let fun_decls : fun_decl FunDeclId.HashMap.t =
+    let num_decls = FunDeclId.HashMap.cardinal crate.fun_decls in
     ProgressBar.with_reporter num_decls "Applied prepasses: " (fun report ->
-        FunDeclId.Map.map
+        FunDeclId.HashMap.map
           (fun f ->
             [%ltrace
               let env = Print.crate_to_fmt_env crate in

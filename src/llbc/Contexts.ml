@@ -30,10 +30,10 @@ let mk_config (mode : interpreter_mode) : config = { mode }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
-  type_decls : type_decl TypeDeclId.Map.t;
+  type_decls : type_decl TypeDeclId.HashMap.t;
       (** Copy of the declarations in the crate *)
   type_infos : TypesAnalysis.type_infos;
-  to_extract : type_decl TypeDeclId.Map.t;
+  to_extract : type_decl TypeDeclId.HashMap.t;
       (** The type declarations that should be extracted.
 
           Charon filters the useless declarations but preserves some of them for
@@ -44,10 +44,10 @@ type type_ctx = {
 [@@deriving show]
 
 type fun_ctx = {
-  fun_decls : fun_decl FunDeclId.Map.t;
+  fun_decls : fun_decl FunDeclId.HashMap.t;
       (** Copy of the declarations in the crate *)
   fun_infos : FunsAnalysis.modules_funs_info;
-  to_extract : fun_decl FunDeclId.Map.t;
+  to_extract : fun_decl FunDeclId.HashMap.t;
       (** The fun declarations that should be extracted.
 
           Charon filters the useless declarations but preserves some of them for
@@ -62,26 +62,26 @@ type decls_ctx = {
   graph_of_uses : Deps.graph_of_uses;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
-  global_decls_to_extract : global_decl GlobalDeclId.Map.t;
+  global_decls_to_extract : global_decl GlobalDeclId.HashMap.t;
       (** The global declarations that should be extracted.
 
           Charon filters the useless declarations but preserves some of them for
           printing purposes: this field only contains the ones that should be
           extracted. *)
-  trait_decls_to_extract : trait_decl TraitDeclId.Map.t;
+  trait_decls_to_extract : trait_decl TraitDeclId.HashMap.t;
       (** Similar to [global_decls_to_extract] *)
   trait_methods_to_extract :
-    trait_method Types.binder TraitMethodId.Map.t TraitDeclId.Map.t;
+    trait_method Types.binder TraitMethodId.Map.t TraitDeclId.HashMap.t;
       (** The trait methods whose declaration should be extracted as fields of
           their trait declaration. This map contains an entry for every
           [TraitDeclId]. *)
-  trait_impls_to_extract : trait_impl TraitImplId.Map.t;
+  trait_impls_to_extract : trait_impl TraitImplId.HashMap.t;
       (** Similar to [global_decls_to_extract] *)
 }
 [@@deriving show]
 
 let compute_local_uses_error_message (ctx : decls_ctx) (id : item_id) : string =
-  if not (LlbcAstUtils.AnyDeclIdSet.mem id ctx.graph_of_uses.locals) then
+  if not (Meta.AnyDeclIdSet.mem id ctx.graph_of_uses.locals) then
     let uses = Deps.compute_local_uses ctx.graph_of_uses [ id ] in
     let uses = Deps.ItemInfoSet.to_list uses in
     if uses = [] then ""
@@ -219,35 +219,35 @@ let ctx_lookup_real_var_binder (span : Meta.span) (ctx : eval_ctx)
 let ctx_lookup_type_decl (span : Meta.span) (ctx : eval_ctx)
     (tid : TypeDeclId.id) : type_decl =
   [%unwrap_opt_span] (Some span)
-    (TypeDeclId.Map.find_opt tid ctx.crate.type_decls)
+    (TypeDeclId.HashMap.find_opt tid ctx.crate.type_decls)
     "Could not lookup type declaration, probably because of a previous error \
      or an --exclude option"
 
 let ctx_lookup_fun_decl (span : Meta.span) (ctx : eval_ctx) (fid : FunDeclId.id)
     : fun_decl =
   [%unwrap_opt_span] (Some span)
-    (FunDeclId.Map.find_opt fid ctx.crate.fun_decls)
+    (FunDeclId.HashMap.find_opt fid ctx.crate.fun_decls)
     "Could not lookup function declaration, probably because of a previous \
      error or an --exclude option"
 
 let ctx_lookup_global_decl (span : Meta.span) (ctx : eval_ctx)
     (gid : GlobalDeclId.id) : global_decl =
   [%unwrap_opt_span] (Some span)
-    (GlobalDeclId.Map.find_opt gid ctx.crate.global_decls)
+    (GlobalDeclId.HashMap.find_opt gid ctx.crate.global_decls)
     "Could not lookup global declaration, probably because of a previous error \
      or an --exclude option"
 
 let ctx_lookup_trait_decl (span : Meta.span) (ctx : eval_ctx)
     (id : TraitDeclId.id) : trait_decl =
   [%unwrap_opt_span] (Some span)
-    (TraitDeclId.Map.find_opt id ctx.crate.trait_decls)
+    (TraitDeclId.HashMap.find_opt id ctx.crate.trait_decls)
     "Could not lookup trait declaration, probably because of a previous error \
      or an --exclude option"
 
 let ctx_lookup_trait_impl (span : Meta.span) (ctx : eval_ctx)
     (id : TraitImplId.id) : trait_impl =
   [%unwrap_opt_span] (Some span)
-    (TraitImplId.Map.find_opt id ctx.crate.trait_impls)
+    (TraitImplId.HashMap.find_opt id ctx.crate.trait_impls)
     "Could not lookup trait implementation, probably because of a previous \
      error or an --exclude option"
 
