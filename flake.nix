@@ -31,6 +31,9 @@
                   opaline = prev.opaline;
 
                   ocamlPackages = sPrev.ocamlPackages.overrideScope (oFinal: oPrev: {
+                    # The compiler's tests don't work when dynamic linking is disabled
+                    ocaml = oPrev.ocaml.overrideAttrs (_: { doCheck = false; });
+
                     buildDunePackage = args: oPrev.buildDunePackage (finalAttrs:
                       let attrs = sPrev.lib.toFunction args finalAttrs; in attrs // {
                         # Disable tests globally for static OCaml packages, as
