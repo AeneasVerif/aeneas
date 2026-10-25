@@ -31,20 +31,21 @@
                   opaline = prev.opaline;
 
                   ocamlPackages = sPrev.ocamlPackages.overrideScope (oFinal: oPrev: {
-                    buildDunePackage = args: oPrev.buildDunePackage (args // {
-                      # Disable tests globally for static OCaml packages, as
-                      # many test suites assume a dynamic environment or
-                      # non-musl features that are unavailable here.
-                      doCheck = false;
+                    buildDunePackage = args: oPrev.buildDunePackage (finalAttrs:
+                      let attrs = sPrev.lib.toFunction args finalAttrs; in attrs // {
+                        # Disable tests globally for static OCaml packages, as
+                        # many test suites assume a dynamic environment or
+                        # non-musl features that are unavailable here.
+                        doCheck = false;
 
-                      # Ensure `as` and other basic binutils are available in
-                      # the static build environment.
-                      nativeBuildInputs = (args.nativeBuildInputs or [ ]) ++ [ sFinal.stdenv.cc.bintools ];
+                        # Ensure `as` and other basic binutils are available in
+                        # the static build environment.
+                        nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [ sFinal.stdenv.cc.bintools ];
 
-                      # Remove `dynlink` as it is incompatible with the
-                      # static compiler.
-                      propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (args.propagatedBuildInputs or [ ]);
-                    });
+                        # Remove `dynlink` as it is incompatible with the
+                        # static compiler.
+                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (attrs.propagatedBuildInputs or [ ]);
+                      });
 
                     ppx_deriving = oPrev.ppx_deriving.overrideAttrs (old: {
                       postPatch = (old.postPatch or "") + ''
