@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-elan default "$(cat lean-toolchain)"
+toolchain="$(cat lean-toolchain)"
+elan default "$toolchain"
+
+# Nix's elan patches downloaded toolchains with absolute store paths. A cached
+# toolchain may retain paths that have since been garbage collected.
+if ! lake --version > /dev/null; then
+  elan toolchain uninstall "$toolchain"
+  elan default "$toolchain"
+fi
 
 # Unset CI to force precompilation of modules, which is disabled by default in
 # CI in lakefile.lean. This ensures releases contain the shared libraries
