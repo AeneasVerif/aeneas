@@ -930,6 +930,8 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 693 *)
     mk_fun "core::num::{u128}::cast_signed" "core.num.U128.cast_signed";
+    (* file: "Aeneas/Std/Scalar/DivCeil.lean", line: 53 *)
+    mk_fun "core::num::{u128}::div_ceil" "core.num.U128.div_ceil";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 786 *)
     mk_fun "core::num::{u128}::is_multiple_of" "core.num.U128.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 29 *)
@@ -942,6 +944,8 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 675 *)
     mk_fun "core::num::{u16}::cast_signed" "core.num.U16.cast_signed";
+    (* file: "Aeneas/Std/Scalar/DivCeil.lean", line: 44 *)
+    mk_fun "core::num::{u16}::div_ceil" "core.num.U16.div_ceil";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 777 *)
     mk_fun "core::num::{u16}::is_multiple_of" "core.num.U16.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 20 *)
@@ -954,6 +958,8 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 681 *)
     mk_fun "core::num::{u32}::cast_signed" "core.num.U32.cast_signed";
+    (* file: "Aeneas/Std/Scalar/DivCeil.lean", line: 47 *)
+    mk_fun "core::num::{u32}::div_ceil" "core.num.U32.div_ceil";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 780 *)
     mk_fun "core::num::{u32}::is_multiple_of" "core.num.U32.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 23 *)
@@ -966,6 +972,8 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 687 *)
     mk_fun "core::num::{u64}::cast_signed" "core.num.U64.cast_signed";
+    (* file: "Aeneas/Std/Scalar/DivCeil.lean", line: 50 *)
+    mk_fun "core::num::{u64}::div_ceil" "core.num.U64.div_ceil";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 783 *)
     mk_fun "core::num::{u64}::is_multiple_of" "core.num.U64.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 26 *)
@@ -978,6 +986,8 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 669 *)
     mk_fun "core::num::{u8}::cast_signed" "core.num.U8.cast_signed";
+    (* file: "Aeneas/Std/Scalar/DivCeil.lean", line: 41 *)
+    mk_fun "core::num::{u8}::div_ceil" "core.num.U8.div_ceil";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 774 *)
     mk_fun "core::num::{u8}::is_multiple_of" "core.num.U8.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 17 *)
@@ -990,6 +1000,8 @@ let lean_builtin_funs =
       ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 699 *)
     mk_fun "core::num::{usize}::cast_signed" "core.num.Usize.cast_signed";
+    (* file: "Aeneas/Std/Scalar/DivCeil.lean", line: 56 *)
+    mk_fun "core::num::{usize}::div_ceil" "core.num.Usize.div_ceil";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 789 *)
     mk_fun "core::num::{usize}::is_multiple_of" "core.num.Usize.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 32 *)
