@@ -785,7 +785,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* There is a special case for casts which convert dyn traits (for instance:
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
-  | Cast (CastUnsize (ty1, MetaVTable (trait_ref, _))) -> (
+  | Cast (CastUnsize (ty1, MetaVTable (trait_ref, _), _)) -> (
       let ty0 = v.ty in
       [%cassert] span
         (trait_ref.binder_regions = [])
@@ -955,7 +955,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
           in
           (Ok output, ctx, cc_comp cc cf)
       | _ -> [%craise] span "Unsupported cast to a dynamic trait")
-  | Cast (CastUnsize (ty1, MetaVTableUpcast fields)) ->
+  | Cast (CastUnsize (ty1, MetaVTableUpcast fields, _)) ->
       let ty0 = v.ty in
       (* Casting a dyn trait to a dyn trait *)
       [%ltrace
@@ -984,7 +984,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
         | Neg OPanic, (TScalar (TInteger (Signed _)) as lty) -> lty
         | Neg OPanic, (TScalar (TInteger (Unsigned _)) as lty) -> lty
         | Cast (CastScalar tgt_ty), _ -> TScalar tgt_ty
-        | Cast (CastUnsize (ty1, _)), ty0 ->
+        | Cast (CastUnsize (ty1, _, _)), ty0 ->
             (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
             let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
