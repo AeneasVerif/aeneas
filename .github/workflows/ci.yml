@@ -92,6 +92,8 @@ jobs:
       - *setup_cachix_push
       - uses: actions/checkout@v4
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
+        run: nix develop --command bash -c "cd backends/lean && lake exe cache get && lake build Aeneas AeneasMeta --wfail"
+      - if: needs.diff_lean_files.outputs.check_lean == 'true'
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
         run: nix develop --command bash -c "cd tests/lean && make"
       - if: >-
