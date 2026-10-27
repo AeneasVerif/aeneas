@@ -2983,16 +2983,24 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
 
 (** Small helper.
 
-    The type `ty` is to be understood in a very general sense. *)
-let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
-    (item_name : string) (separator : string) (ty : unit -> unit) : unit =
+    The type `ty` is to be understood in a very general sense.
+
+    - [as_named_arg]: print the item as a named argument [(item_name := ...)]
+      rather than as a structure field. We use this for the implementations of
+      the traits extracted as [nonpos_structure]s (Lean only), which are built
+      with the constructor function rather than with the [{ ... }] notation. *)
+let extract_trait_item ?(as_named_arg : bool = false) (ctx : extraction_ctx)
+    (fmt : F.formatter) (item_name : string) (separator : string)
+    (ty : unit -> unit) : unit =
   F.pp_print_space fmt ();
   F.pp_open_hovbox fmt ctx.indent_incr;
+  if as_named_arg then F.pp_print_string fmt "(";
   F.pp_print_string fmt item_name;
   F.pp_print_space fmt ();
   (* ":" or "=" *)
   F.pp_print_string fmt separator;
   ty ();
+  if as_named_arg then F.pp_print_string fmt ")";
   (match backend () with
   | Lean -> ()
   | _ -> F.pp_print_string fmt ";");
@@ -3002,14 +3010,15 @@ let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (ty : unit -> unit) : unit =
   extract_trait_item ctx fmt item_name ":" ty
 
-let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
-    (item_name : string) (ty : unit -> unit) : unit =
+let extract_trait_impl_item ?(as_named_arg : bool = false)
+    (ctx : extraction_ctx) (fmt : F.formatter) (item_name : string)
+    (ty : unit -> unit) : unit =
   let assign =
     match backend () with
     | Lean | Coq -> ":="
     | _ -> "="
   in
-  extract_trait_item ctx fmt item_name assign ty
+  extract_trait_item ~as_named_arg ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
 let generic_params_drop_prefix ~(drop_trait_clauses : bool)
@@ -3414,9 +3423,9 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
 (** Small helper.
 
     Extract the items for a method in a trait impl. *)
-let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
-    (fmt : F.formatter) (impl : trait_impl) (method_id : trait_method_id)
-    (fn : fun_decl_ref binder) : unit =
+let extract_trait_impl_method_items_aux ~(as_named_arg : bool)
+    (ctx : extraction_ctx) (fmt : F.formatter) (impl : trait_impl)
+    (method_id : trait_method_id) (fn : fun_decl_ref binder) : unit =
   let span = impl.item_meta.span in
   let trait_decl_id = impl.impl_trait.trait_decl_id in
   let method_decl_id = fn.binder_value.fun_id in
@@ -3457,12 +3466,13 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
       fn.binder_value.fun_generics
   in
 
-  extract_trait_impl_item ctx fmt fun_name ty
+  extract_trait_impl_item ~as_named_arg ctx fmt fun_name ty
 
-let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) (method_id : trait_method_id) (fn : fun_decl_ref binder)
-    : unit =
-  try extract_trait_impl_method_items_aux ctx fmt impl method_id fn
+let extract_trait_impl_method_items ~(as_named_arg : bool)
+    (ctx : extraction_ctx) (fmt : F.formatter) (impl : trait_impl)
+    (method_id : trait_method_id) (fn : fun_decl_ref binder) : unit =
+  try
+    extract_trait_impl_method_items_aux ~as_named_arg ctx fmt impl method_id fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3474,6 +3484,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   let span = impl.item_meta.span in
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl span impl.def_id ctx in
+  (* If the trait is extracted as a [nonpos_structure], we build the impl with
+     its constructor function (with the items as named arguments, followed by
+     the proof of its condition) rather than with the [{ ... }] notation *)
+  let is_nonpos = trait_decl_is_nonpos ctx impl.impl_trait.trait_decl_id in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -3601,7 +3615,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Outer box *)
     F.pp_close_box fmt ())
   else (
-    if backend () = Lean then F.pp_print_string fmt ":= {"
+    if is_nonpos then
+      F.pp_print_string fmt
+        (":= "
+        ^ ctx_get_trait_constructor span impl.impl_trait.trait_decl_id ctx)
+    else if backend () = Lean then F.pp_print_string fmt ":= {"
     else if backend () = Coq then F.pp_print_string fmt ":= {|"
     else F.pp_print_string fmt "= {";
 
@@ -3659,7 +3677,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           if needs_brackets then F.pp_print_string fmt ")"
         in
 
-        extract_trait_impl_item ctx fmt item_name ty)
+        extract_trait_impl_item ~as_named_arg:is_nonpos ctx fmt item_name ty)
       impl.consts;
 
     (* The types *)
@@ -3671,7 +3689,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty
         in
-        extract_trait_impl_item ctx fmt item_name ty)
+        extract_trait_impl_item ~as_named_arg:is_nonpos ctx fmt item_name ty)
       impl.types;
 
     (* The parent clauses *)
@@ -3685,7 +3703,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
             trait_ref
         in
-        extract_trait_impl_item ctx fmt item_name ty)
+        extract_trait_impl_item ~as_named_arg:is_nonpos ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
     (* The methods.
@@ -3711,14 +3729,22 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (method_id, name, bound_fn) ->
         if keep_method name then
-          extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
+          extract_trait_impl_method_items ~as_named_arg:is_nonpos ctx fmt impl
+            method_id bound_fn)
       impl.methods;
 
+    (* For a [nonpos_structure], the last argument of the constructor is the
+       proof of its condition. We print it before closing the box, so that it
+       is indented like the other arguments. *)
+    if is_nonpos then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "(by nonpos_cont)");
     (* Close the outer boxes for the definition, as well as the brackets *)
     F.pp_close_box fmt ();
     if backend () = Coq then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "|}.")
+    else if is_nonpos then ()
     else if (not (backend () = FStar)) || not is_empty then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "}"));

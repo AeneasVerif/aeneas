@@ -23,7 +23,7 @@ namespace nonpos_traits
 /-- Trait declaration: [nonpos_traits::Bla]
     Source: 'tests/src/nonpos-traits.rs', lines 5:0-8:1
     Visibility: public -/
-structure Bla (Self : Type _) where
+nonpos_structure Bla (Self : Type) : Type 1 where
   to_num : Self → Result Std.U32
   add : forall {Other : Type} (BlaInst : Bla Other), Self → Other → Result
     Std.U32
@@ -47,11 +47,11 @@ def U32.Insts.Nonpos_traitsBla.to_num (self : Std.U32) : Result Std.U32 := do
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::Bla for u32}]
     Source: 'tests/src/nonpos-traits.rs', lines 10:0-17:1 -/
 @[reducible]
-def U32.Insts.Nonpos_traitsBla : Bla Std.U32 := {
-  to_num := U32.Insts.Nonpos_traitsBla.to_num
-  add := fun {Other : Type} (BlaInst : Bla Other) =>
-    U32.Insts.Nonpos_traitsBla.add BlaInst
-}
+def U32.Insts.Nonpos_traitsBla : Bla Std.U32 := .mk
+  (to_num := U32.Insts.Nonpos_traitsBla.to_num)
+  (add := fun {Other : Type} (BlaInst : Bla Other) =>
+    U32.Insts.Nonpos_traitsBla.add BlaInst)
+  (by nonpos_cont)
 
 /-- [nonpos_traits::use_bla]:
     Source: 'tests/src/nonpos-traits.rs', lines 19:0-21:1
