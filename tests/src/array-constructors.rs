@@ -35,7 +35,11 @@ pub fn test_from_fn_doc_bool() {
 #[verify::test]
 pub fn test_from_fn_doc_state() {
     let mut state = 1;
-    let a = std::array::from_fn(move |_| { let x = state; state *= 2; x });
+    let a = std::array::from_fn(move |_| {
+        let x = state;
+        state *= 2;
+        x
+    });
     assert_eq!(a, [1, 2, 4, 8, 16, 32]);
 }
 
