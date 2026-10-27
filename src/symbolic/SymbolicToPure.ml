@@ -81,7 +81,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
   let def_id = def.def_id in
   let name = name_to_string ctx def.item_meta.name in
   (* Translate the signature *)
-  let signature = translate_fun_sig_from_decomposed ctx.sg in
+  let signature = translate_fun_sig_from_decomposed ctx.decls_ctx ctx.sg in
   (* Translate the body, if there is *)
   let body =
     match body with

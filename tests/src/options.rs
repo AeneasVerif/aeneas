@@ -74,23 +74,17 @@ pub fn test_bool_then_false() {
 }
 
 // ---------------------------------------------------------------------------
-// exercises Result::unwrap_or, through ok_if_even: the translation of an annotated Ok(2) drops the error type, which Lean then cannot infer
+// exercises Result::unwrap_or on both variants
 // ---------------------------------------------------------------------------
-
-fn ok_if_even(x: u32) -> Result<u32, u32> {
-    if x % 2 == 0 {
-        Ok(x)
-    } else {
-        Err(x)
-    }
-}
 
 #[verify::test]
 pub fn test_result_unwrap_or_ok() {
-    assert!(ok_if_even(2).unwrap_or(0) == 2);
+    let r: Result<u32, u32> = Ok(2);
+    assert!(r.unwrap_or(0) == 2);
 }
 
 #[verify::test]
 pub fn test_result_unwrap_or_err() {
-    assert!(ok_if_even(3).unwrap_or(0) == 0);
+    let r: Result<u32, u32> = Err(3);
+    assert!(r.unwrap_or(0) == 0);
 }
