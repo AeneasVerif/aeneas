@@ -9,23 +9,14 @@ Rust (<https://doc.rust-lang.org/std/array/fn.from_fn.html>, `library/core/src/a
 ```rust
 pub fn from_fn<T, const N: usize, F>(cb: F) -> [T; N] where F: FnMut(usize) -> T
 ```
-creates the array `[cb(0), cb(1), ..., cb(N - 1)]`. The implementation (`try_from_fn_erased`)
-calls `cb` exactly `N` times, **in increasing order of the index** (and never if `N = 0`). Because
-`cb` is `FnMut`, every call may update the closure state, which is threaded from one call to the
-next; the final state is dropped. If a call panics, `from_fn` panics: in the model, a failing call
-makes `from_fn` fail. -/
+creates the array `[cb(0), cb(1), ..., cb(N - 1)]`. -/
 
 namespace Aeneas.Std
 
 open Result WP
 
-/-- Model of `core::array::from_fn`.
-
-    Rust fills the array with a `while` loop which calls the closure on the indices `0, 1, …, N - 1`
-    and pushes each result into a buffer (`try_from_fn_erased`). `Vector.ofFnM` has the same
-    structure: a counter going up from `0` and an accumulator which is pushed to. The closure state
-    is threaded through the calls by running `ofFnM` in the state monad `StateT F Result`, where a
-    call to `call_mut` is exactly a stateful computation. The final closure state is dropped. -/
+/-- Rust fills the array with a `while` loop which calls the closure on the indices `0, 1, …, N - 1`
+    and pushes each result into a buffer (`try_from_fn_erased`). -/
 @[expose, rust_fun "core::array::from_fn"]
 def core.array.from_fn {T F : Type u} (N : Usize) (inst : core.ops.function.FnMut F Usize T)
     (f : F) : Result (Array T N) := do
@@ -58,12 +49,12 @@ theorem core.array.from_fn.ofFnM_spec {T F : Type u} {n : Nat} (fm : Fin n → S
     · simpa only [Vector.getElem_push_lt hj] using hvs j hj
     · simpa only [Vector.getElem_push_eq, Fin.val_last] using hv
 
-/-- **Spec theorem for `core::array::from_fn`**, for a closure with state: if every call `cb(i)`
+/-- Spec theorem for `core::array::from_fn`, for a closure with state: if every call `cb(i)`
     (for `i < N`), starting from a state satisfying `inv i`, returns a value satisfying `post i` and
     a state satisfying `inv (i + 1)`, then the `i`-th element of the array satisfies `post i`. -/
 theorem core.array.from_fn.spec {T F : Type u} (N : Usize)
-    (inst : core.ops.function.FnMut F Usize T) (f : F)
-    (inv : Nat → F → Prop) (post : Nat → T → Prop) (hinv : inv 0 f)
+    (inst : core.ops.function.FnMut F Usize T) (f : F) (inv : Nat → F → Prop)
+    (post : Nat → T → Prop) (hinv : inv 0 f)
     (h : ∀ (i : Usize) (g : F), i.val < N.val → inv i.val g →
       inst.call_mut g i ⦃ (v : T) (g' : F) => post i.val v ∧ inv (i.val + 1) g' ⦄) :
     core.array.from_fn N inst f ⦃ (a : Array T N) =>
@@ -79,7 +70,7 @@ theorem core.array.from_fn.spec {T F : Type u} (N : Usize)
   intro j hj
   simpa only [Vector.getElem_toList] using hv j (by simpa using hj)
 
-/-- **Spec theorem for `core::array::from_fn`**, as `core.array.from_fn.spec` but with the
+/-- Spec theorem for `core::array::from_fn`, as `core.array.from_fn.spec` but with the
     elements read with `a[j]!`. -/
 theorem core.array.from_fn.spec_getElem! {T F : Type u} [Inhabited T] (N : Usize)
     (inst : core.ops.function.FnMut F Usize T) (f : F)
@@ -93,13 +84,9 @@ theorem core.array.from_fn.spec_getElem! {T F : Type u} [Inhabited T] (N : Usize
   rw [Array.getElem!_Nat_eq, getElem!_pos a.val j hj']
   exact ha j hj'
 
-/-- **Spec theorem for `core::array::from_fn`**, for closures whose `call_mut` returns the closure
+/-- Spec theorem for `core::array::from_fn`, for closures whose `call_mut` returns the closure
     state unchanged (this is the case for closures which don't mutate their captured state). For
-    closures which update their state, use `core.array.from_fn.spec` with an invariant.
-
-    `post i` is the postcondition of the call on index `i`, on the pair (output, new state): it is
-    stated on the whole pair so that `step +inferPost` can infer it from the closure body, and
-    `hstate` then checks that the state is unchanged. -/
+    closures which update their state, use `core.array.from_fn.spec` with an invariant. -/
 @[step]
 theorem core.array.from_fn.spec_stateless {T F : Type u} (N : Usize)
     (inst : core.ops.function.FnMut F Usize T) (f : F) {post : Nat → T × F → Prop}
