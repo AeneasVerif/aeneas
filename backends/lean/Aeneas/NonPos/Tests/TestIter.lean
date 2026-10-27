@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Test
+public import Aeneas.NonPos.Tests.Test
 
 @[expose] public section
 -- see the comment on this option in `Test.lean`

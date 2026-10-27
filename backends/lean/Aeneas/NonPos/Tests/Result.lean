@@ -11,8 +11,8 @@ that the order on `Result` is not flat.  `partial_fixpoint` works on it through 
 `Coinductive`.  The continuity facts specific to `Result` (its own `bind`, `ok`, and `vis`) are tagged
 `@[nonpos_continuous]`; the generic `Cont.bind`/`Cont.pure` cover `do` notation.
 -/
-namespace NonPos
-open Aeneas.Data.Coinductive NonPos.Domain Lean.Order
+namespace NonPos.Tests
+open NonPos Aeneas.Data.Coinductive NonPos.Domain Lean.Order
 
 universe w
 
@@ -72,4 +72,4 @@ theorem Cont.input {T : Type} {k : D → Nat → Result T}
   Cont.vis .input hk
 end
 
-end NonPos
+end NonPos.Tests

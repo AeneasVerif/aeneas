@@ -1,12 +1,12 @@
 module
-public import Aeneas.NonPos.Result
+public import Aeneas.NonPos.Tests.Result
 
 @[expose] public section
 /-!
 # Tests over `Result`: the examples of `nonpos/main/Test.lean` and `nonpos/tests/fix_pred`
 -/
 namespace NonPos.TestR
-open NonPos
+open NonPos NonPos.Tests
 
 nonpos_structure Bla (Self : Type) : Type 1 where
   to_num : Self → Result Nat
