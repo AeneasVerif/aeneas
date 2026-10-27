@@ -36,20 +36,44 @@ def squares.closure.call_once (c : squares.closure) (i : Usize) : Result U32 := 
 def squares : Result (Array U32 4#usize) :=
   core.array.from_fn 4#usize squares.closure.FnMut ()
 
-example : squares ⦃ a => ∀ j (hj : j < a.val.length), (a.val[j]).val = j * j ⦄ := by
+example : squares ⦃ a => ∀ j < 4, a[j]!.val = j * j ⦄ := by
   unfold squares
-  step* +inferPost
-  -- `step*` stops after the first bind of the closure body: step through the rest of it
-  on_goal 2 => step* +inferPost
-  obtain ⟨i, hi, x, hx, rfl, ha⟩ := a_post j j_post
-  simp only [Prod.mk.injEq, and_true] at ha
-  have hi' : i.val < 4 := by simpa using hi
-  have hx' : x.val < 2 ^ UScalarTy.U32.numBits := by
-    have : i.val * i.val < 16 := by nlinarith
-    simp only [UScalarTy.U32_numBits_eq]; omega
-  rw [ha, UScalar.cast_val_eq, Nat.mod_eq_of_lt hx', hx]
+  step with core.array.from_fn.spec_stateless_getElem! _ _ _
+    (fun j (v : U32) => v.val = j * j) by (intro i hi; step*)
+  solve_by_elim
 
-/-! ## A closure which updates its state: a counter `c`, with `from_fn(|i| { c += 1; c * 100 + i })` -/
+/-! ## A closure with a single call: `from_fn(|i| i + 1)`
+
+`step* +inferPost` uses the `@[step]` theorem `core.array.from_fn.spec_stateless` and infers the
+postcondition from the body of the closure. -/
+
+@[reducible] def succs.closure := Unit
+
+@[step_simps]
+def succs.closure.call_mut (c : succs.closure) (tupled_args : Usize) :
+    Result (Usize × succs.closure) := do
+  let i ← tupled_args + 1#usize
+  ok (i, c)
+
+def succs.closure.call_once (c : succs.closure) (i : Usize) : Result Usize := do
+  let (i1, _) ← succs.closure.call_mut c i
+  ok i1
+
+@[reducible] def succs.closure.FnOnce : core.ops.function.FnOnce succs.closure Usize Usize :=
+  { call_once := succs.closure.call_once }
+
+@[reducible] def succs.closure.FnMut : core.ops.function.FnMut succs.closure Usize Usize :=
+  { FnOnceInst := succs.closure.FnOnce, call_mut := succs.closure.call_mut }
+
+def succs : Result (Array Usize 4#usize) :=
+  core.array.from_fn 4#usize succs.closure.FnMut ()
+
+example : succs ⦃ a => ∀ j (hj : j < a.val.length), (a.val[j]).val = j + 1 ⦄ := by
+  unfold succs
+  step* +inferPost
+
+/-! ## A closure which updates its state: a counter `c`, with
+`from_fn(|i| { c += 1; c * 100 + i })` -/
 
 @[reducible] def stateful.closure := U32
 
@@ -78,9 +102,8 @@ def stateful : Result (Array U32 4#usize) :=
 /- The counter's invariant: before the call on index `i`, the counter is `i`. -/
 example : stateful ⦃ a => ∀ j (hj : j < a.val.length), (a.val[j]).val = (j + 1) * 100 + j ⦄ := by
   unfold stateful
-  apply core.array.from_fn.spec _ _ _ (post := fun j (v : U32) => v.val = (j + 1) * 100 + j)
-    (fun i (g : stateful.closure) => g.val = i) (by simp)
-  intro i g hi hg
-  step*
+  step with core.array.from_fn.spec _ _ _ (fun i (g : stateful.closure) => g.val = i)
+    (fun j (v : U32) => v.val = (j + 1) * 100 + j) by (intro i g hi hg; step*)
+  solve_by_elim
 
 end array_from_fn
