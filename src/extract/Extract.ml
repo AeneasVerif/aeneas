@@ -3186,9 +3186,13 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `struct Trait (....) =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
+  let is_nonpos = trait_decl_is_nonpos ctx decl.def_id in
   let qualif =
-    Option.get
-      (type_decl_kind_to_qualif decl.item_meta.span SingleNonRec (Some Struct))
+    if is_nonpos then "nonpos_structure"
+      (* TODO: should we organize this using a per backend function? *)
+    else
+      Option.get
+        (type_decl_kind_to_qualif decl.item_meta.span SingleNonRec (Some Struct))
   in
   let is_empty = trait_decl_is_empty decl in
   if backend () = FStar && not is_empty then (
@@ -3232,8 +3236,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
       decl.llbc_generics generics ctx
   in
-  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
-    generics (Some decl.explicit_info) type_params cg_params trait_clauses;
+  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty
+    ~poly_types:(not is_nonpos) Item generics (Some decl.explicit_info)
+    type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
   if is_empty && backend () = FStar then (
@@ -3248,7 +3253,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ())
   else (
     (match backend () with
-    | Lean -> F.pp_print_string fmt "where"
+    | Lean ->
+        (* A [nonpos_structure] needs its universe to be written explicitly *)
+        if is_nonpos then F.pp_print_string fmt ": Type 1 where"
+        else F.pp_print_string fmt "where"
     | FStar -> F.pp_print_string fmt "= {"
     | Coq ->
         let cons =

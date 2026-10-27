@@ -1317,14 +1317,18 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
 
 (** - [as_implicits]: if [explicit] is [None], then we use this parameter to
       control whether the parameters should be extract as explicit or implicit.
-*)
+    - [poly_types]: if [false], the type parameters of an [Item] are printed in
+      [Type] rather than [Type _] (Lean only). We need this for the traits
+      extracted as [nonpos_structure]s, whose parameters must be in a fixed
+      universe. *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    (origin : generic_origin) (generics : generic_params)
-    (explicit : explicit_info option) (type_params : string list)
-    (cg_params : string list) (trait_clauses : string list) : unit =
+    ?(poly_types : bool = true) (origin : generic_origin)
+    (generics : generic_params) (explicit : explicit_info option)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   [%cassert] span
@@ -1379,7 +1383,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               (* Generic trait-method parameters are bound inside a structure
                  field, where Lean can't infer a universe for [Type _]: they
                  stay in [Type]. *)
-              F.pp_print_string fmt (type_keyword ~poly:(origin = Item) span);
+              F.pp_print_string fmt
+                (type_keyword ~poly:(poly_types && origin = Item) span);
               (* ) *)
               right_bracket expl)
             type_params;
