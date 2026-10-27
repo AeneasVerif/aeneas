@@ -214,12 +214,12 @@ def test_from_fn_doc_bool : Result Unit := do
 #guard (test_from_fn_doc_bool).reducesTo ()
 
 /-- [array_constructors::test_from_fn_doc_state::{closure}]
-    Source: 'tests/src/array-constructors.rs', lines 38:32-38:73 -/
+    Source: 'tests/src/array-constructors.rs', lines 38:32-42:5 -/
 @[reducible]
 def test_from_fn_doc_state.closure := Std.I32
 
 /-- [array_constructors::test_from_fn_doc_state::{impl core::ops::function::FnMut<(usize,), i32> for array_constructors::test_from_fn_doc_state::{closure}}::call_mut]:
-    Source: 'tests/src/array-constructors.rs', lines 38:32-38:73 -/
+    Source: 'tests/src/array-constructors.rs', lines 38:32-42:5 -/
 def
   test_from_fn_doc_state.closure.Insts.CoreOpsFunctionFnMutTupleUsizeI32.call_mut
   (c : test_from_fn_doc_state.closure) (tupled_args : Std.Usize) :
@@ -229,7 +229,7 @@ def
   ok (c, i)
 
 /-- [array_constructors::test_from_fn_doc_state::{impl core::ops::function::FnOnce<(usize,), i32> for array_constructors::test_from_fn_doc_state::{closure}}::call_once]:
-    Source: 'tests/src/array-constructors.rs', lines 38:32-38:73 -/
+    Source: 'tests/src/array-constructors.rs', lines 38:32-42:5 -/
 def
   test_from_fn_doc_state.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeI32.call_once
   (c : test_from_fn_doc_state.closure) (i : Std.Usize) : Result Std.I32 := do
@@ -239,7 +239,7 @@ def
   ok i1
 
 /-- Trait implementation: [array_constructors::test_from_fn_doc_state::{impl core::ops::function::FnOnce<(usize,), i32> for array_constructors::test_from_fn_doc_state::{closure}}]
-    Source: 'tests/src/array-constructors.rs', lines 38:32-38:73 -/
+    Source: 'tests/src/array-constructors.rs', lines 38:32-42:5 -/
 @[reducible]
 def test_from_fn_doc_state.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeI32 :
   core.ops.function.FnOnce test_from_fn_doc_state.closure Std.Usize Std.I32
@@ -249,7 +249,7 @@ def test_from_fn_doc_state.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeI32 :
 }
 
 /-- Trait implementation: [array_constructors::test_from_fn_doc_state::{impl core::ops::function::FnMut<(usize,), i32> for array_constructors::test_from_fn_doc_state::{closure}}]
-    Source: 'tests/src/array-constructors.rs', lines 38:32-38:73 -/
+    Source: 'tests/src/array-constructors.rs', lines 38:32-42:5 -/
 @[reducible]
 def test_from_fn_doc_state.closure.Insts.CoreOpsFunctionFnMutTupleUsizeI32 :
   core.ops.function.FnMut test_from_fn_doc_state.closure Std.Usize Std.I32 := {
@@ -260,7 +260,7 @@ def test_from_fn_doc_state.closure.Insts.CoreOpsFunctionFnMutTupleUsizeI32 :
 }
 
 /-- [array_constructors::test_from_fn_doc_state]:
-    Source: 'tests/src/array-constructors.rs', lines 36:0-40:1
+    Source: 'tests/src/array-constructors.rs', lines 36:0-44:1
     Visibility: public -/
 def test_from_fn_doc_state : Result Unit := do
   let a ←
@@ -276,12 +276,12 @@ def test_from_fn_doc_state : Result Unit := do
 #guard (test_from_fn_doc_state).reducesTo ()
 
 /-- [array_constructors::from_fn_stateful::{closure}]
-    Source: 'tests/src/array-constructors.rs', lines 47:25-50:5 -/
+    Source: 'tests/src/array-constructors.rs', lines 51:25-54:5 -/
 @[reducible]
 def from_fn_stateful.closure := Std.U32
 
 /-- [array_constructors::from_fn_stateful::{impl core::ops::function::FnMut<(usize,), u32> for array_constructors::from_fn_stateful::{closure}}::call_mut]:
-    Source: 'tests/src/array-constructors.rs', lines 47:25-50:5 -/
+    Source: 'tests/src/array-constructors.rs', lines 51:25-54:5 -/
 def from_fn_stateful.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32.call_mut
   (c : from_fn_stateful.closure) (tupled_args : Std.Usize) :
   Result (Std.U32 × from_fn_stateful.closure)
@@ -293,7 +293,7 @@ def from_fn_stateful.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32.call_mut
   ok (i3, i)
 
 /-- [array_constructors::from_fn_stateful::{impl core::ops::function::FnOnce<(usize,), u32> for array_constructors::from_fn_stateful::{closure}}::call_once]:
-    Source: 'tests/src/array-constructors.rs', lines 47:25-50:5 -/
+    Source: 'tests/src/array-constructors.rs', lines 51:25-54:5 -/
 def from_fn_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32.call_once
   (c : from_fn_stateful.closure) (i : Std.Usize) : Result Std.U32 := do
   let (i1, _) ←
@@ -302,7 +302,7 @@ def from_fn_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32.call_once
   ok i1
 
 /-- Trait implementation: [array_constructors::from_fn_stateful::{impl core::ops::function::FnOnce<(usize,), u32> for array_constructors::from_fn_stateful::{closure}}]
-    Source: 'tests/src/array-constructors.rs', lines 47:25-50:5 -/
+    Source: 'tests/src/array-constructors.rs', lines 51:25-54:5 -/
 @[reducible]
 def from_fn_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32 :
   core.ops.function.FnOnce from_fn_stateful.closure Std.Usize Std.U32 := {
@@ -311,7 +311,7 @@ def from_fn_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32 :
 }
 
 /-- Trait implementation: [array_constructors::from_fn_stateful::{impl core::ops::function::FnMut<(usize,), u32> for array_constructors::from_fn_stateful::{closure}}]
-    Source: 'tests/src/array-constructors.rs', lines 47:25-50:5 -/
+    Source: 'tests/src/array-constructors.rs', lines 51:25-54:5 -/
 @[reducible]
 def from_fn_stateful.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32 :
   core.ops.function.FnMut from_fn_stateful.closure Std.Usize Std.U32 := {
@@ -322,14 +322,14 @@ def from_fn_stateful.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32 :
 }
 
 /-- [array_constructors::from_fn_stateful]:
-    Source: 'tests/src/array-constructors.rs', lines 45:0-51:1
+    Source: 'tests/src/array-constructors.rs', lines 49:0-55:1
     Visibility: public -/
 def from_fn_stateful : Result (Array Std.U32 4#usize) := do
   core.array.from_fn 4#usize
     from_fn_stateful.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32 0#u32
 
 /-- [array_constructors::test_from_fn_stateful]:
-    Source: 'tests/src/array-constructors.rs', lines 54:0-56:1
+    Source: 'tests/src/array-constructors.rs', lines 58:0-60:1
     Visibility: public -/
 def test_from_fn_stateful : Result Unit := do
   let left_val ← from_fn_stateful
@@ -342,12 +342,12 @@ def test_from_fn_stateful : Result Unit := do
 #guard (test_from_fn_stateful).reducesTo ()
 
 /-- [array_constructors::test_from_fn_empty::{closure}]
-    Source: 'tests/src/array-constructors.rs', lines 61:43-61:55 -/
+    Source: 'tests/src/array-constructors.rs', lines 65:43-65:55 -/
 @[reducible]
 def test_from_fn_empty.closure := Unit
 
 /-- [array_constructors::test_from_fn_empty::{impl core::ops::function::FnMut<(usize,), u32> for array_constructors::test_from_fn_empty::{closure}}::call_mut]:
-    Source: 'tests/src/array-constructors.rs', lines 61:43-61:55 -/
+    Source: 'tests/src/array-constructors.rs', lines 65:43-65:55 -/
 def test_from_fn_empty.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32.call_mut
   (c : test_from_fn_empty.closure) (tupled_args : Std.Usize) :
   Result (Std.U32 × test_from_fn_empty.closure)
@@ -355,7 +355,7 @@ def test_from_fn_empty.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32.call_mut
   fail panic
 
 /-- [array_constructors::test_from_fn_empty::{impl core::ops::function::FnOnce<(usize,), u32> for array_constructors::test_from_fn_empty::{closure}}::call_once]:
-    Source: 'tests/src/array-constructors.rs', lines 61:43-61:55 -/
+    Source: 'tests/src/array-constructors.rs', lines 65:43-65:55 -/
 def
   test_from_fn_empty.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32.call_once
   (c : test_from_fn_empty.closure) (i : Std.Usize) : Result Std.U32 := do
@@ -365,7 +365,7 @@ def
   ok i1
 
 /-- Trait implementation: [array_constructors::test_from_fn_empty::{impl core::ops::function::FnOnce<(usize,), u32> for array_constructors::test_from_fn_empty::{closure}}]
-    Source: 'tests/src/array-constructors.rs', lines 61:43-61:55 -/
+    Source: 'tests/src/array-constructors.rs', lines 65:43-65:55 -/
 @[reducible]
 def test_from_fn_empty.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32 :
   core.ops.function.FnOnce test_from_fn_empty.closure Std.Usize Std.U32 := {
@@ -374,7 +374,7 @@ def test_from_fn_empty.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeU32 :
 }
 
 /-- Trait implementation: [array_constructors::test_from_fn_empty::{impl core::ops::function::FnMut<(usize,), u32> for array_constructors::test_from_fn_empty::{closure}}]
-    Source: 'tests/src/array-constructors.rs', lines 61:43-61:55 -/
+    Source: 'tests/src/array-constructors.rs', lines 65:43-65:55 -/
 @[reducible]
 def test_from_fn_empty.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32 :
   core.ops.function.FnMut test_from_fn_empty.closure Std.Usize Std.U32 := {
@@ -385,7 +385,7 @@ def test_from_fn_empty.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32 :
 }
 
 /-- [array_constructors::test_from_fn_empty]:
-    Source: 'tests/src/array-constructors.rs', lines 60:0-63:1
+    Source: 'tests/src/array-constructors.rs', lines 64:0-67:1
     Visibility: public -/
 def test_from_fn_empty : Result Unit := do
   let a ←
