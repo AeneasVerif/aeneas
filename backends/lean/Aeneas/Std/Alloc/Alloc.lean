@@ -2,7 +2,6 @@
 It is the only allocator: registering another one with `#[global_allocator]` is currently not modelled. -/
 module
 public import Aeneas.Std.Core.Core
-public import Aeneas.Std.Core.Ptr
 public section
 
 namespace Aeneas.Std
@@ -20,21 +19,5 @@ def alloc.alloc.CloneGlobal.clone (_ : alloc.alloc.Global) : Result alloc.alloc.
 def core.clone.CloneGlobal : core.clone.Clone alloc.alloc.Global := {
   clone := alloc.alloc.CloneGlobal.clone
 }
-
--- [`Allocator::allocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.allocate)
--- This signature is different from Rust's signature in the following ways:
--- TODO: it should return a NonNull<T>
--- TODO: it should take a Layout and return a NonNull <u8>
--- TODO: it should return an AllocError
-def alloc.alloc.Global.allocate (_ : alloc.alloc.Global) (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.alloc values
-
--- [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate).
--- This signature is different from Rust's signature in two ways:
--- TODO: it should take a NonNull<T>
--- TODO: then a NonNull<u8> and a Layout
-def alloc.alloc.Global.deallocate (_ : alloc.alloc.Global) (p : MutRawPtr T) (count : Nat) :
-    Result Unit :=
-  Result.guardedModify _ (Heap.dealloc p count)
 
 end Aeneas.Std

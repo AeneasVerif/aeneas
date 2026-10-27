@@ -63,16 +63,23 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst
 }
 
-/-- Allocates a pointer using `Global.allocate`, as creating a Box in Rust would do --/
+/-- Moves the value of the box into memory, in a block of kind `.heap`. In Rust, `into_raw` doesn't
+call the global allocator: the box was already allocated by `Box::new`, and `into_raw` only converts
+the pointer. But the model of `Box<T>` is `T`, which has no address, so the block is created here,
+with the meta operation `State.alloc`. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
 def alloc.boxed.Box.into_raw (b : T) : Result (MutRawPtr T) :=
-  alloc.alloc.Global.mk.allocate [b]
+  Result.guardedModify (State.alloc [b])
 
-/-- Frees the `Box` using `Global.deallocate`, as dropping a Box in Rust would do --/
+/-- Moves the value out of memory, and removes its block with the meta operation `State.dealloc`.
+In Rust, `from_raw` doesn't call the global allocator either: it only converts the pointer, and
+the memory is freed when the box is dropped. But the model of `Box<T>` is `T`, so the value can't
+stay in memory. Converting the box to a raw pointer again creates a new block: this is sound, but
+loses the address of the box. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
 def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
   let value ← RawPtr.read p
-  alloc.alloc.Global.mk.deallocate p 1
+  Result.guardedModify (State.dealloc p 1)
   pure value
 
 end Aeneas.Std

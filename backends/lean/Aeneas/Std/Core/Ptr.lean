@@ -93,13 +93,9 @@ def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsSca
     (_ : RawPtr T M) : Result (RawPtr T' M') :=
   .fail .undef
 
-/-- `add` stays in bounds: the heap owns every cell it steps over. -/
-def RawPtr.InBounds (q : RawPtr T M) (count : Nat) (h : Heap) : Prop :=
-  ∀ i < count, Heap.IsLive h (q.shift i)
-
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
 def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
-  Result.guardedModify (fun h => q.InBounds count.val h) fun h _ => (q.shift count.val, h)
+  Result.guardedModify (State.add q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
@@ -113,7 +109,7 @@ namespace RawPtr
 
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
 def read (q : RawPtr T M) : Result T :=
-  Result.guardedModify _ (Heap.read q)
+  Result.guardedModify (State.read q)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
 attribute [rust_fun "core::ptr::read"] read
@@ -122,7 +118,7 @@ end RawPtr
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
 def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.write q value)
+  Result.guardedModify (State.write q value)
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
@@ -134,10 +130,10 @@ directly. -/
 /-- Dereferences `q` and gives its cell away, so that every access to the cell through a raw
 pointer fails until the borrow is ended with `endBorrow`. -/
 def RawPtr.borrow (q : RawPtr T M) : Result T :=
-  Result.guardedModify _ (Heap.borrow q)
+  Result.guardedModify (State.borrow q)
 
 def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.endBorrow q value)
+  Result.guardedModify (State.endBorrow q value)
 
 def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
   | 0 => .ok []
@@ -163,12 +159,12 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
 
 /-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
 value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
-allocation holding a copy of `values` (`Heap.newView`), which only `endView` frees. -/
+allocation holding a copy of `values` (`State.newView`), which only `endView` frees. -/
 def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.newView values
+  Result.guardedModify (State.newView values)
 
 def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
-  Result.guardedModify _ (Heap.removeView q count)
+  Result.guardedModify (State.removeView q count)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the view, so that the pointer can't be used anymore. -/

@@ -50,14 +50,13 @@ deriving Repr, BEq
 open Error
 
 inductive RustEffect.Input : Type 1 where
-| guardedModify (α : Type) (pre : Heap.{0} → Prop)
-    (modify : (h : Heap.{0}) → pre h → α × Heap.{0}) : RustEffect.Input
+| guardedModify (α : Type) (modify : State.{0} → α → State.{0} → Prop) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
 @[implicit_reducible]
 def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
   match i with
-  | .guardedModify α _ _ => ULift α
+  | .guardedModify α _ => ULift α
   | .fail _ => PEmpty
 
 @[implicit_reducible]
@@ -469,13 +468,14 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.done x => ok x
 partial_fixpoint
 
-def Result.guardedModify {α : Type} (pre : Heap.{0} → Prop)
-    (modify : (h : Heap.{0}) → pre h → α × Heap.{0}) : Result α :=
-  Result.vis (.guardedModify α pre modify) fun answer =>
+/-- An operation on the memory, given as a relation `modify s x s'` between the initial state `s`,
+the result `x` and the final state `s'`. It is undefined behaviour if `s` has no successor. -/
+def Result.guardedModify {α : Type} (modify : State.{0} → α → State.{0} → Prop) : Result α :=
+  Result.vis (.guardedModify α modify) fun answer =>
     Result.ok answer.down
 
 def Result.require (p : Prop) : Result Unit :=
-  Result.guardedModify (fun _ => p) fun h _ => ((), h)
+  Result.guardedModify fun s _ s' => p ∧ s' = s
 
 end
 
