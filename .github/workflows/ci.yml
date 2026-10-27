@@ -79,6 +79,10 @@ jobs:
               echo 'LeanKeywords.ml was changed in this PR'
               echo "CHECK_LEAN_KEYWORDS=true" >> "$GITHUB_ENV"
           fi
+          # On `main`, always build so that it saves a cache for PRs to use.
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+              echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
+          fi
     outputs:
       check_lean: ${{ env.CHECK_LEAN }}
       check_extract_builtin: ${{ env.CHECK_EXTRACT_BUILTIN }}
@@ -92,10 +96,33 @@ jobs:
       - *setup_cachix_push
       - uses: actions/checkout@v4
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
+        # Cache only our own build outputs.
+        id: lean_build_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            backends/lean/.lake/build/lib
+            backends/lean/.lake/build/ir
+            tests/lean/.lake/build/lib
+            tests/lean/.lake/build/ir
+          key: lean-build-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json') }}-${{ github.sha }}
+          restore-keys: lean-build-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json') }}-
+      - if: needs.diff_lean_files.outputs.check_lean == 'true'
         run: nix develop --command bash -c "cd backends/lean && lake exe cache get && lake build Aeneas AeneasMeta --wfail"
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
         run: nix develop --command bash -c "cd tests/lean && make"
+      - if: >-
+          needs.diff_lean_files.outputs.check_lean == 'true' &&
+          (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            backends/lean/.lake/build/lib
+            backends/lean/.lake/build/ir
+            tests/lean/.lake/build/lib
+            tests/lean/.lake/build/ir
+          key: ${{ steps.lean_build_cache.outputs.cache-primary-key }}
       - if: >-
           needs.diff_lean_files.outputs.check_lean == 'true' ||
           needs.diff_lean_files.outputs.check_extract_builtin == 'true'
