@@ -60,12 +60,13 @@ def use_bla : Result Std.U32 := do
   U32.Insts.Nonpos_traitsBla.add U32.Insts.Nonpos_traitsBla 3#u32 4#u32
 
 /-- Trait declaration: [nonpos_traits::Sized2]
-    Source: 'tests/src/nonpos-traits.rs', lines 27:0-32:1
+    Source: 'tests/src/nonpos-traits.rs', lines 27:0-38:1
     Visibility: public -/
 nonpos_structure Sized2 (Self : Type) : Type 1 where
   area : Self → Result Std.U32
   bigger : forall {Other : Type} (Sized2Inst : Sized2 Other), Self → Other
     → Result Bool
+  double : Self → Result Std.U32
 
 /-- [nonpos_traits::Sized2::bigger]:
     Source: 'tests/src/nonpos-traits.rs', lines 29:4-31:5
@@ -80,30 +81,48 @@ def Sized2.bigger.default
   let i1 ← Sized2Inst1.area other
   ok (i > i1)
 
-/-- [nonpos_traits::{impl nonpos_traits::Sized2 for u32}::area]:
+/-- [nonpos_traits::Sized2::double]:
     Source: 'tests/src/nonpos-traits.rs', lines 35:4-37:5
+    Visibility: public -/
+@[trait_default]
+def Sized2.double.default
+  {Self : Type _} (Sized2Inst : Sized2 Self) (self : Self) :
+  Result Std.U32
+  := do
+  let i ← Sized2Inst.area self
+  i + i
+
+/-- [nonpos_traits::{impl nonpos_traits::Sized2 for u32}::area]:
+    Source: 'tests/src/nonpos-traits.rs', lines 41:4-43:5
     Visibility: public -/
 def U32.Insts.Nonpos_traitsSized2.area (self : Std.U32) : Result Std.U32 := do
   ok self
 
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::Sized2 for u32}]
-    Source: 'tests/src/nonpos-traits.rs', lines 34:0-38:1 -/
+    Source: 'tests/src/nonpos-traits.rs', lines 40:0-44:1 -/
 @[reducible]
 impl_def U32.Insts.Nonpos_traitsSized2 : Sized2 Std.U32 := Sized2.mk
   (area := U32.Insts.Nonpos_traitsSized2.area)
   (bigger := fun {Other : Type} (Sized2Inst : Sized2 Other) =>
     Sized2.bigger.default U32.Insts.Nonpos_traitsSized2 Sized2Inst)
+  (double := Sized2.double.default U32.Insts.Nonpos_traitsSized2)
   (by nonpos_cont)
 
 /-- [nonpos_traits::use_sized2]:
-    Source: 'tests/src/nonpos-traits.rs', lines 40:0-42:1
+    Source: 'tests/src/nonpos-traits.rs', lines 46:0-48:1
     Visibility: public -/
 def use_sized2 : Result Bool := do
   Sized2.bigger.default U32.Insts.Nonpos_traitsSized2
     U32.Insts.Nonpos_traitsSized2 3#u32 4#u32
 
+/-- [nonpos_traits::use_double]:
+    Source: 'tests/src/nonpos-traits.rs', lines 50:0-52:1
+    Visibility: public -/
+def use_double : Result Std.U32 := do
+  Sized2.double.default U32.Insts.Nonpos_traitsSized2 3#u32
+
 /-- Trait declaration: [nonpos_traits::Left]
-    Source: 'tests/src/nonpos-traits.rs', lines 47:0-50:1
+    Source: 'tests/src/nonpos-traits.rs', lines 57:0-60:1
     Visibility: public -/
 structure Left (Self : Type _) where
   val : Self → Result Std.U32
@@ -111,14 +130,14 @@ structure Left (Self : Type _) where
     Std.U32
 
 /-- Trait declaration: [nonpos_traits::Right]
-    Source: 'tests/src/nonpos-traits.rs', lines 52:0-54:1
+    Source: 'tests/src/nonpos-traits.rs', lines 62:0-64:1
     Visibility: public -/
 structure Right (Self : Type _) where
   via_left : forall {L : Type} (LeftInst : Left L), Self → L → Result
     Std.U32
 
 /-- [nonpos_traits::{impl nonpos_traits::Left for u32}::via_right]:
-    Source: 'tests/src/nonpos-traits.rs', lines 60:4-62:5
+    Source: 'tests/src/nonpos-traits.rs', lines 70:4-72:5
     Visibility: public -/
 def U32.Insts.Nonpos_traitsLeft.via_right
   {R : Type _} (RightInst : Right R) (self : Std.U32) (r : R) :
@@ -127,13 +146,13 @@ def U32.Insts.Nonpos_traitsLeft.via_right
   RightInst.via_left U32.Insts.Nonpos_traitsLeft r self
 
 /-- [nonpos_traits::{impl nonpos_traits::Left for u32}::val]:
-    Source: 'tests/src/nonpos-traits.rs', lines 57:4-59:5
+    Source: 'tests/src/nonpos-traits.rs', lines 67:4-69:5
     Visibility: public -/
 def U32.Insts.Nonpos_traitsLeft.val (self : Std.U32) : Result Std.U32 := do
   ok self
 
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::Left for u32}]
-    Source: 'tests/src/nonpos-traits.rs', lines 56:0-63:1 -/
+    Source: 'tests/src/nonpos-traits.rs', lines 66:0-73:1 -/
 @[reducible]
 def U32.Insts.Nonpos_traitsLeft : Left Std.U32 := {
   val := U32.Insts.Nonpos_traitsLeft.val
@@ -142,7 +161,7 @@ def U32.Insts.Nonpos_traitsLeft : Left Std.U32 := {
 }
 
 /-- [nonpos_traits::{impl nonpos_traits::Right for u32}::via_left]:
-    Source: 'tests/src/nonpos-traits.rs', lines 66:4-68:5
+    Source: 'tests/src/nonpos-traits.rs', lines 76:4-78:5
     Visibility: public -/
 def U32.Insts.Nonpos_traitsRight.via_left
   {L : Type _} (LeftInst : Left L) (self : Std.U32) (l : L) :
@@ -151,7 +170,7 @@ def U32.Insts.Nonpos_traitsRight.via_left
   LeftInst.val l
 
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::Right for u32}]
-    Source: 'tests/src/nonpos-traits.rs', lines 65:0-69:1 -/
+    Source: 'tests/src/nonpos-traits.rs', lines 75:0-79:1 -/
 @[reducible]
 def U32.Insts.Nonpos_traitsRight : Right Std.U32 := {
   via_left := fun {L : Type} (LeftInst : Left L) =>
@@ -159,7 +178,7 @@ def U32.Insts.Nonpos_traitsRight : Right Std.U32 := {
 }
 
 /-- [nonpos_traits::use_left_right]:
-    Source: 'tests/src/nonpos-traits.rs', lines 71:0-73:1
+    Source: 'tests/src/nonpos-traits.rs', lines 81:0-83:1
     Visibility: public -/
 def use_left_right : Result Std.U32 := do
   U32.Insts.Nonpos_traitsLeft.via_right U32.Insts.Nonpos_traitsRight 3#u32

@@ -29,6 +29,12 @@ pub trait Sized2 {
     fn bigger<Other: Sized2>(&self, other: &Other) -> bool {
         self.area() > other.area()
     }
+    // A provided method with no generics: the impl's field is `Sized2.double.default X`, without
+    // a lambda, so evaluating `X` evaluates `X` again. TODO: the field must be eta-expanded
+    // (`fun x => Sized2.double.default X x`), otherwise the code type-checks but loops when run.
+    fn double(&self) -> u32 {
+        self.area() + self.area()
+    }
 }
 
 impl Sized2 for u32 {
@@ -39,6 +45,10 @@ impl Sized2 for u32 {
 
 pub fn use_sized2() -> bool {
     3u32.bigger(&4u32)
+}
+
+pub fn use_double() -> u32 {
+    3u32.double()
 }
 
 // A group of mutually recursive traits: neither trait refers to itself, but each one refers to
