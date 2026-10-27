@@ -1,17 +1,17 @@
-import Aeneas.Extract.Extract
-
-/-!
-# Extract the models of the Rust standard library
-
-Generates `src/extract/ExtractBuiltinLean.ml`, which lists the Lean models of the Rust standard
-library.
--/
+module
+public import Aeneas.Extract.Extract
+public section
 
 open Lean Aeneas Extract
 
+@[extern "lean_enable_initializer_execution"]
+private unsafe opaque enableInitializerExecutionUnsafe : BaseIO Unit
+@[implemented_by enableInitializerExecutionUnsafe]
+private opaque enableInitializerExecution : BaseIO Unit
+
 def main : IO Unit := do
   println! "Starting extraction"
-  unsafe Lean.enableInitializersExecution
+  enableInitializerExecution.toIO
   -- We need to do this otherwise loading the module (to get the environment) fails
   initSearchPath (← findSysroot)
   -- Load the environment from the module `Aeneas` and extract the state

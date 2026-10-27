@@ -51,7 +51,6 @@ def renderOCamlFile (keywords : Array String) : String :=
 /-! ## Entry point -/
 
 def main : IO Unit := do
-  println! "Starting extraction"
   unsafe Lean.enableInitializersExecution
   initSearchPath (← findSysroot)
   let env ← importModules #[{ module := sourceModule }] {} 0 (loadExts := true)
