@@ -1,12 +1,11 @@
 //@ [!lean] skip
+//@ [lean] subdir=ArrayConstructors
 #![feature(register_tool)]
 #![register_tool(verify)]
-//! Tests for the Lean models of array constructors (`core::array::from_fn`), verifying the model matches Rust behavior.
+//! Tests for the Lean models of array constructors (`core::array::from_fn`).
 //!
-//! The `test_from_fn_doc_*` tests are the examples from the documentation of `core::array::from_fn`
-//! (<https://doc.rust-lang.org/std/array/fn.from_fn.html>), except the one building an array of
-//! `String`s with `format!` (`format!` and `String == &str` have no Lean models), and with the
-//! adaptation explained on `test_from_fn_doc_state`.
+//! The `test_from_fn_doc_*` tests are taken from the documentation of `core::array::from_fn`
+//! (<https://doc.rust-lang.org/std/array/fn.from_fn.html>).
 
 #[verify::test]
 pub fn test_from_fn_doc_identity() {
