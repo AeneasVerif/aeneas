@@ -330,7 +330,7 @@ let lean_builtin_funs =
     mk_fun
       "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"
       "core.array.equality.PartialEqArray.ne";
-    (* file: "Aeneas/Std/Array/FromFn.lean", line: 29 *)
+    (* file: "Aeneas/Std/Array/FromFn.lean", line: 20 *)
     mk_fun "core::array::from_fn" "core.array.from_fn";
     (* file: "Aeneas/Std/Array/Array.lean", line: 165 *)
     mk_fun "core::array::repeat" "Array.repeat"
