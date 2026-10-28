@@ -87,28 +87,25 @@ instance {ty} : IsScalar (UScalar ty) where
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
 
-/-- Always fails. TODO: the typed heap cannot read a cell at another scalar type, so casts are not
-modelled. -/
-def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T']
-    (_ : RawPtr T M) : Result (RawPtr T' M') :=
+/-- Always fails: scalar pointer casts are not modelled by the current wrapper API. -/
+def RawPtr.cast_scalar {T} (T' : Type) (_ : Mutability) [IsScalar T] [IsScalar T']
+    (_ : RawPtr T) : Result (RawPtr T') :=
   .fail .undef
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
-def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
+def RawPtr.add (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
   Result.guardedModify (State.add q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
--- TODO: can a const pointer be cast back to a mutable pointer? If not,
--- then maybe we should go for a design that is more strict
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
 def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
-  ⟨q.allocId, q.offset⟩
+  q
 
 namespace RawPtr
 
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
-def read (q : RawPtr T M) : Result T :=
+def read (q : RawPtr T) : Result T :=
   Result.guardedModify (State.read q)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
@@ -127,30 +124,30 @@ Aeneas builds its models of Rust's raw-pointer functions (`from_mut`, `as_ptr`, 
 `from_raw_parts`, `from_raw_parts_mut`) from the operations below, which act on the model's heap
 directly. -/
 
-/-- Dereferences `q` and gives its cell away, so that every access to the cell through a raw
-pointer fails until the borrow is ended with `endBorrow`. -/
-def RawPtr.borrow (q : RawPtr T M) : Result T :=
-  Result.guardedModify (State.borrow q)
-
-def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
-  Result.guardedModify (State.endBorrow q value)
-
-def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
-  | 0 => .ok []
-  | n + 1 => do
-    let value ← q.borrow
-    let values ← (q.shift 1).borrowRange n
-    .ok (value :: values)
+/-- Transfers full cells into an exclusive borrow, blocking raw access through this view. -/
+def RawPtr.borrowRange (q : RawPtr T) (count : Nat) : Result (List T) :=
+  Result.guardedModify (State.borrowRange q count)
 
 /-- `endBorrow` on the `values.length` cells from `q` on. -/
-def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
-  | [] => .ok ()
-  | value :: values => do
-    q.endBorrow value
-    (q.shift 1).endBorrowRange values
+def RawPtr.endBorrowRange (q : RawPtr T) (values : List T) : Result Unit :=
+  Result.guardedModify (State.endBorrowRange q values)
+
+def RawPtr.borrow (q : RawPtr T) : Result T := do
+  match ← q.borrowRange 1 with
+  | [value] => .ok value
+  | _ => .fail .undef
+
+def RawPtr.endBorrow (q : RawPtr T) (value : T) : Result Unit :=
+  q.endBorrowRange [value]
+
+def RawPtr.shareRange (q : RawPtr T) (count : Nat) : Result (List T) :=
+  Result.guardedModify (State.shareRange q count)
+
+def RawPtr.endShareRange (q : RawPtr T) (values : List T) : Result Unit :=
+  Result.guardedModify (State.endShareRange q values)
 
 /-- `read` on the `n` cells from `q` on. -/
-def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
+def RawPtr.readRange (q : RawPtr T) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do
     let value ← q.read
@@ -163,8 +160,14 @@ allocation holding a copy of `values` (`State.newView`), which only `endView` fr
 def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
   Result.guardedModify (State.newView values)
 
-def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
+def RawPtr.allocSharedView (values : List T) : Result (ConstRawPtr T) :=
+  Result.guardedModify (State.newSharedView values)
+
+def RawPtr.endView (q : RawPtr T) (count : Nat) : Result Unit :=
   Result.guardedModify (State.removeView q count)
+
+def RawPtr.endSharedView (q : RawPtr T) (original : List T) : Result Unit :=
+  Result.guardedModify (State.endSharedView q original)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the view, so that the pointer can't be used anymore. -/

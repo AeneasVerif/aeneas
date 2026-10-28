@@ -58,25 +58,24 @@ theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.lengt
   by simp
 
 /-! Raw-pointer views of slices. The functional slice model has no address: `as_ptr`/`as_mut_ptr`
-copy the slice to a fresh view (`allocView`), freed when the borrow ends;
-`from_raw_parts(_mut)` move the cells out into a borrow (so that raw accesses while the slice is
-live fail). The returned back computations run when the borrow ends. -/
+copy the slice to a fresh shared/exclusive view, removed when the borrow ends.
+`from_raw_parts` shares cells, allowing raw reads but not writes; `from_raw_parts_mut`
+exclusively borrows them, blocking raw access through that view.
+The returned back computations run when the borrow ends. -/
 
 /-- `borrowRange` of `len` cells, as a slice. -/
-def RawPtr.borrowSlice {T : Type} (q : RawPtr T M) (len : Usize) : Result (Slice T) := do
+def RawPtr.borrowSlice {T : Type} (q : RawPtr T) (len : Usize) : Result (Slice T) := do
   let values ← q.borrowRange len.val
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
 /-- End of the shared borrow of `as_ptr`: the cells must still hold `s` (writing through a const
 pointer cast to mut is UB), and the view is freed. -/
 def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
-  let values ← p.readRange s.length
-  p.endView s.length
-  Result.require (values = s.val)
+  p.endSharedView s.val
 
 def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocView s.val) fun p =>
-    .ok (p.cast_const, Slice.end_as_ptr s p.cast_const)
+  Aeneas.Std.bind (RawPtr.allocSharedView s.val) fun p =>
+    .ok (p, Slice.end_as_ptr s p)
 
 /-- End of the mutable borrow of `as_mut_ptr`: the cells become the new slice, and the view is
 freed. -/
@@ -95,7 +94,11 @@ def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : U
 
 def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
     Result (Slice T × Result Unit) :=
-  Aeneas.Std.bind (p.borrowSlice len) fun s => .ok (s, p.endBorrowRange s.val)
+  Aeneas.Std.bind (p.shareRange len.val) fun values =>
+  if h : values.length ≤ Usize.max then
+    let s := Slice.from values h
+    .ok (s, p.endShareRange s.val)
+  else .fail .undef
 
 def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
     Result (Slice T × (Slice T → Result Unit)) :=

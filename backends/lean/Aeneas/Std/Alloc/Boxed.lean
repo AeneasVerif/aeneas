@@ -63,7 +63,8 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst
 }
 
-/-- Moves the value of the box into memory, in a block of kind `.heap`. In Rust, `into_raw` doesn't
+/-- Moves the value of the box into memory, in a block with allocation cleanup authority.
+In Rust, `into_raw` doesn't
 call the global allocator: the box was already allocated by `Box::new`, and `into_raw` only converts
 the pointer. But the model of `Box<T>` is `T`, which has no address, so the block is created here,
 with the meta operation `State.alloc`. -/
