@@ -32,6 +32,16 @@ theorem replaceRange.exists {s : Heap m.Repr} {p : RawPtr ty} {old new : List (C
       simp only [Heap.replaceRange, he, ↓reduceIte]
       exact ⟨hl, before, after, hoff, hs, rfl⟩⟩
 
+theorem replaceRange.old_eq {s s' : Heap m.Repr} {p : RawPtr ty}
+    {owned old new : List (Cell ty)} (hm : Fragment.Matches m s (cellsHeap p owned))
+    (hl : owned.length = old.length) (hu : Heap.replaceRange m s p old new s') :
+    owned = old := by
+  by_cases he : old = []
+  · have ho : owned = [] := List.length_eq_zero_iff.mp (by simpa [he] using hl)
+    simp [he, ho]
+  · obtain ⟨before, after, hoff, hs, _⟩ := hu.load he
+    exact segment_unique hm hl hoff hs
+
 /-- Local update rule, including the empty-range no-op. Its hypotheses describe only the
 owned cells; the proof supplies all disjoint-frame and demonic-successor obligations. -/
 theorem triple_replaceRange {p : RawPtr ty} {old new : List (Cell ty)}

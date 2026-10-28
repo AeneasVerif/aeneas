@@ -172,4 +172,25 @@ theorem freeBlock.spec (p : RawPtr ty) (cs : List (Cell ty)) (own : Bool)
     by simpa using matches_remove_frame p.base hF (frame_base_absent hoff hd hF hs),
     hi.remove p.base, rfl⟩
 
+theorem endSharedView.spec (p : RawPtr ty) (values : List ty) :
+    Triple m (sep (alloc p values.length false) (block p (Cell.shared 1 values)))
+      (Heap.endSharedView m p values) (fun _ => emp) := by
+  intro h F s hp hd hm hi
+  obtain ⟨a, b, _, he, ⟨hoff, ha⟩, hb⟩ := hp
+  change b = cellsHeap p (Cell.shared 1 values) at hb
+  subst h a b
+  obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _ _).mp hm
+  obtain ⟨ha, hc⟩ := (Fragment.matches_union _ _ _ _).mp hab
+  have ha' : Fragment.Matches m s (allocHeap ty p.base (Cell.shared 1 values).length false) :=
+    by simpa [Cell.shared] using ha
+  obtain ⟨halloc, hs⟩ := whole_of_matches hoff ha' hc
+  have hd' : (allocHeap ty p.base (Cell.shared 1 values).length false ∪
+      cellsHeap p (Cell.shared 1 values)).Disjoint F := by
+    simpa [Cell.shared] using hd
+  refine ⟨⟨(), s.remove p.base, hoff, halloc, hs, rfl⟩, ?_⟩
+  rintro _ _ ⟨_, _, _, rfl⟩
+  exact ⟨∅, Fragment.disjoint_empty_left F,
+    by simpa using matches_remove_frame p.base hF (frame_base_absent hoff hd' hF hs),
+    hi.remove p.base, rfl⟩
+
 end Aeneas.Std.SepLogic

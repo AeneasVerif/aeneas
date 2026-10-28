@@ -165,6 +165,14 @@ theorem sep_mono {P P' Q Q' : Assertion.{u}}
   rintro ⟨a, b, hd, he, ha, hb⟩
   exact ⟨a, b, hd, he, hp _ ha, hq _ hb⟩
 
+theorem sep_and_left (A : Prop) (P Q : Assertion.{u}) (h : Fragment.{u}) :
+    sep (fun a => A ∧ P a) Q h ↔ A ∧ sep P Q h := by
+  constructor
+  · rintro ⟨a, b, hd, he, ⟨ha, hp⟩, hq⟩
+    exact ⟨ha, a, b, hd, he, hp, hq⟩
+  · rintro ⟨ha, a, b, hd, he, hp, hq⟩
+    exact ⟨a, b, hd, he, ⟨ha, hp⟩, hq⟩
+
 abbrev Cmd (m : Layout.{u}) (α : Type w) := Heap m.Repr → α → Heap m.Repr → Prop
 
 def Cmd.pure (m : Layout.{u}) (x : α) : Cmd m α := fun s y s' => y = x ∧ s' = s
@@ -215,6 +223,12 @@ theorem Triple.conseq {m : Layout.{u}} {P P' : Assertion.{u}} {c : Cmd m α}
   refine ⟨hsafe, fun x s' hrun => ?_⟩
   obtain ⟨h', hd', hm', hi', hQ⟩ := hpost x s' hrun
   exact ⟨h', hd', hm', hi', hq x h' hQ⟩
+
+theorem Triple.pure_pre {m : Layout.{u}} {A : Prop} {P : Assertion.{u}}
+    {c : Cmd m α} {Q : α → Assertion.{u}} (ht : A → Triple m P c Q) :
+    Triple m (fun h => A ∧ P h) c Q := by
+  intro h F s ⟨ha, hp⟩ hd hm hi
+  exact ht ha h F s hp hd hm hi
 
 theorem Triple.pure (m : Layout.{u}) (P : Assertion.{u}) (x : α) :
     Triple m P (Cmd.pure m x) (fun y h => y = x ∧ P h) := by
