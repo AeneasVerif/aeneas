@@ -100,15 +100,17 @@ def Sized2.double.default
 def U32.Insts.Nonpos_traitsSized2.area (self : Std.U32) : Result Std.U32 := do
   ok self
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::Sized2 for u32}]
     Source: 'tests/src/nonpos-traits.rs', lines 40:0-44:1 -/
 @[reducible]
-impl_def U32.Insts.Nonpos_traitsSized2 : Sized2 Std.U32 := Sized2.mk
+def U32.Insts.Nonpos_traitsSized2 : Sized2 Std.U32 := Sized2.mk
   (area := U32.Insts.Nonpos_traitsSized2.area)
   (bigger := fun {Other : Type} (Sized2Inst : Sized2 Other) =>
     Sized2.bigger.default U32.Insts.Nonpos_traitsSized2 Sized2Inst)
   (double := Sized2.double.default U32.Insts.Nonpos_traitsSized2)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_traits::use_sized2]:
     Source: 'tests/src/nonpos-traits.rs', lines 46:0-48:1
@@ -321,10 +323,11 @@ def Count.Insts.Nonpos_traitsMyIteratorU32.next
   else let i ← self.n - 1#u32
        ok (some i, { n := i })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyIterator<u32> for nonpos_traits::Count}]
     Source: 'tests/src/nonpos-traits.rs', lines 137:0-147:1 -/
 @[reducible]
-impl_def Count.Insts.Nonpos_traitsMyIteratorU32 : MyIterator Count Std.U32
+def Count.Insts.Nonpos_traitsMyIteratorU32 : MyIterator Count Std.U32
   := MyIterator.mk
   (next := Count.Insts.Nonpos_traitsMyIteratorU32.next)
   (zip_count := fun {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
@@ -338,6 +341,7 @@ impl_def Count.Insts.Nonpos_traitsMyIteratorU32 : MyIterator Count Std.U32
     Std.U32) => MyIterator.collect.default
     Count.Insts.Nonpos_traitsMyIteratorU32 MyFromIteratorPU32Inst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_traits::{impl nonpos_traits::MyDoubleEnded<u32> for nonpos_traits::Count}::next_back]:
     Source: 'tests/src/nonpos-traits.rs', lines 150:4-152:5
@@ -439,11 +443,12 @@ def Peek.Insts.Nonpos_traitsMyIterator.next
   let (o, t) ← MyIteratorInst.next self.inner
   ok (o, { self with inner := t })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyIterator<Clause0_Item> for nonpos_traits::Peek<I, Clause0_Item>}]
     Source: 'tests/src/nonpos-traits.rs', lines 178:0-183:1 -/
 @[reducible]
-impl_def Peek.Insts.Nonpos_traitsMyIterator {I : Type _} {Clause0_Item :
-  Type _} (MyIteratorInst : MyIterator I Clause0_Item) : MyIterator (Peek I
+def Peek.Insts.Nonpos_traitsMyIterator {I : Type _} {Clause0_Item : Type _}
+  (MyIteratorInst : MyIterator I Clause0_Item) : MyIterator (Peek I
   Clause0_Item) Clause0_Item := MyIterator.mk
   (next := Peek.Insts.Nonpos_traitsMyIterator.next MyIteratorInst)
   (zip_count := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
@@ -457,6 +462,7 @@ impl_def Peek.Insts.Nonpos_traitsMyIterator {I : Type _} {Clause0_Item :
     Clause0_Item) => MyIterator.collect.default
     (Peek.Insts.Nonpos_traitsMyIterator MyIteratorInst) MyFromIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_traits::sum_count]:
     Source: 'tests/src/nonpos-traits.rs', lines 185:0-187:1

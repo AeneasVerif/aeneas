@@ -3499,8 +3499,17 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      its constructor function (with the items as named arguments, followed by
      the proof of its condition) rather than with the [{ ... }] notation *)
   let is_nonpos = trait_decl_is_nonpos ctx impl.impl_trait.trait_decl_id in
+  (* An impl of a [nonpos_structure] which refers to itself (e.g., through a
+     provided method) is defined with [partial_fixpoint], not [impl_def] *)
+  let is_fixpoint = is_rec && is_nonpos in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
+  (* Without this option, a [by] proof in the body is abstracted into an
+     auxiliary theorem, and [partial_fixpoint] then fails to see that the
+     parameters of a generic impl are fixed *)
+  if is_fixpoint then (
+    F.pp_print_string fmt "set_option backward.proofsInPublic true in";
+    F.pp_print_break fmt 0 0);
   (* Print a comment to link the extracted type to its original rust definition *)
   begin
     let decl_id = impl.impl_trait.trait_decl_id in
@@ -3559,7 +3568,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Lean only: we have a special elaboration if the impl is recursive *)
-  (if is_rec then (
+  (if is_rec && not is_nonpos then (
      F.pp_print_string fmt "impl_def";
      F.pp_print_space fmt ())
    else
@@ -3761,6 +3770,14 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "}"));
   F.pp_close_box fmt ();
+  (* The impl is the least fixed point of its body; the [monotonicity] proof
+     comes from the continuity of the body *)
+  if is_fixpoint then (
+    F.pp_print_break fmt 0 0;
+    F.pp_print_string fmt
+      ("partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont "
+      ^ string_of_int nonpos_cont_fuel
+      ^ ")"));
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 

@@ -665,10 +665,11 @@ def Count.Insts.Nonpos_iteratorIteratorU32.next
   else let i ← self.n - 1#u32
        ok (some i, { n := i })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<u32> for nonpos_iterator::Count}]
     Source: 'tests/src/nonpos-iterator.rs', lines 211:0-221:1 -/
 @[reducible]
-impl_def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
+def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
   := Iterator.mk
   (next := Count.Insts.Nonpos_iteratorIteratorU32.next)
   (collect := fun {B : Type} (FromIteratorPU32Inst : FromIterator B Std.U32) =>
@@ -718,6 +719,7 @@ impl_def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
     (IntoIteratorU32PPInst : IntoIterator Std.U32 Clause0_Item
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorU32PPInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::DoubleEndedIterator<u32> for nonpos_iterator::Count}::next_back]:
     Source: 'tests/src/nonpos-iterator.rs', lines 223:4-225:5
@@ -853,10 +855,11 @@ def Rev.Insts.Nonpos_iteratorIterator.next
   let (o, t) ← DoubleEndedIteratorInst.next_back self.iter
   ok (o, { iter := t })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 253:0-258:1 -/
 @[reducible]
-impl_def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
+def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
   Type _} (DoubleEndedIteratorInst : DoubleEndedIterator I
   Clause0_Clause0_Item) : Iterator (Rev I) Clause0_Clause0_Item := Iterator.mk
   (next := Rev.Insts.Nonpos_iteratorIterator.next DoubleEndedIteratorInst)
@@ -913,6 +916,7 @@ impl_def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
     (IntoIteratorInst : IntoIterator Clause0_Clause0_Item Clause0_Item
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 265:4-267:5
@@ -925,12 +929,13 @@ def StepBy.Insts.Nonpos_iteratorIterator.next
   let (o, t) ← IteratorInst.next self.iter
   ok (o, { self with iter := t })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 263:0-268:1 -/
 @[reducible]
-impl_def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
-  Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator (StepBy I)
-  Clause0_Item := Iterator.mk
+def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
+  (IteratorInst : Iterator I Clause0_Item) : Iterator (StepBy I) Clause0_Item
+  := Iterator.mk
   (next := StepBy.Insts.Nonpos_iteratorIterator.next IteratorInst)
   (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
     => Iterator.collect.default (StepBy.Insts.Nonpos_iteratorIterator
@@ -983,6 +988,7 @@ impl_def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 275:4-282:5
@@ -999,12 +1005,13 @@ def Take.Insts.Nonpos_iteratorIterator.next
     let (o, t) ← IteratorInst.next self.iter
     ok (o, { iter := t, n := i })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 273:0-283:1 -/
 @[reducible]
-impl_def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
-  Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator (Take I)
-  Clause0_Item := Iterator.mk
+def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
+  (IteratorInst : Iterator I Clause0_Item) : Iterator (Take I) Clause0_Item
+  := Iterator.mk
   (next := Take.Insts.Nonpos_iteratorIterator.next IteratorInst)
   (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
     => Iterator.collect.default (Take.Insts.Nonpos_iteratorIterator
@@ -1057,6 +1064,7 @@ impl_def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 290:4-298:5
@@ -1073,12 +1081,13 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
     let i ← self.count + 1#usize
     ok (some (self.count, a), { iter := t, count := i })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 288:0-299:1 -/
 @[reducible]
-impl_def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I :
-  Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item) :
-  Iterator (Enumerate I) (Std.Usize × Clause0_Item) := Iterator.mk
+def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
+  {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator
+  (Enumerate I) (Std.Usize × Clause0_Item) := Iterator.mk
   (next := Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
     IteratorInst)
   (collect := fun {B : Type} (FromIteratorPPairUsizePInst : FromIterator B
@@ -1146,6 +1155,7 @@ impl_def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I :
     Clause0_Item) Clause0_Item1 Clause0_IntoIter) => Iterator.flatten.default
     IntoIteratorPairUsizeClause0_IntoIterPPInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 306:4-311:5
@@ -1162,12 +1172,13 @@ def Peekable.Insts.Nonpos_iteratorIterator.next
     ok (v, { iter := t, peeked := o1 })
   | some v => ok (v, { self with peeked := o1 })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 304:0-312:1 -/
 @[reducible]
-impl_def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
-  Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator (Peekable I
-  Clause0_Item) Clause0_Item := Iterator.mk
+def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
+  (IteratorInst : Iterator I Clause0_Item) : Iterator (Peekable I Clause0_Item)
+  Clause0_Item := Iterator.mk
   (next := Peekable.Insts.Nonpos_iteratorIterator.next IteratorInst)
   (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
     => Iterator.collect.default (Peekable.Insts.Nonpos_iteratorIterator
@@ -1220,6 +1231,7 @@ impl_def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 319:4-324:5
@@ -1238,11 +1250,12 @@ def Map.Insts.Nonpos_iteratorIterator.next
       coreopsfunctionFnMutFTupleClause0_ItemBInst.call_mut self.f x
     ok (some t1, { iter := t, f := t2 })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 317:0-325:1 -/
 @[reducible]
-impl_def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
-  Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
+def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
+  {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (coreopsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) : Iterator (Map I F) B := Iterator.mk
   (next := Map.Insts.Nonpos_iteratorIterator.next IteratorInst
@@ -1302,6 +1315,7 @@ impl_def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
     (IntoIteratorInst : IntoIterator B Clause0_Item1 Clause0_IntoIter) =>
     Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 333:8-339:5
@@ -1353,10 +1367,11 @@ def Filter.Insts.Nonpos_iteratorIterator.next
       coreopsfunctionFnMutPTupleShared0Clause0_ItemBoolInst self
   ok (o, { iter := t, predicate := t1 })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 330:0-340:1 -/
 @[reducible]
-impl_def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
+def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst :
   core.ops.function.FnMut P Clause0_Item Bool) : Iterator (Filter I P)
@@ -1419,6 +1434,7 @@ impl_def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 347:4-357:5
@@ -1438,10 +1454,11 @@ def Zip.Insts.Nonpos_iteratorIteratorPair.next
     | none => ok (none, { a := t, b := t1 })
     | some y => ok (some (x, y), { a := t, b := t1 })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 345:0-358:1 -/
 @[reducible]
-impl_def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
+def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
   {Clause0_Item : Type _} {Clause1_Item : Type _} (IteratorInst : Iterator A
   Clause0_Item) (IteratorInst1 : Iterator B Clause1_Item) : Iterator (Zip A B)
   (Clause0_Item × Clause1_Item) := Iterator.mk
@@ -1502,6 +1519,7 @@ impl_def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
     Clause0_Item1 Clause0_IntoIter) => Iterator.flatten.default
     IntoIteratorPairPPInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 365:4-376:5
@@ -1529,13 +1547,13 @@ def Chain.Insts.Nonpos_iteratorIterator.next
         ok (o1, { a := none, b := (some b1) })
     | some _ => ok (o, { self with a := (some a1) })
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}]
     Source: 'tests/src/nonpos-iterator.rs', lines 363:0-377:1 -/
 @[reducible]
-impl_def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _}
-  {Clause0_Item : Type _} (IteratorInst : Iterator A Clause0_Item)
-  (IteratorInst1 : Iterator B Clause0_Item) : Iterator (Chain A B) Clause0_Item
-  := Iterator.mk
+def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
+  : Type _} (IteratorInst : Iterator A Clause0_Item) (IteratorInst1 : Iterator
+  B Clause0_Item) : Iterator (Chain A B) Clause0_Item := Iterator.mk
   (next := Chain.Insts.Nonpos_iteratorIterator.next IteratorInst IteratorInst1)
   (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 Clause0_Item)
     => Iterator.collect.default (Chain.Insts.Nonpos_iteratorIterator
@@ -1588,5 +1606,6 @@ impl_def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
     Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
   (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 end nonpos_iterator
