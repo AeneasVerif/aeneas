@@ -3118,6 +3118,17 @@ let trait_decl_is_nonpos (ctx : extraction_ctx) (id : trait_decl_id) : bool =
                 List.exists is_self meth.signature.generics.trait_clauses)
               decl.methods)
 
+(** The fuel of the [nonpos_cont] tactic, which proves the conditions of the
+    [nonpos_structure]s. Its default (300 steps) is too small for the impls of
+    traits with many methods, such as [Iterator]. *)
+let nonpos_cont_fuel = 5000
+
+(** The value of [synthInstance.maxSize] for the files containing
+    [nonpos_structure]s: the instances which describe the shape of a structure
+    grow with its number of fields, and Lean's default limit (128) is already
+    too small for a trait with four methods. 4096 is enough for [Iterator]. *)
+let nonpos_synth_instance_max_size = 4096
+
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =
@@ -3738,7 +3749,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
        is indented like the other arguments. *)
     if is_nonpos then (
       F.pp_print_space fmt ();
-      F.pp_print_string fmt "(by nonpos_cont)");
+      F.pp_print_string fmt
+        ("(by nonpos_cont " ^ string_of_int nonpos_cont_fuel ^ ")"));
     (* Close the outer boxes for the definition, as well as the brackets *)
     F.pp_close_box fmt ();
     if backend () = Coq then (

@@ -1375,6 +1375,15 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
          /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI \
          option -/\n";
       Printf.fprintf out "set_option maxRecDepth %d\n" !Config.max_recdepth;
+      (* Larger instance search, for the traits extracted as [nonpos_structure]s
+         (see {!Extract.nonpos_synth_instance_max_size}) *)
+      if
+        TraitDeclId.Map.exists
+          (fun id _ -> Extract.trait_decl_is_nonpos ctx id)
+          ctx.trans_trait_decls
+      then
+        Printf.fprintf out "\nset_option synthInstance.maxSize %d\n"
+          Extract.nonpos_synth_instance_max_size;
       (* Declare the definitions as being noncomputable if needs be *)
       if fi.noncomputable then
         Printf.fprintf out

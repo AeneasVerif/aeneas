@@ -18,6 +18,8 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+set_option synthInstance.maxSize 4096
+
 namespace nonpos_traits
 
 /-- Trait declaration: [nonpos_traits::Bla]
@@ -51,7 +53,7 @@ def U32.Insts.Nonpos_traitsBla : Bla Std.U32 := Bla.mk
   (to_num := U32.Insts.Nonpos_traitsBla.to_num)
   (add := fun {Other : Type} (BlaInst : Bla Other) =>
     U32.Insts.Nonpos_traitsBla.add BlaInst)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::use_bla]:
     Source: 'tests/src/nonpos-traits.rs', lines 19:0-21:1
@@ -106,7 +108,7 @@ impl_def U32.Insts.Nonpos_traitsSized2 : Sized2 Std.U32 := Sized2.mk
   (bigger := fun {Other : Type} (Sized2Inst : Sized2 Other) =>
     Sized2.bigger.default U32.Insts.Nonpos_traitsSized2 Sized2Inst)
   (double := Sized2.double.default U32.Insts.Nonpos_traitsSized2)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::use_sized2]:
     Source: 'tests/src/nonpos-traits.rs', lines 46:0-48:1
@@ -162,7 +164,7 @@ def U32.Insts.Nonpos_traitsLeft : Left Std.U32 := Left.mk
   (val := U32.Insts.Nonpos_traitsLeft.val)
   (via_right := fun {R : Type} (RightInst : Right R) =>
     U32.Insts.Nonpos_traitsLeft.via_right RightInst)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::{impl nonpos_traits::Right for u32}::via_left]:
     Source: 'tests/src/nonpos-traits.rs', lines 78:4-80:5
@@ -179,7 +181,7 @@ def U32.Insts.Nonpos_traitsRight.via_left
 def U32.Insts.Nonpos_traitsRight : Right Std.U32 := Right.mk
   (via_left := fun {L : Type} (LeftInst : Left L) =>
     U32.Insts.Nonpos_traitsRight.via_left LeftInst)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::use_left_right]:
     Source: 'tests/src/nonpos-traits.rs', lines 83:0-85:1
@@ -335,7 +337,7 @@ impl_def Count.Insts.Nonpos_traitsMyIteratorU32 : MyIterator Count Std.U32
   (collect := fun {B : Type} (MyFromIteratorPU32Inst : MyFromIterator B
     Std.U32) => MyIterator.collect.default
     Count.Insts.Nonpos_traitsMyIteratorU32 MyFromIteratorPU32Inst)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::{impl nonpos_traits::MyDoubleEnded<u32> for nonpos_traits::Count}::next_back]:
     Source: 'tests/src/nonpos-traits.rs', lines 150:4-152:5
@@ -351,7 +353,7 @@ def Count.Insts.Nonpos_traitsMyDoubleEndedU32 : MyDoubleEnded Count Std.U32
   := MyDoubleEnded.mk
   (MyIteratorInst := Count.Insts.Nonpos_traitsMyIteratorU32)
   (next_back := Count.Insts.Nonpos_traitsMyDoubleEndedU32.next_back)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::{impl nonpos_traits::MyIntoIterator<u32, nonpos_traits::Count> for nonpos_traits::Count}::into_iter]:
     Source: 'tests/src/nonpos-traits.rs', lines 158:4-160:5
@@ -367,7 +369,7 @@ def Count.Insts.Nonpos_traitsMyIntoIteratorU32Count : MyIntoIterator Count
   Std.U32 Count := MyIntoIterator.mk
   (MyIteratorInst := Count.Insts.Nonpos_traitsMyIteratorU32)
   (into_iter := Count.Insts.Nonpos_traitsMyIntoIteratorU32Count.into_iter)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}::from_iter]: loop body 0:
     Source: 'tests/src/nonpos-traits.rs', lines 166:8-168:9
@@ -417,7 +419,7 @@ def U32.Insts.Nonpos_traitsMyFromIteratorU32 : MyFromIterator Std.U32 Std.U32
   := MyFromIterator.mk
   (from_iter := fun {T : Type} (MyIteratorPU32Inst : MyIterator T Std.U32) =>
     U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter MyIteratorPU32Inst)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::Peek]
     Source: 'tests/src/nonpos-traits.rs', lines 173:0-176:1
@@ -454,7 +456,7 @@ impl_def Peek.Insts.Nonpos_traitsMyIterator {I : Type _} {Clause0_Item :
   (collect := fun {B : Type} (MyFromIteratorInst : MyFromIterator B
     Clause0_Item) => MyIterator.collect.default
     (Peek.Insts.Nonpos_traitsMyIterator MyIteratorInst) MyFromIteratorInst)
-  (by nonpos_cont)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_traits::sum_count]:
     Source: 'tests/src/nonpos-traits.rs', lines 185:0-187:1

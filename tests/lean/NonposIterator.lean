@@ -18,6 +18,8 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+set_option synthInstance.maxSize 4096
+
 namespace nonpos_iterator
 
 /-- [nonpos_iterator::Flatten]
@@ -88,39 +90,41 @@ structure StepBy (I : Type _) where
 structure Rev (T : Type _) where
   iter : T
 
+mutual
+
 /-- Trait declaration: [nonpos_iterator::IntoIterator]
     Source: 'tests/src/nonpos-iterator.rs', lines 12:0-16:1
     Visibility: public -/
-structure IntoIterator (Self : Type _) (Self_Item : Type _) (Self_IntoIter :
-  Type _) where
+nonpos_structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter :
+  Type) : Type 1 where
   IteratorInst : Iterator Self_IntoIter Self_Item
   into_iter : Self → Result Self_IntoIter
 
 /-- Trait declaration: [nonpos_iterator::FromIterator]
     Source: 'tests/src/nonpos-iterator.rs', lines 17:0-19:1
     Visibility: public -/
-structure FromIterator (Self : Type _) (A : Type _) where
+nonpos_structure FromIterator (Self : Type) (A : Type) : Type 1 where
   from_iter : forall {T : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator T A Clause0_IntoIter), T → Result Self
 
 /-- Trait declaration: [nonpos_iterator::DoubleEndedIterator]
     Source: 'tests/src/nonpos-iterator.rs', lines 20:0-22:1
     Visibility: public -/
-structure DoubleEndedIterator (Self : Type _) (Self_Clause0_Item : Type _)
-  where
+nonpos_structure DoubleEndedIterator (Self : Type) (Self_Clause0_Item : Type)
+  : Type 1 where
   IteratorInst : Iterator Self Self_Clause0_Item
   next_back : Self → Result ((Option Self_Clause0_Item) × Self)
 
 /-- Trait declaration: [nonpos_iterator::Sum]
     Source: 'tests/src/nonpos-iterator.rs', lines 23:0-25:1
     Visibility: public -/
-structure Sum (Self : Type _) (A : Type _) where
+nonpos_structure Sum (Self : Type) (A : Type) : Type 1 where
   sum : forall {I : Type} (IteratorInst : Iterator I A), I → Result Self
 
 /-- Trait declaration: [nonpos_iterator::Iterator]
     Source: 'tests/src/nonpos-iterator.rs', lines 29:0-200:1
     Visibility: public -/
-structure Iterator (Self : Type _) (Self_Item : Type _) where
+nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
   next : Self → Result ((Option Self_Item) × Self)
   collect : forall {B : Type} (FromIteratorInst : FromIterator B Self_Item),
     Self → Result B
@@ -160,6 +164,8 @@ structure Iterator (Self : Type _) (Self_Item : Type _) where
     (IntoIteratorInst : IntoIterator Self_Item Clause0_Item Clause0_IntoIter),
     Self → Result (Flatten Self)
 
+end
+
 /-- Trait declaration: [nonpos_iterator::Extend]
     Source: 'tests/src/nonpos-iterator.rs', lines 26:0-28:1
     Visibility: public -/
@@ -181,10 +187,10 @@ def IntoIterator.Blanket.into_iter
     Source: 'tests/src/nonpos-iterator.rs', lines 201:0-207:1 -/
 @[reducible]
 def IntoIterator.Blanket {I : Type _} {Clause0_Item : Type _} (IteratorInst1 :
-  Iterator I Clause0_Item) : IntoIterator I Clause0_Item I := {
-  IteratorInst := IteratorInst1
-  into_iter := IntoIterator.Blanket.into_iter IteratorInst1
-}
+  Iterator I Clause0_Item) : IntoIterator I Clause0_Item I := IntoIterator.mk
+  (IteratorInst := IteratorInst1)
+  (into_iter := IntoIterator.Blanket.into_iter IteratorInst1)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Iterator::collect]:
     Source: 'tests/src/nonpos-iterator.rs', lines 33:4-38:5
@@ -662,53 +668,56 @@ def Count.Insts.Nonpos_iteratorIteratorU32.next
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<u32> for nonpos_iterator::Count}]
     Source: 'tests/src/nonpos-iterator.rs', lines 211:0-221:1 -/
 @[reducible]
-impl_def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32 := {
-  next := Count.Insts.Nonpos_iteratorIteratorU32.next
-  collect := fun {B : Type} (FromIteratorPU32Inst : FromIterator B Std.U32) =>
+impl_def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
+  := Iterator.mk
+  (next := Count.Insts.Nonpos_iteratorIteratorU32.next)
+  (collect := fun {B : Type} (FromIteratorPU32Inst : FromIterator B Std.U32) =>
     Iterator.collect.default Count.Insts.Nonpos_iteratorIteratorU32
-    FromIteratorPU32Inst
-  size_hint := Iterator.size_hint.default Std.U32
-  count := Iterator.count.default Count.Insts.Nonpos_iteratorIteratorU32
-  last := Iterator.last.default Count.Insts.Nonpos_iteratorIteratorU32
-  nth := Iterator.nth.default Count.Insts.Nonpos_iteratorIteratorU32
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPU32PInst :
+    FromIteratorPU32Inst)
+  (size_hint := Iterator.size_hint.default Std.U32)
+  (count := Iterator.count.default Count.Insts.Nonpos_iteratorIteratorU32)
+  (last := Iterator.last.default Count.Insts.Nonpos_iteratorIteratorU32)
+  (nth := Iterator.nth.default Count.Insts.Nonpos_iteratorIteratorU32)
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPU32PInst :
     core.ops.function.FnMut F (B × Std.U32) B) => Iterator.fold.default
-    Count.Insts.Nonpos_iteratorIteratorU32 coreopsfunctionFnMutPPairPU32PInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTupleU32TupleInst :
+    Count.Insts.Nonpos_iteratorIteratorU32 coreopsfunctionFnMutPPairPU32PInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTupleU32TupleInst :
     core.ops.function.FnMut F Std.U32 Unit) => Iterator.for_each.default
     Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32TupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTupleU32BoolInst :
+    coreopsfunctionFnMutPTupleU32TupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTupleU32BoolInst :
     core.ops.function.FnMut F Std.U32 Bool) => Iterator.all.default
     Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32BoolInst
-  sum := fun {S : Type} (SumPU32Inst : Sum S Std.U32) => Iterator.sum.default
-    Count.Insts.Nonpos_iteratorIteratorU32 SumPU32Inst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorCountPInst :
+    coreopsfunctionFnMutPTupleU32BoolInst)
+  (sum := fun {S : Type} (SumPU32Inst : Sum S Std.U32) => Iterator.sum.default
+    Count.Insts.Nonpos_iteratorIteratorU32 SumPU32Inst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorCountPInst :
     DoubleEndedIterator Count Clause0_Clause0_Item) => Iterator.rev.default
-    Std.U32 DoubleEndedIteratorCountPInst
-  step_by := Iterator.step_by.default Std.U32
-  take := Iterator.take.default Std.U32
-  enumerate := Iterator.enumerate.default Std.U32
-  peekable := Iterator.peekable.default Count.Insts.Nonpos_iteratorIteratorU32
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleU32PInst :
+    Std.U32 DoubleEndedIteratorCountPInst)
+  (step_by := Iterator.step_by.default Std.U32)
+  (take := Iterator.take.default Std.U32)
+  (enumerate := Iterator.enumerate.default Std.U32)
+  (peekable := Iterator.peekable.default
+    Count.Insts.Nonpos_iteratorIteratorU32)
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleU32PInst :
     core.ops.function.FnMut F Std.U32 B) => Iterator.map.default
-    coreopsfunctionFnMutPTupleU32PInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedU32BoolInst :
+    coreopsfunctionFnMutPTupleU32PInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedU32BoolInst :
     core.ops.function.FnMut P Std.U32 Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedU32BoolInst
-  zip := fun {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedU32BoolInst)
+  (zip := fun {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item Clause0_IntoIter) =>
-    Iterator.zip.default Std.U32 IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst :
+    Iterator.zip.default Std.U32 IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst :
     IntoIterator U Std.U32 Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorPU32PInst
-  max := fun (corecmpOrdU32Inst : core.cmp.Ord Std.U32) => Iterator.max.default
-    Count.Insts.Nonpos_iteratorIteratorU32 corecmpOrdU32Inst
-  flatten := fun {Clause0_Item : Type} {Clause0_IntoIter : Type}
+    IntoIteratorPU32PInst)
+  (max := fun (corecmpOrdU32Inst : core.cmp.Ord Std.U32) =>
+    Iterator.max.default Count.Insts.Nonpos_iteratorIteratorU32
+    corecmpOrdU32Inst)
+  (flatten := fun {Clause0_Item : Type} {Clause0_IntoIter : Type}
     (IntoIteratorU32PPInst : IntoIterator Std.U32 Clause0_Item
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorU32PPInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorU32PPInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::DoubleEndedIterator<u32> for nonpos_iterator::Count}::next_back]:
     Source: 'tests/src/nonpos-iterator.rs', lines 223:4-225:5
@@ -721,10 +730,10 @@ def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back
     Source: 'tests/src/nonpos-iterator.rs', lines 222:0-226:1 -/
 @[reducible]
 def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32 : DoubleEndedIterator
-  Count Std.U32 := {
-  IteratorInst := Count.Insts.Nonpos_iteratorIteratorU32
-  next_back := Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back
-}
+  Count Std.U32 := DoubleEndedIterator.mk
+  (IteratorInst := Count.Insts.Nonpos_iteratorIteratorU32)
+  (next_back := Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 231:8-233:9
@@ -775,11 +784,11 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
     Source: 'tests/src/nonpos-iterator.rs', lines 227:0-236:1 -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorFromIteratorU32 : FromIterator Std.U32 Std.U32
-  := {
-  from_iter := fun {T : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst
+  := FromIterator.mk
+  (from_iter := fun {T : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst
     : IntoIterator T Std.U32 Clause0_IntoIter) =>
-    U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter IntoIteratorPU32PInst
-}
+    U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter IntoIteratorPU32PInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::use_collect]:
     Source: 'tests/src/nonpos-iterator.rs', lines 237:0-239:1
@@ -828,10 +837,10 @@ def U32.Insts.Nonpos_iteratorSumU32.sum
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}]
     Source: 'tests/src/nonpos-iterator.rs', lines 240:0-249:1 -/
 @[reducible]
-def U32.Insts.Nonpos_iteratorSumU32 : Sum Std.U32 Std.U32 := {
-  sum := fun {I : Type} (IteratorPU32Inst : Iterator I Std.U32) =>
-    U32.Insts.Nonpos_iteratorSumU32.sum IteratorPU32Inst
-}
+def U32.Insts.Nonpos_iteratorSumU32 : Sum Std.U32 Std.U32 := Sum.mk
+  (sum := fun {I : Type} (IteratorPU32Inst : Iterator I Std.U32) =>
+    U32.Insts.Nonpos_iteratorSumU32.sum IteratorPU32Inst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 255:4-257:5
@@ -849,61 +858,61 @@ def Rev.Insts.Nonpos_iteratorIterator.next
 @[reducible]
 impl_def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
   Type _} (DoubleEndedIteratorInst : DoubleEndedIterator I
-  Clause0_Clause0_Item) : Iterator (Rev I) Clause0_Clause0_Item := {
-  next := Rev.Insts.Nonpos_iteratorIterator.next DoubleEndedIteratorInst
-  collect := fun {B : Type} (FromIteratorInst : FromIterator B
+  Clause0_Clause0_Item) : Iterator (Rev I) Clause0_Clause0_Item := Iterator.mk
+  (next := Rev.Insts.Nonpos_iteratorIterator.next DoubleEndedIteratorInst)
+  (collect := fun {B : Type} (FromIteratorInst : FromIterator B
     Clause0_Clause0_Item) => Iterator.collect.default
     (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
-    FromIteratorInst
-  size_hint := Iterator.size_hint.default Clause0_Clause0_Item
-  count := Iterator.count.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst)
-  last := Iterator.last.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst)
-  nth := Iterator.nth.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst)
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
+    FromIteratorInst)
+  (size_hint := Iterator.size_hint.default Clause0_Clause0_Item)
+  (count := Iterator.count.default (Rev.Insts.Nonpos_iteratorIterator
+    DoubleEndedIteratorInst))
+  (last := Iterator.last.default (Rev.Insts.Nonpos_iteratorIterator
+    DoubleEndedIteratorInst))
+  (nth := Iterator.nth.default (Rev.Insts.Nonpos_iteratorIterator
+    DoubleEndedIteratorInst))
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Clause0_Item) B) =>
     Iterator.fold.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
+    DoubleEndedIteratorInst) coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
     core.ops.function.FnMut F Clause0_Clause0_Item Unit) =>
     Iterator.for_each.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
+    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
     core.ops.function.FnMut F Clause0_Clause0_Item Bool) =>
     Iterator.all.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePBoolInst
-  sum := fun {S : Type} (SumInst : Sum S Clause0_Clause0_Item) =>
+    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S Clause0_Clause0_Item) =>
     Iterator.sum.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) SumInst
-  rev := fun {Clause0_Clause0_Item1 : Type} (DoubleEndedIteratorRevPInst :
+    DoubleEndedIteratorInst) SumInst)
+  (rev := fun {Clause0_Clause0_Item1 : Type} (DoubleEndedIteratorRevPInst :
     DoubleEndedIterator (Rev I) Clause0_Clause0_Item1) => Iterator.rev.default
-    Clause0_Clause0_Item DoubleEndedIteratorRevPInst
-  step_by := Iterator.step_by.default Clause0_Clause0_Item
-  take := Iterator.take.default Clause0_Clause0_Item
-  enumerate := Iterator.enumerate.default Clause0_Clause0_Item
-  peekable := Iterator.peekable.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst)
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
+    Clause0_Clause0_Item DoubleEndedIteratorRevPInst)
+  (step_by := Iterator.step_by.default Clause0_Clause0_Item)
+  (take := Iterator.take.default Clause0_Clause0_Item)
+  (enumerate := Iterator.enumerate.default Clause0_Clause0_Item)
+  (peekable := Iterator.peekable.default (Rev.Insts.Nonpos_iteratorIterator
+    DoubleEndedIteratorInst))
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Clause0_Item B) => Iterator.map.default
-    coreopsfunctionFnMutPTupleFPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTupleFPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Clause0_Item Bool) =>
-    Iterator.filter.default coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
+    Iterator.filter.default coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item Clause0_IntoIter) =>
-    Iterator.zip.default Clause0_Clause0_Item IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default Clause0_Clause0_Item IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Clause0_Item Clause0_IntoIter) =>
-    Iterator.chain.default IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Clause0_Item) =>
+    Iterator.chain.default IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Clause0_Item) =>
     Iterator.max.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) corecmpOrdInst
-  flatten := fun {Clause0_Item : Type} {Clause0_IntoIter : Type}
+    DoubleEndedIteratorInst) corecmpOrdInst)
+  (flatten := fun {Clause0_Item : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator Clause0_Clause0_Item Clause0_Item
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 265:4-267:5
@@ -921,59 +930,59 @@ def StepBy.Insts.Nonpos_iteratorIterator.next
 @[reducible]
 impl_def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator (StepBy I)
-  Clause0_Item := {
-  next := StepBy.Insts.Nonpos_iteratorIterator.next IteratorInst
-  collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item) =>
-    Iterator.collect.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst
-  size_hint := Iterator.size_hint.default Clause0_Item
-  count := Iterator.count.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  last := Iterator.last.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  nth := Iterator.nth.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
+  Clause0_Item := Iterator.mk
+  (next := StepBy.Insts.Nonpos_iteratorIterator.next IteratorInst)
+  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
+    => Iterator.collect.default (StepBy.Insts.Nonpos_iteratorIterator
+    IteratorInst) FromIteratorInst)
+  (size_hint := Iterator.size_hint.default Clause0_Item)
+  (count := Iterator.count.default (StepBy.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (last := Iterator.last.default (StepBy.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (nth := Iterator.nth.default (StepBy.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
+    coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
     (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
+    coreopsfunctionFnMutPTuplePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
     core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
     (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst
-  sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) SumInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorStepByPInst :
+    coreopsfunctionFnMutPTuplePBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
+    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) SumInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorStepByPInst :
     DoubleEndedIterator (StepBy I) Clause0_Clause0_Item) =>
-    Iterator.rev.default Clause0_Item DoubleEndedIteratorStepByPInst
-  step_by := Iterator.step_by.default Clause0_Item
-  take := Iterator.take.default Clause0_Item
-  enumerate := Iterator.enumerate.default Clause0_Item
-  peekable := Iterator.peekable.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
+    Iterator.rev.default Clause0_Item DoubleEndedIteratorStepByPInst)
+  (step_by := Iterator.step_by.default Clause0_Item)
+  (take := Iterator.take.default Clause0_Item)
+  (enumerate := Iterator.enumerate.default Clause0_Item)
+  (peekable := Iterator.peekable.default (StepBy.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
-    coreopsfunctionFnMutPTupleFPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTupleFPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default Clause0_Item IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default Clause0_Item IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Item Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
+    IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
     Iterator.max.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    corecmpOrdInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 275:4-282:5
@@ -995,58 +1004,59 @@ def Take.Insts.Nonpos_iteratorIterator.next
 @[reducible]
 impl_def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator (Take I)
-  Clause0_Item := {
-  next := Take.Insts.Nonpos_iteratorIterator.next IteratorInst
-  collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item) =>
-    Iterator.collect.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    FromIteratorInst
-  size_hint := Iterator.size_hint.default Clause0_Item
-  count := Iterator.count.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  last := Iterator.last.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  nth := Iterator.nth.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
+  Clause0_Item := Iterator.mk
+  (next := Take.Insts.Nonpos_iteratorIterator.next IteratorInst)
+  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
+    => Iterator.collect.default (Take.Insts.Nonpos_iteratorIterator
+    IteratorInst) FromIteratorInst)
+  (size_hint := Iterator.size_hint.default Clause0_Item)
+  (count := Iterator.count.default (Take.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (last := Iterator.last.default (Take.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (nth := Iterator.nth.default (Take.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
+    coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
     (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
+    coreopsfunctionFnMutPTuplePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
     core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
     (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst
-  sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst) SumInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorTakePInst :
+    coreopsfunctionFnMutPTuplePBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
+    (Take.Insts.Nonpos_iteratorIterator IteratorInst) SumInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorTakePInst :
     DoubleEndedIterator (Take I) Clause0_Clause0_Item) => Iterator.rev.default
-    Clause0_Item DoubleEndedIteratorTakePInst
-  step_by := Iterator.step_by.default Clause0_Item
-  take := Iterator.take.default Clause0_Item
-  enumerate := Iterator.enumerate.default Clause0_Item
-  peekable := Iterator.peekable.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
+    Clause0_Item DoubleEndedIteratorTakePInst)
+  (step_by := Iterator.step_by.default Clause0_Item)
+  (take := Iterator.take.default Clause0_Item)
+  (enumerate := Iterator.enumerate.default Clause0_Item)
+  (peekable := Iterator.peekable.default (Take.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
-    coreopsfunctionFnMutPTupleFPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTupleFPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default Clause0_Item IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default Clause0_Item IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Item Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
+    IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
     Iterator.max.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    corecmpOrdInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 290:4-298:5
@@ -1068,70 +1078,74 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
 @[reducible]
 impl_def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I :
   Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item) :
-  Iterator (Enumerate I) (Std.Usize × Clause0_Item) := {
-  next := Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
-    IteratorInst
-  collect := fun {B : Type} (FromIteratorPPairUsizePInst : FromIterator B
+  Iterator (Enumerate I) (Std.Usize × Clause0_Item) := Iterator.mk
+  (next := Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
+    IteratorInst)
+  (collect := fun {B : Type} (FromIteratorPPairUsizePInst : FromIterator B
     (Std.Usize × Clause0_Item)) => Iterator.collect.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    FromIteratorPPairUsizePInst
-  size_hint := Iterator.size_hint.default (Std.Usize × Clause0_Item)
-  count := Iterator.count.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-  last := Iterator.last.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-  nth := Iterator.nth.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPPairUsizeFPInst
+    FromIteratorPPairUsizePInst)
+  (size_hint := Iterator.size_hint.default (Std.Usize × Clause0_Item))
+  (count := Iterator.count.default
+    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
+    IteratorInst))
+  (last := Iterator.last.default
+    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
+    IteratorInst))
+  (nth := Iterator.nth.default
+    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
+    IteratorInst))
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPPairUsizeFPInst
     : core.ops.function.FnMut F (B × (Std.Usize × Clause0_Item)) B) =>
     Iterator.fold.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPPairPPairUsizeFPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePTupleInst :
+    coreopsfunctionFnMutPPairPPairUsizeFPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePTupleInst :
     core.ops.function.FnMut F (Std.Usize × Clause0_Item) Unit) =>
     Iterator.for_each.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePBoolInst :
+    coreopsfunctionFnMutPTuplePairUsizePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePBoolInst :
     core.ops.function.FnMut F (Std.Usize × Clause0_Item) Bool) =>
     Iterator.all.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePBoolInst
-  sum := fun {S : Type} (SumPPairUsizePInst : Sum S (Std.Usize ×
+    coreopsfunctionFnMutPTuplePairUsizePBoolInst)
+  (sum := fun {S : Type} (SumPPairUsizePInst : Sum S (Std.Usize ×
     Clause0_Item)) => Iterator.sum.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    SumPPairUsizePInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorEnumeratePInst :
-    DoubleEndedIterator (Enumerate I) Clause0_Clause0_Item) =>
+    SumPPairUsizePInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorEnumeratePInst
+    : DoubleEndedIterator (Enumerate I) Clause0_Clause0_Item) =>
     Iterator.rev.default (Std.Usize × Clause0_Item)
-    DoubleEndedIteratorEnumeratePInst
-  step_by := Iterator.step_by.default (Std.Usize × Clause0_Item)
-  take := Iterator.take.default (Std.Usize × Clause0_Item)
-  enumerate := Iterator.enumerate.default (Std.Usize × Clause0_Item)
-  peekable := Iterator.peekable.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePairUsizeFPInst :
-    core.ops.function.FnMut F (Std.Usize × Clause0_Item) B) =>
-    Iterator.map.default coreopsfunctionFnMutPTuplePairUsizeFPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPairUsizePBoolInst
+    DoubleEndedIteratorEnumeratePInst)
+  (step_by := Iterator.step_by.default (Std.Usize × Clause0_Item))
+  (take := Iterator.take.default (Std.Usize × Clause0_Item))
+  (enumerate := Iterator.enumerate.default (Std.Usize × Clause0_Item))
+  (peekable := Iterator.peekable.default
+    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
+    IteratorInst))
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePairUsizeFPInst
+    : core.ops.function.FnMut F (Std.Usize × Clause0_Item) B) =>
+    Iterator.map.default coreopsfunctionFnMutPTuplePairUsizeFPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPairUsizePBoolInst
     : core.ops.function.FnMut P (Std.Usize × Clause0_Item) Bool) =>
-    Iterator.filter.default coreopsfunctionFnMutPTupleSharedPairUsizePBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    Iterator.filter.default coreopsfunctionFnMutPTupleSharedPairUsizePBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default (Std.Usize × Clause0_Item) IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type}
+    Iterator.zip.default (Std.Usize × Clause0_Item) IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type}
     (IntoIteratorPPairUsizeClause0_IntoIterPInst : IntoIterator U (Std.Usize ×
     Clause0_Item) Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorPPairUsizeClause0_IntoIterPInst
-  max := fun (corecmpOrdPairUsizePInst : core.cmp.Ord (Std.Usize ×
+    IntoIteratorPPairUsizeClause0_IntoIterPInst)
+  (max := fun (corecmpOrdPairUsizePInst : core.cmp.Ord (Std.Usize ×
     Clause0_Item)) => Iterator.max.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    corecmpOrdPairUsizePInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    corecmpOrdPairUsizePInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorPairUsizeClause0_IntoIterPPInst : IntoIterator (Std.Usize ×
     Clause0_Item) Clause0_Item1 Clause0_IntoIter) => Iterator.flatten.default
-    IntoIteratorPairUsizeClause0_IntoIterPPInst
-}
+    IntoIteratorPairUsizeClause0_IntoIterPPInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 306:4-311:5
@@ -1153,59 +1167,59 @@ def Peekable.Insts.Nonpos_iteratorIterator.next
 @[reducible]
 impl_def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator (Peekable I
-  Clause0_Item) Clause0_Item := {
-  next := Peekable.Insts.Nonpos_iteratorIterator.next IteratorInst
-  collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item) =>
-    Iterator.collect.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst
-  size_hint := Iterator.size_hint.default Clause0_Item
-  count := Iterator.count.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  last := Iterator.last.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  nth := Iterator.nth.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
+  Clause0_Item) Clause0_Item := Iterator.mk
+  (next := Peekable.Insts.Nonpos_iteratorIterator.next IteratorInst)
+  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
+    => Iterator.collect.default (Peekable.Insts.Nonpos_iteratorIterator
+    IteratorInst) FromIteratorInst)
+  (size_hint := Iterator.size_hint.default Clause0_Item)
+  (count := Iterator.count.default (Peekable.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (last := Iterator.last.default (Peekable.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (nth := Iterator.nth.default (Peekable.Insts.Nonpos_iteratorIterator
+    IteratorInst))
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
+    coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
     (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
+    coreopsfunctionFnMutPTuplePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
     core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
     (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst
-  sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst) SumInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorPeekablePInst :
+    coreopsfunctionFnMutPTuplePBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
+    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst) SumInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorPeekablePInst :
     DoubleEndedIterator (Peekable I Clause0_Item) Clause0_Clause0_Item) =>
-    Iterator.rev.default Clause0_Item DoubleEndedIteratorPeekablePInst
-  step_by := Iterator.step_by.default Clause0_Item
-  take := Iterator.take.default Clause0_Item
-  enumerate := Iterator.enumerate.default Clause0_Item
-  peekable := Iterator.peekable.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst)
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
+    Iterator.rev.default Clause0_Item DoubleEndedIteratorPeekablePInst)
+  (step_by := Iterator.step_by.default Clause0_Item)
+  (take := Iterator.take.default Clause0_Item)
+  (enumerate := Iterator.enumerate.default Clause0_Item)
+  (peekable := Iterator.peekable.default
+    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst))
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
-    coreopsfunctionFnMutPTupleFPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTupleFPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default Clause0_Item IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default Clause0_Item IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Item Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
+    IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
     Iterator.max.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    corecmpOrdInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 319:4-324:5
@@ -1230,63 +1244,64 @@ def Map.Insts.Nonpos_iteratorIterator.next
 impl_def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
   Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (coreopsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
-  Clause0_Item B) : Iterator (Map I F) B := {
-  next := Map.Insts.Nonpos_iteratorIterator.next IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst
-  collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 B) =>
+  Clause0_Item B) : Iterator (Map I F) B := Iterator.mk
+  (next := Map.Insts.Nonpos_iteratorIterator.next IteratorInst
+    coreopsfunctionFnMutFTupleClause0_ItemBInst)
+  (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 B) =>
     Iterator.collect.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) FromIteratorInst
-  size_hint := Iterator.size_hint.default B
-  count := Iterator.count.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst)
-  last := Iterator.last.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-  nth := Iterator.nth.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-  fold := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPPairPInst :
+    coreopsfunctionFnMutFTupleClause0_ItemBInst) FromIteratorInst)
+  (size_hint := Iterator.size_hint.default B)
+  (count := Iterator.count.default (Map.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst))
+  (last := Iterator.last.default (Map.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst))
+  (nth := Iterator.nth.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
+    coreopsfunctionFnMutFTupleClause0_ItemBInst))
+  (fold := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F1 (B1 × B) B1) => Iterator.fold.default
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) coreopsfunctionFnMutPPairPInst
-  for_each := fun {F1 : Type} (coreopsfunctionFnMutPTupleFTupleInst :
+    coreopsfunctionFnMutFTupleClause0_ItemBInst)
+    coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F1 : Type} (coreopsfunctionFnMutPTupleFTupleInst :
     core.ops.function.FnMut F1 B Unit) => Iterator.for_each.default
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleFTupleInst
-  all := fun {F1 : Type} (coreopsfunctionFnMutPTupleFBoolInst :
+    coreopsfunctionFnMutPTupleFTupleInst)
+  (all := fun {F1 : Type} (coreopsfunctionFnMutPTupleFBoolInst :
     core.ops.function.FnMut F1 B Bool) => Iterator.all.default
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleFBoolInst
-  sum := fun {S : Type} (SumInst : Sum S B) => Iterator.sum.default
+    coreopsfunctionFnMutPTupleFBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S B) => Iterator.sum.default
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) SumInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorMapPInst :
+    coreopsfunctionFnMutFTupleClause0_ItemBInst) SumInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorMapPInst :
     DoubleEndedIterator (Map I F) Clause0_Clause0_Item) => Iterator.rev.default
-    B DoubleEndedIteratorMapPInst
-  step_by := Iterator.step_by.default B
-  take := Iterator.take.default B
-  enumerate := Iterator.enumerate.default B
-  peekable := Iterator.peekable.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst)
-  map := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPTupleBPInst :
+    B DoubleEndedIteratorMapPInst)
+  (step_by := Iterator.step_by.default B)
+  (take := Iterator.take.default B)
+  (enumerate := Iterator.enumerate.default B)
+  (peekable := Iterator.peekable.default (Map.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst))
+  (map := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPTupleBPInst :
     core.ops.function.FnMut F1 B B1) => Iterator.map.default
-    coreopsfunctionFnMutPTupleBPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTupleBPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P B Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default B IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default B IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U B Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.max.default
+    IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.max.default
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpOrdInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpOrdInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator B Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.flatten.default IntoIteratorInst
-}
+    Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 333:8-339:5
@@ -1345,64 +1360,65 @@ impl_def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst :
   core.ops.function.FnMut P Clause0_Item Bool) : Iterator (Filter I P)
-  Clause0_Item := {
-  next := Filter.Insts.Nonpos_iteratorIterator.next IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst
-  collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item) =>
-    Iterator.collect.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) FromIteratorInst
-  size_hint := Iterator.size_hint.default Clause0_Item
-  count := Iterator.count.default (Filter.Insts.Nonpos_iteratorIterator
+  Clause0_Item := Iterator.mk
+  (next := Filter.Insts.Nonpos_iteratorIterator.next IteratorInst
+    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
+  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
+    => Iterator.collect.default (Filter.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-  last := Iterator.last.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-  nth := Iterator.nth.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-  fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
+    FromIteratorInst)
+  (size_hint := Iterator.size_hint.default Clause0_Item)
+  (count := Iterator.count.default (Filter.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
+  (last := Iterator.last.default (Filter.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
+  (nth := Iterator.nth.default (Filter.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
+  (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
+    coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
     (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
+    coreopsfunctionFnMutPTuplePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
     core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
     (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst
-  sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
+    coreopsfunctionFnMutPTuplePBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
     (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) SumInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFilterPInst :
+    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) SumInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFilterPInst :
     DoubleEndedIterator (Filter I P) Clause0_Clause0_Item) =>
-    Iterator.rev.default Clause0_Item DoubleEndedIteratorFilterPInst
-  step_by := Iterator.step_by.default Clause0_Item
-  take := Iterator.take.default Clause0_Item
-  enumerate := Iterator.enumerate.default Clause0_Item
-  peekable := Iterator.peekable.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-  map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
+    Iterator.rev.default Clause0_Item DoubleEndedIteratorFilterPInst)
+  (step_by := Iterator.step_by.default Clause0_Item)
+  (take := Iterator.take.default Clause0_Item)
+  (enumerate := Iterator.enumerate.default Clause0_Item)
+  (peekable := Iterator.peekable.default (Filter.Insts.Nonpos_iteratorIterator
+    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
+  (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
-    coreopsfunctionFnMutPTuplePPInst
-  filter := fun {P1 : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTuplePPInst)
+  (filter := fun {P1 : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default Clause0_Item IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default Clause0_Item IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Item Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
+    IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
     Iterator.max.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 347:4-357:5
@@ -1428,62 +1444,64 @@ def Zip.Insts.Nonpos_iteratorIteratorPair.next
 impl_def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
   {Clause0_Item : Type _} {Clause1_Item : Type _} (IteratorInst : Iterator A
   Clause0_Item) (IteratorInst1 : Iterator B Clause1_Item) : Iterator (Zip A B)
-  (Clause0_Item × Clause1_Item) := {
-  next := Zip.Insts.Nonpos_iteratorIteratorPair.next IteratorInst IteratorInst1
-  collect := fun {B1 : Type} (FromIteratorPPairInst : FromIterator B1
+  (Clause0_Item × Clause1_Item) := Iterator.mk
+  (next := Zip.Insts.Nonpos_iteratorIteratorPair.next IteratorInst
+    IteratorInst1)
+  (collect := fun {B1 : Type} (FromIteratorPPairInst : FromIterator B1
     (Clause0_Item × Clause1_Item)) => Iterator.collect.default
     (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    FromIteratorPPairInst
-  size_hint := Iterator.size_hint.default (Clause0_Item × Clause1_Item)
-  count := Iterator.count.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1)
-  last := Iterator.last.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1)
-  nth := Iterator.nth.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1)
-  fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPPairPInst :
+    FromIteratorPPairInst)
+  (size_hint := Iterator.size_hint.default (Clause0_Item × Clause1_Item))
+  (count := Iterator.count.default (Zip.Insts.Nonpos_iteratorIteratorPair
+    IteratorInst IteratorInst1))
+  (last := Iterator.last.default (Zip.Insts.Nonpos_iteratorIteratorPair
+    IteratorInst IteratorInst1))
+  (nth := Iterator.nth.default (Zip.Insts.Nonpos_iteratorIteratorPair
+    IteratorInst IteratorInst1))
+  (fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPPairPInst :
     core.ops.function.FnMut F (B1 × (Clause0_Item × Clause1_Item)) B1) =>
     Iterator.fold.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPPairPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePairTupleInst :
+    IteratorInst1) coreopsfunctionFnMutPPairPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePairTupleInst :
     core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Unit) =>
     Iterator.for_each.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePairTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePairBoolInst :
+    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePairTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePairBoolInst :
     core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Bool) =>
     Iterator.all.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPTuplePairBoolInst
-  sum := fun {S : Type} (SumPPairInst : Sum S (Clause0_Item × Clause1_Item))
+    IteratorInst1) coreopsfunctionFnMutPTuplePairBoolInst)
+  (sum := fun {S : Type} (SumPPairInst : Sum S (Clause0_Item × Clause1_Item))
     => Iterator.sum.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) SumPPairInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorZipPInst :
+    IteratorInst1) SumPPairInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorZipPInst :
     DoubleEndedIterator (Zip A B) Clause0_Clause0_Item) => Iterator.rev.default
-    (Clause0_Item × Clause1_Item) DoubleEndedIteratorZipPInst
-  step_by := Iterator.step_by.default (Clause0_Item × Clause1_Item)
-  take := Iterator.take.default (Clause0_Item × Clause1_Item)
-  enumerate := Iterator.enumerate.default (Clause0_Item × Clause1_Item)
-  peekable := Iterator.peekable.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1)
-  map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTuplePairPInst :
+    (Clause0_Item × Clause1_Item) DoubleEndedIteratorZipPInst)
+  (step_by := Iterator.step_by.default (Clause0_Item × Clause1_Item))
+  (take := Iterator.take.default (Clause0_Item × Clause1_Item))
+  (enumerate := Iterator.enumerate.default (Clause0_Item × Clause1_Item))
+  (peekable := Iterator.peekable.default (Zip.Insts.Nonpos_iteratorIteratorPair
+    IteratorInst IteratorInst1))
+  (map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTuplePairPInst :
     core.ops.function.FnMut F (Clause0_Item × Clause1_Item) B1) =>
-    Iterator.map.default coreopsfunctionFnMutPTuplePairPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPairBoolInst :
+    Iterator.map.default coreopsfunctionFnMutPTuplePairPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPairBoolInst :
     core.ops.function.FnMut P (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.filter.default coreopsfunctionFnMutPTupleSharedPairBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    Iterator.filter.default coreopsfunctionFnMutPTupleSharedPairBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default (Clause0_Item × Clause1_Item) IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorPPairPInst :
+    Iterator.zip.default (Clause0_Item × Clause1_Item) IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorPPairPInst :
     IntoIterator U (Clause0_Item × Clause1_Item) Clause0_IntoIter) =>
-    Iterator.chain.default IntoIteratorPPairPInst
-  max := fun (corecmpOrdPairInst : core.cmp.Ord (Clause0_Item × Clause1_Item))
-    => Iterator.max.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) corecmpOrdPairInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    Iterator.chain.default IntoIteratorPPairPInst)
+  (max := fun (corecmpOrdPairInst : core.cmp.Ord (Clause0_Item ×
+    Clause1_Item)) => Iterator.max.default
+    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
+    corecmpOrdPairInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorPairPPInst : IntoIterator (Clause0_Item × Clause1_Item)
     Clause0_Item1 Clause0_IntoIter) => Iterator.flatten.default
-    IntoIteratorPairPPInst
-}
+    IntoIteratorPairPPInst)
+  (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 365:4-376:5
@@ -1517,58 +1535,58 @@ def Chain.Insts.Nonpos_iteratorIterator.next
 impl_def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator A Clause0_Item)
   (IteratorInst1 : Iterator B Clause0_Item) : Iterator (Chain A B) Clause0_Item
-  := {
-  next := Chain.Insts.Nonpos_iteratorIterator.next IteratorInst IteratorInst1
-  collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 Clause0_Item)
+  := Iterator.mk
+  (next := Chain.Insts.Nonpos_iteratorIterator.next IteratorInst IteratorInst1)
+  (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 Clause0_Item)
     => Iterator.collect.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1) FromIteratorInst
-  size_hint := Iterator.size_hint.default Clause0_Item
-  count := Iterator.count.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1)
-  last := Iterator.last.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1)
-  nth := Iterator.nth.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1)
-  fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
+    IteratorInst IteratorInst1) FromIteratorInst)
+  (size_hint := Iterator.size_hint.default Clause0_Item)
+  (count := Iterator.count.default (Chain.Insts.Nonpos_iteratorIterator
+    IteratorInst IteratorInst1))
+  (last := Iterator.last.default (Chain.Insts.Nonpos_iteratorIterator
+    IteratorInst IteratorInst1))
+  (nth := Iterator.nth.default (Chain.Insts.Nonpos_iteratorIterator
+    IteratorInst IteratorInst1))
+  (fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B1 × Clause0_Item) B1) => Iterator.fold.default
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPPairPInst
-  for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
+    coreopsfunctionFnMutPPairPInst)
+  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePTupleInst
-  all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
+    coreopsfunctionFnMutPTuplePTupleInst)
+  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
     core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePBoolInst
-  sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1) SumInst
-  rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorChainPInst :
+    coreopsfunctionFnMutPTuplePBoolInst)
+  (sum := fun {S : Type} (SumInst : Sum S Clause0_Item) => Iterator.sum.default
+    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1) SumInst)
+  (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorChainPInst :
     DoubleEndedIterator (Chain A B) Clause0_Clause0_Item) =>
-    Iterator.rev.default Clause0_Item DoubleEndedIteratorChainPInst
-  step_by := Iterator.step_by.default Clause0_Item
-  take := Iterator.take.default Clause0_Item
-  enumerate := Iterator.enumerate.default Clause0_Item
-  peekable := Iterator.peekable.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1)
-  map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
+    Iterator.rev.default Clause0_Item DoubleEndedIteratorChainPInst)
+  (step_by := Iterator.step_by.default Clause0_Item)
+  (take := Iterator.take.default Clause0_Item)
+  (enumerate := Iterator.enumerate.default Clause0_Item)
+  (peekable := Iterator.peekable.default (Chain.Insts.Nonpos_iteratorIterator
+    IteratorInst IteratorInst1))
+  (map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B1) => Iterator.map.default
-    coreopsfunctionFnMutPTuplePPInst
-  filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
+    coreopsfunctionFnMutPTuplePPInst)
+  (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
-    coreopsfunctionFnMutPTupleSharedPBoolInst
-  zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    coreopsfunctionFnMutPTupleSharedPBoolInst)
+  (zip := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator U Clause0_Item1 Clause0_IntoIter) =>
-    Iterator.zip.default Clause0_Item IntoIteratorInst
-  chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    Iterator.zip.default Clause0_Item IntoIteratorInst)
+  (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Item Clause0_IntoIter) => Iterator.chain.default
-    IntoIteratorInst
-  max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
+    IntoIteratorInst)
+  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
     Iterator.max.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) corecmpOrdInst
-  flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    IteratorInst1) corecmpOrdInst)
+  (flatten := fun {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
     (IntoIteratorInst : IntoIterator Clause0_Item Clause0_Item1
-    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst
-}
+    Clause0_IntoIter) => Iterator.flatten.default IntoIteratorInst)
+  (by nonpos_cont 5000)
 
 end nonpos_iterator
