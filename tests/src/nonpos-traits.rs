@@ -81,3 +81,117 @@ impl Right for u32 {
 pub fn use_left_right() -> u32 {
     3u32.via_right(&4u32)
 }
+
+// A miniature of the std iterator traits: a mutually recursive group with associated types, a
+// supertrait inside the group (`MyDoubleEnded: MyIterator`), provided methods with a loop and with
+// other dictionaries, impls which refer to themselves, and a generic impl (`Peek`) which refers to
+// itself. See `nonpos-iterator.rs` for a larger copy of the std traits.
+// TODO: not supported yet (mutually recursive group, impls which refer to themselves).
+pub trait MyIntoIterator {
+    type Item;
+    type IntoIter: MyIterator<Item = Self::Item>;
+    fn into_iter(self) -> Self::IntoIter;
+}
+
+pub trait MyIterator {
+    type Item;
+    fn next(&mut self) -> Option<Self::Item>;
+    fn zip_count<U: MyIntoIterator>(&mut self, other: U) -> u32 {
+        let mut o = other.into_iter();
+        let mut n = 0;
+        while let (Some(_), Some(_)) = (self.next(), o.next()) {
+            n += 1;
+        }
+        n
+    }
+    // Doesn't call `next_back`: Aeneas can't translate that yet (the item type of `MyDoubleEnded`
+    // is not identified with `Self::Item`).
+    fn rev_first(self) -> Option<Self::Item>
+    where
+        Self: MyDoubleEnded + Sized,
+    {
+        None
+    }
+    fn collect<B: MyFromIterator<Self::Item>>(self) -> B
+    where
+        Self: Sized,
+    {
+        B::from_iter(self)
+    }
+}
+
+pub trait MyDoubleEnded: MyIterator {
+    fn next_back(&mut self) -> Option<Self::Item>;
+}
+
+pub trait MyFromIterator<A> {
+    fn from_iter<T: MyIterator<Item = A>>(iter: T) -> Self;
+}
+
+pub struct Count {
+    pub n: u32,
+}
+
+impl MyIterator for Count {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            Some(self.n)
+        }
+    }
+}
+
+impl MyDoubleEnded for Count {
+    fn next_back(&mut self) -> Option<u32> {
+        self.next()
+    }
+}
+
+impl MyIntoIterator for Count {
+    type Item = u32;
+    type IntoIter = Count;
+    fn into_iter(self) -> Count {
+        self
+    }
+}
+
+impl MyFromIterator<u32> for u32 {
+    fn from_iter<T: MyIterator<Item = u32>>(mut iter: T) -> u32 {
+        let mut acc = 0;
+        while let Some(x) = iter.next() {
+            acc += x;
+        }
+        acc
+    }
+}
+
+pub struct Peek<I: MyIterator> {
+    pub inner: I,
+    pub buf: Option<Option<I::Item>>,
+}
+
+impl<I: MyIterator> MyIterator for Peek<I> {
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        self.inner.next()
+    }
+}
+
+pub fn sum_count() -> u32 {
+    Count { n: 4 }.collect()
+}
+
+pub fn sum_peek() -> u32 {
+    Peek {
+        inner: Count { n: 4 },
+        buf: None,
+    }
+    .collect()
+}
+
+pub fn zip_counts() -> u32 {
+    Count { n: 3 }.zip_count(Count { n: 5 })
+}

@@ -184,4 +184,293 @@ def use_left_right : Result Std.U32 := do
   U32.Insts.Nonpos_traitsLeft.via_right U32.Insts.Nonpos_traitsRight 3#u32
     4#u32
 
+/-- Trait declaration: [nonpos_traits::MyIntoIterator]
+    Source: 'tests/src/nonpos-traits.rs', lines 90:0-94:1
+    Visibility: public -/
+structure MyIntoIterator (Self : Type _) (Self_Item : Type _) (Self_IntoIter :
+  Type _) where
+  MyIteratorInst : MyIterator Self_IntoIter Self_Item
+  into_iter : Self → Result Self_IntoIter
+
+/-- Trait declaration: [nonpos_traits::MyIterator]
+    Source: 'tests/src/nonpos-traits.rs', lines 96:0-121:1
+    Visibility: public -/
+structure MyIterator (Self : Type _) (Self_Item : Type _) where
+  next : Self → Result ((Option Self_Item) × Self)
+  zip_count : forall {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
+    (MyIntoIteratorInst : MyIntoIterator U Clause0_Item Clause0_IntoIter), Self
+    → U → Result (Std.U32 × Self)
+  rev_first : forall {Clause0_Clause0_Item : Type} (MyDoubleEndedInst :
+    MyDoubleEnded Self Clause0_Clause0_Item), Self → Result (Option
+    Self_Item)
+  collect : forall {B : Type} (MyFromIteratorInst : MyFromIterator B
+    Self_Item), Self → Result B
+
+/-- Trait declaration: [nonpos_traits::MyDoubleEnded]
+    Source: 'tests/src/nonpos-traits.rs', lines 123:0-125:1
+    Visibility: public -/
+structure MyDoubleEnded (Self : Type _) (Self_Clause0_Item : Type _) where
+  MyIteratorInst : MyIterator Self Self_Clause0_Item
+  next_back : Self → Result ((Option Self_Clause0_Item) × Self)
+
+/-- Trait declaration: [nonpos_traits::MyFromIterator]
+    Source: 'tests/src/nonpos-traits.rs', lines 127:0-129:1
+    Visibility: public -/
+structure MyFromIterator (Self : Type _) (A : Type _) where
+  from_iter : forall {T : Type} (MyIteratorInst : MyIterator T A), T → Result
+    Self
+
+/-- [nonpos_traits::MyIterator::zip_count]: loop body 0:
+    Source: 'tests/src/nonpos-traits.rs', lines 102:8-104:9
+    Visibility: public -/
+@[rust_loop_body, trait_default]
+def MyIterator.zip_count.default_loop.body
+  {Self : Type _} {U : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
+  {Clause1_IntoIter : Type _} (MyIteratorInst : MyIterator Self Clause0_Item)
+  (MyIntoIteratorInst : MyIntoIterator U Clause1_Item Clause1_IntoIter)
+  (self : Self) (o : Clause1_IntoIter) (n : Std.U32) :
+  Result (ControlFlow (Self × Clause1_IntoIter × Std.U32) (Std.U32 × Self))
+  := do
+  let (o1, self1) ← MyIteratorInst.next self
+  let (o2, o3) ← MyIntoIteratorInst.MyIteratorInst.next o
+  match o1 with
+  | none => ok (done (n, self1))
+  | some _ =>
+    match o2 with
+    | none => ok (done (n, self1))
+    | some _ => let n1 ← n + 1#u32
+                ok (cont (self1, o3, n1))
+
+/-- [nonpos_traits::MyIterator::zip_count]: loop 0:
+    Source: 'tests/src/nonpos-traits.rs', lines 102:8-104:9
+    Visibility: public -/
+@[rust_loop, trait_default]
+def MyIterator.zip_count.default_loop
+  {Self : Type _} {U : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
+  {Clause1_IntoIter : Type _} (MyIteratorInst : MyIterator Self Clause0_Item)
+  (MyIntoIteratorInst : MyIntoIterator U Clause1_Item Clause1_IntoIter)
+  (self : Self) (o : Clause1_IntoIter) (n : Std.U32) :
+  Result (Std.U32 × Self)
+  := do
+  loop
+    (fun (self1, o1, n1) => MyIterator.zip_count.default_loop.body
+      MyIteratorInst MyIntoIteratorInst self1 o1 n1)
+    (self, o, n)
+
+/-- [nonpos_traits::MyIterator::zip_count]:
+    Source: 'tests/src/nonpos-traits.rs', lines 99:4-106:5
+    Visibility: public -/
+@[trait_default]
+def MyIterator.zip_count.default
+  {Self : Type _} {U : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
+  {Clause1_IntoIter : Type _} (MyIteratorInst : MyIterator Self Clause0_Item)
+  (MyIntoIteratorInst : MyIntoIterator U Clause1_Item Clause1_IntoIter)
+  (self : Self) (other : U) :
+  Result (Std.U32 × Self)
+  := do
+  let o ← MyIntoIteratorInst.into_iter other
+  MyIterator.zip_count.default_loop MyIteratorInst MyIntoIteratorInst self o
+    0#u32
+
+/-- [nonpos_traits::MyIterator::rev_first]:
+    Source: 'tests/src/nonpos-traits.rs', lines 109:4-114:5
+    Visibility: public -/
+@[trait_default]
+def MyIterator.rev_first.default
+  {Self : Type _} (Clause0_Item : Type _) {Clause1_Clause0_Item : Type _}
+  (MyDoubleEndedInst : MyDoubleEnded Self Clause1_Clause0_Item) (self : Self) :
+  Result (Option Clause0_Item)
+  := do
+  ok none
+
+/-- [nonpos_traits::MyIterator::collect]:
+    Source: 'tests/src/nonpos-traits.rs', lines 115:4-120:5
+    Visibility: public -/
+@[trait_default]
+def MyIterator.collect.default
+  {Self : Type _} {B : Type _} {Clause0_Item : Type _} (MyIteratorInst :
+  MyIterator Self Clause0_Item) (MyFromIteratorInst : MyFromIterator B
+  Clause0_Item) (self : Self) :
+  Result B
+  := do
+  MyFromIteratorInst.from_iter MyIteratorInst self
+
+/-- [nonpos_traits::Count]
+    Source: 'tests/src/nonpos-traits.rs', lines 131:0-133:1
+    Visibility: public -/
+structure Count where
+  n : Std.U32
+
+/-- [nonpos_traits::{impl nonpos_traits::MyIterator<u32> for nonpos_traits::Count}::next]:
+    Source: 'tests/src/nonpos-traits.rs', lines 137:4-144:5
+    Visibility: public -/
+def Count.Insts.Nonpos_traitsMyIteratorU32.next
+  (self : Count) : Result ((Option Std.U32) × Count) := do
+  if self.n = 0#u32
+  then ok (none, self)
+  else let i ← self.n - 1#u32
+       ok (some i, { n := i })
+
+/-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyIterator<u32> for nonpos_traits::Count}]
+    Source: 'tests/src/nonpos-traits.rs', lines 135:0-145:1 -/
+@[reducible]
+impl_def Count.Insts.Nonpos_traitsMyIteratorU32 : MyIterator Count Std.U32 := {
+  next := Count.Insts.Nonpos_traitsMyIteratorU32.next
+  zip_count := fun {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
+    (MyIntoIteratorInst : MyIntoIterator U Clause0_Item Clause0_IntoIter) =>
+    MyIterator.zip_count.default Count.Insts.Nonpos_traitsMyIteratorU32
+    MyIntoIteratorInst
+  rev_first := fun {Clause0_Clause0_Item : Type} (MyDoubleEndedCountPInst :
+    MyDoubleEnded Count Clause0_Clause0_Item) => MyIterator.rev_first.default
+    Std.U32 MyDoubleEndedCountPInst
+  collect := fun {B : Type} (MyFromIteratorPU32Inst : MyFromIterator B Std.U32)
+    => MyIterator.collect.default Count.Insts.Nonpos_traitsMyIteratorU32
+    MyFromIteratorPU32Inst
+}
+
+/-- [nonpos_traits::{impl nonpos_traits::MyDoubleEnded<u32> for nonpos_traits::Count}::next_back]:
+    Source: 'tests/src/nonpos-traits.rs', lines 148:4-150:5
+    Visibility: public -/
+def Count.Insts.Nonpos_traitsMyDoubleEndedU32.next_back
+  (self : Count) : Result ((Option Std.U32) × Count) := do
+  Count.Insts.Nonpos_traitsMyIteratorU32.next self
+
+/-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyDoubleEnded<u32> for nonpos_traits::Count}]
+    Source: 'tests/src/nonpos-traits.rs', lines 147:0-151:1 -/
+@[reducible]
+def Count.Insts.Nonpos_traitsMyDoubleEndedU32 : MyDoubleEnded Count Std.U32
+  := {
+  MyIteratorInst := Count.Insts.Nonpos_traitsMyIteratorU32
+  next_back := Count.Insts.Nonpos_traitsMyDoubleEndedU32.next_back
+}
+
+/-- [nonpos_traits::{impl nonpos_traits::MyIntoIterator<u32, nonpos_traits::Count> for nonpos_traits::Count}::into_iter]:
+    Source: 'tests/src/nonpos-traits.rs', lines 156:4-158:5
+    Visibility: public -/
+def Count.Insts.Nonpos_traitsMyIntoIteratorU32Count.into_iter
+  (self : Count) : Result Count := do
+  ok self
+
+/-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyIntoIterator<u32, nonpos_traits::Count> for nonpos_traits::Count}]
+    Source: 'tests/src/nonpos-traits.rs', lines 153:0-159:1 -/
+@[reducible]
+def Count.Insts.Nonpos_traitsMyIntoIteratorU32Count : MyIntoIterator Count
+  Std.U32 Count := {
+  MyIteratorInst := Count.Insts.Nonpos_traitsMyIteratorU32
+  into_iter := Count.Insts.Nonpos_traitsMyIntoIteratorU32Count.into_iter
+}
+
+/-- [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}::from_iter]: loop body 0:
+    Source: 'tests/src/nonpos-traits.rs', lines 164:8-166:9
+    Visibility: public -/
+@[rust_loop_body]
+def U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop.body
+  {T : Type _} (MyIteratorTU32Inst : MyIterator T Std.U32) (iter : T)
+  (acc : Std.U32) :
+  Result (ControlFlow (T × Std.U32) Std.U32)
+  := do
+  let (o, iter1) ← MyIteratorTU32Inst.next iter
+  match o with
+  | none => ok (done acc)
+  | some x => let acc1 ← acc + x
+              ok (cont (iter1, acc1))
+
+/-- [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}::from_iter]: loop 0:
+    Source: 'tests/src/nonpos-traits.rs', lines 164:8-166:9
+    Visibility: public -/
+@[rust_loop]
+def U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop
+  {T : Type _} (MyIteratorTU32Inst : MyIterator T Std.U32) (iter : T)
+  (acc : Std.U32) :
+  Result Std.U32
+  := do
+  loop
+    (fun (iter1, acc1) =>
+      U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop.body
+      MyIteratorTU32Inst iter1 acc1)
+    (iter, acc)
+
+/-- [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}::from_iter]:
+    Source: 'tests/src/nonpos-traits.rs', lines 162:4-168:5
+    Visibility: public -/
+@[reducible]
+def U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter
+  {T : Type _} (MyIteratorTU32Inst : MyIterator T Std.U32) (iter : T) :
+  Result Std.U32
+  := do
+  U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop MyIteratorTU32Inst
+    iter 0#u32
+
+/-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}]
+    Source: 'tests/src/nonpos-traits.rs', lines 161:0-169:1 -/
+@[reducible]
+def U32.Insts.Nonpos_traitsMyFromIteratorU32 : MyFromIterator Std.U32 Std.U32
+  := {
+  from_iter := fun {T : Type} (MyIteratorPU32Inst : MyIterator T Std.U32) =>
+    U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter MyIteratorPU32Inst
+}
+
+/-- [nonpos_traits::Peek]
+    Source: 'tests/src/nonpos-traits.rs', lines 171:0-174:1
+    Visibility: public -/
+structure Peek (I : Type _) (Clause0_Item : Type _) where
+  inner : I
+  buf : Option (Option Clause0_Item)
+
+/-- [nonpos_traits::{impl nonpos_traits::MyIterator<Clause0_Item> for nonpos_traits::Peek<I, Clause0_Item>}::next]:
+    Source: 'tests/src/nonpos-traits.rs', lines 178:4-180:5
+    Visibility: public -/
+def Peek.Insts.Nonpos_traitsMyIterator.next
+  {I : Type _} {Clause0_Item : Type _} (MyIteratorInst : MyIterator I
+  Clause0_Item) (self : Peek I Clause0_Item) :
+  Result ((Option Clause0_Item) × (Peek I Clause0_Item))
+  := do
+  let (o, t) ← MyIteratorInst.next self.inner
+  ok (o, { self with inner := t })
+
+/-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyIterator<Clause0_Item> for nonpos_traits::Peek<I, Clause0_Item>}]
+    Source: 'tests/src/nonpos-traits.rs', lines 176:0-181:1 -/
+@[reducible]
+impl_def Peek.Insts.Nonpos_traitsMyIterator {I : Type _} {Clause0_Item :
+  Type _} (MyIteratorInst : MyIterator I Clause0_Item) : MyIterator (Peek I
+  Clause0_Item) Clause0_Item := {
+  next := Peek.Insts.Nonpos_traitsMyIterator.next MyIteratorInst
+  zip_count := fun {U : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
+    (MyIntoIteratorInst : MyIntoIterator U Clause0_Item1 Clause0_IntoIter) =>
+    MyIterator.zip_count.default (Peek.Insts.Nonpos_traitsMyIterator
+    MyIteratorInst) MyIntoIteratorInst
+  rev_first := fun {Clause0_Clause0_Item : Type} (MyDoubleEndedPeekPInst :
+    MyDoubleEnded (Peek I Clause0_Item) Clause0_Clause0_Item) =>
+    MyIterator.rev_first.default Clause0_Item MyDoubleEndedPeekPInst
+  collect := fun {B : Type} (MyFromIteratorInst : MyFromIterator B
+    Clause0_Item) => MyIterator.collect.default
+    (Peek.Insts.Nonpos_traitsMyIterator MyIteratorInst) MyFromIteratorInst
+}
+
+/-- [nonpos_traits::sum_count]:
+    Source: 'tests/src/nonpos-traits.rs', lines 183:0-185:1
+    Visibility: public -/
+def sum_count : Result Std.U32 := do
+  MyIterator.collect.default Count.Insts.Nonpos_traitsMyIteratorU32
+    U32.Insts.Nonpos_traitsMyFromIteratorU32 { n := 4#u32 }
+
+/-- [nonpos_traits::sum_peek]:
+    Source: 'tests/src/nonpos-traits.rs', lines 187:0-193:1
+    Visibility: public -/
+def sum_peek : Result Std.U32 := do
+  MyIterator.collect.default (Peek.Insts.Nonpos_traitsMyIterator
+    Count.Insts.Nonpos_traitsMyIteratorU32)
+    U32.Insts.Nonpos_traitsMyFromIteratorU32
+    { inner := { n := 4#u32 }, buf := none }
+
+/-- [nonpos_traits::zip_counts]:
+    Source: 'tests/src/nonpos-traits.rs', lines 195:0-197:1
+    Visibility: public -/
+def zip_counts : Result Std.U32 := do
+  let (i, _) ←
+    MyIterator.zip_count.default Count.Insts.Nonpos_traitsMyIteratorU32
+      Count.Insts.Nonpos_traitsMyIntoIteratorU32Count { n := 3#u32 }
+      { n := 5#u32 }
+  ok i
+
 end nonpos_traits
