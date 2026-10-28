@@ -129,10 +129,16 @@ instance (k : I) : Dom (Fix F k) := Fix.dom F k
 
 In the logic, `fold` and `unfold` are the model's (`Model.Fix.fold`, `Model.Fix.unfold`), and a
 dictionary is an element of an inverse-limit domain.  Compiled code never builds that: at runtime a
-dictionary is stored as the tuple of its fields.  So `fold` does nothing at runtime (the tuple
-`x : F k (Fix F)` is kept as it is, and only its static type changes to `Fix F k`), and `unfold` does
-nothing either (it changes the type back).  The work of `fold` is all in the logic: proving
+dictionary is stored as a `Thunk` of the tuple of its fields.  So `fold` stores the tuple
+`x : F k (Fix F)` without evaluating it (only its static type changes to `Fix F k`), and `unfold`
+forces it (and changes the type back).  The work of `fold` is all in the logic: proving
 `Shape.cond x`, and `Fix.unfold_fold` below, which says that unfolding gives back the same tuple.
+
+Why delayed: a self-referential dictionary `d := mk … (f d) …` (defined by `partial_fixpoint`) is
+compiled by Lean as a recursive constant, and a field such as `f d` that mentions `d` outside a
+lambda would otherwise be evaluated while `d` is being built, which loops.  `fold` and the
+generated `mk` are `@[macro_inline]`, so at a call site the tuple ends up under the lambda that
+`fold` passes to `foldDelayed`, and is evaluated only when the dictionary is first unfolded.
 
 Compiled code is correct under these assumptions:
 1. Every dictionary that exists at runtime was made by `fold`.  This holds because every other
@@ -145,14 +151,19 @@ Compiled code is correct under these assumptions:
 3. Compiled code never reads a `Shape` instance.  This holds because its field `cond` is a `Prop`
    and its field `sd` is read only by the model.  The command therefore gives each generated
    `Shape` instance the runtime implementation `Shape.runtime`, which is never inspected.
-Under 1 and 2, the dictionary `unfold` receives is the tuple `x` that `fold` was given, which is
-also the logical value of `unfold (fold x h)` by `Fix.unfold_fold`; so compiled projections compute
-their logical values. -/
+Under 1 and 2, the dictionary `unfold` receives is a `Thunk` of the tuple `x` that `fold` was given,
+and forcing it gives `x`, which is also the logical value of `unfold (fold x h)` by
+`Fix.unfold_fold`; so compiled projections compute their logical values. -/
 
-unsafe def Fix.foldImpl {k : I} (x : F k (Fix F)) (_ : Shape.cond x) : Fix F k := unsafeCast x
-unsafe def Fix.unfoldImpl {k : I} (d : Fix F k) : F k (Fix F) := unsafeCast d
-@[implemented_by Fix.foldImpl]
-noncomputable def Fix.fold {k : I} (x : F k (Fix F)) (h : Shape.cond x) : Fix F k := Model.Fix.fold F x h
+unsafe def Fix.foldDelayedImpl {k : I} (x : Unit → F k (Fix F)) (_ : Shape.cond (x ())) : Fix F k :=
+  unsafeCast (Thunk.mk x)
+unsafe def Fix.unfoldImpl {k : I} (d : Fix F k) : F k (Fix F) := (unsafeCast d : Thunk (F k (Fix F))).get
+/-- `fold` of the tuple `x ()`; at runtime, `x` is stored in a `Thunk` without being called. -/
+@[implemented_by Fix.foldDelayedImpl]
+noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : Shape.cond (x ())) : Fix F k :=
+  Model.Fix.fold F (x ()) h
+@[macro_inline]
+def Fix.fold {k : I} (x : F k (Fix F)) (h : Shape.cond x) : Fix F k := Fix.foldDelayed F (fun _ => x) h
 @[implemented_by Fix.unfoldImpl]
 noncomputable def Fix.unfold {k : I} (d : Fix F k) : F k (Fix F) := Model.Fix.unfold F d
 
@@ -299,7 +310,8 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
       ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
     let fieldNames := s.fields.map (·.1)                        -- `fa`                   `to_nat f`
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
-    elabCommand (← `(def $mkId $impl* $fieldBinders*
+    -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 3)
+    elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
         (h : Shape.cond (F := $fId $k) (X := Fix $fId) $fieldTuple) : $(s.name):ident $args* :=
       Fix.fold $fId $fieldTuple h))  -- `Example1.mk`, `A.mk`, `B.mk`
     for (f, τ) in s.fields, j in List.range s.fields.size do

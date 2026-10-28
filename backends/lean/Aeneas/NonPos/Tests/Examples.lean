@@ -46,8 +46,9 @@ attribute [implemented_by Example1.shapeImpl] Example1.shape
 -- The structure.
 abbrev Example1 : Type := Fix Example1.F .Example1
 
--- `mk`, from the fields and the condition.
-def Example1.mk (to_nat : Nat) (f : Example1 → Option Nat)
+-- `mk`, from the fields and the condition.  `macro_inline`, so that the fields are not evaluated
+-- before `fold` delays them (section 3 of `Top.lean`).
+@[macro_inline] def Example1.mk (to_nat : Nat) (f : Example1 → Option Nat)
     (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
   Fix.fold Example1.F ⟨to_nat, f, ⟨⟩⟩ h
 
@@ -134,7 +135,7 @@ attribute [implemented_by A.shapeImpl] A.shape
 abbrev A (Self : Type) : Type 1 := Fix A.F (.A Self)
 abbrev B (Self : Type) : Type 1 := Fix A.F (.B Self)
 
-def A.mk {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
+@[macro_inline] def A.mk {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
     (h : Shape.cond (F := A.F (.A Self)) (X := Fix A.F) ⟨fa, ⟨⟩⟩) : A Self :=
   Fix.fold A.F ⟨fa, ⟨⟩⟩ h
 def A.fa {Self : Type} (d : A Self) : ∀ {O : Type} (BInst : B O), Self → O → Option Nat :=
@@ -144,7 +145,7 @@ def A.fa {Self : Type} (d : A Self) : ∀ {O : Type} (BInst : B O), Self → O �
     @A.fa Self (A.mk fa h) = @fa := by
   simp only [A.fa, A.mk, Fix.unfold_fold]
 
-def B.mk {Self : Type} (fb : ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
+@[macro_inline] def B.mk {Self : Type} (fb : ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
     (h : Shape.cond (F := A.F (.B Self)) (X := Fix A.F) ⟨fb, ⟨⟩⟩) : B Self :=
   Fix.fold A.F ⟨fb, ⟨⟩⟩ h
 def B.fb {Self : Type} (d : B Self) : ∀ {O : Type} (AInst : A O), Self → O → Option Nat :=
