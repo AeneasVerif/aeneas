@@ -80,9 +80,9 @@ let apply_special_comment comment input =
   in
 
   (* Parse the other options *)
-  let charon_args = Core.String.chop_prefix comment ~prefix:"charon-args=" in
-  let aeneas_args = Core.String.chop_prefix comment ~prefix:"aeneas-args=" in
-  let subdir = Core.String.chop_prefix comment ~prefix:"subdir=" in
+  let charon_args = Utils.chop_prefix comment ~prefix:"charon-args=" in
+  let aeneas_args = Utils.chop_prefix comment ~prefix:"aeneas-args=" in
+  let subdir = Utils.chop_prefix comment ~prefix:"subdir=" in
 
   if comment = "skip" then per_backend (fun x -> { x with action = Skip })
   else if comment = "known-failure" then
@@ -109,8 +109,8 @@ let build (path : string) : t =
   let name = Filename.remove_extension (Filename.basename path) in
   let name = Str.global_replace (Str.regexp "-") "_" name in
   let kind =
-    if Sys_unix.is_file_exn path then SingleFile
-    else if Sys_unix.is_directory_exn path then Crate
+    if Sys.file_exists path && Sys.is_regular_file path then SingleFile
+    else if Sys.file_exists path && Sys.is_directory path then Crate
     else failwith ("`" ^ path ^ "` is not a file or a directory.")
   in
   let per_backend =
@@ -127,11 +127,11 @@ let build (path : string) : t =
   let crate_config_file = Filename.concat path "aeneas-test-options" in
   match kind with
   | SingleFile ->
-      let file_lines = Core.In_channel.read_lines path in
+      let file_lines = Utils.read_lines path in
       (* Extract the special lines. Stop at the first non-special line. *)
       let special_comments =
         Utils.map_while
-          (fun line -> Core.String.chop_prefix line ~prefix:"//@")
+          (fun line -> Utils.chop_prefix line ~prefix:"//@")
           file_lines
       in
       (* Apply the changes from the special lines to our input. *)
@@ -139,7 +139,7 @@ let build (path : string) : t =
         (fun input comment -> apply_special_comment comment input)
         input special_comments
   | Crate when Sys.file_exists crate_config_file ->
-      let special_comments = Core.In_channel.read_lines crate_config_file in
+      let special_comments = Utils.read_lines crate_config_file in
       List.fold_left
         (fun input comment -> apply_special_comment comment input)
         input special_comments

@@ -11,11 +11,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1792196533,
-        "narHash": "sha256-x8NqDHIxkE0VhJgcL1xOLL0ygm7g04BKaZ0tVhm6KZ4=",
+        "lastModified": 1793032046,
+        "narHash": "sha256-eiGjyVndw9fPF8BB3wcYQ/XK43yYh1nIBmorAYuoqgw=",
         "owner": "AeneasVerif",
         "repo": "charon",
-        "rev": "de8736f7c995ac54dc490345cef9ea5143c06c62",
+        "rev": "2ec7e964e1032c59220e726840a9ac7d7684be2f",
         "type": "github"
       },
       "original": {
@@ -154,6 +154,22 @@
         "type": "indirect"
       }
     },
+    "nixpkgs-hol4": {
+      "locked": {
+        "lastModified": 1762111121,
+        "narHash": "sha256-4vhDuZ7OZaZmKKrnDpxLZZpGIJvAeMtK6FKLJYUtAdw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+        "type": "github"
+      }
+    },
     "nixpkgs_2": {
       "locked": {
         "lastModified": 1759381078,
@@ -171,17 +187,17 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1762111121,
-        "narHash": "sha256-4vhDuZ7OZaZmKKrnDpxLZZpGIJvAeMtK6FKLJYUtAdw=",
+        "lastModified": 1792502884,
+        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "b3d51a0365f6695e7dd5cdf3e180604530ed33b4",
+        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
         "type": "github"
       }
     },
@@ -193,7 +209,8 @@
           "flake-utils"
         ],
         "fstar": "fstar",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_3",
+        "nixpkgs-hol4": "nixpkgs-hol4"
       }
     },
     "rust-overlay": {

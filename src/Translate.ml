@@ -1291,6 +1291,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
+  FormatCompat.use_byte_width fmt;
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
   EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace
@@ -1774,11 +1775,16 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     ^ "\n- full_dest_dir: " ^ full_dest_dir ^ "\n- extract_filebasename: "
     ^ extract_filebasename];
 
+  (* Create a directory and its missing parents, with *default* permissions *)
+  let rec mkdir_p dir =
+    if not (Sys.file_exists dir) then (
+      mkdir_p (Filename.dirname dir);
+      Sys.mkdir dir 0o777)
+  in
   let mkdir_if dest_dir =
     if not (Sys.file_exists dest_dir) then (
       log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
-      (* Create a directory with *default* permissions *)
-      Core_unix.mkdir_p dest_dir)
+      mkdir_p dest_dir)
   in
 
   (* Create the directory, if necessary *)

@@ -384,7 +384,7 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
     ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg];
   (* We have to treat unsized casts separately *)
   match call.call_id with
-  | S.Unop (Cast (CastUnsize (ty1, _))) ->
+  | S.Unop (Cast (CastUnsize (ty1, _, _))) ->
       let ty0 =
         match call.args with
         | [ arg ] -> arg.ty
@@ -700,8 +700,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   let ty0 = ty_as_integer ctx.span arg0.ty in
                   let ty1 = ty_as_integer ctx.span arg1.ty in
                   Shr (om, ty0, ty1)
-              | Expressions.Offset ->
-                  [%craise] ctx.span "Not supported: `binop::offset`"
               | Expressions.Cmp -> Cmp (get_single_int_ty ())
             in
             (ctx, Binop binop, effect_info, args, [], dest)

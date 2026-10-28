@@ -35,7 +35,6 @@
  (libraries
   charon
   easy_logging
-  core_unix
   ocamlgraph
   str
   progress
@@ -61,6 +60,7 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FormatCompat
   FunsAnalysis
   GitVersion
   Identifiers
