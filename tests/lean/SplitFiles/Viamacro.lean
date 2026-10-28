@@ -2,7 +2,6 @@
 -- [split_files]
 module
 public import Aeneas
-public import SplitFiles.ExternalMacros
 @[expose] public section
 open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
@@ -20,6 +19,20 @@ set_option maxHeartbeats 1000000
 set_option maxRecDepth 2048
 
 namespace split_files
+
+/-- [split_files::viamacro::Counter]
+    Source: 'macrolib/src/lib.rs', lines 8:8-10:9; this code is generated from a macro invocation at: 'src/viamacro.rs', lines 7:0-7:34
+    Visibility: public -/
+structure viamacro.Counter where
+  value : Std.U32
+
+/-- [split_files::viamacro::{split_files::viamacro::Counter}::incr]:
+    Source: 'macrolib/src/lib.rs', lines 13:12-15:13; this code is generated from a macro invocation at: 'src/viamacro.rs', lines 7:0-7:34
+    Visibility: public -/
+def viamacro.Counter.incr
+  (self : viamacro.Counter) : Result viamacro.Counter := do
+  let i ← self.value + 1#u32
+  ok { value := i }
 
 /-- [split_files::viamacro::make]:
     Source: 'src/viamacro.rs', lines 9:0-11:1
