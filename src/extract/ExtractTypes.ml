@@ -268,6 +268,33 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0)
 
+(** See {!start_fun_decl_group}: similar usage, but for the trait declarations.
+
+    For now, only Lean needs delimiters: a group of mutually recursive traits is
+    extracted to [nonpos_structure]s, which must be in a [mutual ... end] block.
+    The other backends don't support recursive traits. *)
+let start_trait_decl_group (fmt : F.formatter) (is_rec : bool)
+    (dg : Pure.trait_decl list) =
+  match backend () with
+  | Lean ->
+      if is_rec && List.length dg > 1 then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "mutual";
+        F.pp_print_space fmt ())
+  | FStar | Coq | HOL4 -> ()
+
+(** See {!start_trait_decl_group}. *)
+let end_trait_decl_group (fmt : F.formatter) (is_rec : bool)
+    (dg : Pure.trait_decl list) =
+  match backend () with
+  | Lean ->
+      if is_rec && List.length dg > 1 then (
+        F.pp_print_cut fmt ();
+        F.pp_print_string fmt "end";
+        (* Add breaks to insert new lines between definitions *)
+        F.pp_print_break fmt 0 0)
+  | FStar | Coq | HOL4 -> ()
+
 let unit_name () =
   match backend () with
   | Lean -> "Unit"

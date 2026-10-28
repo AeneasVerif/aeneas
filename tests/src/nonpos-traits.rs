@@ -53,7 +53,6 @@ pub fn use_double() -> u32 {
 
 // A group of mutually recursive traits: neither trait refers to itself, but each one refers to
 // the other.
-// TODO: not supported yet; Aeneas prints them as ordinary structures, one after the other.
 pub trait Left {
     fn val(&self) -> u32;
     fn via_right<R: Right>(&self, r: &R) -> u32;
@@ -67,8 +66,11 @@ impl Left for u32 {
     fn val(&self) -> u32 {
         *self
     }
+    // Doesn't call `r.via_left(self)`: an impl method which passes the impl itself as a
+    // dictionary is printed before the impl, which Lean rejects (a pre-existing Aeneas
+    // limitation, independent of positivity).
     fn via_right<R: Right>(&self, r: &R) -> u32 {
-        r.via_left(self)
+        *self
     }
 }
 
@@ -79,7 +81,7 @@ impl Right for u32 {
 }
 
 pub fn use_left_right() -> u32 {
-    3u32.via_right(&4u32)
+    4u32.via_left(&3u32)
 }
 
 // A miniature of the std iterator traits: a mutually recursive group with associated types, a

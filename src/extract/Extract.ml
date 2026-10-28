@@ -3094,29 +3094,29 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     backend only)?
 
     This is the case for the traits which break positivity, and thus can't be
-    modelled by an ordinary structure. For now, we only detect the traits which
-    refer to themselves in the trait clauses of a method (e.g.,
-    [fn add<Other: Bla>(...)] in trait [Bla]) or in a parent clause.
-
-    TODO: also detect the traits of a group of mutually recursive traits (e.g.,
-    [Iterator] and [FromIterator]). Charon computes these groups
-    ([TraitDeclGroup (RecGroup ids)]), but there is no per-declaration lookup:
-    we should compute the set of such traits once rather than scan the groups at
-    each call. Note that Charon never puts a single trait in a recursive group
-    (almost all traits refer to [Self]), which is why we check for
-    self-references here. *)
+    modelled by an ordinary structure:
+    - the traits of a group of (at least two) mutually recursive traits, e.g.,
+      [Iterator] and [FromIterator]. Charon computes these groups
+      ([TraitDeclGroup (RecGroup ids)]); we collect their traits once, in
+      [ctx.rec_group_trait_decls];
+    - the traits which refer to themselves in the trait clauses of a method
+      (e.g., [fn add<Other: Bla>(...)] in trait [Bla]) or in a parent clause. We
+      need this second check because Charon never puts a single trait in a
+      recursive group (almost all traits refer to [Self]). *)
 let trait_decl_is_nonpos (ctx : extraction_ctx) (id : trait_decl_id) : bool =
   backend () = Lean
-  &&
-  match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-  | None -> false (* The declaration might be missing if there was an error *)
-  | Some decl ->
-      let is_self (clause : trait_param) = clause.trait_id = id in
-      List.exists is_self decl.parent_clauses
-      || List.exists
-           (fun (meth : trait_method) ->
-             List.exists is_self meth.signature.generics.trait_clauses)
-           decl.methods
+  && (TraitDeclId.Set.mem id ctx.rec_group_trait_decls
+     ||
+     match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+     | None ->
+         false (* The declaration might be missing if there was an error *)
+     | Some decl ->
+         let is_self (clause : trait_param) = clause.trait_id = id in
+         List.exists is_self decl.parent_clauses
+         || List.exists
+              (fun (meth : trait_method) ->
+                List.exists is_self meth.signature.generics.trait_clauses)
+              decl.methods)
 
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
