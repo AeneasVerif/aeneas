@@ -107,7 +107,7 @@ info: test13_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test13_eq
 /--
-info: 'Aeneas.Command.Decompose.TestsBig.test13_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test13_eq' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
 -/
 #guard_msgs in
 #print axioms test13_eq
@@ -404,7 +404,7 @@ info: test32_eq : ∀ (mode flag : Bool) (x y z w : U32),
 #guard_msgs in
 #check @test32_eq
 /--
-info: 'Aeneas.Command.Decompose.TestsBig.test32_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test32_eq' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
 -/
 #guard_msgs in
 #print axioms test32_eq
@@ -630,7 +630,7 @@ def test55 (v1 : U32) (v2 : U32) (v3 : U32) (v4 : U32) (v5 : U32) (v6 : U32) (v7
   letRange 24 4 => test55_add4
 
 /--
-info: 'Aeneas.Command.Decompose.TestsBig.test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
 -/
 #guard_msgs in
 #print axioms test55_eq
@@ -750,7 +750,7 @@ def test56 (b : Bool) (x y : U32) : Result U32 := do
   branch 1 full => test56_else
 
 /--
-info: 'Aeneas.Command.Decompose.TestsBig.test56_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test56_eq' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
 -/
 #guard_msgs in
 #print axioms test56_eq

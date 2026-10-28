@@ -1,198 +1,331 @@
 module
-import Aeneas.Std.HeapLemmas
 
-/-! Heap tests: allocation ids are never reused, `dealloc` only accepts a whole block of the right
-kind, once, and freed blocks can never be used again. Then, the examples of `Aeneas.Std.Heap`,
-proved with the separation logic of `Aeneas.Std.HeapLemmas`. -/
+import Aeneas.Std.HeapLemmas
+import all Aeneas.Std.Heap.Model
+import all Aeneas.Std.Heap.Separation
+import all Aeneas.Std.Heap.Resources
+
+/-! Composed heap lifecycles and rejection examples, parametric in `Layout`.
+The commands reproduce the relational effects of the Rust wrappers; they do not
+constitute an integration with the ordinary effect-rejecting weakest precondition. -/
 
 namespace Aeneas.Std.HeapTests
 
-open State SepLogic
+open SepLogic
 
-attribute [local simp] State.cell State.empty State.newBlock State.allocBlock State.removeBlock
-  State.setCell Heap.setCell RawPtr.loc RawPtr.shift
+universe u
 
--- The start of the first allocation in the empty memory.
-local notation "p₀" => (RawPtr.mk 0 0 : MutRawPtr Nat)
+variable {m : Layout.{u}}
 
-/-- A fresh heap allocation can be deallocated, but only once. -/
-example (value : Nat) :
-    ∃ s₁ s₂, State.alloc [value] empty p₀ s₁ ∧ dealloc p₀ 1 s₁ () s₂ ∧
-      ∀ s₃, ¬ dealloc p₀ 1 s₂ () s₃ :=
-  ⟨_, _, rfl, ⟨⟨rfl, rfl, fun i hi => ⟨Nat, some value, by simp_all⟩⟩, rfl⟩,
-    fun _ ⟨⟨_, h, _⟩, _⟩ => by simp at h⟩
+def boxIntoFromRaw (m : Layout.{0}) (value : Nat) : Cmd m Nat :=
+  Cmd.bind (Heap.newBlock m [value] true) fun p =>
+  Cmd.bind (Heap.read m p) fun x =>
+  Cmd.bind (Heap.freeBlock m p 1 true) fun _ =>
+  Cmd.pure m x
 
-/-- A two-cell allocation is deallocated whole. -/
-example (a b : Nat) : ∃ s, dealloc p₀ 2 (empty.allocBlock [a, b] .heap).2 () s :=
-  ⟨_, ⟨rfl, rfl, fun i hi => ⟨Nat, [a, b][i]?, by simp_all⟩⟩, rfl⟩
+theorem boxIntoFromRaw.spec (m : Layout.{0}) (value : Nat) :
+    Triple m emp (boxIntoFromRaw m value) (fun x h => x = value ∧ emp h) := by
+  apply Triple.bind (newBlock.spec [value] true)
+  intro p
+  apply Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) (fun _ _ h => h)
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun x h hp => (sep_and_left (x = value)
+      (block p [.val (some 0) value]) (alloc p 1 true) h).mp hp)
+    (frame (R := alloc p 1 true) (read.spec p value 0)))
+  intro x
+  apply Triple.pure_pre
+  intro hx
+  subst x
+  apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ _ h => h) (freeBlock.spec p [.val (some 0) value] true (by simp [Cell.writable])))
+  intro _
+  exact Triple.pure m emp value
 
-/-- An empty allocation can also be deallocated only once. -/
-example :
-    ∃ s₁ s₂, State.alloc ([] : List Nat) empty p₀ s₁ ∧ dealloc p₀ 0 s₁ () s₂ ∧
-      ∀ s₃, ¬ dealloc p₀ 0 s₂ () s₃ :=
-  ⟨_, _, rfl, ⟨⟨rfl, rfl, fun _ hi => absurd hi (Nat.not_lt_zero _)⟩, rfl⟩,
-    fun _ ⟨⟨_, h, _⟩, _⟩ => by simp at h⟩
+def borrowLifecycle (m : Layout.{0}) (a b : Nat) : Cmd m (List Nat × Nat) :=
+  Cmd.bind (Heap.alloc m (ty := Nat) 1) fun p =>
+  Cmd.bind (Heap.write m p a) fun _ =>
+  Cmd.bind (Heap.borrowRange m p 1) fun original =>
+  Cmd.bind (Heap.endBorrowRange m p [b]) fun _ =>
+  Cmd.bind (Heap.read m p) fun value =>
+  Cmd.bind (Heap.freeBlock m p 1 true) fun _ =>
+  Cmd.pure m (original, value)
 
-/-- Creating a view after a deallocation gets a new id, and the freed block stays dead. -/
-example {α : Type} (s s₁ s₂ : State) (hInv : s.Inv) (q : MutRawPtr Nat) (p : MutRawPtr α)
-    (value : α) (h₁ : dealloc q 1 s () s₁) (h₂ : newView [value] s₁ p s₂) :
-    p.allocId ≠ q.allocId ∧ ¬ s₂.IsLive q := by
-  obtain ⟨⟨hOff, hAlloc, _⟩, rfl⟩ := h₁
-  simp only [newBlock, allocBlock, removeBlock, Prod.mk.injEq] at h₂
-  obtain ⟨rfl, rfl⟩ := h₂
-  have hLt : q.allocId < s.next := by
-    refine Nat.lt_of_not_le fun hle => ?_
-    simp [(hInv _ hle).1] at hAlloc
-  refine ⟨Nat.ne_of_gt hLt, fun ⟨ty, value', hCell⟩ => ?_⟩
-  simp [hOff, Nat.ne_of_lt hLt] at hCell
+theorem borrowLifecycle.spec (m : Layout.{0}) (a b : Nat) :
+    Triple m emp (borrowLifecycle m a b) (fun result h => result = ([a], b) ∧ emp h) := by
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun _ h hp => (sep_comm _ _ h).mp hp) (alloc.spec Nat 1))
+  intro p
+  apply Triple.bind (frame (R := alloc p 1 true)
+    (write.spec p .uninitialized a True.intro))
+  intro _
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun result h hp => (sep_and_left (result = [a])
+      (block p (Cell.borrowed [a])) (alloc p 1 true) h).mp hp)
+    (frame (R := alloc p 1 true) (borrowRange.spec p [a])))
+  intro original
+  apply Triple.pure_pre
+  intro horiginal
+  subst original
+  apply Triple.bind (frame (R := alloc p 1 true) (endBorrowRange.spec p [a] [b] rfl))
+  intro _
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun value h hp => (sep_and_left (value = b)
+      (block p [.val (some 0) b]) (alloc p 1 true) h).mp hp)
+    (frame (R := alloc p 1 true) (read.spec p b 0)))
+  intro value
+  apply Triple.pure_pre
+  intro hvalue
+  subst value
+  apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ _ h => h) (freeBlock.spec p [.val (some 0) b] true (by simp [Cell.writable])))
+  intro _
+  exact Triple.pure m emp ([a], b)
 
-/-- An empty view reserves its id, and its pointer stays dead after the next view. -/
-example {α β : Type} (s s₁ s₂ : State) (hInv : s.Inv) (p : MutRawPtr α) (p' : MutRawPtr β)
-    (value : β) (h₁ : newView ([] : List α) s p s₁) (h₂ : newView [value] s₁ p' s₂) :
-    p'.allocId ≠ p.allocId ∧ ¬ s₂.IsLive p := by
-  simp only [newBlock, allocBlock, Prod.mk.injEq] at h₁ h₂
-  obtain ⟨rfl, rfl⟩ := h₁
-  obtain ⟨rfl, rfl⟩ := h₂
-  have hNone : s.heap.cells ⟨s.next, 0⟩ = none := (hInv s.next (Nat.le_refl _)).2 0
-  refine ⟨by simp, fun ⟨ty, value', hCell⟩ => ?_⟩
-  simp [hNone] at hCell
+/-- Borrow one cell, update its neighbor in the same representation, then restore it. -/
+def neighboringBorrow (m : Layout.{0}) (p : RawPtr Nat) (a' b' : Nat) : Cmd m (List Nat) :=
+  Cmd.bind (Heap.borrowRange m p 1) fun original =>
+  Cmd.bind (Heap.write m (p.shift 1) b') fun _ =>
+  Cmd.bind (Heap.endBorrowRange m p [a']) fun _ =>
+  Cmd.pure m original
 
-/-- A view (e.g. a copy behind a reference) cannot be deallocated through the allocator. -/
-example (value : Nat) (s : State) : ¬ dealloc p₀ 1 (empty.allocBlock [value] .view).2 () s :=
-  fun ⟨⟨_, h, _⟩, _⟩ => by simp at h
+theorem neighboringBorrow.spec (m : Layout.{0}) (p : RawPtr Nat) (a b a' b' : Nat) :
+    Triple m (block p (Cell.full [a, b])) (neighboringBorrow m p a' b')
+      (fun result h => result = [a] ∧ block p (Cell.full [a', b']) h) := by
+  apply Triple.conseq
+    (fun h hp => (block_append p (Cell.full [a]) (Cell.full [b]) h).mp hp)
+    (fun _ _ h => h)
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun result h hp => (sep_and_left (result = [a])
+      (block p (Cell.borrowed [a])) (block (p.shift 1) (Cell.full [b])) h).mp hp)
+    (frame (R := block (p.shift 1) (Cell.full [b])) (borrowRange.spec p [a])))
+  intro original
+  apply Triple.pure_pre
+  intro horiginal
+  subst original
+  apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ h hp => (sep_comm _ _ h).mp hp)
+    (frame (R := block p (Cell.borrowed [a]))
+      (write.spec (p.shift 1) (.val (some 0) b) b' True.intro)))
+  intro _
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun _ h hp => (block_append p (Cell.full [a']) (Cell.full [b']) h).mpr hp)
+    (frame (R := block (p.shift 1) (Cell.full [b']))
+      (endBorrowRange.spec p [a] [a'] rfl)))
+  intro _
+  exact Triple.pure m (block p (Cell.full [a', b'])) [a]
 
-/-- Conversely, memory from the global allocator cannot be released as a view. -/
-example (value : Nat) (s : State) : ¬ removeView p₀ 1 (empty.allocBlock [value] .heap).2 () s :=
-  fun ⟨⟨_, h, _⟩, _⟩ => by simp at h
+def nestedSharing (m : Layout.{0}) (p : RawPtr Nat) : Cmd m Nat :=
+  Cmd.bind (Heap.shareRange m p 1) fun _ =>
+  Cmd.bind (Heap.shareRange m p 1) fun _ =>
+  Cmd.bind (Heap.read m p) fun value =>
+  Cmd.bind (Heap.endShareRange m p [value]) fun _ =>
+  Cmd.bind (Heap.endShareRange m p [value]) fun _ =>
+  Cmd.pure m value
 
-/-- `endBorrow` never applies to a freed block. -/
-example (s s₁ s₂ : State) (q : MutRawPtr Nat) (value : Nat) (h₁ : dealloc q 1 s () s₁) :
-    ¬ endBorrow q value s₁ () s₂ := by
-  obtain ⟨⟨hOff, _, _⟩, rfl⟩ := h₁
-  rintro ⟨h, _⟩
-  simp [hOff] at h
+theorem nestedSharing.spec (m : Layout.{0}) (p : RawPtr Nat) (a : Nat) :
+    Triple m (pointsTo p a) (nestedSharing m p)
+      (fun result h => result = a ∧ pointsTo p a h) := by
+  apply Triple.bind (Triple.conseq (fun _ h => h) (fun _ _ h => h.2)
+    (shareRange.spec p [a] 0))
+  intro _
+  apply Triple.bind (Triple.conseq (fun _ h => h) (fun _ _ h => h.2)
+    (shareRange.spec p [a] 1))
+  intro _
+  apply Triple.bind (read.spec p a 2)
+  intro value
+  apply Triple.pure_pre
+  intro hvalue
+  subst value
+  apply Triple.bind (endShareRange.spec p [a] 1)
+  intro _
+  apply Triple.bind (endShareRange.spec p [a] 0)
+  intro _
+  exact Triple.pure m (pointsTo p a) a
 
-/-- While a cell is borrowed, its block cannot be deallocated. -/
-example (s s₁ s₂ : State) (q : MutRawPtr Nat) (x : Nat) (kind : AllocKind)
-    (h₁ : borrow q s x s₁) : ¬ freeBlock q 1 kind s₁ () s₂ := by
-  obtain ⟨_, rfl⟩ := h₁
-  rintro ⟨⟨_, _, hLive⟩, _⟩
-  obtain ⟨ty, value, hCell⟩ := hLive 0 Nat.one_pos
-  simp at hCell
+def sharedViewLifecycle (m : Layout.{0}) (a : Nat) : Cmd m Nat :=
+  Cmd.bind (Heap.newSharedView m [a]) fun p =>
+  Cmd.bind (Heap.read m p) fun value =>
+  Cmd.bind (Heap.endSharedView m p [a]) fun _ =>
+  Cmd.pure m value
 
-/-- An interior pointer cannot be deallocated. -/
-example (a b : Nat) (s : State) :
-    ¬ dealloc (RawPtr.shift p₀ 1) 1 (empty.allocBlock [a, b] .heap).2 () s :=
-  fun ⟨⟨h, _, _⟩, _⟩ => by simp at h
+theorem sharedViewLifecycle.spec (m : Layout.{0}) (a : Nat) :
+    Triple m emp (sharedViewLifecycle m a) (fun value h => value = a ∧ emp h) := by
+  apply Triple.bind (newSharedView.spec [a])
+  intro p
+  apply Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) (fun _ _ h => h)
+  apply Triple.bind (Triple.conseq (fun _ h => h)
+    (fun value h hp => (sep_and_left (value = a)
+      (block p [.val (some 1) a]) (alloc p 1 false) h).mp hp)
+    (frame (R := alloc p 1 false) (read.spec p a 1)))
+  intro value
+  apply Triple.pure_pre
+  intro hvalue
+  subst value
+  apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ _ h => h) (endSharedView.spec p [a]))
+  intro _
+  exact Triple.pure m emp a
 
-/-- A size smaller than the block's is rejected. -/
-example (a b : Nat) (s : State) : ¬ dealloc p₀ 1 (empty.allocBlock [a, b] .heap).2 () s :=
-  fun ⟨⟨_, h, _⟩, _⟩ => by simp at h
+def emptyAllocation (m : Layout.{0}) : Cmd m Unit :=
+  Cmd.bind (Heap.alloc m (ty := Nat) 0) fun p =>
+  Cmd.bind (Heap.add m p 0) fun q =>
+  Heap.freeBlock m q 0 true
 
-/-- A size larger than the block's is rejected. -/
-example (value : Nat) (s : State) : ¬ dealloc p₀ 2 (empty.allocBlock [value] .heap).2 () s :=
-  fun ⟨⟨_, h, _⟩, _⟩ => by simp at h
+theorem emptyAllocation.spec (m : Layout.{0}) :
+    Triple m emp (emptyAllocation m) (fun _ => emp) := by
+  apply Triple.bind (alloc.spec Nat 0)
+  intro p
+  apply Triple.bind (addWholeBlock.spec p [] true 0 (by simp))
+  intro q
+  apply Triple.pure_pre
+  intro hq
+  subst q
+  simpa using freeBlock.spec (m := m) p [] true (by simp)
 
-/-- A shifted pointer moves within its allocation. -/
-example (q : MutRawPtr Nat) : (q.shift 1).shift 2 = q.shift 3 :=
-  RawPtr.shift_shift q 1 2
+/-- Uninitialized storage is writable, but not readable. -/
+example (s s' : Heap m.Repr) (p : RawPtr ty) (value : ty)
+    (hm : Fragment.Matches m s (cellsHeap p [.uninitialized])) :
+    ¬ Heap.read m p s value s' :=
+  read.denied hm rfl value
 
-/-- The second cell of a fresh allocation holds the second value, and reading it can only
-return that value. -/
-example (s : State) (a b : Nat) :
-    read (⟨s.next, 1⟩ : MutRawPtr Nat) (s.allocBlock [a, b] .heap).2 b (s.allocBlock [a, b] .heap).2 ∧
-      ∀ x s', read (⟨s.next, 1⟩ : MutRawPtr Nat) (s.allocBlock [a, b] .heap).2 x s' → x = b :=
-  ⟨⟨by simp, rfl⟩, fun _ _ ⟨h, _⟩ => by simpa using h.symm⟩
+/-- An exclusive borrow blocks reads, raw writes, and whole-base cleanup. -/
+example (s s' : Heap m.Repr) (p : RawPtr ty) (old value : ty)
+    (hm : Fragment.Matches m s (cellsHeap p [.val none old])) (count : Nat) :
+    ¬ Heap.read m p s value s' ∧ ¬ Heap.write m p value s () s' ∧
+      ¬ Heap.freeBlock m (⟨p.base, 0⟩ : RawPtr ty) count true s () s' :=
+  ⟨read.denied hm rfl value, write.denied hm (by simp [Cell.writable]) value,
+    freeBlock.denied (q := ⟨p.base, 0⟩) hm (by simp [Cell.writable]) rfl count true⟩
 
-/-- Allocation frames the existing memory: a cell already there keeps its value. -/
-example (s : State) (hInv : s.Inv) (q : MutRawPtr Nat) (value : Nat)
-    (hCell : s.cell q = some (.owned Nat (some value))) (values : List Nat) :
-    read q (s.allocBlock values .heap).2 value (s.allocBlock values .heap).2 := by
-  have hNe : q.allocId ≠ s.next := fun hEq => by
-    have := (hInv q.allocId (Nat.le_of_eq hEq.symm)).2 q.offset
-    simp at hCell
-    simp [hCell] at this
-  simp at hCell
-  exact ⟨by simp [hNe, hCell], rfl⟩
+/-- Shared permissions retain reads but exclude writes and cleanup. -/
+example (s s' : Heap m.Repr) (p : RawPtr ty) (old value : ty) (depth count : Nat)
+    (hm : Fragment.Matches m s (cellsHeap p [.val (some (depth + 1)) old])) :
+    ¬ Heap.write m p value s () s' ∧
+      ¬ Heap.freeBlock m (⟨p.base, 0⟩ : RawPtr ty) count false s () s' :=
+  ⟨write.denied hm (by simp [Cell.writable]) value,
+    freeBlock.denied (q := ⟨p.base, 0⟩) hm (by simp [Cell.writable]) rfl count false⟩
 
-/-! ### The examples of `Aeneas.Std.Heap`
+example (s s' : Heap m.Repr) (p : RawPtr ty) (count : Nat) (own : Bool)
+    (hoff : p.offset ≠ 0) : ¬ Heap.freeBlock m p count own s () s' :=
+  fun h => hoff h.1
 
-The programs below are the memory effects of the Lean models of the examples: one operation per
-`Result.guardedModify`. -/
+example (s s' : Heap m.Repr) (p : RawPtr ty) (count : Nat)
+    (hview : s.allocated p.base = false) : ¬ Heap.freeBlock m p count true s () s' := by
+  intro h
+  simp [Heap.freeBlock, hview] at h
 
-/-- The precondition of an operation on the fresh block of `[value]`: its cell, and the right to
-free it (framed). -/
-private theorem fresh_block {kind : AllocKind} {p : MutRawPtr α} {value : α} {h : Heap} :
-    sep (alloc kind p.loc [value].length) (block p.loc [value].length fun o => .owned α [value][o]?) h →
-      sep (pointsTo p value) (alloc kind p.loc 1) h := fun hp =>
-  (sep_comm _ _ _).mp (sep_mono (fun _ h => h)
-    (fun _ h => (block_congr fun i hi => by simp at hi; simp [hi]).mp h) hp)
+example (s s' : Heap m.Repr) (p : RawPtr ty) (count : Nat)
+    (howned : s.allocated p.base = true) : ¬ Heap.freeBlock m p count false s () s' := by
+  intro h
+  simp [Heap.freeBlock, howned] at h
 
-/-- `Box::into_raw(Box::new(value))`, then `*Box::from_raw(p)`. -/
-def boxIntoFromRaw (value : Nat) : Cmd.{0, 0} Nat :=
-  Cmd.bind (State.alloc [value]) fun p =>
-  Cmd.bind (State.read p) fun x =>
-  Cmd.bind (State.dealloc p 1) fun _ =>
-  Cmd.pure x
+example (s s' : Heap m.Repr) (p : RawPtr ty) (cs : List (Cell ty)) (count : Nat)
+    (hs : s.load m.interpret ty p.base = some cs) (hne : count ≠ cs.length) (own : Bool) :
+    ¬ Heap.freeBlock m p count own s () s' := by
+  rintro ⟨_, _, ⟨actual, ha, hn, _⟩, _⟩
+  have he : actual = cs := Option.some.inj (ha.symm.trans hs)
+  exact hne (he ▸ hn.symm)
 
-example (value : Nat) : Triple emp (boxIntoFromRaw value) (fun x h => x = value ∧ emp h) := by
-  refine Triple.bind (newBlock_spec [value] .heap) fun p => ?_
-  refine Triple.conseq (fun _ => fresh_block) (fun _ _ h => h) ?_
-  refine Triple.bind (frame (read_spec p value)) fun x => ?_
-  refine Triple.conseq (fun h hp => (sep_and_left _ _ _ h).mp hp) (fun _ _ h => h)
-    (Triple.pure_pre fun hx => ?_)
-  subst hx
-  refine Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) (fun _ _ h => h)
-    (freeBlock_spec p 1 .heap _ fun _ _ => ⟨Nat, _, rfl⟩)) fun _ => ?_
-  exact Triple.pure x
+/-- Removing the base prevents a second cleanup, even for an empty allocation. -/
+example (s s' s'' : Heap m.Repr) (p : RawPtr ty) (count : Nat) (own : Bool)
+    (h : Heap.freeBlock m p count own s () s') :
+    ¬ Heap.freeBlock m p count own s' () s'' := by
+  obtain ⟨_, _, _, rfl⟩ := h
+  rintro ⟨_, _, ⟨cs, hs, _⟩, _⟩
+  simp at hs
 
-/-- A raw pointer to the local `x = 0`, a write of `1` through it, and the end of the borrow of
-`x`. -/
-def rawPtrOfPlace : Cmd.{0, 0} Nat :=
-  Cmd.bind (State.newView [0]) fun p =>
-  Cmd.bind (State.write p 1) fun _ =>
-  Cmd.bind (State.read p) fun x =>
-  Cmd.bind (State.removeView p 1) fun _ =>
-  Cmd.pure x
+example (s s' : Heap m.Repr) (p : RawPtr ty) (value : ty) :
+    ¬ Heap.read m p (s.remove p.base) value s' := by
+  rintro ⟨⟨before, after, f, _, hs⟩, _⟩
+  simp at hs
 
-example : Triple emp rawPtrOfPlace (fun x h => x = 1 ∧ emp h) := by
-  refine Triple.bind (newBlock_spec [0] .view) fun p => ?_
-  refine Triple.conseq (fun _ => fresh_block) (fun _ _ h => h) ?_
-  refine Triple.bind (frame (write_spec p (some 0) 1)) fun _ => ?_
-  refine Triple.bind (frame (read_spec p 1)) fun x => ?_
-  refine Triple.conseq (fun h hp => (sep_and_left _ _ _ h).mp hp) (fun _ _ h => h)
-    (Triple.pure_pre fun hx => ?_)
-  subst hx
-  refine Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) (fun _ _ h => h)
-    (freeBlock_spec p 1 .view _ fun _ _ => ⟨Nat, _, rfl⟩)) fun _ => ?_
-  exact Triple.pure _
+example (s s' : Heap m.Repr) (p : RawPtr ty) (value : ty) :
+    ¬ Heap.write m p value (s.remove p.base) () s' := by
+  rintro ⟨old, _, hu⟩
+  obtain ⟨before, after, _, hs, _⟩ := hu.load (by simp)
+  simp at hs
 
-/-- As `rawPtrOfPlace`, then the raw pointer is converted to a borrow (`&mut *p`), through which
-`2` is written. Returns the value of the borrow, and the final value of `x`. -/
-def rawPtrToBorrow : Cmd.{0, 0} (Nat × Nat) :=
-  Cmd.bind (State.newView [0]) fun p =>
-  Cmd.bind (State.write p 1) fun _ =>
-  Cmd.bind (State.borrow p) fun p1 =>
-  Cmd.bind (State.endBorrow p 2) fun _ =>
-  Cmd.bind (State.read p) fun x =>
-  Cmd.bind (State.removeView p 1) fun _ =>
-  Cmd.pure (p1, x)
+example (s s' : Heap m.Repr) (p : RawPtr ty) (values : List ty) (hne : values ≠ []) :
+    ¬ Heap.endBorrowRange m p values (s.remove p.base) () s' := by
+  rintro ⟨original, hu⟩
+  have hl := replaceRange.length hu
+  have ho : Cell.borrowed original ≠ [] := by
+    intro he
+    have hz : values.length = 0 := by simpa [he, Cell.full] using hl.symm
+    exact hne (List.length_eq_zero_iff.mp hz)
+  obtain ⟨before, after, _, hs, _⟩ := hu.load ho
+  simp at hs
 
-example : Triple emp rawPtrToBorrow (fun r h => r = (1, 2) ∧ emp h) := by
-  refine Triple.bind (newBlock_spec [0] .view) fun p => ?_
-  refine Triple.conseq (fun _ => fresh_block) (fun _ _ h => h) ?_
-  refine Triple.bind (frame (write_spec p (some 0) 1)) fun _ => ?_
-  refine Triple.bind (frame (borrow_spec p 1)) fun p1 => ?_
-  refine Triple.conseq (fun h hp => (sep_and_left _ _ _ h).mp hp) (fun _ _ h => h)
-    (Triple.pure_pre fun hp1 => ?_)
-  subst hp1
-  refine Triple.bind (frame (endBorrow_spec p 2)) fun _ => ?_
-  refine Triple.bind (frame (read_spec p 2)) fun x => ?_
-  refine Triple.conseq (fun h hp => (sep_and_left _ _ _ h).mp hp) (fun _ _ h => h)
-    (Triple.pure_pre fun hx => ?_)
-  subst hx
-  refine Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) (fun _ _ h => h)
-    (freeBlock_spec p 1 .view _ fun _ _ => ⟨Nat, _, rfl⟩)) fun _ => ?_
-  exact Triple.pure _
+/-- Fresh views cannot reuse a freed allocation's base. -/
+example (s s' s'' : Heap m.Repr) (hi : s.Inv) (p q : RawPtr ty) (count : Nat)
+    (hfree : Heap.freeBlock m p count true s () s')
+    (values : List ty) (hnew : Heap.newBlock m values false s' q s'') :
+    q.base ≠ p.base := by
+  obtain ⟨_, _, ⟨cs, hs, _⟩, rfl⟩ := hfree
+  obtain ⟨_, rfl, _⟩ := hnew
+  exact (Nat.ne_of_lt (hi.base_lt hs)).symm
+
+example (s s' : Heap m.Repr) (p : RawPtr ty) (value : ty)
+    (hm : Fragment.Matches m s (cellsHeap p [.val (some 2) value])) :
+    ¬ Heap.endSharedView m p [value] s () s' := by
+  rintro ⟨hoff, _, hs, _⟩
+  have he := segment_unique hm (other := Cell.shared 1 [value])
+    (before := []) (after := []) (by simp [Cell.shared]) (by simpa using hoff.symm)
+    (by simpa using hs)
+  simp [Cell.shared] at he
+
+example (s s' : Heap m.Repr) (p : RawPtr ty) (cs : List (Cell ty)) (count : Nat)
+    (hs : s.load m.interpret ty p.base = some cs) (hbound : cs.length < p.offset + count)
+    (q : RawPtr ty) : ¬ Heap.add m p count s q s' := by
+  rintro ⟨⟨actual, ha, hb⟩, _⟩
+  have he : actual = cs := Option.some.inj (ha.symm.trans hs)
+  exact (Nat.not_le_of_lt hbound) (he ▸ hb)
+
+/-- Empty borrow and share ranges are literal no-ops, without assuming a live base. -/
+example (s s' : Heap m.Repr) (p : RawPtr ty) :
+    Heap.borrowRange m p 0 s [] s' ↔ s' = s := by
+  simp [Heap.borrowRange, Heap.replaceRange, Cell.full, Cell.borrowed]
+
+example (s s' : Heap m.Repr) (p : RawPtr ty) :
+    Heap.shareRange m p 0 s [] s' ↔ s' = s := by
+  simp [Heap.shareRange, Heap.replaceRange, Cell.shared]
+
+/-- Changing a hidden `T` payload cannot change any successful or failed raw `U` read. -/
+example (s s' : Heap m.Repr) (p : RawPtr T) (x y : T) (q : RawPtr U)
+    (hb : q.base = p.base)
+    (hu : Heap.replaceRange m s p [.val none x] [.val none y] s') (value : U) :
+    Heap.read m q s value s ↔ Heap.read m q s' value s' := by
+  have he : List.Forall₂ Cell.ReadEquivalent [.val none x] [.val none y] :=
+    .cons True.intro .nil
+  exact hu.hidden_read_iff he q hb value
+
+example (s s' : Heap m.Repr) (p : RawPtr U) (value : U)
+    (T : Type u) (original : T) (depth : Nat)
+    (hs : s.load m.interpret T p.base = some [.val (some (depth + 1)) original])
+    (hw : Heap.write m p value s () s') :
+    (s'.load m.interpret T p.base).bind (fun cs => cs[0]?) =
+      some (.val (some (depth + 1)) original) :=
+  hw.preserves_protected hs 0 (by simp) (by simp [Cell.writable])
+
+/-- Heap relations alone do not authenticate backward computations: directly invoking
+`endShareRange` can make a fresh shared view writable. This is intentionally a witness
+to the trusted translation boundary, not a Rust-callable program or a valid borrow protocol. -/
+theorem restoration_is_privileged (m : Layout.{u}) (s : Heap m.Repr) (hi : s.Inv)
+    (original value : ty) :
+    ∃ (p : RawPtr ty) (s₁ s₂ s₃ : Heap m.Repr),
+      Heap.newSharedView m [original] s p s₁ ∧
+      Heap.endShareRange m p [original] s₁ () s₂ ∧
+      Heap.write m p value s₂ () s₃ := by
+  let p : RawPtr ty := ⟨s.next, 0⟩
+  let s₁ := s.create m (Cell.shared 1 [original]) false
+  let s₂ := s₁.store m.represent ty p.base [.val (some 0) original]
+  let s₃ := s₂.store m.represent ty p.base [.val (some 0) value]
+  have hs : s₁.load m.interpret ty p.base = some (Cell.shared 1 [original]) := by
+    simpa [s₁, p, Heap.create] using m.roundTrip ty (Cell.shared 1 [original])
+  refine ⟨p, s₁, s₂, s₃, ⟨hi, rfl, rfl⟩, ⟨0, ?_⟩, ?_⟩
+  · apply (ite_eq_right (by simp [Cell.shared])).mpr
+    exact ⟨rfl, [], [], rfl, by simpa using hs, rfl⟩
+  · refine ⟨.val (some 0) original, True.intro, ?_⟩
+    apply (ite_eq_right (by simp)).mpr
+    exact ⟨rfl, [], [], rfl, by simp [s₂], rfl⟩
 
 end Aeneas.Std.HeapTests

@@ -4,8 +4,9 @@ This is an experimental simplification of
 [AeneasVerif/aeneas#1433](https://github.com/AeneasVerif/aeneas/pull/1433),
 based on commit `8c7727c79465046cf50057b7530fe5855ea79457`.
 Compare this branch against `cezar/heap_model`, not `main`.
-The new modules can be checked independently, but the existing standard-library
-integration is not yet ported. This is a design-feedback snapshot, not a merge-ready PR.
+The standard-library entry point imports the new connector and its parametric
+lifecycle examples. This remains a design-feedback experiment, not a complete
+formalization of Rust memory or a merge-ready PR.
 
 ## Design and terminology
 
@@ -28,6 +29,12 @@ separation proofs are parametric in this interface.
 translation. No byte or alignment implementation is supplied.
 An informal type-tagged example is described beside `Layout`; its consistency
 has not been formalized.
+
+The fixed representation occurs in `Result`'s memory-effect type. Consequently,
+some otherwise pure monadic proofs acquire a syntactic `layout` axiom dependency.
+The decomposition tests retain exact axiom-report guards including that dependency;
+the generic heap, separation, and lifecycle theorems instead quantify over `Layout`
+and do not depend on the fixed-instance axiom.
 
 A *view* exposes a safe value through temporary explicit storage, with cleanup by
 the matching backward computation. Allocation cleanup authority instead allows
@@ -80,32 +87,70 @@ The affine relational triples require both an existing successor and correctness
 of every successor, for every matching disjoint frame. Frame, bind, consequence,
 pure, and resource-dropping rules are proved. Primitive triples cover range
 replacement, reads, writes, initialized block creation, typed uninitialized
-allocation, shared-view creation, and whole-block cleanup.
+allocation, shared-view creation and cleanup, exclusive borrowing and restoration,
+nested sharing and restoration, typed pointer addition, and whole-block cleanup.
 
-From `backends/lean`, check the experimental modules and adapted wrappers with:
+`Access.lean` uses the cross-view laws to prove that hidden-payload replacement
+preserves actual raw-read success/failure, and that writes through `U` preserve
+protected `T` cells. The observation function is proved equivalent to the
+relational read operation, rather than used as an unconnected proxy.
+
+`HeapTests.lean` composes allocation, initialization, borrow, restoration, read,
+and cleanup; separately it exercises same-base neighboring-cell framing, nested
+sharing, Box and shared-view lifecycles, and zero-count allocation/addition/cleanup.
+Rejection examples cover uninitialized reads, borrowed/shared writes and cleanup,
+wrong cleanup authority and extent, interior pointers, repeated cleanup, stale
+access/restoration after removal, address reuse, and out-of-bounds addition.
+Empty borrow/share ranges remain no-ops even without a live base; pointer addition
+still requires an interpreted extent, including for a zero count.
+
+## Permission-restoration trust boundary
+
+The heap records permissions, not identities or capabilities for live borrows.
+The `endBorrowRange` and `endShareRange` relations describe privileged backward
+operations; they do not prove that the caller owns the matching continuation.
+In particular, `HeapTests.restoration_is_privileged` proves that directly invoking
+`endShareRange` on a freshly created shared view can make it writable, without a
+preceding `shareRange`. Ordinary raw writes are still rejected at the shared depth.
+
+The handwritten Rust models must therefore keep these operations internal, and
+the translation must invoke only the matching backward computations with their
+required extent/value discipline. The relational triples prove the heap effect
+when such an operation is invoked, not the translation's authority to invoke it.
+If the intended theorem quantifies over arbitrary Lean callers of these internal
+operations, explicit ghost capabilities or borrow identities would be necessary.
+No such mechanism is silently assumed or implemented here.
+
+From `backends/lean`, check the heap examples or the complete backend with:
 
 ```sh
-lake build Aeneas.Std.Heap.Allocation Aeneas.Std.Core.Alloc Aeneas.Std.Slice Aeneas.Std.Alloc.Boxed
+lake build Aeneas.Std.HeapTests
+lake build
 ```
+
+The complete backend builds successfully with these examples in its import
+closure. Axiom reports for the lifecycle and cross-view proofs contain only
+Lean's standard logical axioms, not the fixed `layout` assumption.
 
 ## Remaining work and feedback scope
 
 The central design and law statements are ready for discussion. In particular,
 feedback is needed on the read law's re-encoding strength, the write law's
 authorization/footprint boundary, the same-type logical ownership restriction,
-and how matching backward computations authorize borrow restoration.
+and the explicit trusted-translation boundary for borrow restoration.
 
-Before claiming end-to-end integration:
+Remaining validation and scope:
 
-- Port the old `HeapLemmas.lean` and `HeapTests.lean`, which still use the old
-  API and are imported by `Std.lean`. The library is not globally buildable yet;
-  no imports or default targets have been removed to conceal this.
-- Add borrow/share/end-share, shared-view cleanup, and pointer-addition triples;
-  exercise composed Box, slice, allocation, and borrow lifecycles.
-- Restore the negative examples for invalid reads/writes, cleanup authority,
-  wrong extents, interior pointers, double cleanup, and zero-length cases.
-- Review the laws and operation proofs together, and run the complete library
-  build and relevant extraction tests.
+- Audit the translation's matching-continuation discipline and run relevant Rust
+  extraction examples; the current lifecycle programs reproduce the relational
+  effects, not automatically extracted Rust programs. The existing
+  `tests/src/raw_pointers.rs` fixture is marked as a Lean known failure; it has
+  not been re-extracted here.
+- Decide whether to retain single-type logical ownership or introduce the
+  footprint/overlap interface needed for cross-type framing and authorization
+  of even same-value writes.
+- Assess the laws against the intended byte/alignment interpretation. A concrete
+  `Repr` instance is deliberately not part of this experiment.
 
 The relational connector is not an integration with the ordinary `WP.effectWP`,
 which rejects effects in the starting branch. Such an integration is separate work.
