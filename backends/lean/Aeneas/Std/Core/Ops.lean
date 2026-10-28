@@ -1,6 +1,7 @@
 module
 public import Lean
-public import Aeneas.Std.Alloc
+public meta import Aeneas.Extract.Extract
+public import Aeneas.Std.Primitives
 public section
 
 namespace Aeneas
@@ -26,21 +27,6 @@ structure core.ops.deref.Deref (Self Target : Type _) where
 structure core.ops.deref.DerefMut (Self Target : Type _) where
   derefInst : Deref Self Target
   deref_mut : Self → Result (Target × (Target → Self))
-
-/-- Trait instance -/
-@[expose, rust_trait_impl "core::ops::deref::Deref<Box<@T>, @T>" (keepParams := [true, false])]
-def core.ops.deref.DerefBoxInst (T : Type _) :
-  core.ops.deref.Deref T T := {
-  deref x := ok (alloc.boxed.Box.deref x)
-}
-
-/-- Trait instance -/
-@[expose, rust_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>" (keepParams := [true, false])]
-def core.ops.deref.DerefMutBoxInst (T : Type _) :
-  core.ops.deref.DerefMut T T := {
-  derefInst := DerefBoxInst T
-  deref_mut x := ok (alloc.boxed.Box.deref_mut x)
-}
 
 @[rust_trait "core::ops::bit::BitAnd"]
 structure core.ops.bit.BitAnd (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where

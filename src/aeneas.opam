@@ -10,7 +10,6 @@ bug-reports: "https://github.com/AeneasVerif/aeneas/issues"
 depends: [
   "dune" {>= "3.7"}
   "calendar"
-  "core_unix"
   "domainslib"
   "easy_logging"
   "logs"

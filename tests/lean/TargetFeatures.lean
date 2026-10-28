@@ -27,15 +27,15 @@ namespace target_features
     Source: 'tests/src/target-features.rs', lines 16:4-18:5
     Visibility: public -/
 def x86.add (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  massert (target_feature_enabled (toStr "avx2"))
+  massert (target_feature_enabled "avx2")
   ok (core.num.U32.wrapping_add x y)
 
 /-- [target_features::x86::add_twice]:
     Source: 'tests/src/target-features.rs', lines 22:4-24:5
     Visibility: public -/
 def x86.add_twice (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  massert (target_feature_enabled (toStr "sse2"))
-  massert (target_feature_enabled (toStr "avx2"))
+  massert (target_feature_enabled "sse2")
+  massert (target_feature_enabled "avx2")
   let i ← lift (core.num.U32.wrapping_add x y)
   ok (core.num.U32.wrapping_add i y)
 
@@ -43,7 +43,7 @@ def x86.add_twice (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
     Source: 'tests/src/target-features.rs', lines 28:4-30:5
     Visibility: public -/
 def x86.call_add (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  massert (target_feature_enabled (toStr "avx2"))
+  massert (target_feature_enabled "avx2")
   x86.add x y
 
 /-- [target_features::x86::sum]: loop body 0:
@@ -77,14 +77,14 @@ def x86.sum_loop
     Source: 'tests/src/target-features.rs', lines 35:4-43:5
     Visibility: public -/
 def x86.sum (x : Slice Std.U32) : Result Std.U32 := do
-  massert (target_feature_enabled (toStr "avx2"))
+  massert (target_feature_enabled "avx2")
   x86.sum_loop x 0#u32 0#usize
 
 /-- [target_features::arm::add]:
     Source: 'tests/src/target-features.rs', lines 49:4-51:5
     Visibility: public -/
 def arm.add (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  massert (target_feature_enabled (toStr "neon"))
+  massert (target_feature_enabled "neon")
   ok (core.num.U32.wrapping_add x y)
 
 /-- [target_features::add_plain]:
@@ -112,7 +112,7 @@ def dispatch_add.«aarch64-apple-darwin»
     Visibility: public -/
 def dispatch_add (i : Std.U32) (i1 : Std.U32) : Result Std.U32 := do
   let tgt ← get_target
-  if tgt = (toStr "x86_64-apple-darwin")
+  if tgt = "x86_64-apple-darwin"
   then dispatch_add.«x86_64-apple-darwin» i i1
   else dispatch_add.«aarch64-apple-darwin» i i1
 

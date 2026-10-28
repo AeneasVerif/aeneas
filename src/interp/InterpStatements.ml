@@ -37,12 +37,12 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let _, mv = InterpPaths.read_place span access p ctx in
+    let _, mv, path = eval_place span access p ctx in
     let dummy_id = ctx.fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = VBottom } in
-    let ctx = write_place span access p nv ctx in
+    let ctx = write_path span path nv ctx in
     [%ltrace
       "place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -101,7 +101,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   let rv, ctx = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
-  let _, mv = InterpPaths.read_place span Write p ctx in
+  let _, mv, path = eval_place span Write p ctx in
   let dest_vid = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
@@ -110,7 +110,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
     (not (bottom_in_value ctx.ended_regions rv))
     "The value to move contains bottom";
   (* Update the destination *)
-  let ctx = write_place span Write p rv ctx in
+  let ctx = write_path span path rv ctx in
   (* Debug *)
   [%ltrace
     "- rv: "
@@ -579,7 +579,7 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
 
     We return the value as well as its type with regions. Note that we currently
     only support globals whose (instantiated) type doesn't contain regions,
-    except for a top-level static shared reference. *)
+    except for static shared references. *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
     (gref : global_decl_ref) (ctx : eval_ctx) :
     eval_ctx * tvalue * rty * (SA.expr -> SA.expr) =
@@ -606,6 +606,8 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
          abstraction owning the static region, allowing the borrow to live as
          long as needed. *)
       let sval = mk_fresh_symbolic_value span ctx inner_ty in
+      (* The value may contain static borrows: we need to project their loans *)
+      let ctx = push_static_loans_proj_for_symbolic_value span ctx sval in
       let v = mk_tvalue_from_symbolic_value sval in
       let ctx, borrow = push_value_to_static_shared_loan span ctx v inner_ty in
       let cc = S.synthesize_global_eval gref sval in
@@ -621,6 +623,9 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       let ty = Subst.erase_regions_substitute_types subst global.ty in
       [%cassert] span (ty_no_regions ty) "Unimplemented";
       let sval = mk_fresh_symbolic_value span ctx ty in
+      (* The value may contain static borrows (hidden in ADTs, for instance
+         [struct S(&'static u8)]): we need to project their loans *)
+      let ctx = push_static_loans_proj_for_symbolic_value span ctx sval in
       let cc = S.synthesize_global_eval gref sval in
       (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
@@ -980,7 +985,7 @@ and eval_switch_raw (config : config) (span : Meta.span) (data : switch_data)
       (* Access the place *)
       let access = Read in
       let expand_prim_copy = false in
-      let _, p_v, ctx, cf_read_p =
+      let _, p_v, _, ctx, cf_read_p =
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in

@@ -15,7 +15,7 @@ module Command = struct
   let make (args : string list) : t =
     { args = Array.of_list args; redirect_out = None }
 
-  let to_string (cmd : t) = Core.String.concat_array ~sep:" " cmd.args
+  let to_string (cmd : t) = String.concat " " (Array.to_list cmd.args)
 
   (* Run the command and returns its exit status. *)
   let run (cmd : t) : status =
@@ -27,11 +27,11 @@ module Command = struct
     let pid =
       Unix.create_process cmd.args.(0) cmd.args Unix.stdin out Unix.stderr
     in
-    let status = Core_unix.waitpid (Core.Pid.of_int pid) in
+    let (_, status) = Unix.waitpid [] pid in
     match status with
-    | Ok () -> Success
-    | Error (`Exit_non_zero _) -> Failure
-    | Error (`Signal _) ->
+    | WEXITED 0 -> Success
+    | WEXITED _ -> Failure
+    | WSIGNALED _ | WSTOPPED _ ->
         failwith ("Command `" ^ command_str ^ "` exited incorrectly.")
 
   (* Run the command and aborts the program if the command failed. *)
@@ -112,8 +112,8 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   | KnownFailure ->
       let out =
         if check_output then
-          Core_unix.openfile ~mode:[ O_CREAT; O_TRUNC; O_WRONLY ] output_file
-        else Core_unix.openfile ~mode:[ O_WRONLY ] "/dev/null"
+          Unix.openfile output_file [ O_CREAT; O_TRUNC; O_WRONLY ] 0o644
+        else Unix.openfile "/dev/null" [ O_WRONLY ] 0o644
       in
       let cmd = { cmd with redirect_out = Some out } in
       Command.run_command_expecting_failure cmd;
@@ -126,9 +126,7 @@ let run_charon (env : runner_env) (case : Input.t) =
      (* Note that the [full_perm] argument is ignored on Windows *)
      let full_perm = 0o777 in
      Sys.mkdir env.llbc_dir full_perm);
-  let llbc_name =
-    Filename_unix.realpath env.llbc_dir ^ "/" ^ case.name ^ ".llbc"
-  in
+  let llbc_name = Unix.realpath env.llbc_dir ^ "/" ^ case.name ^ ".llbc" in
   match case.kind with
   | SingleFile ->
       let args =

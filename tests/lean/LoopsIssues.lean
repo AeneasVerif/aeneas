@@ -143,7 +143,7 @@ def read_global_loop (b : Bool) (n_rows : Std.Usize) : Result Unit := do
   read_global_loop_loop b
 
 /-- [loops_issues::mut_loop_len]: loop body 0:
-    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+    Source: 'tests/src/loops-issues.rs', lines 55:4-57:5 -/
 @[rust_loop_body]
 def mut_loop_len_loop.body
   (b : Bool) (buf : Array Std.U8 4#usize) :
@@ -157,7 +157,7 @@ def mut_loop_len_loop.body
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:
-    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+    Source: 'tests/src/loops-issues.rs', lines 55:4-57:5 -/
 @[rust_loop]
 def mut_loop_len_loop
   (b : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do

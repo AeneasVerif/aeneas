@@ -35,7 +35,6 @@
  (libraries
   charon
   easy_logging
-  core_unix
   ocamlgraph
   str
   progress
@@ -64,6 +63,7 @@
   FileGraph
   FileMapping
   FilePlan
+  FormatCompat
   FunsAnalysis
   GitVersion
   Identifiers

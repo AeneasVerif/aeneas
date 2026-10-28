@@ -55,6 +55,8 @@ package «tests» {}
 @[default_target] lean_lib Issue1250AnonymousConst
 @[default_target] lean_lib Issue1260EliminateSharedLoans
 @[default_target] lean_lib Issue134LoopSharedBorrows
+@[default_target] lean_lib Issue1436LoopGenerics
+@[default_target] lean_lib Issue1436LoopGenericsRec
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError

@@ -525,3 +525,145 @@ fn copy_in_branch_static(o: Option<&'static u32>, b: bool) -> u32 {
         None => 0,
     }
 }
+
+// Regression tests: types which hide a 'static borrow (in an ADT) used in
+// combination with the `?` operator, other regions, raw pointers, etc.
+pub struct WithStaticRef(pub &'static str);
+
+pub fn question_mark_static_ref(r: Result<u32, WithStaticRef>) -> Result<u32, WithStaticRef> {
+    Ok(r?)
+}
+
+pub enum StaticError {
+    Decode,
+    InvalidParams(&'static str),
+}
+
+fn static_error_parse(x: u32) -> Result<u32, StaticError> {
+    if x == 0 {
+        Err(StaticError::Decode)
+    } else {
+        Ok(x)
+    }
+}
+
+pub fn static_error_question_mark(x: u32) -> Result<u32, StaticError> {
+    let y = static_error_parse(x)?;
+    Ok(y)
+}
+
+pub fn static_error_match(x: u32) -> Result<u32, StaticError> {
+    match static_error_parse(x) {
+        Ok(y) => Ok(y),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn static_error_with_region<'a>(
+    r: Result<&'a u8, WithStaticRef>,
+) -> Result<&'a u8, WithStaticRef> {
+    r
+}
+
+pub fn static_error_with_mut_region<'a>(
+    r: Result<&'a mut u8, WithStaticRef>,
+) -> Result<&'a mut u8, WithStaticRef> {
+    r
+}
+
+pub fn static_error_shared_ret<'a>(x: &'a u32, b: bool) -> Result<&'a u32, StaticError> {
+    if b {
+        Err(StaticError::InvalidParams("bad"))
+    } else {
+        Ok(x)
+    }
+}
+
+pub fn static_error_outlives<'a, 'b: 'a>(r: Result<&'a u8, &'b u8>) -> Result<&'a u8, &'b u8> {
+    r
+}
+
+pub fn static_error_raw_ptr(
+    r: Result<*const u8, WithStaticRef>,
+) -> Result<*const u8, WithStaticRef> {
+    r
+}
+
+// Calling functions whose signature uses the static region (hidden in an ADT)
+// together with other regions, inside loops
+fn static_error_get<'a>(v: &'a [u8], i: usize) -> Result<&'a u8, StaticError> {
+    if i < v.len() {
+        Ok(&v[i])
+    } else {
+        Err(StaticError::Decode)
+    }
+}
+
+pub fn static_error_loop_question_mark(v: &[u8], n: usize) -> Result<u32, StaticError> {
+    let mut i = 0;
+    let mut s = 0u32;
+    while i < n {
+        s += *static_error_get(v, i)? as u32;
+        i += 1;
+    }
+    Ok(s)
+}
+
+pub fn static_error_loop_call<'a>(
+    mut r: Result<&'a u8, WithStaticRef>,
+    n: u32,
+) -> Result<&'a u8, WithStaticRef> {
+    let mut i = 0;
+    while i < n {
+        r = static_error_with_region(r);
+        i += 1;
+    }
+    r
+}
+
+// The static region (hidden in an ADT) living under borrows of other regions:
+// the static region group must still depend on the other region groups
+pub struct CtxWithStaticRef {
+    pub name: &'static str,
+    pub v: u32,
+}
+
+pub fn ctx_with_static_ref_get_v(c: &mut CtxWithStaticRef) -> &mut u32 {
+    &mut c.v
+}
+
+pub fn swap_with_static_ref<'a>(x: &'a mut WithStaticRef, y: &'a mut WithStaticRef) {
+    core::mem::swap(x, y)
+}
+
+pub fn shared_ref_static_error<'a>(
+    r: &'a Result<u32, StaticError>,
+) -> &'a Result<u32, StaticError> {
+    r
+}
+
+// The static region hidden in the type arguments of an ADT with region
+// parameters
+pub struct MutRefWrapper<'a, T>(pub &'a mut T);
+
+pub fn mut_ref_wrapper_get_v<'a>(c: MutRefWrapper<'a, CtxWithStaticRef>) -> &'a mut u32 {
+    &mut c.0.v
+}
+
+// Static borrows coerced to borrows with shorter lifetimes
+pub fn shorten_static_str<'b>(s: &'static str) -> &'b str {
+    s
+}
+
+pub fn pick_static_ref<'a>(x: &'a str, w: WithStaticRef, b: bool) -> &'a str {
+    if b {
+        x
+    } else {
+        w.0
+    }
+}
+
+pub fn write_static_ref<'a, 'b>(x: &'a mut (&'b str, u32), s: WithStaticRef) -> &'a mut u32 {
+    x.0 = s.0;
+    &mut x.1
+}

@@ -1951,49 +1951,53 @@ let simplify_trait_calls (crate : crate) : crate =
   (* *)
   { crate with declarations }
 
-(** Add missing outlives constraints for closure trait implementations.
+(** Repair the return lifetime of closure trait implementations.
 
-    Charon sometimes fails to properly retrieves the lifetime constraints
-    between the inputs and outputs of closures. This passes is a temporary
-    (ad-hoc) fix for the following situation:
+    Charon sometimes fails to retrieve the lifetime constraints between the
+    captured state and the output of a closure. When the captured fields use
+    exactly one lifetime ['a], this temporary (ad-hoc) fix changes:
     {[
-      call_mut<'a, 'b, 'c>(v@1 : &'c mut closure<'a>) -> &'b T
+      call_mut<'a, 'b, 'c>(v@1 : &'c mut closure<'a, 'b>) -> &'b T
     ]}
-    that we update to:
+    to:
     {[
-      call_mut<'b, 'c>(v@1 : &'c mut closure<'a>) -> &'a T
+      call_mut<'a, 'b, 'c>(v@1 : &'c mut closure<'a, 'b>) -> &'a T
     ]}
 
-    Similarly we do:
-    {[
-      call_once<'a, 'b>(v@1 : mut closure<'a>) -> &'b T
-    ]}
-    that we update to:
-    {[
-      call_once<'b, 'c>(v@1 : mut closure<'a>) -> &'a T
-    ]}
+    The same repair applies to [call] and [call_once].
 
     See https://github.com/AeneasVerif/aeneas/issues/804 and
     https://github.com/AeneasVerif/charon/issues/1040.
 
     TODO: remove once the Charon issue is fixed. *)
 let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
-  (* Check that the function is a closure *)
   (* Decompose the type of the first argument (it should be the state).
-     We do the update only if the state is inside a reference. *)
+     Look at the captured fields and return the unique lifetime mentioned
+     therein, if there is one. Note that the closure adt may have lifetimes
+     params not used in its fields. *)
   let find_input_region (ty : ty) =
     match ty with
-    | TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None }
-    | TRef
-        ( _,
-          TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None },
-          _ ) -> (
+    | TAdt { id; generics; builtin = None }
+    | TRef (_, TAdt { id; generics; builtin = None }, _) -> (
         match TypeDeclId.Map.find_opt id crate.type_decls with
-        | Some decl -> (
-            match decl.src with
-            | ClosureType _ -> Some rid
+        | Some ({ src = ClosureType _; _ } as decl) -> (
+            let fields =
+              Substitute.type_decl_get_instantiated_variants_fields_types
+                f.item_meta.span decl generics
+              |> List.concat_map snd
+            in
+            let regions = ref RegionSet.empty in
+            let visitor =
+              object
+                inherit [_] iter_ty
+                method! visit_region _ r = regions := RegionSet.add r !regions
+              end
+            in
+            List.iter (visitor#visit_ty ()) fields;
+            match RegionSet.elements !regions with
+            | [ RVar (Free _ as rid) ] -> Some rid
             | _ -> None)
-        | None -> None)
+        | _ -> None)
     | _ -> None
   in
   match f.signature.inputs with
@@ -2305,7 +2309,13 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
           let index = RegionId.of_int !next_index in
           incr next_index;
           new_regions :=
-            { index; name = None; variance = VaUnknown; mutability = LtUnknown }
+            {
+              index;
+              name = None;
+              variance = VaUnknown;
+              mutability = LtUnknown;
+              late_bound = false;
+            }
             :: !new_regions;
           RVar (Free index)
       end

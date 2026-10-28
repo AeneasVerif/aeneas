@@ -849,8 +849,8 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
       simp_all [inv, inv_load]
       split_conjs at hInv
       --
-      apply Nat.mul_le_of_le_div at hSmaller; try simp [*]
-      apply Nat.mul_le_of_le_div at hSmaller; try simp
+      apply Nat.mul_le_of_le_div at hSmaller
+      apply Nat.mul_le_of_le_div at hSmaller
       --
       have : (hm.slots.val.length * hm.2.1.val) * 1 ≤ (hm.slots.val.length * hm.2.1.val) * 2 := by
         apply Nat.mul_le_mul <;> (try simp [*])

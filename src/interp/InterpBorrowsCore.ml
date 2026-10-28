@@ -414,6 +414,7 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
   | TScalar lit1, TScalar lit2 ->
       [%sanity_check] span (lit1 = lit2);
       default
+  | TNever, TNever -> default
   | TAdt tref1, TAdt tref2 ->
       let generics1 = tref1.generics in
       let generics2 = tref2.generics in
@@ -474,6 +475,13 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
       let regions_b = compare_regions r1 r2 in
       let tys_b = compare ty1 ty2 in
       combine regions_b tys_b
+  | TRawPtr (ty1, kind1), TRawPtr (ty2, kind2) ->
+      [%sanity_check] span (kind1 = kind2);
+      compare ty1 ty2
+  | TFnPtr _, TFnPtr _ | TFnDef _, TFnDef _ ->
+      (* Values of those types don't contain borrows (the regions which may
+         appear in the types are only used in the signatures) *)
+      default
   | TVar id1, TVar id2 ->
       [%sanity_check] span (id1 = id2);
       default
@@ -1975,7 +1983,10 @@ let lookup_shared_value_opt (span : Meta.span) (env : env) (bid : BorrowId.id) :
 
 let lookup_shared_value (span : Meta.span) (env : env) (bid : BorrowId.id) :
     tvalue =
-  Option.get (lookup_shared_value_opt span env bid)
+  [%unwrap_with_span] span
+    (lookup_shared_value_opt span env bid)
+    ("Could not find the shared loan for borrow " ^ BorrowId.to_string bid
+   ^ " (dangling shared borrow)")
 
 let ctx_lookup_shared_value span ctx = lookup_shared_value span ctx.env
 
