@@ -626,7 +626,16 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       (* The value may contain static borrows (hidden in ADTs, for instance
          [struct S(&'static u8)]): we need to project their loans *)
       let ctx = push_static_loans_proj_for_symbolic_value span ctx sval in
-      let cc = S.synthesize_global_eval gref sval in
+      let cc =
+        match Charon.GAstUtils.init_fun_id_of_global global with
+        | Some _ -> S.synthesize_global_eval gref sval
+        | None ->
+            (* The global has no initializer: its value is a constant *)
+            let value = VLiteral (constant_expr_as_literal global.value) in
+            fun e ->
+              SymbolicAst.IntroSymbolic
+                (ctx, None, sval, VaSingleValue { value; ty }, e)
+      in
       (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
 (** Evaluate a statement. *)
