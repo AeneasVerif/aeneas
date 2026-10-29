@@ -1,13 +1,15 @@
-import Aeneas
-import VecMethods.VecMethods
+module
+public import Aeneas
+public import VecMethods.VecMethods
+public section
+
 open Aeneas Aeneas.Std Result
 
-/-! Proofs about the extracted `tests/src/vec-methods.rs`, using the specification theorem of the
-model of `Vec::is_empty` through `step`. -/
+/-! Proofs for `Vec::is_empty` examples. -/
 
 namespace vec_methods
 
-/-- The example of the documentation of `Vec::is_empty`: a new vector is empty… -/
+/-- A new vector is empty… -/
 theorem new_is_empty_spec : new_is_empty ⦃ b => b = true ⦄ := by
   unfold new_is_empty
   step*
