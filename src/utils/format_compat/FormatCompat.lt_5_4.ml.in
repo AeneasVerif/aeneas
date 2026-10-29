@@ -1,0 +1,3 @@
+(** Before OCaml 5.4, [Format] already measures the width of strings in bytes:
+    there is nothing to do (see the OCaml >= 5.4 version of this file). *)
+let use_byte_width (_ : Format.formatter) : unit = ()

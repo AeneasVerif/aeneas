@@ -19,6 +19,8 @@ let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
         place_to_mplace subplace
     | PlaceProjection (_, PtrMetadata) ->
         [%craise] span "Unsupported place projection: pointer metadata"
+    | PlaceProjection (_, Offset _) ->
+        [%craise] span "Unsupported place projection: offset"
     | PlaceGlobal gref -> PlaceGlobal gref
   in
   place_to_mplace p

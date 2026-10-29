@@ -1164,7 +1164,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           [%craise_opt_span] None "Mutually recursive globals are not supported"
         else (* Translate *)
           export_functions_group pure_funs
-    | GlobalGroup (NonRecGroup id) -> export_global id
+    | GlobalGroup (NonRecGroup id) ->
+        (* The globals without initializers are constants which we inline *)
+        let global =
+          GlobalDeclId.Map.find id ctx.trans_ctx.crate.global_decls
+        in
+        if Option.is_some (Charon.GAstUtils.init_fun_id_of_global global) then
+          export_global id
     | GlobalGroup (RecGroup _ids) ->
         [%craise_opt_span] None "Mutually recursive globals are not supported"
     | TraitDeclGroup (RecGroup ids) ->
@@ -1291,6 +1297,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
+  FormatCompat.use_byte_width fmt;
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
   EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace
@@ -1774,11 +1781,16 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     ^ "\n- full_dest_dir: " ^ full_dest_dir ^ "\n- extract_filebasename: "
     ^ extract_filebasename];
 
+  (* Create a directory and its missing parents, with *default* permissions *)
+  let rec mkdir_p dir =
+    if not (Sys.file_exists dir) then (
+      mkdir_p (Filename.dirname dir);
+      Sys.mkdir dir 0o777)
+  in
   let mkdir_if dest_dir =
     if not (Sys.file_exists dest_dir) then (
       log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
-      (* Create a directory with *default* permissions *)
-      Core_unix.mkdir_p dest_dir)
+      mkdir_p dest_dir)
   in
 
   (* Create the directory, if necessary *)

@@ -403,3 +403,25 @@ pub fn take_while_twice(v: &[u32]) -> (Option<u32>, Option<u32>) {
     let b = it.next().copied();
     (a, b)
 }
+
+// ============================================================================
+// Rev / next_back
+// ============================================================================
+
+/// `rev` on a slice iterator delegates to `next_back`.
+#[verify::test]
+pub fn test_rev_slice() {
+    let v: [u32; 3] = [1, 2, 3];
+    let mut it = v.iter().rev();
+    assert!(*it.next().unwrap() == 3);
+    assert!(*it.next().unwrap() == 2);
+    assert!(*it.next().unwrap() == 1);
+    assert!(it.next().is_none());
+}
+
+#[verify::test]
+pub fn test_rev_empty_slice() {
+    let v: [u32; 0] = [];
+    let mut it = v.iter().rev();
+    assert!(it.next().is_none());
+}

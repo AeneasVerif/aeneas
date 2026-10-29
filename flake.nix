@@ -6,16 +6,18 @@
     # arguments to `outputs` below!
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
-    # Keep Aeneas on OCaml 5.2 for now. Newer nixpkgs revisions mark the
-    # matching ocaml-lsp 1.21 package broken, and it indeed fails to compile.
-    # Whenever we move to OCaml 5.4, we can go back to reusing Charon's nixpkgs.
-    nixpkgs.url = "github:NixOS/nixpkgs/b3d51a0365f6695e7dd5cdf3e180604530ed33b4";
+    # We pin a specific commit because charon-ml requires a relatively recent
+    # version of some OCaml packages (e.g. ppx_deriving_hash).
+    nixpkgs.url = "github:NixOS/nixpkgs/02c087f3fe673c9e317f206a627cb6b910336dbe";
+    # Newer nixpkgs revisions ship HOL4 Trindemossen, which our HOL4 backend
+    # isn't compatible with: we keep HOL4 Kananaskis-14 from an older revision.
+    nixpkgs-hol4.url = "github:NixOS/nixpkgs/b3d51a0365f6695e7dd5cdf3e180604530ed33b4";
     fstar.url = "github:FStarLang/fstar";
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = inputs @ { self, flake-utils, nixpkgs, fstar, ... }:
+  outputs = inputs @ { self, flake-utils, nixpkgs, nixpkgs-hol4, fstar, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -28,9 +30,12 @@
                   # avoids bootstrapping issues in the static environment.
                   opaline = prev.opaline;
 
-                  ocaml-ng = sPrev.ocaml-ng // {
-                    ocamlPackages_5_2 = sPrev.ocaml-ng.ocamlPackages_5_2.overrideScope (oFinal: oPrev: {
-                      buildDunePackage = args: oPrev.buildDunePackage (args // {
+                  ocamlPackages = sPrev.ocamlPackages.overrideScope (oFinal: oPrev: {
+                    # The compiler's tests don't work when dynamic linking is disabled
+                    ocaml = oPrev.ocaml.overrideAttrs (_: { doCheck = false; });
+
+                    buildDunePackage = args: oPrev.buildDunePackage (finalAttrs:
+                      let attrs = sPrev.lib.toFunction args finalAttrs; in attrs // {
                         # Disable tests globally for static OCaml packages, as
                         # many test suites assume a dynamic environment or
                         # non-musl features that are unavailable here.
@@ -38,46 +43,40 @@
 
                         # Ensure `as` and other basic binutils are available in
                         # the static build environment.
-                        nativeBuildInputs = (args.nativeBuildInputs or [ ]) ++ [ sFinal.stdenv.cc.bintools ];
+                        nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [ sFinal.stdenv.cc.bintools ];
 
                         # Remove `dynlink` as it is incompatible with the
                         # static compiler.
-                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (args.propagatedBuildInputs or [ ]);
+                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (attrs.propagatedBuildInputs or [ ]);
                       });
 
-                      ppx_deriving = oPrev.ppx_deriving.overrideAttrs (old: {
-                        postPatch = (old.postPatch or "") + ''
-                          # Remove `findlib.dynload` from the build
-                          # dependencies.
-                          substituteInPlace src/dune --replace "findlib.dynload" "findlib"
+                    ppx_deriving = oPrev.ppx_deriving.overrideAttrs (old: {
+                      postPatch = (old.postPatch or "") + ''
+                        # Remove `findlib.dynload` from the build
+                        # dependencies.
+                        substituteInPlace src/dune --replace "findlib.dynload" "findlib"
 
-                          # Stub out dynamic loading calls in the source, as
-                          # they will fail to link or run otherwise.
-                          substituteInPlace src/ppx_deriving_main.cppo.ml \
-                            --replace "Dynlink.adapt_filename filename" "filename" \
-                            --replace "Dynlink.loadfile filename" "()" \
-                            --replace "Dynlink.Error error" "Failure _" \
-                            --replace "Dynlink.error_message error" "\"\"" \
-                            --replace "Fl_dynload.load_packages [pkg]" "()"
-                        '';
-                      });
-
-                      core_unix = oPrev.core_unix.overrideAttrs (old: {
-                        # Work around a compilation error in `musl` when using
-                        # GCC 14, where a `struct msghdr` field is incorrectly
-                        # initialized with `NULL` instead of `0`.
-                        env.NIX_CFLAGS_COMPILE = (old.env.NIX_CFLAGS_COMPILE or "") + " -Wno-error=int-conversion";
-                      });
+                        # Stub out dynamic loading calls in the source, as
+                        # they will fail to link or run otherwise.
+                        substituteInPlace src/ppx_deriving_main.cppo.ml \
+                          --replace "Dynlink.adapt_filename filename" "filename" \
+                          --replace "Dynlink.loadfile filename" "()" \
+                          --replace "Dynlink.Error error" "Failure _" \
+                          --replace "Dynlink.error_message error" "\"\"" \
+                          --replace "Fl_dynload.load_packages [pkg]" "()"
+                      '';
                     });
-                  };
+                  });
                 })
               ];
             })
           ];
         };
 
-        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
-        ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
+        ocamlPackages = pkgs.ocamlPackages;
+        ocamlPackagesStatic = pkgs.pkgsStatic.ocamlPackages;
+        # nixpkgs marks ocamlformat broken for OCaml 5.4+, so build it with 5.3 instead
+        ocamlformat = pkgs.ocaml-ng.ocamlPackages_5_3.ocamlformat_0_27_0;
         coqPackages = pkgs.coqPackages_8_18;
         charon = inputs.charon.packages.${system}.charon;
         charon-release = inputs.charon.packages.${system}.charon-release;
@@ -124,7 +123,6 @@
                 charon-ml
               ] ++ (with ocamlPackages; [
                 calendar
-                core_unix
                 ppx_deriving
                 ppx_deriving_yojson
                 visitors
@@ -185,7 +183,7 @@
           buildInputs = [
             ocamlPackages.dune_3
             ocamlPackages.ocaml
-            ocamlPackages.ocamlformat_0_27_0
+            ocamlformat
             inputs.charon.packages.${system}.rustToolchain
           ];
           buildPhase = ''
@@ -214,8 +212,8 @@
           src = ./tests/test_runner;
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = (with ocamlPackages; [
-            core_unix
             ppx_deriving
+            re
           ]);
         };
 
@@ -316,7 +314,7 @@
               || pkgs.lib.hasPrefix (toString ./tests/hol4) path
             ;
           };
-          buildInputs = [ pkgs.hol ];
+          buildInputs = [ nixpkgs-hol4.legacyPackages.${system}.hol ];
           buildPhase = ''
             cd ./tests/hol4
             make prepare-projects
@@ -353,7 +351,7 @@
             pkgs.curl
             pkgs.elan
             ocamlPackages.ocaml
-            ocamlPackages.ocamlformat_0_27_0
+            ocamlformat
             ocamlPackages.menhir
             ocamlPackages.odoc
             # ocaml-lsp's version must match the ocaml version used. Pinning

@@ -1,5 +1,5 @@
 module
-public import Aeneas
+public import Aeneas.Extract.Extract
 public section
 
 open Lean Aeneas Extract
