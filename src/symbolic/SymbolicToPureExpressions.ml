@@ -384,7 +384,7 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
     ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg];
   (* We have to treat unsized casts separately *)
   match call.call_id with
-  | S.Unop (Cast (CastUnsize (ty1, _))) ->
+  | S.Unop (Cast (CastUnsize (ty1, _, _))) ->
       let ty0 =
         match call.args with
         | [ arg ] -> arg.ty
