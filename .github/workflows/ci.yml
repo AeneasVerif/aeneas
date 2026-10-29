@@ -59,9 +59,12 @@ jobs:
       - id: lean_cache_key
         # The key covers every input of the Lean build
         run: |
-          prefix='lean-build-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json', 'tests/lean/lake-manifest.json') }}-'
+          set -o pipefail
+          deps=$(git rev-parse HEAD:backends/lean/lean-toolchain HEAD:backends/lean/lake-manifest.json HEAD:tests/lean/lake-manifest.json | sha256sum | cut -c1-16)
+          content=$(git rev-parse HEAD:backends/lean HEAD:tests/lean | sha256sum | cut -c1-16)
+          prefix="lean-build-$deps-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
-          echo "key=$prefix${{ hashFiles('backends/lean/**', 'tests/lean/**', '!**/.lake/**') }}" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix$content" >> "$GITHUB_OUTPUT"
       - id: lean_cache_lookup
         uses: actions/cache/restore@v6
         with:
