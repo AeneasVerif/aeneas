@@ -3102,15 +3102,20 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     - the traits which refer to themselves in the trait clauses of a method
       (e.g., [fn add<Other: Bla>(...)] in trait [Bla]) or in a parent clause. We
       need this second check because Charon never puts a single trait in a
-      recursive group (almost all traits refer to [Self]). *)
+      recursive group (almost all traits refer to [Self]).
+
+    The builtin traits (e.g., the std [Iterator] family, which Charon also puts
+    in a recursive group) are never extracted as [nonpos_structure]s: their
+    models are written by hand in the Lean library. *)
 let trait_decl_is_nonpos (ctx : extraction_ctx) (id : trait_decl_id) : bool =
   backend () = Lean
-  && (TraitDeclId.Set.mem id ctx.rec_group_trait_decls
-     ||
-     match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-     | None ->
-         false (* The declaration might be missing if there was an error *)
-     | Some decl ->
+  &&
+  match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+  | None -> false (* The declaration might be missing if there was an error *)
+  | Some decl ->
+      decl.builtin_info = None
+      && (TraitDeclId.Set.mem id ctx.rec_group_trait_decls
+         ||
          let is_self (clause : trait_param) = clause.trait_id = id in
          List.exists is_self decl.parent_clauses
          || List.exists
