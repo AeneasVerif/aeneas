@@ -1,5 +1,8 @@
-import Aeneas
-import Results.Results
+module
+public import Aeneas
+public import Results.Results
+public section
+
 open Aeneas Aeneas.Std Result
 
 /-! Proofs about the extracted `tests/src/results.rs`, using the specification theorems of the model
