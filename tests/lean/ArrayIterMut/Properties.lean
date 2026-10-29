@@ -1,5 +1,8 @@
-import Aeneas
-import ArrayIterMut.ArrayIterMut
+module
+public import Aeneas
+public import ArrayIterMut.ArrayIterMut
+public section
+
 open Aeneas Aeneas.Std Result core.slice.iter
 
 /-! Proofs about the extracted `tests/src/array-iter-mut.rs`, using the specification theorems of
