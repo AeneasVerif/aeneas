@@ -14,16 +14,19 @@ structure core.borrow.Borrow (Self : Type _) (Borrowed : Type _) where
   borrow : Self → Result Borrowed
 
 /-- Model of the blanket `impl<T: ?Sized> Borrow<T> for T`
-    (`library/core/src/borrow.rs`: `fn borrow(&self) -> &T { self }`): the identity. -/
-@[expose, simp, rust_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow"]
+    (`library/core/src/borrow.rs`: `fn borrow(&self) -> &T { self }`): the identity, which can't
+    panic. It is in `Result` all the same, as it fills the `borrow` field of the trait, which
+    generic code calls monadically (other impls may fail). -/
+@[expose, rust_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow"]
 def core.borrow.Borrow.Blanket.borrow {T : Type _} (x : T) : Result T := ok x
 
 /-- **Spec theorem for `<T as core::borrow::Borrow<T>>::borrow`**: returns its argument. -/
 @[step]
 theorem core.borrow.Borrow.Blanket.borrow.spec {T : Type _} (x : T) :
     core.borrow.Borrow.Blanket.borrow x ⦃ (y : T) => y = x ⦄ := by
-  simp [core.borrow.Borrow.Blanket.borrow, WP.spec_ok]
+  simp [core.borrow.Borrow.Blanket.borrow]
 
+/-- The blanket `impl<T: ?Sized> Borrow<T> for T`. -/
 @[expose, reducible, rust_trait_impl "core::borrow::Borrow<@T, @T>"]
 def core.borrow.Borrow.Blanket (T : Type _) : core.borrow.Borrow T T := {
   borrow := core.borrow.Borrow.Blanket.borrow

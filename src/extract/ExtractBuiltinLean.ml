@@ -392,7 +392,7 @@ let lean_builtin_funs =
       "core.array.Array.index_mut";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
     mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
-    (* file: "Aeneas/Std/Core/Borrow.lean", line: 18 *)
+    (* file: "Aeneas/Std/Core/Borrow.lean", line: 20 *)
     mk_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow"
       "core.borrow.Borrow.Blanket.borrow";
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
@@ -1524,7 +1524,7 @@ let lean_builtin_trait_decls =
 
 let lean_builtin_trait_impls =
   [
-    (* file: "Aeneas/Std/Core/Borrow.lean", line: 27 *)
+    (* file: "Aeneas/Std/Core/Borrow.lean", line: 30 *)
     mk_trait_impl "core::borrow::Borrow<@T, @T>" "core.borrow.Borrow.Blanket";
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 48 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
