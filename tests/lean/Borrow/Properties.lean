@@ -1,5 +1,8 @@
-import Aeneas
-import Borrow.Borrow
+module
+public import Aeneas
+public import Borrow.Borrow
+public section
+
 open Aeneas Aeneas.Std Result
 
 /-! Proofs about the extracted `tests/src/borrow.rs`, using the specification theorem of the model
