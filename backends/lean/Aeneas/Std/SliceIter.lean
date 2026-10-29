@@ -388,4 +388,25 @@ theorem MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter.
         (back iter').val = iter'.slice.val ⦄ := by
   simp only [MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter, WP.spec_ok]
   refine ⟨by simp, rfl, fun iter' h => Array.from_slice_val _ _ (by simpa using h)⟩
+
+/-- **Spec theorem for `<IterMut<T> as Iterator>::next`**: returns the element at the current index
+    (`none` at the end) and advances the index, on the same slice. The back function writes the new
+    value of that element (given as `some x`) into a slice; given `none`, it changes nothing. This
+    is what loops over `IterMut` (e.g. `for elem in &mut a`) need to describe their accumulated
+    back function. -/
+@[step]
+theorem core.slice.iter.IteratorIterMut.next.spec {T : Type _} (it : core.slice.iter.IterMut T) :
+    core.slice.iter.IteratorIterMut.next it ⦃ o it' back =>
+      o = it.slice.val[it.i]? ∧ it'.slice = it.slice ∧
+      it'.i = (if it.i < it.slice.length then it.i + 1 else it.i) ∧
+      (∀ it'', back it'' none = it'') ∧
+      (it.i < it.slice.length → ∀ it'' x,
+        back it'' (some x) = { it'' with slice := it''.slice.setAtNat it.i x }) ⦄ := by
+  unfold core.slice.iter.IteratorIterMut.next
+  split
+  · rename_i h
+    have hi : it.i < it.slice.val.length := by simpa using h
+    simp [hi]
+    rfl
+  · simp_all
 end Aeneas.Std

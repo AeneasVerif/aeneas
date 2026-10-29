@@ -10,9 +10,17 @@ namespace iter_mut
 function writes the iterator's slice back into the array. -/
 example (a : Array U32 4#usize) :
     MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter a
-      ⦃ it back => it.slice.val = a.val ∧ (back it) = a ⦄ := by
+      ⦃ it back => it.slice.val = a.val ∧ (back it).val = a.val ⦄ := by
   step*
-  refine ⟨it_post, Aeneas.Std.Array.ext _ _ ?_⟩
-  rw [it_post2 it (by simp [it_post]), it_post]
+  simp_all
+
+/- One step of an `IterMut` over a non-empty slice: the first element, and a back function which
+writes it. -/
+example (s : Slice U32) (h : 0 < s.length) :
+    core.slice.iter.IteratorIterMut.next { slice := s }
+      ⦃ o it back => o = some s.val[0] ∧ it.i = 1 ∧
+        (back it (some 7#u32)).slice.val[0]! = 7#u32 ⦄ := by
+  step*
+  simp_all
 
 end iter_mut
