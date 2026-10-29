@@ -328,4 +328,37 @@ theorem restoration_is_privileged (m : Layout.{u}) (s : Heap m.Repr) (hi : s.Inv
     apply (ite_eq_right (by simp)).mpr
     exact ⟨rfl, [], [], rfl, by simp [s₂], rfl⟩
 
+/- The effect bridge must reject undefined behaviour, failure, divergence, and a
+postcondition that accepts only one of several possible successors. -/
+example (s : State.{0}) :
+    ¬ HeapWP.Spec (Result.guardedModify (fun _ (_ : Nat) _ => False))
+      (fun _ _ => True) s := by
+  rw [HeapWP.Spec.guardedModify]
+  rintro ⟨⟨_, _, h⟩, _⟩
+  exact h
+
+example (s : State.{0}) :
+    ¬ HeapWP.Spec (Result.guardedModify
+      (fun s₀ (x : Nat) s₁ => (x = 0 ∨ x = 1) ∧ s₁ = s₀))
+      (fun x _ => x = 0) s := by
+  rw [HeapWP.Spec.guardedModify]
+  rintro ⟨_, h⟩
+  have he := h 1 s ⟨Or.inr rfl, rfl⟩
+  exact Nat.noConfusion he
+
+example (s : State.{0}) :
+    HeapWP.Spec (Result.guardedModify
+      (fun s₀ (x : Nat) s₁ => (x = 0 ∨ x = 1) ∧ s₁ = s₀))
+      (fun x s₁ => (x = 0 ∨ x = 1) ∧ s₁ = s) s := by
+  rw [HeapWP.Spec.guardedModify]
+  exact ⟨⟨0, s, Or.inl rfl, rfl⟩, fun _ _ h => h⟩
+
+example (s : State.{0}) :
+    ¬ HeapWP.Spec (Result.fail .undef : Result Nat) (fun _ _ => True) s :=
+  HeapWP.Spec.fail .undef
+
+example (s : State.{0}) :
+    ¬ HeapWP.Spec (Result.div : Result Nat) (fun _ _ => True) s :=
+  HeapWP.Spec.div
+
 end Aeneas.Std.HeapTests

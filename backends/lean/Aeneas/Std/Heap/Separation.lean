@@ -173,6 +173,15 @@ theorem sep_and_left (A : Prop) (P Q : Assertion.{u}) (h : Fragment.{u}) :
   · rintro ⟨ha, a, b, hd, he, hp, hq⟩
     exact ⟨a, b, hd, he, ⟨ha, hp⟩, hq⟩
 
+theorem sep_emp_left (P : Assertion.{u}) (h : Fragment.{u}) :
+    sep emp P h ↔ P h := by
+  constructor
+  · rintro ⟨a, b, _, he, rfl, hp⟩
+    have he' : h = b := by simpa using he
+    simpa [he'] using hp
+  · intro hp
+    exact ⟨∅, h, Fragment.disjoint_empty_left h, by simp, rfl, hp⟩
+
 abbrev Cmd (m : Layout.{u}) (α : Type w) := Heap m.Repr → α → Heap m.Repr → Prop
 
 def Cmd.pure (m : Layout.{u}) (x : α) : Cmd m α := fun s y s' => y = x ∧ s' = s
