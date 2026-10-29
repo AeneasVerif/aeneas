@@ -1,255 +1,192 @@
-# Instrumented Byte Memory for Aeneas (WIP)
+# Concrete byte memory for Aeneas (WIP)
 
 An experiment based on
 [AeneasVerif/aeneas#1433](https://github.com/AeneasVerif/aeneas/pull/1433).
-This is a design-feedback model, not a complete formalization of Rust memory.
+It is a design-feedback model, not a refinement proof of Rust's operational
+semantics or a completed extraction pipeline.
 
-## Core design
+## Runtime core: two files
 
-`Heap Block` maps fresh base identifiers to optional allocation entries.
-Each entry contains instrumented storage, its guaranteed base alignment, and an
-owned-allocation flag. Absence means there is no live allocation or exposure.
-The `cells`, `alignment`, and `allocated` accessors are derived from this one map.
-Cleanup authority is separate from permissions to access cells. Identifiers are
-never reused; they are model identities, not physical addresses.
+`Repr.lean` defines byte representations and permission updates. `Model.lean`
+defines pointers, blocks, the heap, and executable heap operations. There is no
+`Types.lean`, abstract `Block`, global representation lookup, or representation
+axiom file.
 
-There is no `Layout` record. `Block` is abstract, and `Block.bytes` projects its
-canonical instrumented bytes as `List (Cell U8)`. This is the same
-`U8` used by extracted Rust code: `Scalar/Types.lean` defines the unsigned scalar
-types without importing effectful operations. The model does not expose how
-permissions or typed-validity flags are stored.
+### Representations and permissions (`Repr.lean`)
 
-`RawPtr T` contains a base and a natural `index`, counted in `T` cells. Cell `i`
-has byte footprint `[i * size T, (i + 1) * size T)`. Thus index
-equality across types says nothing about overlap. The permission system is
-independent of pointer constness: casting a shared pointer to mutable does not
-authorize writes. `MutRawPtr` and `ConstRawPtr` currently abbreviate the same type.
-`UnsafeCell` is not modeled.
+An explicit `Repr T` supplies `size`, `align`, partial `decode`, a proof that
+alignment divides size, and completeness: every `T` has some decoding byte vector.
+Alignment is a positive power of two. Size includes padding and is the array
+stride; zero size is allowed. These parameters must be calibrated separately to
+the Rust type and target.
 
-The canonical bytes and typed observations use the same minimal cell type:
-`shared depth (Option T) | borrowed`.
+There is no canonical encoder. Executable writes receive an encoding and a proof
+that it decodes to the requested value. Rust-facing relational adapters choose
+any such encoding, justified by completeness. This does not assert a finite
+encoding for arbitrary Lean types: supplying a representation is an obligation.
+In particular, an infinite type such as `Nat` cannot have this representation.
 
-| Cell | Read | Raw write |
+The only permission-bearing cell type is
+`Cell T = shared depth (Option T) | borrowed`. Actual storage contains `Cell U8`.
+
+| Byte cell | Read | Raw write |
 |---|---|---|
-| `shared 0 (some value)` | Yes | Yes |
-| `shared (depth + 1) (some value)` | Yes | No |
+| `shared 0 (some byte)` | Yes | Yes |
+| `shared (depth + 1) (some byte)` | Yes | No |
 | `shared 0 none` | No | Yes |
 | `shared (depth + 1) none` | No | No |
 | `borrowed` | No | No |
 
-There is no separate permission type or uninitialized constructor. Missing values
-do not discard sharing depth. An exclusive borrow transfers the value to the
-safe borrower; the raw representation retains no borrowed payload.
-Sharing depths are neither ownership fractions nor counts of raw-pointer aliases.
-Safe values remain valid Lean values of their translated types. `MaybeUninit`
-and precise treatment of Rust padding are outside this model: currently a readable
-typed cell requires initialized bytes throughout its footprint, including padding.
+`create` expands encoded cells into byte cells, preserving their permissions.
+`select` and `update` operate on footprint `[i * size, (i + 1) * size)`.
+`read` collects readable initialized bytes, then decodes them. Their sharing
+depths need not agree. `write` checks every byte's write permission before
+replacing the footprint. Invalid typed contents can therefore be overwritten.
 
-### Size and alignment
+`borrow`, `share`, and `endShare` change permissions, not typed values.
+Borrowing can transfer uninitialized writable bytes. `endBorrow` restores
+initialized encoded bytes. All updates preserve the surrounding bytes and length.
+An empty footprint cannot authorize an observation or single-cell mutation:
+these operations reject zero-sized representations.
 
-`Heap.repr T : Heap.Repr T` describes the type once. `Heap.size T` and
-`Heap.align T` are derived from that description, not independently supplied maps.
-`size T` corresponds to Rust's `size_of::<T>()`, including padding; it is the
-array stride, not an unpadded payload length. `align T` corresponds to
-`align_of::<T>()`. Its `Alignment` type guarantees a positive power of two, and
-`size_aligned` requires that alignment to divide size. Zero size is permitted,
-but zero alignment is not.
+There is no extra typed-validity metadata or automatic pointer invalidation.
+Overlapping access is governed by the same byte permissions at every type.
+Whether readable bytes decode as another type is determined by that type's
+descriptor; neither decoding success nor failure is universally promised.
+Padding must currently be initialized to read the whole footprint.
+`MaybeUninit` and `UnsafeCell` are not modeled.
 
-Allocation entries store a guaranteed base alignment, not an address. Access as
-`T` requires that `align T` divide that guarantee. Since `index * size T` is a
-multiple of `align T`, typed displacement adds no further alignment condition.
-Allocation establishes the requested type's alignment; updates preserve it.
-A differently typed interpretation must satisfy its own alignment requirement.
-The guarantee is conservative: fortuitous stronger physical alignment is not
-available to this model.
+### Heap and pointers (`Model.lean`)
 
-## Typed observations and local updates
+`RawPtr T` contains a bounded `Usize` base identifier and a bounded `Usize` index
+counted in `T` entries. The phantom type contributes no runtime metadata.
+`MutRawPtr` and `ConstRawPtr` abbreviate the same type; changing constness does
+not grant permissions.
 
-`view T r i cell` is a partial, single-valued relation, not a whole-list decoder.
-Every byte in a successful cell's footprint must agree with the cell's sharing
-depth or borrowed state. Readable typed values require readable bytes.
-Incompatible depths therefore make the view fail; no permission averaging
-or conversion to a weaker permission is allowed. Even uniform byte permissions
-need not make a typed value available: validity is also instrumented.
+`Block` stores a byte-cell list, a guaranteed base alignment, and an `owned` flag.
+`Heap` stores one map from bases to optional blocks and the next fresh base.
+Absence means no live allocation or exposure. Identifiers are never reused;
+they are model identities, not physical addresses.
 
-`decode T r i : Option (Cell T)` is derived from this relation. `none` is
-observation failure, not a cell with a missing value or a borrowed cell. `Heap.observe`
-includes base lookup and alignment; composing it with `Cell.read` is proved equivalent to
-the actual relational raw-read operation.
+`alloc` creates uninitialized depth-zero bytes using `Repr.create`. `newBlock`
+creates supplied encodings at depth zero; `newSharedExposure` starts at depth one.
+The latter two also use `create`. Empty allocations still have an identity and
+cleanup authority. Allocation checks byte length, counter capacity, and vacancy
+of the next slot. The greatest base identifier is an exhausted-counter sentinel.
+`Heap.Inv` requires every slot at or above the counter to be absent.
 
-`setCell T i cell r r'` relates representations differing by one typed-cell update.
-Its `none` case is exactly `r' = r`. Likewise, `Heap.writeBack p none` leaves
-the entire heap unchanged, including when the base is absent. Writing back a
-failed observation cannot overwrite bytes.
+Access requires the requested alignment to divide the block's guarantee. The
+aligned stride then suffices for typed displacement. `modify` commits a
+length-preserving transformation only on success. Range operations transform
+all selected footprints before committing once: failure exposes no partial update.
+Empty ranges still require a live aligned base and an in-bounds position.
 
-For `some cell`, the target must be in bounds and has that cell afterward.
-Byte length and all typed extents stay unchanged. Bytes and permissions outside
-the footprint are preserved, as are all disjoint typed observations, including
-their success or failure. Overlapping interpretations may become unavailable.
-`Updates` composes these atomic operations; range operations do not decode and
-re-encode an entire allocation. Empty range replacement is an exact no-op.
+`freeBlock` requires index zero, the matching owned flag, alignment, **exact**
+byte coverage, and depth-zero permissions throughout. It cannot hide protected
+trailing bytes through floor division. Shared-exposure cleanup instead requires
+`owned = false` and depth one throughout.
 
-The former functional `encode`/whole-list `decode`, `ReadLaw`, `WriteLaw`, and
-`taint` interface has been removed. There is deliberately no promise that an
-unchanged integer update preserves every other typed interpretation.
+`offset` takes an `Int` displacement. Both endpoints must lie in the typed extent,
+including one-past, and the result must fit `Usize`. Movement before the beginning
+is rejected, not truncated. Extent requires a live aligned base, but not readable
+contents. Rust `add` and `offset` use this checked operation.
 
-### Type representations
+Physical pointer equality, pointer-integer conversions, usable cross-type cast
+wrappers, unaligned access, and arbitrary byte-offset pointers are not provided.
+Different descriptors can inspect a common base directly in model examples;
+that alone does not implement Rust's cast API.
 
-`Heap.Repr T` describes a type's byte representation; it is not an allocation or
-a stored byte block. Its fields are `size`, `alignment : Alignment`, `encode`,
-partial `decode`, and `supports`. Size divisibility, encoding length, and the
-round-trip law are separate declarations in `Axioms/Representation.lean`.
-The namespace avoids shadowing Lean's `Repr` class.
+## Rust boundary and Boxes
 
-`Block.Realizes T` is a separate client obligation: every initialized `T`
-observation is supported by `Heap.repr T` and has its corresponding encoded bytes
-in its footprint. The round-trip law then recovers that value from those bytes.
-There are no size/alignment agreement conditions: both the block relations and
-the byte-content claims use the same `Heap.repr T`.
+`Std/Heap.lean` contains relational adapters around the executable operations;
+`Core/Ptr.lean`, `Alloc/Boxed.lean`, and slice wrappers supply Rust-facing effects.
+Descriptors are passed explicitly, not found through a typeclass or global map.
+Safe borrow boundaries read typed values before transferring byte permissions.
 
-`Heap.read.bytes` and `Heap.write.bytes` connect these obligations to the actual
-heap primitives, not just an auxiliary observation. `HeapTests.byteRepr` and its
-write example demonstrate this interface for a single byte, given that this is
-the chosen `Heap.repr U8`.
+Safe `Box<T>` values remain represented by `T`. `Box.into_raw` creates a one-value
+owned block. `Box.from_raw` reads and removes that entire allocation; it cannot
+recover an independently owned Box from an interior field.
 
-The heap primitives manipulate abstract typed values without requiring their
-finite encodings to round-trip. Concrete byte-content claims require `Realizes`;
-it is not assumed automatically. No lossless finite encoding of every value of
-an arbitrary Lean type is asserted. In particular, abstract allocation identifiers are unbounded, so stored
-pointers are not given a universal injective finite-byte codec.
+A raw exposure is different: it temporarily puts a safe place into explicit
+storage with `owned = false`. Its matching backward computation reads the
+updated value and removes the exposure. Removing it does not deallocate the
+underlying Rust Box. Cleanup authority and byte access permissions are separate.
 
-### Cross-type permissions and pointer validity
+Restoration is privileged to the matching translated backward continuation.
+The heap does not authenticate continuation identity, lifetime, or restoration
+type. Arbitrary direct Lean calls to `endShare` or `endBorrow` are not authorized
+Rust programs. `HeapTests.restoration_is_privileged` demonstrates this boundary.
 
-A raw write checks every byte in its footprint, even if decoding at the writing
-type fails. Protected bytes reject even same-value writes. For zero-sized cells,
-any available same-type cell must also be writable; an empty footprint does not
-bypass that cell's permission.
+## Proof files
 
-Borrowing a positive-sized `T` cell makes every overlapping different-type view
-unavailable, rather than exposing a borrowed marker at `U`. Consequently, an
-overlapping `U` cannot end that borrow. Disjoint observations survive.
-Nonempty zero-sized exclusive borrowing is deliberately deferred; empty borrows
-are no-ops. Zero-sized allocation, reads, writes, and cleanup remain available.
-Distinct same-type zero-sized indices are logical cells; a zero-sized footprint
-at a different type is byte-disjoint and cannot alter those observations.
+| File | Responsibility |
+|---|---|
+| `Lemmas.lean` | Concrete traversal, byte selection/update, read-back, disjoint access, map and invariant laws |
+| `Separation.lean` | Byte/cleanup resources, matching, separation algebra, framed relational triples |
+| `Resources.lean` | Byte fragments, encoded `pointsTo`, splitting, matching, and update framing |
+| `Specs.lean` | Generic footprint-update rule and framed read/write contracts |
+| `Allocation.lean` | Capacity, freshness, allocation resources, frame preservation, exact cleanup |
+| `Borrowing.lean` | Single-footprint borrow/share/restoration and checked movement contracts |
+| `Access.lean` | Byte-based read/write/cleanup denial, including overlapping different types |
+| `Effects.lean` | Total-correctness interpretation of actual `Result` effects and composition rules |
+| `EffectSpecs.lean` | Rust read/write, movement, Box and mutable-exposure allocation/cleanup contracts |
 
-An update at a type different from `RawPtr U` invalidates every overlapping
-`RawPtr U` view, even when byte contents happen to be identical. This conservative
-rule needs no type classifier. Same-type pointer stores remain possible. Pointer
-validity is not recoverable from bits alone. Reading pointer bytes as an integer
-is underspecified: the block may expose an integer view without changing state,
-or conservatively reject it. A write through that integer view cannot preserve
-the overlapping pointer's validity.
+Cell resources claim individual byte positions and an alignment guarantee.
+Compatibility is byte-disjointness, independent of the originating type.
+Cleanup resources separately record exact byte length, alignment, and ownership.
+Fragments can therefore frame differently typed, disjoint footprints at one base.
+Shared cells are not duplicable resources.
 
-Sizes and alignments are interface parameters, not inferred from arbitrary Lean types.
-The concrete `U32`/`U8` and stored-pointer cross-type examples explicitly state
-their size assumptions. The abstract `repr` declaration does not yet
-calibrate those parameters for Rust types.
+Triples require an enabled transition and correctness of every successor,
+preserving arbitrary matching disjoint frames. `HeapWP.Spec` interprets actual
+`Result` computations using interaction-tree `DWP`; it rejects failure,
+divergence, and disabled effects. Ordinary effect-free WP is unchanged.
 
-`Access.lean` proves byte-based read/write denial, byte-based cleanup denial,
-disjoint observation preservation, mixed-permission decoding failure, wrong-type
-borrow-restoration denial, and integer-to-pointer invalidation. The cleanup
-contract requires complete byte coverage, not just the floor-divided typed extent;
-otherwise a different type could hide protected trailing bytes.
+**Finite allocation needs capacity.** Allocation contracts use `HeapWP.Spec` at
+the actual input heap, with explicit counter/size bounds. An unconditional framed
+allocation triple from `emp` would be false at an exhausted heap. Local access,
+permission transfer, movement, and cleanup retain ordinary framed triples.
 
-## Allocation, Boxes, and pointer movement
+The concrete heap proof chain and integration proofs introduce no memory-model
+axioms or `sorry`; the integration guards allow only `propext`,
+`Classical.choice`, and `Quot.sound`. This proves properties of this model, not
+its correspondence with Rust or the correctness of its compiler adaptations.
 
-`create` relates a typed cell list to an instrumented representation with exactly
-that extent, byte length, and those initial observations. It does not choose a
-base. `Heap.newCells` creates the fresh identity; `alloc` initializes its cells
-as `shared 0 none`, while `newBlock` and `newSharedExposure` create initialized cells.
-Zero-count allocation still creates a fresh base with cleanup authority.
+### Coverage boundaries
 
-A *raw exposure* places a safe value in temporary explicit storage, with cleanup
-by the matching backward computation. Allocation cleanup authority instead allows
-recovering an owned allocation or deallocating it. These are separate from cell
-access permissions.
+Range operations are executable and regression-tested, but their former
+general range-level separation/effect contracts have not yet been ported.
+`Borrowing.lean` currently proves single-footprint permission transfer.
+Do not treat a successful backend build as evidence of those missing contracts.
 
-Safe `Box<T>` values remain represented by `T`. `Box.into_raw` exposes a one-cell
-owned block; `Box.from_raw` reads and removes that entire block. This does not
-assign physical identities to safe boxes or permit converting an interior field
-into an independently owned box. Whole-block cleanup conservatively requires
-available writable cells of a covering type; invalidated typed values may first
-need to be initialized again.
+Integration proofs cover Box round-trip, stored pointers, corrected alias and
+repeated-read examples, and a handwritten borrowed-Box/callback prototype.
+Descriptors are explicit parameters, including a separate descriptor for stored
+pointers; pointers are not assumed to fit in one word. The callback contract
+accepts any subsequently written value and consumes the exposure resources.
+Pair and one-past fixtures type-check but do not yet have end-to-end proofs.
+A true zero-sized descriptor cannot satisfy a read-success theorem here.
 
-Rust's `.add(usize)` and `.offset(isize)` use checked `Heap.offset`, whose
-displacement is an `Int`. Both starting and resulting indices must lie within
-the typed extent, including one-past-the-end. Extent is independent of typed
-value availability but requires a live, suitably aligned base. Movement before
-the beginning is rejected, not truncated.
+The fixture headers mark manual descriptor adaptations and repeated-read repairs.
+The compiler was not changed or rerun; re-extraction would overwrite those edits.
+See `tests/lean/EXTRACTION.md` for the recorded extraction provenance.
 
-Physical pointer equality, pointer-integer conversions, usable cross-type pointer
-cast wrappers, unaligned access APIs, and arbitrary byte-offset pointers are not
-provided. The block laws can describe differently typed footprints at one base;
-that does not by itself implement Rust's casting API.
+## Checks
 
-## Separation and effects
-
-Fragments are sets of logical cell and cleanup resources observing a whole heap,
-not physical fragments of `Block`. Typed ranges split and recombine. Cleanup
-resources record allocation authority, alignment, exact extent, and complete byte coverage.
-Resources at one base still must agree on their type and have distinct keys.
-Simultaneously owning differently typed resources at one base is not supported
-by this connector; the underlying block relations nevertheless have cross-type frame laws.
-
-Relational triples require both an existing successor and correctness of every
-successor, preserving arbitrary matching disjoint frames. Frame, bind,
-consequence, pure, and resource-dropping rules are proved, along with primitive
-allocation, access, borrowing, sharing, movement, and cleanup contracts.
-
-`Effects.lean` interprets `Result` with the interaction-tree `DWP`. Guarded effects
-require an existing successor and correctness for every successor. Failure,
-divergence, and disabled effects are rejected. The ordinary effect-free WP is
-unchanged. `HeapWP.Triple` and `EffectSpecs.lean` lift and compose the relational
-contracts for actual Rust-model wrappers, without ordinary `step` automation.
-
-## Trust boundary and examples
-
-`Types.lean` defines cells, pointers, alignment, `Heap Block`, and `Heap.Repr T`.
-`Axioms/Representation.lean` separately declares the abstract `Block`, `Heap.repr`,
-byte projection, typed relations, and their required laws. `Model.lean` defines
-the heap operations from these declarations. There is no bundled model argument
-or second copy of the type metadata.
-
-The former single `layout` assumption has been unpacked, not discharged: no
-concrete block implementation or refinement proof to Rust's operational semantics
-is supplied. Heap and separation proofs use these fixed declarations.
-`Block` also appears in `Result`'s effect type, so otherwise pure proofs can have
-a syntactic `Block` dependency. The integration examples check exact axiom lists,
-now naming the individual assumptions rather than hiding them behind `layout`.
-
-The heap records permissions, not identities or capabilities for live borrows.
-`setCell`, `writeBack`, range replacement, and restoration are internal
-operations, not independently authorized Rust calls. Matching translated backward
-computations must invoke the right restoration at the right type and lifetime.
-Wrong-type borrowed decoding is blocked, but same-type continuation identity is
-not authenticated. `HeapTests.restoration_is_privileged` explicitly demonstrates
-that directly invoking `endShareRange` can make a fresh shared exposure writable.
-This is a trust-boundary witness, not a valid Rust program.
-
-`HeapTests.lean` covers composed lifecycles, neighboring-cell framing, nested
-sharing, signed movement, empty allocations, access/cleanup rejection, cross-type
-borrow protection, mixed-permission failure, and integer-over-pointer invalidation.
-The latter examples use different typed indices and partial overlap. Alignment
-regressions reject observation, reads, writes, and movement at an insufficiently
-aligned base; absent byte values remain unreadable and retain sharing protection.
-
-`tests/lean/RawBoxProofs.lean` proves extracted Box round-trip and stored-pointer
-examples. `RawBoxManual.lean` additionally proves corrected read/write/read,
-alias-write, and handwritten borrowed-Box/callback examples. The callback consumes
-its cell and exposure-cleanup resources before returning the updated safe value.
-The repeated-read compiler bug is deliberately unfixed; re-extraction overwrites
-the marked manual corrections. See `tests/lean/EXTRACTION.md` for provenance.
-
-From `backends/lean`, check the examples or the complete backend:
+From `backends/lean`:
 
 ```sh
 lake build Aeneas.Std.HeapTests
 lake build
 ```
 
-From the repository root, check the end-to-end Box examples without re-extraction:
+From the repository root, without re-extraction:
 
 ```sh
 make verify-raw-box
 ```
+
+`HeapTests.lean` exercises lifecycle and cleanup, uninitialized borrow/restoration,
+mixed sharing, cross-type byte protection, alignment, atomic range failure,
+signed/one-past movement, finite allocation exhaustion, empty footprints, and the
+privileged-restoration boundary.

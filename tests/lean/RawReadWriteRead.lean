@@ -1,4 +1,4 @@
-/- Extracted by Aeneas, then manually corrected to retain reads after writes.
+/- Extracted by Aeneas, then adapted to explicit representations and corrected to retain reads after writes.
    The compiler is not patched. Re-extraction overwrites these corrections;
    see EXTRACTION.md. -/
 -- [raw_read_write_read]
@@ -25,18 +25,19 @@ namespace raw_read_write_read
 /-- [raw_read_write_read::read_write_read]:
     Source: 'tests/src/raw_read_write_read.rs', lines 5:0-9:1
     Visibility: public -/
-def read_write_read (p : MutRawPtr Std.U32) : Result (Std.U32 × Std.U32) := do
-  let before ← RawPtr.read p
-  MutRawPtr.write p 1#u32
-  let after ← RawPtr.read p
+def read_write_read (repr : Aeneas.Std.Repr Std.U32)
+    (p : MutRawPtr Std.U32) : Result (Std.U32 × Std.U32) := do
+  let before ← RawPtr.read repr p
+  MutRawPtr.write repr p 1#u32
+  let after ← RawPtr.read repr p
   ok (before, after)
 
 /-- [raw_read_write_read::discarded_read]:
     Source: 'tests/src/raw_read_write_read.rs', lines 13:0-17:1
     Visibility: public -/
-def discarded_read (p : MutRawPtr Std.U32) : Result Std.U32 := do
-  let _ ← RawPtr.read p
-  MutRawPtr.write p 1#u32
-  RawPtr.read p
+def discarded_read (repr : Aeneas.Std.Repr Std.U32) (p : MutRawPtr Std.U32) : Result Std.U32 := do
+  let _ ← RawPtr.read repr p
+  MutRawPtr.write repr p 1#u32
+  RawPtr.read repr p
 
 end raw_read_write_read

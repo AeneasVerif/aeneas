@@ -83,8 +83,40 @@ the original functional value. The callback contract applies to any subsequently
 written value, not just its initial contents.
 
 Returning an effectful callback raises the result universe; the prototype uses
-explicit cross-universe `Aeneas.Std.bind` and a local proved composition rule.
+explicit cross-universe `Aeneas.Std.bind` and a proved composition rule.
 No compiler or backend primitive was changed. `make verify-raw-box` checks the
 original proofs and these manual validation proofs, including exact axiom guards
 allowing only the existing `layout` assumption and standard Lean logical axioms.
 The pair, pointer-addition, and zero-sized-value examples remain unproved.
+
+## Post-extraction migration — concrete byte heap
+
+No compiler was changed and no extraction was rerun for this migration. The
+hashes and commands above record the historical extraction, not a current
+toolchain attestation.
+
+`RawBox.lean` and `RawReadWriteRead.lean` were manually adapted to pass explicit
+`Aeneas.Std.Repr` descriptors through the memory wrappers. Stored pointers take
+their own descriptor, independently of the pointed-to value's descriptor.
+The marked repeated-read repairs remain in place. Re-extraction with the
+recorded compiler overwrites both kinds of adaptation.
+
+`RawBoxProofs.lean` and `RawBoxManual.lean` now use the concrete byte heap.
+Allocation correctness is stated at the actual input heap with explicit finite
+counter capacity and representation-size bounds, preserving any matching frame.
+Local access and cleanup use framed separation triples. The borrowed-Box
+prototype uses temporary non-owned exposure storage; its callback recovers any
+subsequently written value and consumes both byte and exposure-cleanup resources.
+Cross-universe composition is supplied by the common `HeapWP` bind rules.
+
+There is no remaining `layout`, abstract `Block`, or byte-representation axiom
+in these proof dependencies. Exact guards allow only `propext`,
+`Classical.choice`, and `Quot.sound`. The descriptors and their completeness
+proofs are explicit theorem parameters, not added axioms.
+
+`make verify-raw-box` checks these migrated fixtures and proofs without
+re-extraction. Pair and pointer-addition fixtures still lack end-to-end proofs.
+The zero-sized fixture type-checks, but its raw read is deliberately disabled
+for an actual zero-sized descriptor; no read-success theorem is claimed.
+General range-level permission/effect contracts also remain to be ported,
+although the executable range operations have concrete regression tests.

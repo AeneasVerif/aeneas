@@ -4,9 +4,7 @@ public import RawBox
 public import RawReadWriteRead
 public import Aeneas.Std.Heap.EffectSpecs
 import all Aeneas.Std.Core.Ptr
-import all Aeneas.Std.Alloc.Boxed
 import all Aeneas.Std.Primitives
-import all Aeneas.Std.Heap.Effects
 
 public section
 
@@ -16,178 +14,146 @@ open Aeneas.Std.SepLogic
 namespace raw_read_write_read
 
 /-- The manually corrected translation observes both the old and new values. -/
-theorem read_write_read.spec (p : MutRawPtr U32) (initial : U32) :
-    HeapWP.Triple (pointsTo p initial) (read_write_read p)
-      (fun result h => result = (initial, 1#u32) ∧ pointsTo p 1#u32 h) := by
+theorem read_write_read.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32) (initial : U32)
+    (hsize : 0 < repr.size) :
+    HeapWP.Triple (pointsTo repr p initial) (read_write_read repr p)
+      (fun result h => result = (initial, 1#u32) ∧ pointsTo repr p 1#u32 0 h) := by
   unfold read_write_read
-  apply HeapWP.Triple.bind (HeapWP.read.spec p initial 0)
+  apply HeapWP.Triple.bind (HeapWP.read.spec repr p initial 0 hsize)
   intro before
   apply HeapWP.Triple.pure_pre
   intro hbefore
   subst before
-  apply HeapWP.Triple.bind
-    (HeapWP.write.spec p (.shared 0 (some initial)) 1#u32 rfl)
+  apply HeapWP.Triple.bind (HeapWP.write.spec repr p initial 1#u32 hsize)
   intro _
-  apply HeapWP.Triple.bind (HeapWP.read.spec p 1#u32 0)
+  apply HeapWP.Triple.bind (HeapWP.read.spec repr p 1#u32 0 hsize)
   intro after
   apply HeapWP.Triple.pure_pre
   intro hafter
   subst after
-  exact HeapWP.Triple.pure (pointsTo p 1#u32) (initial, 1#u32)
+  exact HeapWP.Triple.pure (pointsTo repr p 1#u32) (initial, 1#u32)
 
 /-- Discarding the first read does not permit reusing it after a write. -/
-theorem discarded_read.spec (p : MutRawPtr U32) (initial : U32) :
-    HeapWP.Triple (pointsTo p initial) (discarded_read p)
-      (fun result h => result = 1#u32 ∧ pointsTo p 1#u32 h) := by
+theorem discarded_read.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32) (initial : U32)
+    (hsize : 0 < repr.size) :
+    HeapWP.Triple (pointsTo repr p initial) (discarded_read repr p)
+      (fun result h => result = 1#u32 ∧ pointsTo repr p 1#u32 0 h) := by
   unfold discarded_read
-  apply HeapWP.Triple.bind (HeapWP.read.spec p initial 0)
+  apply HeapWP.Triple.bind (HeapWP.read.spec repr p initial 0 hsize)
   intro _
   apply HeapWP.Triple.pure_pre
   intro _
-  apply HeapWP.Triple.bind
-    (HeapWP.write.spec p (.shared 0 (some initial)) 1#u32 rfl)
+  apply HeapWP.Triple.bind (HeapWP.write.spec repr p initial 1#u32 hsize)
   intro _
-  exact HeapWP.read.spec p 1#u32 0
+  exact HeapWP.read.spec repr p 1#u32 0 hsize
 
 end raw_read_write_read
 
 namespace raw_box
 
-/-- The corrected alias example observes the write and releases its allocation. -/
-theorem alias_write.spec (initial replacement : U32) :
-    HeapWP.Triple emp (alias_write initial replacement)
+theorem alias_write_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
+    (initial replacement : U32) (hsize : 0 < repr.size) :
+    HeapWP.Triple (sep (alloc repr p 1 true) (pointsTo repr p initial))
+      (do let before ← RawPtr.read repr p
+          MutRawPtr.write repr p replacement
+          let after ← RawPtr.read repr p
+          let _ ← alloc.boxed.Box.from_raw repr p
+          pure (before, after))
       (fun result h => result = (initial, replacement) ∧ emp h) := by
-  unfold alias_write
-  apply HeapWP.Triple.bind (HeapWP.intoRaw.spec initial)
-  intro p
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun value h hp => (sep_and_left (value = initial)
-      (pointsTo p initial) (alloc p 1 true) h).mp hp)
-    (HeapWP.frame (R := alloc p 1 true) (HeapWP.read.spec p initial 0)))
+      (pointsTo repr p initial) (alloc repr p 1 true) h).mp hp)
+    (HeapWP.frame (R := alloc repr p 1 true) (HeapWP.read.spec repr p initial 0 hsize)))
   intro before
   apply HeapWP.Triple.pure_pre
   intro hbefore
   subst before
-  apply HeapWP.Triple.bind (HeapWP.frame (R := alloc p 1 true)
-    (HeapWP.write.spec p (.shared 0 (some initial)) replacement rfl))
+  apply HeapWP.Triple.bind (HeapWP.frame (R := alloc repr p 1 true)
+    (HeapWP.write.spec repr p initial replacement hsize))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun value h hp => (sep_and_left (value = replacement)
-      (pointsTo p replacement) (alloc p 1 true) h).mp hp)
-    (HeapWP.frame (R := alloc p 1 true) (HeapWP.read.spec p replacement 0)))
+      (pointsTo repr p replacement) (alloc repr p 1 true) h).mp hp)
+    (HeapWP.frame (R := alloc repr p 1 true) (HeapWP.read.spec repr p replacement 0 hsize)))
   intro after
   apply HeapWP.Triple.pure_pre
   intro hafter
   subst after
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
-    (fun _ _ hp => hp.2) (HeapWP.fromRaw.spec p replacement))
+    (fun _ _ hp => hp.2) (HeapWP.fromRaw.spec repr p replacement hsize))
   intro _
   exact HeapWP.Triple.pure emp (initial, replacement)
+
+/-- The corrected alias example observes the write and releases its allocation. -/
+theorem alias_write.spec (repr : Aeneas.Std.Repr U32) (initial replacement : U32)
+    (hsize : 0 < repr.size) (hfit : repr.size < 2 ^ UScalarTy.numBits .Usize)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (alias_write repr initial replacement)
+      (fun result s' => result = (initial, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  unfold alias_write
+  apply HeapWP.Spec.bind (HeapWP.intoRaw.spec repr initial s F hi hm hc hfit)
+  rintro p s' ⟨_, h, hd, hm', hi', hp⟩
+  apply HeapWP.Spec.mono (alias_write_tail.spec repr p initial replacement hsize h F s' hp hd hm' hi')
+  rintro result s'' ⟨h', _, hm'', hi'', hv, rfl⟩
+  exact ⟨hv, by simpa using hm'', hi''⟩
 
 end raw_box
 
 namespace raw_box_manual
 
-unseal Result
+/- A handwritten borrowed-Box prototype, not Rust's consuming Box conversion.
+The safe place is unavailable until the matching callback returns its updated
+value. Removing the exposure does not deallocate the Rust Box. -/
+def into_raw (repr : Aeneas.Std.Repr T) (b : T) : Result (MutRawPtr T × (Unit → Result T)) :=
+  Aeneas.Std.bind (RawPtr.allocExposure repr [b]) fun p =>
+    Result.ok (p, fun (_ : Unit) => core.ptr.end_from_mut repr p)
 
-/- Returning an effectful callback raises the result universe. Keep the
-   cross-universe composition rule local to this prototype. -/
-theorem bind {α : Type u} {β : Type v}
-    {P : Assertion.{0}} {Q : α → Assertion.{0}} {R : β → Assertion.{0}}
-    {c : Result α} {k : α → Result β}
-    (hc : HeapWP.Triple P c Q)
-    (hk : ∀ x, HeapWP.Triple (Q x) (k x) R) :
-    HeapWP.Triple P (Aeneas.Std.bind c k) R := by
-  intro h F s hp hd hm hi
-  apply Aeneas.Data.Coinductive.DWP.bind (hc h F s hp hd hm hi)
-  rintro x s' ⟨h', hd', hm', hi', hq⟩
-  exact hk x h' F s' hq hd' hm' hi'
-
-/- A candidate *borrowed* conversion, not Rust's consuming `Box::into_raw`.
-   The Rust counterpart of `borrowed_box` is:
-
-   pub fn borrowed_box(initial: u32, replacement: u32) -> (u32, u32) {
-       let mut b = Box::new(initial);
-       let p = std::ptr::from_mut(&mut *b);
-       let before = unsafe { p.read() };
-       unsafe { p.write(replacement) };
-       (before, *b)
-   }
-
-   The model's Box is a plain value. The safe place is unavailable until its
-   backward callback returns the updated value. Ending the exposure does not free
-   the Rust Box; it removes only its temporary raw-memory representation.
-   This is handwritten design validation, not current compiler output. -/
-def into_raw (b : T) : Result (MutRawPtr T × (Unit → Result T)) :=
-  Aeneas.Std.bind (RawPtr.allocExposure [b]) fun p =>
-    Result.ok (p, fun (_ : Unit) => core.ptr.end_from_mut p)
-
-def borrowed_box (initial replacement : U32) : Result (U32 × U32) :=
-  Aeneas.Std.bind (into_raw initial) fun (p, end_borrow) => do
-    let before ← RawPtr.read p
-    MutRawPtr.write p replacement
+def borrowed_box (repr : Aeneas.Std.Repr U32) (initial replacement : U32) : Result (U32 × U32) :=
+  Aeneas.Std.bind (into_raw repr initial) fun (p, end_borrow) => do
+    let before ← RawPtr.read repr p
+    MutRawPtr.write repr p replacement
     let b ← end_borrow ()
     pure (before, alloc.boxed.Box.deref b)
 
-theorem allocExposure.spec (value : T) :
-    HeapWP.Triple emp (RawPtr.allocExposure [value])
-      (fun p => sep (alloc p 1 false) (pointsTo p value)) := by
-  simpa [RawPtr.allocExposure, State.newExposure, State.newBlock, Cell.full] using
-    HeapWP.Triple.guardedModify (SepLogic.newBlock.spec [value] false)
-
-theorem end_from_mut.spec (p : MutRawPtr T) (value : T) :
-    HeapWP.Triple (sep (alloc p 1 false) (pointsTo p value))
-      (core.ptr.end_from_mut p) (fun result h => result = value ∧ emp h) := by
-  unfold core.ptr.end_from_mut
-  apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
-    (fun x h hp => (sep_and_left (x = value)
-      (pointsTo p value) (alloc p 1 false) h).mp hp)
-    (HeapWP.frame (R := alloc p 1 false) (HeapWP.read.spec p value 0)))
-  intro x
-  apply HeapWP.Triple.pure_pre
-  intro hx
-  subst x
-  apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
-    (fun _ _ h => h) (HeapWP.Triple.guardedModify
-      (SepLogic.freeBlock.spec p [.shared 0 (some value)] false (by simp [Cell.writable]))))
-  intro _
-  exact HeapWP.Triple.pure emp value
-
 /-- The callback recovers any subsequently written value, not just the initial one. -/
-theorem into_raw.spec (value : T) :
-    HeapWP.Triple emp (into_raw value)
-      (fun (p, back) h =>
-        (∀ updated, HeapWP.Triple (sep (alloc p 1 false) (pointsTo p updated))
+theorem into_raw.spec (repr : Aeneas.Std.Repr T) (value : T)
+    (hsize : 0 < repr.size) (hfit : repr.size < 2 ^ UScalarTy.numBits .Usize)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (into_raw repr value)
+      (fun (p, back) s' =>
+        (∀ updated, HeapWP.Triple (sep (alloc repr p 1 false) (pointsTo repr p updated))
           (back ()) (fun result h => result = updated ∧ emp h)) ∧
-        sep (alloc p 1 false) (pointsTo p value) h) := by
+        s'.next.val = s.next.val + 1 ∧
+        ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
+          sep (alloc repr p 1 false) (pointsTo repr p value) h) s := by
   unfold into_raw
-  apply bind (allocExposure.spec value)
-  intro p
-  apply HeapWP.Triple.conseq (fun _ h => h) _ (HeapWP.Triple.pure
-    (sep (alloc p 1 false) (pointsTo p value))
-    (p, fun (_ : Unit) => core.ptr.end_from_mut p))
-  rintro _ _ ⟨rfl, hp⟩
-  exact ⟨fun updated => end_from_mut.spec p updated, hp⟩
+  apply HeapWP.Spec.bind (HeapWP.allocExposure.spec repr value s F hi hm hc hfit)
+  intro p s' hp
+  apply HeapWP.Spec.pure _ _ _ |>.mpr
+  exact ⟨fun updated => HeapWP.end_from_mut.spec repr p updated hsize, hp⟩
 
-/-- Raw writes reach the safe Box through the end-borrow callback, leaving no raw exposure. -/
-theorem borrowed_box.spec (initial replacement : U32) :
-    HeapWP.Triple emp (borrowed_box initial replacement)
+theorem borrowed_box_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
+    (back : Unit → Result U32) (initial replacement : U32) (hsize : 0 < repr.size)
+    (hback : ∀ updated, HeapWP.Triple (sep (alloc repr p 1 false) (pointsTo repr p updated))
+      (back ()) (fun result h => result = updated ∧ emp h)) :
+    HeapWP.Triple (sep (alloc repr p 1 false) (pointsTo repr p initial))
+      (do let before ← RawPtr.read repr p
+          MutRawPtr.write repr p replacement
+          let b ← back ()
+          pure (before, alloc.boxed.Box.deref b))
       (fun result h => result = (initial, replacement) ∧ emp h) := by
-  unfold borrowed_box
-  apply bind (into_raw.spec initial)
-  rintro ⟨p, end_borrow⟩
-  apply HeapWP.Triple.pure_pre
-  intro hback
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun value h hp => (sep_and_left (value = initial)
-      (pointsTo p initial) (alloc p 1 false) h).mp hp)
-    (HeapWP.frame (R := alloc p 1 false) (HeapWP.read.spec p initial 0)))
+      (pointsTo repr p initial) (alloc repr p 1 false) h).mp hp)
+    (HeapWP.frame (R := alloc repr p 1 false) (HeapWP.read.spec repr p initial 0 hsize)))
   intro before
   apply HeapWP.Triple.pure_pre
   intro hbefore
   subst before
-  apply HeapWP.Triple.bind (HeapWP.frame (R := alloc p 1 false)
-    (HeapWP.write.spec p (.shared 0 (some initial)) replacement rfl))
+  apply HeapWP.Triple.bind (HeapWP.frame (R := alloc repr p 1 false)
+    (HeapWP.write.spec repr p initial replacement hsize))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ h => h) (hback replacement))
@@ -197,122 +163,39 @@ theorem borrowed_box.spec (initial replacement : U32) :
   subst b
   exact HeapWP.Triple.pure emp (initial, replacement)
 
+/-- Raw writes reach the safe Box through the matching callback, leaving no exposure. -/
+theorem borrowed_box.spec (repr : Aeneas.Std.Repr U32) (initial replacement : U32)
+    (hsize : 0 < repr.size) (hfit : repr.size < 2 ^ UScalarTy.numBits .Usize)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (borrowed_box repr initial replacement)
+      (fun result s' => result = (initial, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  unfold borrowed_box
+  apply HeapWP.Spec.bind (into_raw.spec repr initial hsize hfit s F hi hm hc)
+  rintro ⟨p, back⟩ s' ⟨hback, _, h, hd, hm', hi', hp⟩
+  apply HeapWP.Spec.mono
+    (borrowed_box_tail.spec repr p back initial replacement hsize hback h F s' hp hd hm' hi')
+  rintro result s'' ⟨h', _, hm'', hi'', hv, rfl⟩
+  exact ⟨hv, by simpa using hm'', hi''⟩
+
 end raw_box_manual
 
-/--
-info: 'raw_read_write_read.read_write_read.spec' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block,
- Block.bytes,
- Block.extent,
- Block.setCell,
- Block.set_bytes_length,
- Block.set_exists,
- Block.set_extent,
- Block.set_frame,
- Block.set_view,
- Block.view,
- Block.view_bound,
- Block.view_bytes,
- Block.view_unique,
- Heap.repr]
--/
+/-- info: 'raw_read_write_read.read_write_read.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_read_write_read.read_write_read.spec
 
-/--
-info: 'raw_read_write_read.discarded_read.spec' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block,
- Block.bytes,
- Block.extent,
- Block.setCell,
- Block.set_bytes_length,
- Block.set_exists,
- Block.set_extent,
- Block.set_frame,
- Block.set_view,
- Block.view,
- Block.view_bound,
- Block.view_bytes,
- Block.view_unique,
- Heap.repr]
--/
+/-- info: 'raw_read_write_read.discarded_read.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_read_write_read.discarded_read.spec
 
-/--
-info: 'raw_box.alias_write.spec' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block,
- Block.bytes,
- Block.create,
- Block.create_bytes,
- Block.create_exists,
- Block.create_extent,
- Block.create_view,
- Block.extent,
- Block.setCell,
- Block.set_bytes_length,
- Block.set_exists,
- Block.set_extent,
- Block.set_frame,
- Block.set_view,
- Block.view,
- Block.view_bound,
- Block.view_bytes,
- Block.view_unique,
- Heap.repr]
--/
+/-- info: 'raw_box.alias_write.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_box.alias_write.spec
 
-/--
-info: 'raw_box_manual.into_raw.spec' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block,
- Block.bytes,
- Block.create,
- Block.create_bytes,
- Block.create_exists,
- Block.create_extent,
- Block.create_view,
- Block.extent,
- Block.view,
- Block.view_bound,
- Block.view_unique,
- Heap.repr]
--/
+/-- info: 'raw_box_manual.into_raw.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_box_manual.into_raw.spec
 
-/--
-info: 'raw_box_manual.borrowed_box.spec' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block,
- Block.bytes,
- Block.create,
- Block.create_bytes,
- Block.create_exists,
- Block.create_extent,
- Block.create_view,
- Block.extent,
- Block.setCell,
- Block.set_bytes_length,
- Block.set_exists,
- Block.set_extent,
- Block.set_frame,
- Block.set_view,
- Block.view,
- Block.view_bound,
- Block.view_bytes,
- Block.view_unique,
- Heap.repr]
--/
+/-- info: 'raw_box_manual.borrowed_box.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_box_manual.borrowed_box.spec
