@@ -1,14 +1,12 @@
 module
 
 public import Aeneas.Std.Heap.Borrowing
-public import Mathlib.Data.List.Forall2
 import all Aeneas.Std.Heap.Model
 import all Aeneas.Std.Heap.Separation
 import all Aeneas.Std.Heap.Resources
 
-/-! Observable consequences of the cross-view laws and access-denial checks.
-No concrete representation, type-size function, or cross-type index correspondence
-is used. The laws concern raw data updates, not privileged permission restoration. -/
+/-! Cross-type safety follows from canonical byte permissions. Layout framing concerns
+disjoint byte intervals, not equality of differently typed indices. -/
 
 @[expose] public section
 
@@ -16,101 +14,152 @@ namespace Aeneas.Std
 
 universe u
 
-theorem Cell.readEquivalent_refl (c : Cell ty) : c.ReadEquivalent c := by
-  cases c
-  · rename_i fraction value
-    cases fraction
-    · trivial
-    · exact ⟨rfl, rfl⟩
-  · trivial
-
 namespace Heap
 
 variable {m : Layout.{u}}
 
-/-- Authorized heap observation, with missing, out-of-bounds, and unreadable cells hidden. -/
-def observe (m : Layout.{u}) (s : Heap m.Repr) (p : RawPtr ty) : Option ty :=
-  (s.load m.interpret ty p.base).bind fun cs => cs[p.offset]?.bind Cell.read
+theorem decode_none_of_permission_conflict {ty : Type u} {r : m.Repr}
+    {i a b : Nat}
+    (ha : i * m.byteLength ty ≤ a ∧ a < (i + 1) * m.byteLength ty)
+    (hb : i * m.byteLength ty ≤ b ∧ b < (i + 1) * m.byteLength ty)
+    (hp : m.permission r a ≠ m.permission r b) :
+    m.decode ty r i = none := by
+  cases he : m.decode ty r i
+  · rfl
+  · rename_i c
+    have hv := Layout.decode_eq_some.mp he
+    exact (hp ((m.view_permission _ _ _ _ hv a ha.1 ha.2).trans
+      (m.view_permission _ _ _ _ hv b hb.1 hb.2).symm)).elim
 
-open SepLogic in
 theorem read_iff_observe {s s' : Heap m.Repr} {p : RawPtr ty} {value : ty} :
-    read m p s value s' ↔ observe m s p = some value ∧ s' = s := by
+    read m p s value s' ↔
+      ((observe m s p).bind Cell.read = some value) ∧ s' = s := by
   constructor
-  · rintro ⟨⟨before, after, f, hoff, hs⟩, rfl⟩
-    have hm := matches_segment p before [.val (some f) value] after hoff hs
-    obtain ⟨actual, ha, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
-    have hv' : actual[p.offset]? = some (.val (some f) value) := by simpa using hv
-    exact ⟨by simp [observe, ha, hv', Cell.read], rfl⟩
-  · rintro ⟨hv, hstate⟩
-    subst s'
-    obtain ⟨cs, hcs, hv⟩ := Option.bind_eq_some_iff.mp hv
-    obtain ⟨cell, hcell, hv⟩ := Option.bind_eq_some_iff.mp hv
-    cases cell
-    · rename_i fraction x
-      cases fraction
-      · simp [Cell.read] at hv
-      · rename_i f
-        have hx : x = value := Option.some.inj hv
-        subst x
-        have hm : Fragment.Matches m s (cellsHeap p [.val (some f) value]) := by
-          apply matches_cellsHeap.mpr
-          intro i hi
-          have he : i = 0 := by simp at hi; grind
-          subst i
-          exact ⟨cs, hcs, by simpa using hcell⟩
-        obtain ⟨before, after, hoff, hs⟩ := segment_of_matches (by simp) hm
-        exact ⟨⟨before, after, f, hoff, hs⟩, rfl⟩
+  · rintro ⟨⟨r, depth, hs, hv⟩, rfl⟩
+    have hd := Layout.decode_eq_some.mpr hv
+    exact ⟨by simp [observe, hs, hd, Cell.read], rfl⟩
+  · rintro ⟨hv, rfl⟩
+    obtain ⟨c, hc, hv⟩ := Option.bind_eq_some_iff.mp hv
+    obtain ⟨r, hs, hc⟩ := Option.bind_eq_some_iff.mp hc
+    have hcell := Layout.decode_eq_some.mp hc
+    cases c
+    · rename_i depth x _
+      have he := Option.some.inj hv
+      subst x
+      exact ⟨⟨r, depth, hs, hcell⟩, rfl⟩
+    · simp [Cell.read] at hv
     · simp [Cell.read] at hv
 
-theorem replaceRange.hidden_reads {s s' : Heap m.Repr} {p : RawPtr T}
-    {old new : List (Cell T)} (he : List.Forall₂ Cell.ReadEquivalent old new)
-    (hu : replaceRange m s p old new s') (q : RawPtr U) (hb : q.base = p.base) :
-    observe m s q = observe m s' q := by
-  by_cases hn : old = []
-  · have hs : s' = s := ((ite_eq_left hn).mp hu).2
-    rw [hs]
-  · obtain ⟨_, before, after, _, hs, rfl⟩ := (ite_eq_right hn).mp hu
-    have hbefore := List.forall₂_same.mpr (fun c (_ : c ∈ before) => Cell.readEquivalent_refl c)
-    have hafter := List.forall₂_same.mpr (fun c (_ : c ∈ after) => Cell.readEquivalent_refl c)
-    have hall := List.rel_append (List.rel_append hbefore he) hafter
-    cases hr : s.cells p.base
-    · simp [Heap.load, hr] at hs
-    · rename_i r
-      have hs' : m.interpret T r = some (before ++ old ++ after) := by
-        simpa [Heap.load, hr] using hs
-      have hread := m.readLaw T r _ _ hs' hall U q.offset
-      simpa [observe, Heap.load, store, update, hb, hr, readCell] using hread
+theorem read.bytes {s s' : Heap m.Repr} {p : RawPtr ty} {value : ty}
+    (hr : read m p s value s') (codec : ByteCodec ty) (hc : m.Realizes ty codec) :
+    ∃ r, s.cells p.base = some r ∧ codec.supports value ∧
+      ((m.bytes r).drop (p.index * codec.byteLength)).take codec.byteLength =
+        codec.encode value := by
+  obtain ⟨⟨r, depth, hs, hv⟩, _⟩ := hr
+  exact ⟨r, hs, hc.2 r p.index depth value hv⟩
 
-theorem replaceRange.hidden_read_iff {s s' : Heap m.Repr} {p : RawPtr T}
-    {old new : List (Cell T)} (he : List.Forall₂ Cell.ReadEquivalent old new)
-    (hu : replaceRange m s p old new s') (q : RawPtr U) (hb : q.base = p.base)
-    (value : U) : read m q s value s ↔ read m q s' value s' := by
-  simp [read_iff_observe, hu.hidden_reads he q hb]
+theorem write.bytes {s s' : Heap m.Repr} {p : RawPtr ty} {value : ty}
+    (hw : write m p value s () s') (codec : ByteCodec ty) (hc : m.Realizes ty codec) :
+    ∃ r, s'.cells p.base = some r ∧ codec.supports value ∧
+      ((m.bytes r).drop (p.index * codec.byteLength)).take codec.byteLength =
+        codec.encode value := by
+  obtain ⟨r, r', _, _, hu, rfl⟩ := hw
+  exact ⟨r', by simp, hc.2 r' p.index 0 value (m.set_view _ _ _ _ _ hu)⟩
 
-/-- A raw write through `U` cannot change a protected `T` cell at the same base. -/
-theorem write.preserves_protected {s s' : Heap m.Repr} {p : RawPtr U} {value : U}
-    {T : Type u} {cs : List (Cell T)}
-    (hs : s.load m.interpret T p.base = some cs)
-    (index : Nat) (hi : index < cs.length) (hp : ¬ cs[index].writable)
-    (hw : write m p value s () s') :
-    (s'.load m.interpret T p.base).bind (fun updated => updated[index]?) = some cs[index] := by
-  obtain ⟨old, hwrite, hu⟩ := hw
-  obtain ⟨_, before, after, _, hU, rfl⟩ := (ite_eq_right (by simp)).mp hu
-  have hbefore : List.Forall₂ Cell.WriteCompatible before before :=
-    List.forall₂_same.mpr (fun _ _ => Or.inr rfl)
-  have hafter : List.Forall₂ Cell.WriteCompatible after after :=
-    List.forall₂_same.mpr (fun _ _ => Or.inr rfl)
-  have hcell : Cell.WriteCompatible old (.val (some 0) value) := .inl hwrite
-  have hall := List.rel_append
-    (List.rel_append hbefore (List.Forall₂.cons hcell .nil)) hafter
-  cases hr : s.cells p.base
-  · simp [Heap.load, hr] at hs
-  · rename_i r
-    have hT : m.interpret T r = some cs := by simpa [Heap.load, hr] using hs
-    have hU' : m.interpret U r = some (before ++ [old] ++ after) := by
-      simpa [Heap.load, hr] using hU
-    have hprotected := m.writeLaw U r _ _ hU' hall T cs hT index hi hp
-    simpa [Heap.load, store, update] using hprotected
+@[simp] theorem writeBack_none (p : RawPtr ty) (s s' : Heap m.Repr) :
+    writeBack m p none s s' ↔ s' = s := Iff.rfl
+
+/-- Even a same-value write is denied if any byte in its footprint is protected. -/
+theorem write.denied_by_byte {s s' : Heap m.Repr} {p : RawPtr ty} {r : m.Repr}
+    (hs : s.cells p.base = some r) (b : Nat)
+    (hlo : p.index * m.byteLength ty ≤ b) (hhi : b < (p.index + 1) * m.byteLength ty)
+    (permission : Permission) (hp : m.permission r b = some permission)
+    (hn : ¬ permission.writable) (value : ty) : ¬ write m p value s () s' := by
+  rintro ⟨r₀, _, hs₀, hw, _⟩
+  have he : r₀ = r := Option.some.inj (hs₀.symm.trans hs)
+  subst r₀
+  obtain ⟨p', hp', hw'⟩ := hw.2.1 b hlo hhi
+  have he := Option.some.inj (hp'.symm.trans hp)
+  exact hn (he ▸ hw')
+
+theorem read.denied_by_byte {s s' : Heap m.Repr} {p : RawPtr ty} {r : m.Repr}
+    (hs : s.cells p.base = some r) (b : Nat)
+    (hlo : p.index * m.byteLength ty ≤ b) (hhi : b < (p.index + 1) * m.byteLength ty)
+    (permission : Permission) (hp : m.permission r b = some permission)
+    (hn : ∀ depth, permission ≠ .shared depth) (value : ty) :
+    ¬ read m p s value s' := by
+  rintro ⟨⟨r₀, depth, hs₀, hv⟩, _⟩
+  have he : r₀ = r := Option.some.inj (hs₀.symm.trans hs)
+  subst r₀
+  have hp' := m.view_permission _ _ _ _ hv b hlo hhi
+  exact hn depth (Option.some.inj (hp.symm.trans hp'))
+
+theorem write.preserves_disjoint {s s' : Heap m.Repr} {p : RawPtr T} {value : T}
+    (hw : write m p value s () s') (q : RawPtr U)
+    (hd : p.base ≠ q.base ∨ CellsDisjoint m.byteLength T p.index U q.index) :
+    observe m s' q = observe m s q := by
+  obtain ⟨r, r', hs, _, hu, rfl⟩ := hw
+  by_cases hb : q.base = p.base
+  · have hdis : CellsDisjoint m.byteLength T p.index U q.index := by
+      rcases hd with hne | hdis
+      · exact (hne hb.symm).elim
+      · exact hdis
+    simpa [observe, storeRepr, update, hb, hs] using Layout.set_decode_frame hu hdis
+  · simp [observe, storeRepr, update, hb]
+
+/-- Integer stores invalidate overlapping pointer observations, independently of bit equality. -/
+theorem write.invalidates_pointer {s s' : Heap m.Repr} {p : RawPtr T} {value : T}
+    (hw : write m p value s () s') (q : RawPtr U) (hb : q.base = p.base)
+    (hint : m.kind T = .integer) (hptr : m.kind U = .pointer)
+    (hoverlap : ¬ CellsDisjoint m.byteLength T p.index U q.index) :
+    observe m s' q = none := by
+  obtain ⟨r, r', _, _, hu, rfl⟩ := hw
+  have hn : m.decode U r' q.index = none := by
+    cases he : m.decode U r' q.index
+    · rfl
+    · rename_i c
+      exact (m.set_integer_pointer _ _ _ _ _ _ hu hint U q.index hptr hoverlap c
+        (Layout.decode_eq_some.mp he)).elim
+  simp [observe, storeRepr, update, hb, hn]
+
+/-- A borrowed marker cannot be decoded and restored through an overlapping different type. -/
+theorem endBorrowRange.denied_other_type {s s' : Heap m.Repr}
+    {T U : Type u} {i : Nat} {r r' : m.Repr}
+    (hu : m.setCell T i (some .borrowed) r r') (q : RawPtr U)
+    (hs : s.cells q.base = some r') (ht : T ≠ U)
+    (hoverlap : ¬ CellsDisjoint m.byteLength T i U q.index)
+    (values : List U) (hne : values ≠ []) :
+    ¬ endBorrowRange m q values s () s' := by
+  have ho : List.replicate values.length (.borrowed : Cell U) ≠ [] := by simpa using hne
+  rintro h
+  obtain ⟨_, actual, _, ha, hv, _⟩ := (ite_eq_right ho).mp h
+  have he : actual = r' := Option.some.inj (ha.symm.trans hs)
+  subst actual
+  have hi : 0 < (List.replicate values.length (.borrowed : Cell U)).length := by
+    simpa using List.length_pos_iff.mpr hne
+  have hv₀ := hv 0 hi
+  exact m.set_borrow_type _ _ _ _ hu U q.index ht hoverlap .borrowed (by simpa using hv₀)
+
+theorem freeBlock.denied_by_byte {s s' : Heap m.Repr} {p : RawPtr ty} {r : m.Repr}
+    (hs : s.cells p.base = some r) (b : Nat) (hb : b < (m.bytes r).length)
+    (permission : Permission) (hp : m.permission r b = some permission)
+    (hn : ¬ permission.writable) (count : Nat) (own : Bool) :
+    ¬ freeBlock m p count own s () s' := by
+  rintro ⟨_, _, ⟨cs, ⟨r', hs', _, hv, hbytes⟩, _, hw⟩, _⟩
+  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
+  subst r'
+  have hsize : 0 < m.byteLength ty := by grind
+  have hi : b / m.byteLength ty < cs.length :=
+    (Nat.div_lt_iff_lt_mul hsize).mpr (by simpa [hbytes] using hb)
+  have hv₀ := hv (b / m.byteLength ty) hi
+  have hlo : (b / m.byteLength ty) * m.byteLength ty ≤ b := Nat.div_mul_le_self _ _
+  have hhi : b < (b / m.byteLength ty + 1) * m.byteLength ty := by
+    have hmod := Nat.mod_lt b hsize
+    have hdiv := Nat.mod_add_div b (m.byteLength ty)
+    grind
+  have hp' := m.view_permission _ _ _ _ hv₀ b (by simpa using hlo) (by simpa using hhi)
+  have he := Option.some.inj (hp.symm.trans hp')
+  exact hn (he.symm ▸ hw cs[b / m.byteLength ty] (List.getElem_mem hi))
 
 end Heap
 
@@ -121,31 +170,38 @@ variable {m : Layout.{u}}
 theorem read.denied {s s' : Heap m.Repr} {p : RawPtr ty} {cell : Cell ty}
     (hm : Fragment.Matches m s (cellsHeap p [cell])) (hc : cell.read = none)
     (value : ty) : ¬ Heap.read m p s value s' := by
-  rintro ⟨⟨before, after, f, hoff, hs⟩, _⟩
-  have he := segment_unique hm (by simp) hoff hs
-  have hcell : cell = .val (some f) value := (List.cons.inj he).1
+  obtain ⟨r, hs, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
+  rintro ⟨⟨r', depth, hs', hv'⟩, _⟩
+  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
+  subst r'
+  have hv₀ : m.view ty r p.index cell := by simpa using hv
+  have hcell := m.view_unique _ _ _ _ _ hv₀ hv'
   simp [hcell, Cell.read] at hc
 
 theorem write.denied {s s' : Heap m.Repr} {p : RawPtr ty} {cell : Cell ty}
     (hm : Fragment.Matches m s (cellsHeap p [cell])) (hc : ¬ cell.writable)
     (value : ty) : ¬ Heap.write m p value s () s' := by
-  rintro ⟨old, hw, hu⟩
-  have he := replaceRange.old_eq hm (by simp) hu
-  have hcell : cell = old := (List.cons.inj he).1
-  exact hc (by simpa [hcell] using hw)
+  obtain ⟨r, hs, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
+  rintro ⟨r', _, hs', hw, _⟩
+  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
+  subst r'
+  exact hc (hw.2.2 cell (by simpa using hv))
 
 theorem freeBlock.denied {s s' : Heap m.Repr} {p q : RawPtr ty} {cell : Cell ty}
     (hm : Fragment.Matches m s (cellsHeap p [cell])) (hc : ¬ cell.writable)
     (hb : q.base = p.base) (count : Nat) (own : Bool) :
     ¬ Heap.freeBlock m q count own s () s' := by
-  rintro ⟨_, _, ⟨cs, hs, _, hw⟩, _⟩
-  obtain ⟨actual, ha, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
-  have he : actual = cs := by
-    rw [hb] at hs
-    exact Option.some.inj (ha.symm.trans hs)
-  have hcell : cs[p.offset]? = some cell := by simpa [he] using hv
-  obtain ⟨hi, hvalue⟩ := List.getElem?_eq_some_iff.mp hcell
-  exact hc (hw cell (hvalue ▸ List.getElem_mem hi))
+  obtain ⟨r, hs, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
+  have hv₀ : m.view ty r p.index cell := by simpa using hv
+  rintro ⟨_, _, ⟨cs, ⟨r', hs', hn, hcs, _⟩, _, hw⟩, _⟩
+  have he : r' = r := by
+    rw [hb] at hs'
+    exact Option.some.inj (hs'.symm.trans hs)
+  subst r'
+  have hi : p.index < cs.length := by simpa [hn] using m.view_bound _ _ _ _ hv₀
+  have hv' : m.view ty r p.index cs[p.index] := by simpa using hcs p.index hi
+  have he := m.view_unique _ _ _ _ _ hv₀ hv'
+  exact hc (he ▸ hw cs[p.index] (List.getElem_mem hi))
 
 end SepLogic
 end Aeneas.Std

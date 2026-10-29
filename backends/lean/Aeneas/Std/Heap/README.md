@@ -1,189 +1,212 @@
-# Parametric heap experiment (WIP)
+# Instrumented Byte Memory for Aeneas (WIP)
 
-This is an experimental simplification of
-[AeneasVerif/aeneas#1433](https://github.com/AeneasVerif/aeneas/pull/1433),
-based on commit `8c7727c79465046cf50057b7530fe5855ea79457`.
-Compare this branch against `cezar/heap_model`, not `main`.
-The standard-library entry point imports the new connector and its parametric
-lifecycle examples. This remains a design-feedback experiment, not a complete
-formalization of Rust memory or a merge-ready PR.
+An experiment based on
+[AeneasVerif/aeneas#1433](https://github.com/AeneasVerif/aeneas/pull/1433).
+This is a design-feedback model, not a complete formalization of Rust memory.
 
-## Design and terminology
+## Core design
 
-`Heap Repr` maps fresh base identifiers to representations, separately records
-allocation cleanup authority, and maintains a global freshness counter. Identifiers
-are never reused. They are model identities, not physical addresses.
+`Heap Repr` maps fresh base identifiers to instrumented representations.
+Allocation cleanup authority is separate from permissions to access cells.
+Identifiers are never reused; they are model identities, not physical addresses.
 
-`RawPtr T` contains a base and an offset counted in `T` cells. Mutable and const
-raw pointers have the same model type; the pointer does not carry access rights.
-`Cell T` records either uninitialized storage or a value with a borrow permission:
-`none` is exclusively borrowed, `some 0` is full access, and positive depths allow
-shared reads. Uninitialized cells can be written but not read. These depths are
-not arbitrary rational ownership fractions.
+`Layout` hides the representation and its instrumentation. Its public projections
+give canonical byte contents (`List (BitVec 8)`), a permission for each byte,
+type sizes, and typed extents. `BitVec 8` is the payload of Rust `u8`; using it
+avoids importing the effectful scalar library into the memory-effect definition.
+The model does not expose how permissions or typed-validity flags are stored.
 
-`Layout` is the representation interface, not the whole memory model. It provides
-typed `represent`/`interpret` functions, round-trip and cross-view laws, and a
-total typed fresh-storage operation taking a cell count. The generic heap and
-separation proofs are parametric in this interface.
-`Axioms/Representation.lean` assumes one fixed `Layout` at the universes needed by
-translation. No byte or alignment implementation is supplied.
-An informal type-tagged example is described beside `Layout`; its consistency
-has not been formalized.
+`RawPtr T` contains a base and a natural `index`, counted in `T` cells. Cell `i`
+has byte footprint `[i * byteLength T, (i + 1) * byteLength T)`. Thus index
+equality across types says nothing about overlap. The permission system is
+independent of pointer constness: casting a shared pointer to mutable does not
+authorize writes. `MutRawPtr` and `ConstRawPtr` currently abbreviate the same type.
+`UnsafeCell` is not modeled.
 
-The fixed representation occurs in `Result`'s memory-effect type. Consequently,
-some otherwise pure monadic proofs acquire a syntactic `layout` axiom dependency.
-The decomposition tests retain exact axiom-report guards including that dependency;
-the generic heap, separation, and lifecycle theorems instead quantify over `Layout`
-and do not depend on the fixed-instance axiom.
+The canonical byte permissions and typed cells use the same three states:
 
-A *view* exposes a safe value through temporary explicit storage, with cleanup by
-the matching backward computation. Allocation cleanup authority instead allows
-recovering an owned allocation or deallocating it. Cell access and cleanup
-authority are separate resources. Safe `Box<T>` values remain represented by `T`:
-`Box.into_raw` exposes a one-cell owned block, and `Box.from_raw` reads and removes
-that whole block. This does not assign physical identities to safe boxes or model
-substructural conversion of a field into an independently owned box.
+| Permission | Typed cell | Read | Raw write |
+|---|---|---|---|
+| `shared 0` | `shared 0 value` | Yes | Yes |
+| `shared (depth + 1)` | `shared (depth + 1) value` | Yes | No |
+| `uninitialized` | `uninitialized` | No | Yes |
+| `borrowed` | `borrowed` | No | No |
 
-Typed pointer addition is supported within the interpreted extent, including
-one-past-the-end. Pointer equality, physical addresses, pointer-integer conversions,
-byte arithmetic, alignment, and usable cross-type pointer casts are not provided.
-In particular, this experiment does not justify physical pointer-equality assertions.
+`uninitialized` does not include `borrowed`. An exclusive borrow transfers the
+value to the safe borrower; the raw representation retains no borrowed payload.
+Sharing depths are neither ownership fractions nor counts of raw-pointer aliases.
+Safe values remain valid Lean values of their translated types. `MaybeUninit`
+and precise treatment of Rust padding are outside this model.
 
-## Cross-view laws
+## Typed observations and local updates
 
-`ReadLaw` says that varying only unreadable borrowed payloads in a `T` view and
-re-encoding it cannot change any authorized `U` read, including success or failure.
-It applies to arbitrary initial representations, so even unchanged re-encoding
-must preserve all read observations. This excludes forgetting read-observable
-padding or other information absent from the `T` view: whether that is the right
-strength for a future byte interpretation needs review.
+`view T r i cell` is a partial, single-valued relation, not a whole-list decoder.
+Every byte in a successful cell's footprint must have exactly the cell's permission.
+Incompatible permissions therefore make the view fail; no permission averaging
+or conversion to a weaker permission is allowed. Even uniform byte permissions
+need not make a typed value available: validity is also instrumented.
 
-`WriteLaw` says that changing writable `T` cells while carrying protected cells
-through unchanged preserves every protected `U` cell, its permission, and its
-continued interpretability. It does not equate indices of differently typed cells.
-It is not a complete footprint/overlap authorization law: in particular, an
-unchanged value alone cannot establish that a write at that location was authorized.
-The interface currently has no abstract cross-type footprint relation.
+`decode T r i : Option (Cell T)` is derived from this relation. `none` is
+observation failure, not an uninitialized or borrowed cell. `Heap.observe`
+includes base lookup; composing it with `Cell.read` is proved equivalent to
+the actual relational raw-read operation.
 
-Empty range replacement is explicitly a state-preserving no-op. It does not
-re-encode the surrounding representation. Zero-count allocation still creates a
-fresh base with cleanup authority; absence of cell resources does not supply that
-authority.
+`setCell T i cell r r'` relates representations differing by one typed-cell update.
+Its `none` case is exactly `r' = r`. Likewise, `Heap.writeBack p none` leaves
+the entire heap unchanged, including when the base is absent. Writing back a
+failed observation cannot overwrite bytes.
 
-## Separation-logic connector
+For `some cell`, the target must be in bounds and has that cell afterward.
+Byte length and all typed extents stay unchanged. Bytes and permissions outside
+the footprint are preserved, as are all disjoint typed observations, including
+their success or failure. Overlapping interpretations may become unavailable.
+`Updates` composes these atomic operations; range operations do not decode and
+re-encode an entire allocation. Empty range replacement is an exact no-op.
+
+The former functional `encode`/whole-list `decode`, `ReadLaw`, `WriteLaw`, and
+`taint` interface has been removed. There is deliberately no promise that an
+unchanged integer update preserves every other typed interpretation.
+
+### Caller-supplied byte codecs
+
+`ByteCodec T` packages a byte length, `encode`, partial `decode`, and a round-trip
+law on its supported values. `Layout.Realizes T codec` is the caller's obligation:
+the codec has the layout's size, and every initialized `T` observation has exactly
+the corresponding encoded bytes in its footprint. The codec's round-trip law
+then recovers that value from those bytes.
+
+`Heap.read.bytes` and `Heap.write.bytes` connect these obligations to the actual
+heap primitives, not just an auxiliary observation. `HeapTests.byteCodec` and its
+write example demonstrate this interface for a single byte.
+
+The generic heap primitives manipulate abstract typed values and do not require
+a codec. Concrete byte-content claims require `Realizes`; it is not assumed
+automatically. No finite encoding of every value of an arbitrary Lean type is
+asserted. In particular, abstract allocation identifiers are unbounded, so stored
+pointers are not given a universal injective finite-byte codec.
+
+### Cross-type permissions and pointer validity
+
+A raw write checks every byte in its footprint, even if decoding at the writing
+type fails. Protected bytes reject even same-value writes. For zero-sized cells,
+any available same-type cell must also be writable; an empty footprint does not
+bypass that cell's permission.
+
+Borrowing a positive-sized `T` cell makes every overlapping different-type view
+unavailable, rather than exposing a borrowed marker at `U`. Consequently, an
+overlapping `U` cannot end that borrow. Disjoint observations survive.
+Nonempty zero-sized exclusive borrowing is deliberately deferred; empty borrows
+are no-ops. Zero-sized allocation, reads, writes, and cleanup remain available.
+Distinct same-type zero-sized indices are logical cells; a zero-sized footprint
+at a different type is byte-disjoint and cannot alter those observations.
+
+An initialized update at an integer-classified type invalidates every overlapping
+pointer-classified view, even when byte contents happen to be identical. Pointer
+validity is not recoverable from bits alone. Reading pointer bytes as an integer
+is underspecified: the layout may expose an integer view without changing state,
+or conservatively reject it. A write through that integer view cannot preserve
+the overlapping pointer's validity.
+
+`kind` and sizes are layout parameters, not inferred from arbitrary Lean types.
+The concrete `U32`/`U8` and stored-pointer cross-type examples explicitly state
+their size/classification assumptions. The fixed layout axiom does not yet
+calibrate those parameters for Rust types.
+
+`Access.lean` proves byte-based read/write denial, byte-based cleanup denial,
+disjoint observation preservation, mixed-permission decoding failure, wrong-type
+borrow-restoration denial, and integer-to-pointer invalidation. The cleanup
+contract requires complete byte coverage, not just the floor-divided typed extent;
+otherwise a different type could hide protected trailing bytes.
+
+## Allocation, Boxes, and pointer movement
+
+`create` relates a typed cell list to an instrumented representation with exactly
+that extent, byte length, and those initial observations. It does not choose a
+base. `Heap.newCells` creates the fresh identity; `alloc` initializes its cells
+as uninitialized, while `newBlock` and `newSharedExposure` create initialized cells.
+Zero-count allocation still creates a fresh base with cleanup authority.
+
+A *raw exposure* places a safe value in temporary explicit storage, with cleanup
+by the matching backward computation. Allocation cleanup authority instead allows
+recovering an owned allocation or deallocating it. These are separate from cell
+access permissions.
+
+Safe `Box<T>` values remain represented by `T`. `Box.into_raw` exposes a one-cell
+owned block; `Box.from_raw` reads and removes that entire block. This does not
+assign physical identities to safe boxes or permit converting an interior field
+into an independently owned box. Whole-block cleanup conservatively requires
+available writable cells of a covering type; invalidated typed values may first
+need to be initialized again.
+
+Rust's `.add(usize)` and `.offset(isize)` use checked `Heap.offset`, whose
+displacement is an `Int`. Both starting and resulting indices must lie within
+the typed extent, including one-past-the-end. Extent is independent of typed
+value availability. Movement before the beginning is rejected, not truncated.
+
+Physical pointer equality, pointer-integer conversions, usable cross-type pointer
+cast wrappers, alignment checks, and arbitrary byte-offset pointers are not
+provided. The layout laws can describe differently typed footprints at one base;
+that does not by itself implement Rust's casting API.
+
+## Separation and effects
 
 Fragments are sets of logical cell and cleanup resources observing a whole heap,
-not pieces of `Repr`. This avoids requiring a physical separation operation on
-the representation. Typed ranges can be split and recombined.
+not physical fragments of `Repr`. Typed ranges split and recombine. Cleanup
+resources record allocation authority, exact extent, and complete byte coverage.
+Resources at one base still must agree on their type and have distinct keys.
+Simultaneously owning differently typed resources at one base is not supported
+by this connector; the underlying layout nevertheless has cross-type frame laws.
 
-Disjoint resources at one base must agree on their type and have distinct resource
-keys. Cleanup and cell resources have different keys. This is a restriction on
-logical ownership, not a claim that only one physical interpretation exists.
-Simultaneously framing different typed views of one base is not supported.
-The present frame proofs use same-type round-trip reasoning, not the new
-cross-view read/write laws.
+Relational triples require both an existing successor and correctness of every
+successor, preserving arbitrary matching disjoint frames. Frame, bind,
+consequence, pure, and resource-dropping rules are proved, along with primitive
+allocation, access, borrowing, sharing, movement, and cleanup contracts.
 
-The affine relational triples require both an existing successor and correctness
-of every successor, for every matching disjoint frame. Frame, bind, consequence,
-pure, and resource-dropping rules are proved. Primitive triples cover range
-replacement, reads, writes, initialized block creation, typed uninitialized
-allocation, shared-view creation and cleanup, exclusive borrowing and restoration,
-nested sharing and restoration, typed pointer addition, and whole-block cleanup.
+`Effects.lean` interprets `Result` with the interaction-tree `DWP`. Guarded effects
+require an existing successor and correctness for every successor. Failure,
+divergence, and disabled effects are rejected. The ordinary effect-free WP is
+unchanged. `HeapWP.Triple` and `EffectSpecs.lean` lift and compose the relational
+contracts for actual Rust-model wrappers, without ordinary `step` automation.
 
-`Access.lean` uses the cross-view laws to prove that hidden-payload replacement
-preserves actual raw-read success/failure, and that writes through `U` preserve
-protected `T` cells. The observation function is proved equivalent to the
-relational read operation, rather than used as an unconnected proxy.
+## Trust boundary and examples
 
-`HeapTests.lean` composes allocation, initialization, borrow, restoration, read,
-and cleanup; separately it exercises same-base neighboring-cell framing, nested
-sharing, Box and shared-view lifecycles, and zero-count allocation/addition/cleanup.
-Rejection examples cover uninitialized reads, borrowed/shared writes and cleanup,
-wrong cleanup authority and extent, interior pointers, repeated cleanup, stale
-access/restoration after removal, address reuse, and out-of-bounds addition.
-Empty borrow/share ranges remain no-ops even without a live base; pointer addition
-still requires an interpreted extent, including for a zero count.
-
-## Permission-restoration trust boundary
+`Axioms/Representation.lean` assumes one `layout` satisfying the abstract laws at
+each needed universe. No concrete `Layout` implementation or refinement proof
+to Rust's operational semantics is supplied. Generic heap and separation proofs
+quantify over `Layout`; effect-boundary theorems use the fixed axiom. The fixed
+representation also appears in `Result`'s effect type, so otherwise pure proofs
+can have a syntactic `layout` dependency.
 
 The heap records permissions, not identities or capabilities for live borrows.
-The `endBorrowRange` and `endShareRange` relations describe privileged backward
-operations; they do not prove that the caller owns the matching continuation.
-In particular, `HeapTests.restoration_is_privileged` proves that directly invoking
-`endShareRange` on a freshly created shared view can make it writable, without a
-preceding `shareRange`. Ordinary raw writes are still rejected at the shared depth.
+`setCell`, `writeBack`, range replacement, and restoration are internal
+operations, not independently authorized Rust calls. Matching translated backward
+computations must invoke the right restoration at the right type and lifetime.
+Wrong-type borrowed decoding is blocked, but same-type continuation identity is
+not authenticated. `HeapTests.restoration_is_privileged` explicitly demonstrates
+that directly invoking `endShareRange` can make a fresh shared exposure writable.
+This is a trust-boundary witness, not a valid Rust program.
 
-The handwritten Rust models must therefore keep these operations internal, and
-the translation must invoke only the matching backward computations with their
-required extent/value discipline. The relational triples prove the heap effect
-when such an operation is invoked, not the translation's authority to invoke it.
-If the intended theorem quantifies over arbitrary Lean callers of these internal
-operations, explicit ghost capabilities or borrow identities would be necessary.
-No such mechanism is silently assumed or implemented here.
+`HeapTests.lean` covers composed lifecycles, neighboring-cell framing, nested
+sharing, signed movement, empty allocations, access/cleanup rejection, cross-type
+borrow protection, mixed-permission failure, and integer-over-pointer invalidation.
+The latter examples use different typed indices and partial overlap.
 
-From `backends/lean`, check the heap examples or the complete backend with:
+`tests/lean/RawBoxProofs.lean` proves extracted Box round-trip and stored-pointer
+examples. `RawBoxManual.lean` additionally proves corrected read/write/read,
+alias-write, and handwritten borrowed-Box/callback examples. The callback consumes
+its cell and exposure-cleanup resources before returning the updated safe value.
+The repeated-read compiler bug is deliberately unfixed; re-extraction overwrites
+the marked manual corrections. See `tests/lean/EXTRACTION.md` for provenance.
+
+From `backends/lean`, check the examples or the complete backend:
 
 ```sh
 lake build Aeneas.Std.HeapTests
 lake build
 ```
 
-The complete backend builds successfully with these examples in its import
-closure. Axiom reports for the lifecycle and cross-view proofs contain only
-Lean's standard logical axioms, not the fixed `layout` assumption.
-
-## Remaining work and feedback scope
-
-The central design and law statements are ready for discussion. In particular,
-feedback is needed on the read law's re-encoding strength, the write law's
-authorization/footprint boundary, the same-type logical ownership restriction,
-and the explicit trusted-translation boundary for borrow restoration.
-
-## Effect-aware verification
-
-`Effects.lean` defines a separate heap-aware interpretation of `Result` using the
-existing interaction-tree `DWP`. A guarded heap effect requires a successor to
-exist and its continuation to hold for every successor. Failure, divergence, and
-disabled effects are rejected. The ordinary effect-free `WP.effectWP` is unchanged.
-
-`HeapWP.Triple` gives the generated `Result` program a framed separation contract.
-The generic `Triple.guardedModify` rule lifts existing relational heap triples;
-pure, bind, consequence, and frame rules compose them without reconstructing the
-program. `EffectSpecs.lean` supplies rules for the actual Box, read/write, and
-borrow/share/restoration wrappers. These effect-boundary theorems use the existing
-fixed `layout` assumption; the underlying relational proofs remain parametric.
-
-`tests/src/raw_box.rs` and its unmodified extraction `tests/lean/RawBox.lean`
-exercise two lifecycles: Box exposure, write/read, and recovery; and a second Box
-containing the first Box's raw pointer, loaded and used to update the target.
-`RawBoxProofs.lean` proves that both return the replacement for arbitrary `u32`
-inputs, consuming their allocation resources and preserving every disjoint frame.
-No pointer equality, new axioms, or proof holes are used. This is validation of
-the extracted programs against the handwritten Rust models, not a proof of
-compiler or model soundness with respect to Rust's operational semantics.
-
-From the repository root:
+From the repository root, check the end-to-end Box examples without re-extraction:
 
 ```sh
 make verify-raw-box
 ```
-
-See `tests/lean/EXTRACTION.md` for the exact extraction command and executable
-provenance, including the newer compiler/Charon pair used read-only for this run.
-
-Remaining validation and scope:
-
-- Audit the translation's matching-continuation discipline and run relevant Rust
-  extraction examples involving array views and restoration; the Box examples
-  above do not exercise backward continuations. The existing
-  `tests/src/raw_pointers.rs` fixture is marked as a Lean known failure; it has
-  not been re-extracted here.
-- Decide whether to retain single-type logical ownership or introduce the
-  footprint/overlap interface needed for cross-type framing and authorization
-  of even same-value writes.
-- Assess the laws against the intended byte/alignment interpretation. A concrete
-  `Repr` instance is deliberately not part of this experiment.
-
-The separate heap-aware contracts do not yet have the ordinary `step` tactic's
-automation. Cross-type framing, physical byte layout, and higher-order storage of
-`Result`-returning closures are not established by these examples.

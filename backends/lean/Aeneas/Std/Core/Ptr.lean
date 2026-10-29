@@ -87,6 +87,11 @@ instance {ty} : IsScalar (UScalar ty) where
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
 
+/-- Compatibility argument of the existing, unsupported scalar-pointer cast wrapper only. -/
+inductive Mutability where
+  | Mut
+  | Const
+
 /-- Always fails: scalar pointer casts are not modelled by the current wrapper API. -/
 def RawPtr.cast_scalar {T} (T' : Type) (_ : Mutability) [IsScalar T] [IsScalar T']
     (_ : RawPtr T) : Result (RawPtr T') :=
@@ -94,9 +99,15 @@ def RawPtr.cast_scalar {T} (T' : Type) (_ : Mutability) [IsScalar T] [IsScalar T
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
 def RawPtr.add (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
-  Result.guardedModify (State.add q count.val)
+  Result.guardedModify (State.offset q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::offset"]
+def RawPtr.offset (q : RawPtr T) (count : Isize) : Result (RawPtr T) :=
+  Result.guardedModify (State.offset q count.val)
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset"] RawPtr.offset
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
 def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
@@ -124,7 +135,7 @@ Aeneas builds its models of Rust's raw-pointer functions (`from_mut`, `as_ptr`, 
 `from_raw_parts`, `from_raw_parts_mut`) from the operations below, which act on the model's heap
 directly. -/
 
-/-- Transfers full cells into an exclusive borrow, blocking raw access through this view. -/
+/-- Transfers full cells into an exclusive borrow, blocking raw access to these cells. -/
 def RawPtr.borrowRange (q : RawPtr T) (count : Nat) : Result (List T) :=
   Result.guardedModify (State.borrowRange q count)
 
@@ -151,33 +162,35 @@ def RawPtr.readRange (q : RawPtr T) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do
     let value ← q.read
-    let values ← (q.shift 1).readRange n
+    let values ← (⟨q.base, q.index + 1⟩ : RawPtr T).readRange n
     .ok (value :: values)
 
-/-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
-value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
-allocation holding a copy of `values` (`State.newView`), which only `endView` frees. -/
-def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (State.newView values)
+/-- Exposes a safe mutable place, represented functionally without an address, as raw memory.
+Used by `from_mut` and `as_mut_ptr`. The fresh block holds `values` with full access
+(`State.newExposure`); the matching backward computation removes it with `endExposure`. -/
+def RawPtr.allocExposure (values : List T) : Result (MutRawPtr T) :=
+  Result.guardedModify (State.newExposure values)
 
-def RawPtr.allocSharedView (values : List T) : Result (ConstRawPtr T) :=
-  Result.guardedModify (State.newSharedView values)
+/-- Exposes a shared safe borrow with read-only cells (`shared 1`), as used by `as_ptr`.
+Casting the returned pointer to mutable does not change those permissions. -/
+def RawPtr.allocSharedExposure (values : List T) : Result (ConstRawPtr T) :=
+  Result.guardedModify (State.newSharedExposure values)
 
-def RawPtr.endView (q : RawPtr T) (count : Nat) : Result Unit :=
-  Result.guardedModify (State.removeView q count)
+def RawPtr.endExposure (q : RawPtr T) (count : Nat) : Result Unit :=
+  Result.guardedModify (State.removeExposure q count)
 
-def RawPtr.endSharedView (q : RawPtr T) (original : List T) : Result Unit :=
-  Result.guardedModify (State.endSharedView q original)
+def RawPtr.endSharedExposure (q : RawPtr T) (original : List T) : Result Unit :=
+  Result.guardedModify (State.endSharedExposure q original)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
-ends the view, so that the pointer can't be used anymore. -/
+ends the exposure, so that the pointer can't be used anymore. -/
 def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
   let value ← p.read
-  p.endView 1
+  p.endExposure 1
   .ok value
 
-/-- The pointer is a view of `r`; the back computation runs when the borrow ends. -/
+/-- Exposes `r` as raw memory; the back computation runs when the borrow ends. -/
 def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
-  Aeneas.Std.bind (RawPtr.allocView [r]) fun p => .ok (p, core.ptr.end_from_mut p)
+  Aeneas.Std.bind (RawPtr.allocExposure [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std

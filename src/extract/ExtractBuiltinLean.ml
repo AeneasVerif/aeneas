@@ -1063,10 +1063,12 @@ let lean_builtin_funs =
       "core.option.Option.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 104 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::add" "RawPtr.add";
+    mk_fun "core::ptr::const_ptr::{*const @T}::offset" "RawPtr.offset";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 114 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read" "RawPtr.read";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 100 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::add" "RawPtr.add";
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::offset" "RawPtr.offset";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 108 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" "RawPtr.cast_const"
       ~can_fail:false ~lift:false;

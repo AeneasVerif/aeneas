@@ -20,7 +20,7 @@ theorem round_trip.spec (initial replacement : U32) :
   intro p
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ h => h) (HeapWP.frame (R := alloc p 1 true)
-      (HeapWP.write.spec p (.val (some 0) initial) replacement True.intro)))
+      (HeapWP.write.spec p (.shared 0 initial) replacement True.intro)))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun value h hp => (sep_and_left (value = replacement)
@@ -70,7 +70,7 @@ theorem stored_pointer.spec (initial replacement : U32) :
       (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
         (fun _ _ h => (sep_comm _ _ _).mp h)
         (HeapWP.frame (R := alloc target 1 true)
-          (HeapWP.write.spec target (.val (some 0) initial) replacement True.intro)))))
+          (HeapWP.write.spec target (.shared 0 initial) replacement True.intro)))))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq
     (fun h hp => (sep_comm _ _ h).mp hp)

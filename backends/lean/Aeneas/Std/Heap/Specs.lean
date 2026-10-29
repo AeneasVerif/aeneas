@@ -27,10 +27,9 @@ theorem replaceRange.exists {s : Heap m.Repr} {p : RawPtr ty} {old new : List (C
   by_cases he : old = []
   · have hn : new = [] := List.length_eq_zero_iff.mp (by simpa [he] using hl.symm)
     exact ⟨s, by simp [Heap.replaceRange, he, hn]⟩
-  · obtain ⟨before, after, hoff, hs⟩ := segment_of_matches he hm
-    exact ⟨_, by
-      simp only [Heap.replaceRange, he, ↓reduceIte]
-      exact ⟨hl, before, after, hoff, hs, rfl⟩⟩
+  · obtain ⟨r, hs, hv⟩ := views_of_matches he hm
+    obtain ⟨r', hu⟩ := Layout.Updates.exists ty p.index new r (by simpa [hl] using hv.bound he)
+    exact ⟨s.storeRepr p.base r', (ite_eq_right he).mpr ⟨hl, r, r', hs, hv, hu, rfl⟩⟩
 
 theorem replaceRange.old_eq {s s' : Heap m.Repr} {p : RawPtr ty}
     {owned old new : List (Cell ty)} (hm : Fragment.Matches m s (cellsHeap p owned))
@@ -39,11 +38,10 @@ theorem replaceRange.old_eq {s s' : Heap m.Repr} {p : RawPtr ty}
   by_cases he : old = []
   · have ho : owned = [] := List.length_eq_zero_iff.mp (by simpa [he] using hl)
     simp [he, ho]
-  · obtain ⟨before, after, hoff, hs, _⟩ := hu.load he
-    exact segment_unique hm hl hoff hs
+  · obtain ⟨_, r, _, hs, hv, _⟩ := (ite_eq_right he).mp hu
+    exact views_unique hm hl hs hv
 
-/-- Local update rule, including the empty-range no-op. Its hypotheses describe only the
-owned cells; the proof supplies all disjoint-frame and demonic-successor obligations. -/
+/-- Local list rules are proved from composed single-cell updates, not whole-block encoding. -/
 theorem triple_replaceRange {p : RawPtr ty} {old new : List (Cell ty)}
     {op : Cmd m α} {P : α → Prop}
     (hsafe : ∀ s, Fragment.Matches m s (cellsHeap p old) → ∃ x s', op s x s')
@@ -60,9 +58,9 @@ theorem triple_replaceRange {p : RawPtr ty} {old new : List (Cell ty)}
   by_cases he : old = []
   · obtain ⟨hn, rfl⟩ := (ite_eq_left he).mp hu
     exact ⟨by simp [hn], hF⟩
-  · obtain ⟨_, before, after, hoff, hs, rfl⟩ := (ite_eq_right he).mp hu
-    exact ⟨matches_segment p before new after hoff (Heap.load_store _ _ _ _),
-      matches_store_frame he hl hoff hs hd hF⟩
+  · obtain ⟨_, r, r', hs, _, hupdates, rfl⟩ := (ite_eq_right he).mp hu
+    exact ⟨matches_views p new (by simp) hupdates.views,
+      matches_updates_frame he hl hs hupdates hd hF⟩
 
 theorem replaceRange.spec (p : RawPtr ty) (old new : List (Cell ty))
     (hl : old.length = new.length) :
@@ -75,35 +73,42 @@ theorem replaceRange.spec (p : RawPtr ty) (old new : List (Cell ty))
         exact ⟨(), s', hs⟩)
       (fun _ _ _ _ hu => ⟨True.intro, hu⟩))
 
-theorem read.spec (p : RawPtr ty) (value : ty) (fraction : Nat) :
-    Triple m (block p [.val (some fraction) value]) (Heap.read m p)
-      (fun x h => x = value ∧ block p [.val (some fraction) value] h) := by
+theorem read.spec (p : RawPtr ty) (value : ty) (depth : Nat) :
+    Triple m (block p [.shared depth value]) (Heap.read m p)
+      (fun x h => x = value ∧ block p [.shared depth value] h) := by
   intro h F s rfl hd hm hi
-  obtain ⟨hown, hF⟩ := (Fragment.matches_union _ _ _ _).mp hm
-  obtain ⟨before, after, hoff, hs⟩ := segment_of_matches (by simp) hown
-  refine ⟨⟨value, s, ⟨before, after, fraction, hoff, hs⟩, rfl⟩, ?_⟩
-  rintro x s' ⟨⟨before', after', f', hoff', hs'⟩, rfl⟩
-  have he := segment_unique hown (by simp) hoff' hs'
-  have hx : x = value := by
-    have hh : f' = fraction ∧ x = value := by simpa using he.symm
-    exact hh.2
-  exact ⟨_, hd, (Fragment.matches_union _ _ _ _).mpr ⟨hown, hF⟩, hi, hx, rfl⟩
+  obtain ⟨hown, _⟩ := (Fragment.matches_union _ _ _ _).mp hm
+  obtain ⟨r, hs, hv⟩ := matches_cellsHeap.mp hown 0 (by simp)
+  have hv' : m.view ty r p.index (.shared depth value) := by simpa using hv
+  refine ⟨⟨value, s, ⟨r, depth, hs, hv'⟩, rfl⟩, ?_⟩
+  rintro x s' ⟨⟨r', depth', hs', hv'⟩, rfl⟩
+  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
+  subst r'
+  have hx := (Cell.shared.inj (m.view_unique ty r _ _ _ hv' ‹m.view ty r p.index
+    (.shared depth value)›)).2
+  exact ⟨_, hd, hm, hi, hx, rfl⟩
 
 theorem write.spec (p : RawPtr ty) (old : Cell ty) (value : ty) (hw : old.writable) :
     Triple m (block p [old]) (Heap.write m p value) (fun _ => pointsTo p value) := by
-  refine Triple.conseq (P' := block p [old])
+  apply Triple.conseq (P' := block p [old])
     (Q' := fun (_ : Unit) h => True ∧ pointsTo p value h)
-    (fun _ h => h) (fun _ _ h => h.2) ?_
-  apply triple_replaceRange (old := [old]) (new := [.val (some 0) value])
-    (P := fun _ => True)
+    (fun _ h => h) (fun _ _ h => h.2)
+  apply triple_replaceRange (old := [old]) (new := [.shared 0 value]) (P := fun _ => True)
   · intro s hm
-    obtain ⟨s', hu⟩ := replaceRange.exists (new := [.val (some 0) value]) (by simp) hm
-    exact ⟨(), s', old, hw, hu⟩
-  · rintro s _ s' hm ⟨other, _, hu⟩
-    obtain ⟨before, after, hoff, hs, _⟩ := hu.load (by simp)
-    have he := segment_unique hm (by simp) hoff hs
-    have hold : old = other := by simpa using he
-    subst other
-    exact ⟨trivial, hu⟩
+    obtain ⟨r, hs, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
+    have hv' : m.view ty r p.index old := by simpa using hv
+    have hwrite := Heap.writable_of_view hv' hw
+    obtain ⟨r', hu⟩ := m.set_exists ty p.index r hwrite.1 (.shared 0 value)
+    exact ⟨(), _, r, r', hs, hwrite, hu, rfl⟩
+  · rintro s _ s' hm ⟨r, r', hs, _, hu, rfl⟩
+    obtain ⟨actual, ha, hv⟩ := matches_cellsHeap.mp hm 0 (by simp)
+    have he : actual = r := Option.some.inj (ha.symm.trans hs)
+    subst actual
+    refine ⟨trivial, (ite_eq_right (by simp)).mpr ⟨rfl, r, r', hs, ?_, ?_, rfl⟩⟩
+    · intro i hi
+      have he : i = 0 := by simpa using hi
+      subst i
+      simpa using hv
+    · exact .cons hu (.nil _ _)
 
 end Aeneas.Std.SepLogic

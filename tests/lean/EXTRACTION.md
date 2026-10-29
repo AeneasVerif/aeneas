@@ -1,6 +1,7 @@
 # Raw Box extraction provenance
 
-This log covers `RawBox.lean` only, not the other fixtures in this directory.
+This log covers the raw-memory fixtures described below, not the other fixtures
+in this directory.
 
 ## 2026-10-29 — Box lifecycle and stored-pointer lifecycle
 
@@ -36,3 +37,54 @@ proves framed total-correctness contracts about those definitions, using
 Replay the Lean checks with `make verify-raw-box`. This uses the isolated backend
 and temporary compiled fixture artifacts rather than populating a second Mathlib
 build cache. The normal test Lake targets also include both modules.
+
+## 2026-10-29 — Additional examples and minimized repeated-read bug
+
+```text
+commands   : make test-raw_box.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+             make test-raw_read_write_read.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+rust       : AeneasVerif/aeneas, fournet/wip-memory-model, based on f1fc114739d6c4f847661996a6de3d5d90a9e4d3
+sources    : tests/src/raw_box.rs, Git blob 988995e74be81c50eb64d05033b919200bf99562
+             tests/src/raw_read_write_read.rs, Git blob 1b1fbbc3ac0930e57af1f2b4b52873098c965ae4
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; same read-only executable as above
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; same read-only executable as above
+rustc      : nightly-2026-09-17
+options    : existing test runner; Lean only; IN_CI=1 supplies -checks
+```
+
+Additional Box examples illustrate pointer aliases, whole-pair cells, zero and
+one-past pointer addition, and a zero-sized value (one logical typed cell, not an
+empty range). Native Rust tests pass and all definitions extract and type-check.
+The existing two Box proofs still pass; the additional examples are not yet proved.
+
+The alias example exposes an incorrect repeated-read optimization. The smaller
+`RawReadWriteRead.lean` reproduces it without Box allocation or a copied pointer:
+`discarded_read` reads through `p`, writes `1` through the same `p`, then reads
+again. Its generated definition returns the first read instead of performing the
+second. From an initialized writable cell holding `0`, native Rust returns `1`
+but the generated program returns `0`. Keeping both read results also reproduces
+the bug. No generated definitions were manually repaired or axiomatized.
+
+Post-extraction edits, explicitly requested for design validation before changing
+the compiler: restored the second read in `RawBox.alias_write` and in both
+`RawReadWriteRead` functions. Their file headers now mark these manual corrections.
+Re-extraction with the recorded compiler overwrites them and reproduces the bug;
+these corrected definitions are not evidence of a repaired extraction pipeline.
+
+`RawBoxManual.lean` proves the corrected definitions return the replacement
+(and the initial value where returned), preserving arbitrary disjoint frames.
+It also contains a handwritten borrowed-Box translation with an `into_raw`
+prototype returning a pointer and a `Unit → Result T` restoration callback.
+This prototype models borrowing via `ptr::from_mut`, not Rust's consuming
+`Box::into_raw`. Its callback requires both the full cell and the temporary
+exposure-cleanup resource; it reads the updated value, removes the exposure, and returns
+the safe value with `emp`. The caller cannot regain a safe value by retaining
+the original functional value. The callback contract applies to any subsequently
+written value, not just its initial contents.
+
+Returning an effectful callback raises the result universe; the prototype uses
+explicit cross-universe `Aeneas.Std.bind` and a local proved composition rule.
+No compiler or backend primitive was changed. `make verify-raw-box` checks the
+original proofs and these manual validation proofs, including exact axiom guards
+allowing only the existing `layout` assumption and standard Lean logical axioms.
+The pair, pointer-addition, and zero-sized-value examples remain unproved.

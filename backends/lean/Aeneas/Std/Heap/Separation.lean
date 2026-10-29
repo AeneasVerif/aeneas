@@ -6,10 +6,8 @@ public import Aeneas.Std.Heap.Lemmas
 
 A cell resource observes one typed cell; a cleanup resource observes cleanup authority and
 the current typed extent. The extent is a logical fact, not extra allocation metadata.
-Disjoint resources at one base must agree on their type. This is the single-type-view
-discipline: round-trip alone cannot justify framing across unrelated interpretations.
-This restricts compatible logical resources, not the physical representation: a model
-may admit several interpretations of one representation.
+The connector retains same-type logical fragments at a base; the underlying layout
+additionally provides byte-disjoint cross-type framing and byte-wise authorization.
 
 Cell permissions are part of the observed cell. Separating conjunction does not duplicate
 shared cells; splitting and rejoining safe borrows are explicit memory operations.
@@ -35,7 +33,7 @@ def base : Resource → BasePtr
   | .cleanup _ base _ _ => base
 
 def key : Resource → Option Nat
-  | .cell _ p _ => some p.offset
+  | .cell _ p _ => some p.index
   | .cleanup _ _ _ _ => none
 
 def Compatible (a b : Resource.{u}) : Prop :=
@@ -50,13 +48,14 @@ theorem not_compatible_self (a : Resource.{u}) : ¬ a.Compatible a := by
 
 def Holds (m : Layout.{u}) (s : Heap m.Repr) : Resource.{u} → Prop
   | .cell ty p c =>
-    ∃ cs, s.load m.interpret ty p.base = some cs ∧ cs[p.offset]? = some c
+    ∃ r, s.cells p.base = some r ∧ m.view ty r p.index c
   | .cleanup ty base count own =>
     s.allocated base = own ∧
-      ∃ cs, s.load m.interpret ty base = some cs ∧ cs.length = count
+      ∃ r, s.cells base = some r ∧ m.extent ty r = count ∧
+        (m.bytes r).length = count * m.byteLength ty
 
 theorem Holds.live {m : Layout.{u}} {s : Heap m.Repr} {r : Resource.{u}}
-    (h : r.Holds m s) : ∃ cs, s.load m.interpret r.ty r.base = some cs := by
+    (h : r.Holds m s) : ∃ repr, s.cells r.base = some repr := by
   cases r
   · exact h.imp fun _ hc => hc.1
   · exact h.2.imp fun _ hc => hc.1

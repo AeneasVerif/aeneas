@@ -57,10 +57,10 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
-/-! Raw-pointer views of slices. The functional slice model has no address: `as_ptr`/`as_mut_ptr`
-copy the slice to a fresh shared/exclusive view, removed when the borrow ends.
+/-! Raw-pointer exposures of slices. The functional slice model has no address: `as_ptr`/`as_mut_ptr`
+copy the slice to a fresh shared/exclusive exposure, removed when the borrow ends.
 `from_raw_parts` shares cells, allowing raw reads but not writes; `from_raw_parts_mut`
-exclusively borrows them, blocking raw access through that view.
+exclusively borrows them, blocking raw access to those cells.
 The returned back computations run when the borrow ends. -/
 
 /-- `borrowRange` of `len` cells, as a slice. -/
@@ -68,24 +68,24 @@ def RawPtr.borrowSlice {T : Type} (q : RawPtr T) (len : Usize) : Result (Slice T
   let values ← q.borrowRange len.val
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
-/-- End of the shared borrow of `as_ptr`: the cells must still hold `s` (writing through a const
-pointer cast to mut is UB), and the view is freed. -/
+/-- Ends the shared exposure created by `as_ptr`: its read-only cells must still hold `s`.
+Casting the pointer to mutable cannot authorize writes; the temporary block is removed. -/
 def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
-  p.endSharedView s.val
+  p.endSharedExposure s.val
 
 def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocSharedView s.val) fun p =>
+  Aeneas.Std.bind (RawPtr.allocSharedExposure s.val) fun p =>
     .ok (p, Slice.end_as_ptr s p)
 
-/-- End of the mutable borrow of `as_mut_ptr`: the cells become the new slice, and the view is
-freed. -/
+/-- Ends the mutable exposure of `as_mut_ptr`: the cells become the new slice and their
+temporary block is removed. -/
 def Slice.end_as_mut_ptr {T : Type} (s : Slice T) (p : MutRawPtr T) : Result (Slice T) := do
   let values ← p.readRange s.length
-  p.endView s.length
+  p.endExposure s.length
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
 def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
-  Aeneas.Std.bind (RawPtr.allocView s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
+  Aeneas.Std.bind (RawPtr.allocExposure s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
 
 /-- Back function of `from_raw_parts_mut`: ends the borrow of the cells with the final slice. -/
 def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : Usize)

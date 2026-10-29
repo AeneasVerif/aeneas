@@ -18,39 +18,37 @@ theorem matches_create_frame {s : Heap m.Repr} {F : Fragment.{u}}
     Fragment.Matches m (s.createRepr r own) F := by
   intro resource hr
   have hh := hm resource hr
-  obtain ⟨cs, hc⟩ := hh.live
+  obtain ⟨actual, hc⟩ := hh.live
   have hlt := hi.base_lt hc
   have hne : resource.base ≠ s.next := Nat.ne_of_lt hlt
   cases resource
   · rename_i ty p value
-    obtain ⟨actual, ha, hv⟩ := hh
-    exact ⟨actual, (Heap.load_createRepr_other _ _ _ _ _ _ hne).trans ha, hv⟩
+    change p.base ≠ s.next at hne
+    obtain ⟨r', hs, hv⟩ := hh
+    exact ⟨r', by simpa [Heap.createRepr, update, hne] using hs, hv⟩
   · rename_i ty base count allocated
     change base ≠ s.next at hne
-    obtain ⟨ha, actual, hs, hn⟩ := hh
+    obtain ⟨ha, r', hs, hn⟩ := hh
     exact ⟨by simpa [Heap.createRepr, update, hne] using ha,
-      actual, (Heap.load_createRepr_other _ _ _ _ _ _ hne).trans hs, hn⟩
+      r', by simpa [Heap.createRepr, update, hne] using hs, hn⟩
 
 theorem fresh_disjoint {s : Heap m.Repr} {F : Fragment.{u}}
     (hi : s.Inv) (hm : Fragment.Matches m s F)
     {h : Fragment.{u}} (hfresh : ∀ r, h r → r.base = s.next) : h.Disjoint F := by
   intro r hr other ho
-  obtain ⟨cs, hc⟩ := (hm other ho).live
+  obtain ⟨repr, hc⟩ := (hm other ho).live
   have hlt := hi.base_lt hc
   left
   rw [hfresh r hr]
   exact (Nat.ne_of_lt hlt).symm
 
-theorem triple_create (ty : Type u) (cs : List (Cell ty)) (own : Bool)
-    (op : Cmd m (RawPtr ty))
-    (hsafe : ∀ s, s.Inv → ∃ p s', op s p s')
-    (hpost : ∀ s p s', op s p s' → p = ⟨s.next, 0⟩ ∧
-      ∃ r, m.interpret ty r = some cs ∧ s' = s.createRepr r own) :
-    Triple m emp op (fun p => sep (alloc p cs.length own) (block p cs)) := by
-  intro h F s rfl hd hm hi
+theorem newCells.spec (cs : List (Cell ty)) (own : Bool) :
+    Triple m emp (Heap.newCells m cs own)
+      (fun p => sep (alloc p cs.length own) (block p cs)) := by
+  intro h F s rfl _ hm hi
   have hF : Fragment.Matches m s F := by simpa using hm
-  refine ⟨hsafe s hi, fun p s' hrun => ?_⟩
-  obtain ⟨rfl, r, hr, rfl⟩ := hpost s p s' hrun
+  refine ⟨Heap.newCells.exists cs own s hi, fun p s' hrun => ?_⟩
+  obtain ⟨_, rfl, r, hr, rfl⟩ := hrun
   let p : RawPtr ty := ⟨s.next, 0⟩
   let a := allocHeap ty s.next cs.length own
   let b := cellsHeap p cs
@@ -65,73 +63,68 @@ theorem triple_create (ty : Type u) (cs : List (Cell ty)) (own : Bool)
   apply (Fragment.matches_union _ _ _ _).mpr
   constructor
   · apply (Fragment.matches_single _ _ _).mpr
-    exact ⟨by simp [Heap.createRepr, update],
-      cs, by simpa using hr, rfl⟩
-  · exact matches_segment p [] cs [] rfl (by simpa [p] using hr)
+    exact ⟨by simp [Heap.createRepr, update], r, by simp [Heap.createRepr, update],
+      m.create_extent _ _ _ hr, m.create_bytes _ _ _ hr⟩
+  · apply matches_views p cs (r := r) (by simp [Heap.createRepr, update, p])
+    intro i hi
+    simpa [p] using m.create_view ty cs r hr i hi
 
 theorem newBlock.spec (values : List ty) (own : Bool) :
     Triple m emp (Heap.newBlock m values own)
       (fun p => sep (alloc p values.length own) (block p (Cell.full values))) := by
-  have ht := triple_create ty (Cell.full values) own (Heap.newBlock m values own)
-    (fun s hi => ⟨⟨s.next, 0⟩, s.create m (Cell.full values) own, hi, rfl, rfl⟩)
-    (fun _ _ _ h => ⟨h.2.1, _, m.roundTrip ty (Cell.full values), h.2.2⟩)
-  simpa [Cell.full] using ht
+  simpa [Heap.newBlock, Cell.full] using newCells.spec (m := m) (Cell.full values) own
 
 theorem alloc.spec (ty : Type u) (count : Nat) :
     Triple m emp (Heap.alloc m (ty := ty) count)
       (fun p => sep (alloc p count true)
         (block p (List.replicate count .uninitialized))) := by
-  have ht := triple_create ty (List.replicate count .uninitialized) true (Heap.alloc m count)
-    (fun s hi => Heap.alloc.exists m ty count s hi)
-    (fun _ _ _ h => by
-      obtain ⟨_, hp, r, _, hr, hs⟩ := h
-      exact ⟨hp, r, hr, hs⟩)
-  simpa using ht
+  simpa [Heap.alloc] using newCells.spec (m := m)
+    (List.replicate count (.uninitialized : Cell ty)) true
 
-theorem newSharedView.spec (values : List ty) :
-    Triple m emp (Heap.newSharedView m values)
-      (fun p => sep (alloc p values.length false) (block p (Cell.shared 1 values))) := by
-  have ht := triple_create ty (Cell.shared 1 values) false (Heap.newSharedView m values)
-    (fun s hi => ⟨⟨s.next, 0⟩, s.create m (Cell.shared 1 values) false, hi, rfl, rfl⟩)
-    (fun _ _ _ h => ⟨h.2.1, _, m.roundTrip ty (Cell.shared 1 values), h.2.2⟩)
-  simpa [Cell.shared] using ht
+theorem newSharedExposure.spec (values : List ty) :
+    Triple m emp (Heap.newSharedExposure m values)
+      (fun p => sep (alloc p values.length false) (block p (values.map (Cell.shared 1)))) := by
+  simpa [Heap.newSharedExposure] using newCells.spec (m := m) (values.map (Cell.shared 1)) false
 
 theorem whole_of_matches {s : Heap m.Repr} {p : RawPtr ty} {cs : List (Cell ty)}
-    {own : Bool} (hoff : p.offset = 0)
+    {own : Bool} (hoff : p.index = 0)
     (ha : Fragment.Matches m s (allocHeap ty p.base cs.length own))
     (hc : Fragment.Matches m s (cellsHeap p cs)) :
-    s.allocated p.base = own ∧ s.load m.interpret ty p.base = some cs := by
-  obtain ⟨halloc, actual, hs, hlen⟩ := (Fragment.matches_single _ _ _).mp ha
-  have he := segment_unique hc hlen.symm (before := []) (after := []) hoff.symm
-    (by simpa using hs)
-  exact ⟨halloc, by simpa [he] using hs⟩
+    s.allocated p.base = own ∧ Heap.Whole m s p cs := by
+  obtain ⟨halloc, r, hs, hlen, hbytes⟩ := (Fragment.matches_single _ _ _).mp ha
+  refine ⟨halloc, r, hs, hlen, ?_, hbytes⟩
+  intro i hi
+  obtain ⟨r', hs', hv⟩ := matches_cellsHeap.mp hc i hi
+  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
+  simpa [he, hoff] using hv
 
 theorem frame_base_absent {s : Heap m.Repr} {p : RawPtr ty} {cs : List (Cell ty)}
-    {own : Bool} {F : Fragment.{u}} (hoff : p.offset = 0)
+    {own : Bool} {F : Fragment.{u}} (hoff : p.index = 0)
     (hd : (allocHeap ty p.base cs.length own ∪ cellsHeap p cs).Disjoint F)
-    (hm : Fragment.Matches m s F)
-    (hs : s.load m.interpret ty p.base = some cs) :
+    (hm : Fragment.Matches m s F) (hs : Heap.Whole m s p cs) :
     ∀ r, F r → r.base ≠ p.base := by
-  intro r hr hb
+  intro resource hr hb
   obtain ⟨ha, hc⟩ := Fragment.disjoint_union_left.mp hd
-  have hcompat := ha _ rfl r hr
-  have ht : ty = r.ty := by
+  have hcompat := ha _ rfl resource hr
+  have ht : ty = resource.ty := by
     rcases hcompat with hne | ⟨ht, _⟩
     · exact (hne hb.symm).elim
     · exact ht
-  have hh := hm r hr
-  cases r
+  have hh := hm resource hr
+  cases resource
   · rename_i otherTy q value
     change ty = otherTy at ht
     subst otherTy
     change q.base = p.base at hb
     obtain ⟨actual, hactual, hv⟩ := hh
-    have he : actual = cs := by
+    obtain ⟨r, hs, hn, _⟩ := hs
+    have he : actual = r := by
       rw [hb] at hactual
       exact Option.some.inj (hactual.symm.trans hs)
-    have hbound : q.offset < cs.length :=
-      he ▸ (List.getElem?_eq_some_iff.mp hv).1
-    have hbad := hc _ ⟨q.offset, hbound, rfl⟩ _ hr
+    have hbound : q.index < cs.length := by
+      have hvb := m.view_bound ty actual q.index value hv
+      simpa [he, hn] using hvb
+    have hbad := hc _ ⟨q.index, hbound, rfl⟩ _ hr
     simp [Resource.Compatible, Resource.base, Resource.ty, Resource.key, hb, hoff] at hbad
   · rcases hcompat with hne | ⟨_, hkey⟩
     · exact hne hb.symm
@@ -140,18 +133,19 @@ theorem frame_base_absent {s : Heap m.Repr} {p : RawPtr ty} {cs : List (Cell ty)
 theorem matches_remove_frame {s : Heap m.Repr} {F : Fragment.{u}} (base : BasePtr)
     (hm : Fragment.Matches m s F) (hne : ∀ r, F r → r.base ≠ base) :
     Fragment.Matches m (s.remove base) F := by
-  intro r hr
-  have hh := hm r hr
-  have hb := hne r hr
-  cases r
+  intro resource hr
+  have hh := hm resource hr
+  have hb := hne resource hr
+  cases resource
   · rename_i ty p value
-    obtain ⟨actual, ha, hv⟩ := hh
-    exact ⟨actual, (Heap.load_remove_other _ _ _ _ _ hb).trans ha, hv⟩
+    change p.base ≠ base at hb
+    obtain ⟨r, hs, hv⟩ := hh
+    exact ⟨r, by simpa [Heap.remove, update, hb] using hs, hv⟩
   · rename_i ty other count own
     change other ≠ base at hb
-    obtain ⟨ha, actual, hs, hn⟩ := hh
+    obtain ⟨ha, r, hs, hn⟩ := hh
     exact ⟨by simpa [Heap.remove, update, hb] using ha,
-      actual, (Heap.load_remove_other _ _ _ _ _ hb).trans hs, hn⟩
+      r, by simpa [Heap.remove, update, hb] using hs, hn⟩
 
 theorem freeBlock.spec (p : RawPtr ty) (cs : List (Cell ty)) (own : Bool)
     (hw : ∀ c ∈ cs, c.writable) :
@@ -164,29 +158,26 @@ theorem freeBlock.spec (p : RawPtr ty) (cs : List (Cell ty)) (own : Bool)
   obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _ _).mp hm
   obtain ⟨ha, hc⟩ := (Fragment.matches_union _ _ _ _).mp hab
   obtain ⟨halloc, hs⟩ := whole_of_matches hoff ha hc
-  have hcan : Heap.freeBlock m p cs.length own s () (s.remove p.base) :=
-    ⟨hoff, halloc, ⟨cs, hs, rfl, hw⟩, rfl⟩
-  refine ⟨⟨(), _, hcan⟩, ?_⟩
+  refine ⟨⟨(), s.remove p.base, hoff, halloc, ⟨cs, hs, rfl, hw⟩, rfl⟩, ?_⟩
   rintro _ _ ⟨_, _, _, rfl⟩
   exact ⟨∅, Fragment.disjoint_empty_left F,
     by simpa using matches_remove_frame p.base hF (frame_base_absent hoff hd hF hs),
     hi.remove p.base, rfl⟩
 
-theorem endSharedView.spec (p : RawPtr ty) (values : List ty) :
-    Triple m (sep (alloc p values.length false) (block p (Cell.shared 1 values)))
-      (Heap.endSharedView m p values) (fun _ => emp) := by
+theorem endSharedExposure.spec (p : RawPtr ty) (values : List ty) :
+    Triple m (sep (alloc p values.length false) (block p (values.map (Cell.shared 1))))
+      (Heap.endSharedExposure m p values) (fun _ => emp) := by
   intro h F s hp hd hm hi
   obtain ⟨a, b, _, he, ⟨hoff, ha⟩, hb⟩ := hp
-  change b = cellsHeap p (Cell.shared 1 values) at hb
+  change b = cellsHeap p (values.map (Cell.shared 1)) at hb
   subst h a b
   obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _ _).mp hm
   obtain ⟨ha, hc⟩ := (Fragment.matches_union _ _ _ _).mp hab
-  have ha' : Fragment.Matches m s (allocHeap ty p.base (Cell.shared 1 values).length false) :=
-    by simpa [Cell.shared] using ha
+  have ha' : Fragment.Matches m s
+      (allocHeap ty p.base (values.map (Cell.shared 1)).length false) := by simpa using ha
   obtain ⟨halloc, hs⟩ := whole_of_matches hoff ha' hc
-  have hd' : (allocHeap ty p.base (Cell.shared 1 values).length false ∪
-      cellsHeap p (Cell.shared 1 values)).Disjoint F := by
-    simpa [Cell.shared] using hd
+  have hd' : (allocHeap ty p.base (values.map (Cell.shared 1)).length false ∪
+      cellsHeap p (values.map (Cell.shared 1))).Disjoint F := by simpa using hd
   refine ⟨⟨(), s.remove p.base, hoff, halloc, hs, rfl⟩, ?_⟩
   rintro _ _ ⟨_, _, _, rfl⟩
   exact ⟨∅, Fragment.disjoint_empty_left F,

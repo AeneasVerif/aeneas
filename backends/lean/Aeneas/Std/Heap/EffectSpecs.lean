@@ -13,14 +13,36 @@ namespace Aeneas.Std.HeapWP
 
 open SepLogic
 
-theorem read.spec (p : RawPtr T) (value : T) (fraction : Nat) :
-    Triple (block p [.val (some fraction) value]) (RawPtr.read p)
-      (fun x h => x = value ∧ block p [.val (some fraction) value] h) :=
-  Triple.guardedModify (SepLogic.read.spec p value fraction)
+theorem read.spec (p : RawPtr T) (value : T) (depth : Nat) :
+    Triple (block p [.shared depth value]) (RawPtr.read p)
+      (fun x h => x = value ∧ block p [.shared depth value] h) :=
+  Triple.guardedModify (SepLogic.read.spec p value depth)
 
 theorem write.spec (p : RawPtr T) (old : Cell T) (value : T) (hw : old.writable) :
     Triple (block p [old]) (MutRawPtr.write p value) (fun _ => pointsTo p value) :=
   Triple.guardedModify (SepLogic.write.spec p old value hw)
+
+theorem add.spec (p : RawPtr T) (cs : List (Cell T)) (own : Bool)
+    (start target : Nat) (count : Usize)
+    (hstart : start ≤ cs.length) (htarget : target ≤ cs.length)
+    (hcount : (count.val : Int) = (target : Int) - start) :
+    Triple (sep (alloc p cs.length own) (block p cs))
+      (RawPtr.add (⟨p.base, p.index + start⟩ : RawPtr T) count)
+      (fun result h => result = ⟨p.base, p.index + target⟩ ∧
+        sep (alloc p cs.length own) (block p cs) h) := by
+  simpa [RawPtr.add, State.offset, hcount] using Triple.guardedModify
+    (SepLogic.offsetWholeBlock.spec p cs own start target hstart htarget)
+
+theorem offset.spec (p : RawPtr T) (cs : List (Cell T)) (own : Bool)
+    (start target : Nat) (count : Isize)
+    (hstart : start ≤ cs.length) (htarget : target ≤ cs.length)
+    (hcount : count.val = (target : Int) - start) :
+    Triple (sep (alloc p cs.length own) (block p cs))
+      (RawPtr.offset (⟨p.base, p.index + start⟩ : RawPtr T) count)
+      (fun result h => result = ⟨p.base, p.index + target⟩ ∧
+        sep (alloc p cs.length own) (block p cs) h) := by
+  simpa [RawPtr.offset, State.offset, hcount] using Triple.guardedModify
+    (SepLogic.offsetWholeBlock.spec p cs own start target hstart htarget)
 
 theorem intoRaw.spec (value : T) :
     Triple emp (alloc.boxed.Box.into_raw value)
@@ -42,30 +64,30 @@ theorem fromRaw.spec (p : RawPtr T) (value : T) :
   subst x
   apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ h => h) (Triple.guardedModify
-      (SepLogic.freeBlock.spec p [.val (some 0) value] true (by simp [Cell.writable]))))
+      (SepLogic.freeBlock.spec p [.shared 0 value] true (by simp [Cell.writable]))))
   intro _
   exact Triple.pure emp value
 
-theorem borrowRange.spec (p : RawPtr T) (values : List T) :
+theorem borrowRange.spec (p : RawPtr T) (values : List T)
+    (hsize : values = [] ∨ 0 < layout.byteLength T) :
     Triple (block p (Cell.full values)) (RawPtr.borrowRange p values.length)
-      (fun x h => x = values ∧ block p (Cell.borrowed values) h) :=
-  Triple.guardedModify (SepLogic.borrowRange.spec p values)
+      (fun x h => x = values ∧ block p (List.replicate values.length .borrowed) h) :=
+  Triple.guardedModify (SepLogic.borrowRange.spec p values hsize)
 
-theorem endBorrowRange.spec (p : RawPtr T) (old values : List T)
-    (hlen : old.length = values.length) :
-    Triple (block p (Cell.borrowed old)) (RawPtr.endBorrowRange p values)
+theorem endBorrowRange.spec (p : RawPtr T) (values : List T) :
+    Triple (block p (List.replicate values.length .borrowed)) (RawPtr.endBorrowRange p values)
       (fun _ => block p (Cell.full values)) :=
-  Triple.guardedModify (SepLogic.endBorrowRange.spec p old values hlen)
+  Triple.guardedModify (SepLogic.endBorrowRange.spec p values)
 
 theorem shareRange.spec (p : RawPtr T) (values : List T) (depth : Nat) :
-    Triple (block p (Cell.shared depth values)) (RawPtr.shareRange p values.length)
-      (fun x h => x = values ∧ block p (Cell.shared (depth + 1) values) h) :=
+    Triple (block p (values.map (Cell.shared depth))) (RawPtr.shareRange p values.length)
+      (fun x h => x = values ∧ block p (values.map (Cell.shared (depth + 1))) h) :=
   Triple.guardedModify (SepLogic.shareRange.spec p values depth)
 
 theorem endShareRange.spec (p : RawPtr T) (values : List T) (depth : Nat) :
-    Triple (block p (Cell.shared (depth + 1) values))
+    Triple (block p (values.map (Cell.shared (depth + 1))))
       (RawPtr.endShareRange p values)
-      (fun _ => block p (Cell.shared depth values)) :=
+      (fun _ => block p (values.map (Cell.shared depth))) :=
   Triple.guardedModify (SepLogic.endShareRange.spec p values depth)
 
 end Aeneas.Std.HeapWP
