@@ -1,6 +1,6 @@
 module
 
-public import Aeneas.Std.Heap.Allocation
+public import Aeneas.Std.Heap.Specs
 public import Aeneas.Std.Primitives
 public import Aeneas.Data.Coinductive.ITreeWP.DWP
 import all Aeneas.Std.Heap.Separation
@@ -17,7 +17,7 @@ unseal Result
 /-- Heap effects require an enabled transition and accept every possible successor.
 Failure is rejected; the ordinary effect-free WP is unchanged. -/
 def effectWP : EffectWP RustEffect where
-  State := State.{0}
+  State := State
   wp effect C s :=
     match effect with
     | .guardedModify _ modify =>
@@ -49,20 +49,25 @@ instance : effectWP.ExcludedMiracle where
     · exact he
 
 /-- Successful termination of an actual `Result` computation with a heap postcondition. -/
-def Spec (c : Result α) (Q : α → State.{0} → Prop) (s : State.{0}) : Prop :=
+def Spec (c : Result α) (Q : α → State → Prop) (s : State) : Prop :=
   DWP effectWP c Q s
 
-theorem Spec.pure (x : α) (Q : α → State.{0} → Prop) (s : State.{0}) :
+theorem Spec.pure (x : α) (Q : α → State → Prop) (s : State) :
     Spec (pure x) Q s ↔ Q x s :=
   DWP.ret_iff
 
-theorem Spec.bind {c : Result α} {k : α → Result β}
+theorem Spec.bind {α : Type u} {β : Type v} {c : Result α} {k : α → Result β}
+    {Q : α → State → Prop} {R : β → State → Prop}
     (hc : Spec c Q s) (hk : ∀ x s', Q x s' → Spec (k x) R s') :
-    Spec (c >>= k) R s :=
+    Spec (Aeneas.Std.bind c k) R s :=
   DWP.bind hc hk
 
 theorem Spec.exists (hc : Spec c Q s) : ∃ x s', Q x s' :=
   DWP.exists hc
+
+theorem Spec.mono (hc : Spec c Q s) (hq : ∀ x s', Q x s' → R x s') :
+    Spec c R s :=
+  DWP.mono hc hq
 
 theorem Spec.fail (e : Error) : ¬ Spec (Result.fail e : Result α) Q s := by
   intro h
@@ -71,7 +76,7 @@ theorem Spec.fail (e : Error) : ¬ Spec (Result.fail e : Result α) Q s := by
 theorem Spec.div : ¬ Spec (Result.div : Result α) Q s :=
   DWP.div_false
 
-theorem Spec.guardedModify {modify : State.{0} → α → State.{0} → Prop} :
+theorem Spec.guardedModify {modify : State → α → State → Prop} :
     Spec (Result.guardedModify modify) Q s ↔
       (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → Q x s' := by
   constructor
@@ -82,25 +87,26 @@ theorem Spec.guardedModify {modify : State.{0} → α → State.{0} → Prop} :
     exact DWP.vis ⟨hsafe, fun x s' hx => DWP.ret_iff.mpr (hpost x s' hx)⟩
 
 /-- A framed separation contract for the generated computation itself. -/
-def Triple (P : Assertion.{0}) (c : Result α) (Q : α → Assertion.{0}) : Prop :=
+def Triple (P : Assertion) (c : Result α) (Q : α → Assertion) : Prop :=
   ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
     Spec c (fun x s' => ∃ h', h'.Disjoint F ∧
       Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h') s
 
-theorem Triple.guardedModify {modify : State.{0} → α → State.{0} → Prop}
+theorem Triple.guardedModify {modify : State → α → State → Prop}
     (ht : SepLogic.Triple P modify Q) :
     Triple P (Result.guardedModify modify) Q := by
   intro h F s hp hd hm hi
   exact Spec.guardedModify.mpr (ht h F s hp hd hm hi)
 
-theorem Triple.pure (P : Assertion.{0}) (x : α) :
+theorem Triple.pure (P : Assertion) (x : α) :
     Triple P (pure x) (fun y h => y = x ∧ P h) := by
   intro h F s hp hd hm hi
   exact Spec.pure _ _ _ |>.mpr ⟨h, hd, hm, hi, rfl, hp⟩
 
-theorem Triple.bind {c : Result α} {k : α → Result β}
+theorem Triple.bind {α : Type u} {β : Type v} {c : Result α} {k : α → Result β}
+    {Q : α → Assertion} {R : β → Assertion}
     (hc : Triple P c Q) (hk : ∀ x, Triple (Q x) (k x) R) :
-    Triple P (c >>= k) R := by
+    Triple P (Aeneas.Std.bind c k) R := by
   intro h F s hp hd hm hi
   apply Spec.bind (hc h F s hp hd hm hi)
   rintro x s' ⟨h', hd', hm', hi', hq⟩

@@ -74,7 +74,7 @@ info: test1_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test1_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test1_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test1_eq
@@ -119,7 +119,7 @@ info: test2_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test2_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test2_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test2_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test2_eq
@@ -182,7 +182,7 @@ info: test3_eq : ∀ (b : Bool) (x y : U32), test3 b x y = if b = true then test
 #guard_msgs in
 #check @test3_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test3_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test3_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test3_eq
@@ -212,7 +212,7 @@ info: test4_eq : ∀ (x y : U32), test4 x y = test4_body x y
 #guard_msgs in
 #check @test4_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test4_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test4_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test4_eq
@@ -244,7 +244,7 @@ info: test5_eq : ∀ (x : U32), test5 x = test5_all x
 #guard_msgs in
 #check @test5_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test5_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test5_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test5_eq
@@ -301,7 +301,7 @@ full => test7_body
 
 -- Verify
 /--
-info: 'Aeneas.Command.Decompose.Tests.test7_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test7_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test7_eq
@@ -340,7 +340,7 @@ info: test8_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test8_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test8_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test8_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test8_eq
@@ -374,7 +374,7 @@ info: test9_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test9_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test9_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test9_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test9_eq
@@ -414,7 +414,7 @@ info: test10_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test10_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test10_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test10_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test10_eq
@@ -458,7 +458,7 @@ info: test11_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test11_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test11_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test11_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test11_eq
@@ -509,7 +509,7 @@ info: test12_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test12_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test12_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test12_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test12_eq
@@ -555,7 +555,7 @@ info: test15_eq : ∀ (b1 b2 : Bool) (x : U32),
 #guard_msgs in
 #check @test15_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test15_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test15_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test15_eq
@@ -631,7 +631,7 @@ info: test17_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test17_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test17_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test17_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test17_eq
@@ -699,7 +699,7 @@ info: test19_eq : ∀ (x : U32), test19 x = test19_fn test19_extracted x
 #guard_msgs in
 #check @test19_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test19_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test19_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test19_eq
@@ -732,7 +732,7 @@ info: test20_eq : ∀ (x : U32), test20 x = test20_apply (fun y => test20_body x
 #guard_msgs in
 #check @test20_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test20_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test20_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test20_eq
@@ -822,7 +822,7 @@ info: test22_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test22_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test22_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test22_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test22_eq
@@ -859,7 +859,7 @@ info: test23_eq : ∀ (n : ℕ) (x : U32) (s : Slice U8) (b : Bool),
 #guard_msgs in
 #check @test23_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test23_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test23_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test23_eq
@@ -928,7 +928,7 @@ info: test24_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test24_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test24_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test24_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test24_eq
@@ -970,7 +970,7 @@ info: test25_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test25_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test25_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test25_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test25_eq
@@ -1012,7 +1012,7 @@ info: test26_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test26_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test26_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test26_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test26_eq
@@ -1167,7 +1167,7 @@ info: test30_eq : ∀ (b : Bool) (x y : U32),
 #guard_msgs in
 #check @test30_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test30_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test30_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test30_eq
@@ -1574,7 +1574,7 @@ info: test39_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test39_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test39_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test39_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test39_eq
@@ -1889,7 +1889,7 @@ info: test47_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test47_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test47_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test47_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test47_eq
@@ -1925,7 +1925,7 @@ info: test48_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test48_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test48_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test48_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test48_eq
@@ -1960,7 +1960,7 @@ info: test49_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test49_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test49_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test49_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test49_eq
@@ -1998,7 +1998,7 @@ info: test50_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test50_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test50_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test50_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test50_eq
@@ -2037,7 +2037,7 @@ info: test51_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test51_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test51_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test51_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test51_eq
@@ -2079,7 +2079,7 @@ info: test52_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test52_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test52_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test52_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test52_eq
@@ -2159,7 +2159,7 @@ def loop (o : Option Usize)
   branch 1 (letRange 0 8) => loop.body_8
 
 /--
-info: 'Aeneas.Command.Decompose.Tests.test55_ns.loop_eq_8' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test55_ns.loop_eq_8' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms loop_eq_8
@@ -2327,10 +2327,7 @@ info: g_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @g_prefix_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix_eq' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block]
+info: 'Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms g_prefix_eq
@@ -2394,10 +2391,7 @@ info: g_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @g_prefix_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix_eq' depends on axioms: [propext,
- Classical.choice,
- Quot.sound,
- Block]
+info: 'Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms g_prefix_eq
@@ -2497,7 +2491,7 @@ info: test59_eq : ∀ (pk : Slice U8),
 #check @test59_eq
 
 /--
-info: 'Aeneas.Command.Decompose.Tests.test59.test59_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
+info: 'Aeneas.Command.Decompose.Tests.test59.test59_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test59_eq

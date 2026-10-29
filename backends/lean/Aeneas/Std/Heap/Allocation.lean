@@ -5,181 +5,260 @@ import all Aeneas.Std.Heap.Model
 import all Aeneas.Std.Heap.Separation
 import all Aeneas.Std.Heap.Resources
 
+/-! Checked allocation, freshness, and framed cleanup. Allocation needs capacity
+in the input heap; there is deliberately no unconditional allocation triple
+from `emp`. -/
+
 @[expose] public section
 
-namespace Aeneas.Std.SepLogic
+namespace Aeneas.Std
 
-universe u
+namespace Heap
 
-theorem matches_create_frame {s : Heap Std.Block.{u}} {F : Fragment.{u}}
-    (hi : s.Inv) (hm : Fragment.Matches s F) (r : Std.Block.{u}) (own : Bool)
-    (alignment : Alignment) :
-    Fragment.Matches (s.createRepr r own alignment) F := by
+theorem createRepr.enabled (s : Heap) (block : Block)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize)
+    (hl : block.repr.length < 2 ^ UScalarTy.numBits .Usize)
+    (hf : s.allocations s.next = none) :
+    ∃ base s', s.createRepr block = some (base, s') := by
+  exact ⟨s.next, ⟨update s.allocations s.next (some block),
+    ⟨BitVec.ofNat _ (s.next.val + 1)⟩⟩, by simp [createRepr, hc, hl, hf]⟩
+
+theorem createRepr.success {s s' : Heap} {block : Block} {base : BasePtr}
+    (h : s.createRepr block = some (base, s')) :
+    base = s.next ∧ s.allocations s.next = none ∧
+      s'.allocations = update s.allocations s.next (some block) ∧
+      s'.next.val = s.next.val + 1 := by
+  unfold createRepr at h
+  split at h
+  · rename_i hc
+    split at h
+    · rename_i hf
+      have he := Option.some.inj h
+      cases he
+      refine ⟨rfl, hf, rfl, ?_⟩
+      exact Nat.mod_eq_of_lt hc.1
+    · cases h
+  · cases h
+
+theorem createRepr.inv {s s' : Heap} {block : Block} {base : BasePtr}
+    (hi : s.Inv) (h : s.createRepr block = some (base, s')) : s'.Inv := by
+  obtain ⟨_, _, ha, hn⟩ := createRepr.success h
+  intro other ho
+  have hne : other ≠ s.next := by
+    intro he
+    rw [he, hn] at ho
+    grind
+  rw [ha]
+  simp only [update, ite_eq_right hne]
+  apply hi other
+  rw [hn] at ho
+  grind
+
+theorem newBlock.enabled (repr : Repr ty) (data : List (Vector U8 repr.size))
+    (own : Bool) (s : Heap) (hi : s.Inv)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize)
+    (hl : data.length * repr.size < 2 ^ UScalarTy.numBits .Usize) :
+    ∃ p s', newBlock repr data own s = some (p, s') := by
+  obtain ⟨base, s', hs⟩ := createRepr.enabled s
+    ⟨(repr.create (data.toArray.toVector.map (Cell.shared 0 ∘ some))).toList, repr.align, own⟩
+    hc (by simpa only [Vector.length_toList, List.size_toArray] using hl) (hi s.next (Nat.le_refl _))
+  exact ⟨⟨base, ⟨0⟩⟩, s', by simp only [newBlock, hs]⟩
+
+theorem newBlock.inv {repr : Repr ty} {data : List (Vector U8 repr.size)}
+    {own : Bool} {s s' : Heap} {p : RawPtr ty}
+    (hi : s.Inv) (h : newBlock repr data own s = some (p, s')) : s'.Inv := by
+  unfold newBlock at h
+  split at h
+  · rename_i base actual hs
+    have he := Option.some.inj h
+    cases he
+    exact createRepr.inv hi hs
+  · cases h
+
+end Heap
+
+namespace SepLogic
+
+theorem matches_create_frame {s s' : Heap} {F : Fragment} {block : Block} {base : BasePtr}
+    (hi : s.Inv) (hm : Fragment.Matches s F) (h : s.createRepr block = some (base, s')) :
+    Fragment.Matches s' F := by
+  obtain ⟨_, _, ha, _⟩ := Heap.createRepr.success h
   intro resource hr
   have hh := hm resource hr
-  obtain ⟨actual, hc⟩ := hh.live
-  have hlt := hi.base_lt hc
-  have hne : resource.base ≠ s.next := Nat.ne_of_lt hlt
+  obtain ⟨actual, hl⟩ := hh.live
+  have hne : resource.base ≠ s.next := by
+    intro he
+    have hn := hi s.next (Nat.le_refl _)
+    rw [he, hn] at hl
+    cases hl
   cases resource
-  · rename_i ty p value
-    change p.base ≠ s.next at hne
-    obtain ⟨r', hs, ha, hv⟩ := hh
-    exact ⟨r', by simpa [hne] using hs, by simpa [Heap.Aligned, hne] using ha, hv⟩
-  · rename_i ty base count allocated
-    change base ≠ s.next at hne
-    obtain ⟨ha, r', hs, halign, hn⟩ := hh
-    exact ⟨by simpa [hne] using ha, r', by simpa [hne] using hs,
-      by simpa [Heap.Aligned, hne] using halign, hn⟩
+  · rename_i other index alignment value
+    obtain ⟨actual, hl, halign, hv⟩ := hh
+    change other ≠ s.next at hne
+    exact ⟨actual, by simpa [ha, update, hne] using hl, halign, hv⟩
+  · rename_i other size alignment own
+    obtain ⟨actual, hl, hn, halign, ho⟩ := hh
+    change other ≠ s.next at hne
+    exact ⟨actual, by simpa [ha, update, hne] using hl, hn, halign, ho⟩
 
-theorem fresh_disjoint {s : Heap Std.Block.{u}} {F : Fragment.{u}}
+theorem fresh_disjoint {s : Heap} {F h : Fragment}
     (hi : s.Inv) (hm : Fragment.Matches s F)
-    {h : Fragment.{u}} (hfresh : ∀ r, h r → r.base = s.next) : h.Disjoint F := by
+    (hfresh : ∀ r, h r → r.base = s.next) : h.Disjoint F := by
   intro r hr other ho
-  obtain ⟨repr, hc⟩ := (hm other ho).live
-  have hlt := hi.base_lt hc
+  obtain ⟨actual, hl⟩ := (hm other ho).live
+  have hlt := hi.base_lt hl
   left
-  rw [hfresh r hr]
-  exact (Nat.ne_of_lt hlt).symm
+  intro he
+  have hval := congrArg UScalar.val (he ▸ hfresh r hr)
+  grind
 
-theorem newCells.spec (cs : List (Cell ty)) (own : Bool) :
-    Triple emp (Heap.newCells cs own)
-      (fun p => sep (alloc p cs.length own) (block p cs)) := by
-  intro h F s rfl _ hm hi
-  have hF : Fragment.Matches s F := by simpa using hm
-  refine ⟨Heap.newCells.exists cs own s hi, fun p s' hrun => ?_⟩
-  obtain ⟨_, rfl, r, hr, rfl⟩ := hrun
-  let p : RawPtr ty := ⟨s.next, 0⟩
-  let a := allocHeap ty s.next cs.length own
-  let b := cellsHeap p cs
-  have hfresh : ∀ resource, (a ∪ b) resource → resource.base = s.next := by
-    rintro resource (rfl | ⟨i, hi, rfl⟩)
-    · rfl
-    · rfl
-  refine ⟨a ∪ b, fresh_disjoint hi hF hfresh, ?_, hi.createRepr r own _,
-    a, b, disjoint_alloc_cells p cs.length own cs, rfl, ⟨rfl, rfl⟩, rfl⟩
-  apply (Fragment.matches_union _ _ _).mpr
-  refine ⟨?_, matches_create_frame hi hF r own _⟩
-  apply (Fragment.matches_union _ _ _).mpr
-  constructor
-  · apply (Fragment.matches_single _ _).mpr
-    exact ⟨by simp, r, by simp, by simp,
-      Std.Block.create_extent _ _ _ hr, Std.Block.create_bytes _ _ _ hr⟩
-  · apply matches_views p cs (r := r) (by simp [p]) (by simp [p])
-    intro i hi
-    simpa [p] using Std.Block.create_view ty cs r hr i hi
+theorem newBlock_single.resources {repr : Repr ty} {data : Vector U8 repr.size}
+    {own : Bool} {s s' : Heap} {p : RawPtr ty}
+    (h : Heap.newBlock repr [data] own s = some (p, s')) :
+    p.base = s.next ∧ p.index.val = 0 ∧ s'.next.val = s.next.val + 1 ∧
+      Fragment.Matches s'
+        (allocHeap repr p.base 1 own ∪
+          cellsHeap repr.align p.base 0 (data.map (Cell.shared 0 ∘ some)).toList) := by
+  unfold Heap.newBlock at h
+  split at h
+  · rename_i base actual hs
+    have he := Option.some.inj h
+    cases he
+    obtain ⟨hbase, _, ha, hn⟩ := Heap.createRepr.success hs
+    subst base
+    have hb : (repr.create ([data].toArray.toVector.map (Cell.shared 0 ∘ some))).toList =
+        (data.map (Cell.shared 0 ∘ some)).toList := by
+      simpa using Repr.create_single repr data 0
+    let blk : Block :=
+      ⟨(repr.create ([data].toArray.toVector.map (Cell.shared 0 ∘ some))).toList, repr.align, own⟩
+    have hlookup : s'.allocations s.next = some blk := by simp [ha, update, blk]
+    refine ⟨rfl, rfl, hn, (Fragment.matches_union _ _ _).mpr ⟨?_, ?_⟩⟩
+    · apply (Fragment.matches_single _ _).mpr
+      refine ⟨blk, hlookup, ?_, rfl, rfl⟩
+      simp only [blk, Vector.length_toList, List.size_toArray, List.length_cons, List.length_nil]
+    · rw [matches_cellsHeap]
+      intro i hi
+      exact ⟨blk, hlookup, Nat.dvd_refl _,
+        by simpa only [blk, hb, Nat.zero_add] using List.getElem?_eq_getElem hi⟩
+  · cases h
 
-theorem newBlock.spec (values : List ty) (own : Bool) :
-    Triple emp (Heap.newBlock values own)
-      (fun p => sep (alloc p values.length own) (block p (Cell.full values))) := by
-  simpa [Heap.newBlock, Cell.full] using newCells.spec (Cell.full values) own
+theorem newBlock_single.frame {repr : Repr ty} {data : Vector U8 repr.size}
+    {own : Bool} {s s' : Heap} {p : RawPtr ty} {F : Fragment}
+    (hi : s.Inv) (hm : Fragment.Matches s F)
+    (h : Heap.newBlock repr [data] own s = some (p, s')) :
+    Fragment.Matches s' F := by
+  unfold Heap.newBlock at h
+  split at h
+  · rename_i base actual hs
+    have he := Option.some.inj h
+    cases he
+    exact matches_create_frame hi hm hs
+  · cases h
 
-theorem alloc.spec (ty : Type u) (count : Nat) :
-    Triple emp (Heap.alloc (ty := ty) count)
-      (fun p => sep (alloc p count true)
-        (block p (List.replicate count (.shared 0 none)))) := by
-  simpa [Heap.alloc] using newCells.spec (List.replicate count ((.shared 0 none) : Cell ty)) true
-
-theorem newSharedExposure.spec (values : List ty) :
-    Triple emp (Heap.newSharedExposure values)
-      (fun p => sep (alloc p values.length false) (block p (values.map (Cell.shared 1 ∘ some)))) := by
-  simpa [Heap.newSharedExposure] using newCells.spec (values.map (Cell.shared 1 ∘ some)) false
-
-theorem whole_of_matches {s : Heap Std.Block.{u}} {p : RawPtr ty} {cs : List (Cell ty)}
-    {own : Bool} (hoff : p.index = 0)
-    (ha : Fragment.Matches s (allocHeap ty p.base cs.length own))
-    (hc : Fragment.Matches s (cellsHeap p cs)) :
-    s.allocated p.base = own ∧ Heap.Whole s p cs := by
-  obtain ⟨halloc, r, hs, halign, hlen, hbytes⟩ := (Fragment.matches_single _ _).mp ha
-  refine ⟨halloc, r, hs, halign, hlen, ?_, hbytes⟩
-  intro i hi
-  obtain ⟨r', hs', _, hv⟩ := matches_cellsHeap.mp hc i hi
-  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
-  simpa [he, hoff] using hv
-
-theorem frame_base_absent {s : Heap Std.Block.{u}} {p : RawPtr ty} {cs : List (Cell ty)}
-    {own : Bool} {F : Fragment.{u}} (hoff : p.index = 0)
-    (hd : (allocHeap ty p.base cs.length own ∪ cellsHeap p cs).Disjoint F)
-    (hm : Fragment.Matches s F) (hs : Heap.Whole s p cs) :
-    ∀ r, F r → r.base ≠ p.base := by
-  intro resource hr hb
-  obtain ⟨ha, hc⟩ := Fragment.disjoint_union_left.mp hd
-  have hcompat := ha _ rfl resource hr
-  have ht : ty = resource.ty := by
-    rcases hcompat with hne | ⟨ht, _⟩
-    · exact (hne hb.symm).elim
-    · exact ht
-  have hh := hm resource hr
-  cases resource
-  · rename_i otherTy q value
-    change ty = otherTy at ht
-    subst otherTy
-    change q.base = p.base at hb
-    obtain ⟨actual, hactual, _, hv⟩ := hh
-    obtain ⟨r, hs, _, hn, _⟩ := hs
-    have he : actual = r := by
-      rw [hb] at hactual
-      exact Option.some.inj (hactual.symm.trans hs)
-    have hbound : q.index < cs.length := by
-      have hvb := Std.Block.view_bound ty actual q.index value hv
-      simpa [he, hn] using hvb
-    have hbad := hc _ ⟨q.index, hbound, rfl⟩ _ hr
-    simp [Resource.Compatible, Resource.base, Resource.ty, Resource.key, hb, hoff] at hbad
-  · rcases hcompat with hne | ⟨_, hkey⟩
-    · exact hne hb.symm
-    · exact hkey rfl
-
-theorem matches_remove_frame {s : Heap Std.Block.{u}} {F : Fragment.{u}} (base : BasePtr)
+theorem matches_remove_frame {s : Heap} {F : Fragment} (base : BasePtr)
     (hm : Fragment.Matches s F) (hne : ∀ r, F r → r.base ≠ base) :
     Fragment.Matches (s.remove base) F := by
   intro resource hr
   have hh := hm resource hr
   have hb := hne resource hr
   cases resource
-  · rename_i ty p value
-    change p.base ≠ base at hb
-    obtain ⟨r, hs, ha, hv⟩ := hh
-    exact ⟨r, by simpa [hb] using hs, by simpa [Heap.Aligned, hb] using ha, hv⟩
-  · rename_i ty other count own
+  · rename_i other index alignment value
+    obtain ⟨actual, hl, ha, hv⟩ := hh
     change other ≠ base at hb
-    obtain ⟨ha, r, hs, halign, hn⟩ := hh
-    exact ⟨by simpa [hb] using ha, r, by simpa [hb] using hs,
-      by simpa [Heap.Aligned, hb] using halign, hn⟩
+    exact ⟨actual, by simpa [hb] using hl, ha, hv⟩
+  · rename_i other size alignment own
+    obtain ⟨actual, hl, hn, ha, ho⟩ := hh
+    change other ≠ base at hb
+    exact ⟨actual, by simpa [hb] using hl, hn, ha, ho⟩
 
-theorem freeBlock.spec (p : RawPtr ty) (cs : List (Cell ty)) (own : Bool)
-    (hw : ∀ c ∈ cs, c.writable) :
-    Triple (sep (alloc p cs.length own) (block p cs))
-      (Heap.freeBlock p cs.length own) (fun _ => emp) := by
+theorem whole_of_matches {s : Heap} {repr : Repr ty} {p : RawPtr ty}
+    {cells : List (Cell U8)} {count : Nat} {own : Bool}
+    (hoff : p.index.val = 0) (hlen : cells.length = count * repr.size)
+    (ha : Fragment.Matches s (allocHeap repr p.base count own))
+    (hc : Fragment.Matches s (cellsHeap repr.align p.base (p.index.val * repr.size) cells)) :
+    ∃ block, s.allocations p.base = some block ∧ block.repr = cells ∧
+      block.alignment = repr.align ∧ block.owned = own := by
+  obtain ⟨block, hl, hn, halign, ho⟩ := (Fragment.matches_single _ _).mp ha
+  refine ⟨block, hl, ?_, halign, ho⟩
+  apply List.ext_getElem (hn.trans hlen.symm)
+  intro i hi hi'
+  obtain ⟨actual, hs, _, hv⟩ := matches_cellsHeap.mp hc i hi'
+  have he : actual = block := Option.some.inj (hs.symm.trans hl)
+  subst actual
+  simpa only [hoff, Nat.zero_mul, Nat.zero_add, List.getElem?_eq_getElem hi,
+    Option.some.injEq] using hv
+
+theorem frame_base_absent {s : Heap} {alignment : Alignment} {base : BasePtr}
+    {cells : List (Cell U8)} {count : Nat} {own : Bool} {F : Fragment}
+    (hd : (Fragment.single (.cleanup base count alignment own) ∪
+      cellsHeap alignment base 0 cells).Disjoint F)
+    (hm : Fragment.Matches s F) (hl : s.cells base = some cells) :
+    ∀ r, F r → r.base ≠ base := by
+  intro resource hr hb
+  obtain ⟨ha, hc⟩ := Fragment.disjoint_union_left.mp hd
+  cases resource
+  · rename_i other index otherAlignment value
+    obtain ⟨actual, hs, _, hv⟩ := hm _ hr
+    change other = base at hb
+    subst other
+    have he : actual.repr = cells := by simpa [Heap.cells, hs] using hl
+    have hi : index < cells.length := by
+      have hx := (List.getElem?_eq_some_iff.mp hv).1
+      simpa [he] using hx
+    have hh := hc _ ⟨index, hi, rfl⟩ _ hr
+    simp [Resource.Compatible, Resource.base, Resource.key] at hh
+  · rename_i other size alignment own
+    have hh := ha _ rfl _ hr
+    change other = base at hb
+    simp [Resource.Compatible, Resource.base, Resource.key, hb] at hh
+
+theorem freeBlock.spec (repr : Repr ty) (p : RawPtr ty) (cells : List (Cell U8))
+    (count : Nat) (own : Bool) (hlen : cells.length = count * repr.size)
+    (hw : ∀ c ∈ cells, c.writable) :
+    Triple (sep (alloc repr p count own) (block repr p cells))
+      (fun s (_ : Unit) s' => Heap.freeBlock repr p count own s = some s')
+      (fun _ => emp) := by
   intro h F s hp hd hm hi
   obtain ⟨a, b, _, he, ⟨hoff, ha⟩, hb⟩ := hp
-  change b = cellsHeap p cs at hb
+  change b = cellsHeap repr.align p.base (p.index.val * repr.size) cells at hb
   subst h a b
   obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _).mp hm
   obtain ⟨ha, hc⟩ := (Fragment.matches_union _ _ _).mp hab
-  obtain ⟨halloc, hs⟩ := whole_of_matches hoff ha hc
-  refine ⟨⟨(), s.remove p.base, hoff, halloc, ⟨cs, hs, rfl, hw⟩, rfl⟩, ?_⟩
-  rintro _ _ ⟨_, _, _, rfl⟩
-  exact ⟨∅, Fragment.disjoint_empty_left F,
-    by simpa using matches_remove_frame p.base hF (frame_base_absent hoff hd hF hs),
-    hi.remove p.base, rfl⟩
+  obtain ⟨block, hl, hb, halign, ho⟩ := whole_of_matches hoff hlen ha hc
+  have hw' : block.repr.all (fun c => c.depth == some 0) = true := by
+    rw [hb, List.all_eq_true]
+    intro c hc
+    exact beq_iff_eq.mpr (hw c hc)
+  have hrun : Heap.freeBlock repr p count own s = some (s.remove p.base) := by
+    have hlen' : block.repr.length = count * repr.size := hb ▸ hlen
+    have hg : p.index.val = 0 ∧ block.owned = own ∧
+        repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
+        block.repr.all (fun c => c.depth == some 0) = true :=
+      ⟨hoff, ho, halign ▸ Nat.dvd_refl _, hlen', hw'⟩
+    simp only [Heap.freeBlock, hl, hg, and_self, ite_true]
+  refine ⟨⟨(), _, hrun⟩, ?_⟩
+  rintro _ s' hs'
+  have he := Option.some.inj (hrun.symm.trans hs')
+  subst s'
+  have hd' : (Fragment.single (.cleanup p.base (count * repr.size) repr.align own) ∪
+      cellsHeap repr.align p.base 0 cells).Disjoint F := by simpa [allocHeap, hoff] using hd
+  have hcells : s.cells p.base = some cells := by simp [Heap.cells, hl, hb]
+  exact ⟨∅, Fragment.disjoint_empty_left _,
+    by simpa using matches_remove_frame p.base hF (frame_base_absent hd' hF hcells),
+    hi.remove _, rfl⟩
 
-theorem endSharedExposure.spec (p : RawPtr ty) (values : List ty) :
-    Triple (sep (alloc p values.length false) (block p (values.map (Cell.shared 1 ∘ some))))
-      (Heap.endSharedExposure p values) (fun _ => emp) := by
+theorem free_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (value : ty) (own : Bool) :
+    Triple (sep (alloc repr p 1 own) (pointsTo repr p value))
+      (fun s (_ : Unit) s' => Heap.freeBlock repr p 1 own s = some s') (fun _ => emp) := by
   intro h F s hp hd hm hi
-  obtain ⟨a, b, _, he, ⟨hoff, ha⟩, hb⟩ := hp
-  change b = cellsHeap p (values.map (Cell.shared 1 ∘ some)) at hb
-  subst h a b
-  obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _).mp hm
-  obtain ⟨ha, hc⟩ := (Fragment.matches_union _ _ _).mp hab
-  have ha' : Fragment.Matches s
-      (allocHeap ty p.base (values.map (Cell.shared 1 ∘ some)).length false) := by simpa using ha
-  obtain ⟨halloc, hs⟩ := whole_of_matches hoff ha' hc
-  have hd' : (allocHeap ty p.base (values.map (Cell.shared 1 ∘ some)).length false ∪
-      cellsHeap p (values.map (Cell.shared 1 ∘ some))).Disjoint F := by simpa using hd
-  refine ⟨⟨(), s.remove p.base, hoff, halloc, hs, rfl⟩, ?_⟩
-  rintro _ _ ⟨_, _, _, rfl⟩
-  exact ⟨∅, Fragment.disjoint_empty_left F,
-    by simpa using matches_remove_frame p.base hF (frame_base_absent hoff hd' hF hs),
-    hi.remove p.base, rfl⟩
+  obtain ⟨a, b, hab, he, ha, data, _, hb⟩ := hp
+  have hlen : (data.map (Cell.shared 0 ∘ some)).toList.length = 1 * repr.size := by simp
+  have hw : ∀ c ∈ (data.map (Cell.shared 0 ∘ some)).toList, c.writable := by
+    intro c hc
+    rw [Vector.toList_map] at hc
+    obtain ⟨byte, _, rfl⟩ := List.mem_map.mp hc
+    rfl
+  exact freeBlock.spec repr p _ 1 own hlen hw h F s ⟨a, b, hab, he, ha, hb⟩ hd hm hi
 
-end Aeneas.Std.SepLogic
+end SepLogic
+end Aeneas.Std

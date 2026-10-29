@@ -4,8 +4,13 @@ public import Aeneas.Std.Heap.Effects
 public import Aeneas.Std.Heap.Borrowing
 public import Aeneas.Std.Alloc.Boxed
 import all Aeneas.Std.Heap.Separation
+import all Aeneas.Std.Heap.Resources
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Alloc.Boxed
+
+/-! Contracts for actual Rust-effect computations. Allocation is stated at its
+input state, with a capacity hypothesis; local access and cleanup retain framed
+separation triples. -/
 
 @[expose] public section
 
@@ -13,81 +18,130 @@ namespace Aeneas.Std.HeapWP
 
 open SepLogic
 
-theorem read.spec (p : RawPtr T) (value : T) (depth : Nat) :
-    Triple (block p [.shared depth (some value)]) (RawPtr.read p)
-      (fun x h => x = value ∧ block p [.shared depth (some value)] h) :=
-  Triple.guardedModify (SepLogic.read.spec p value depth)
+theorem read.spec (repr : Repr T) (p : RawPtr T) (value : T) (depth : Nat)
+    (hsize : 0 < repr.size) :
+    Triple (pointsTo repr p value depth) (RawPtr.read repr p)
+      (fun x h => x = value ∧ pointsTo repr p value depth h) :=
+  Triple.guardedModify (SepLogic.read.spec repr p value depth hsize)
 
-theorem write.spec (p : RawPtr T) (old : Cell T) (value : T) (hw : old.writable) :
-    Triple (block p [old]) (MutRawPtr.write p value) (fun _ => pointsTo p value) :=
-  Triple.guardedModify (SepLogic.write.spec p old value hw)
+theorem write.spec (repr : Repr T) (p : RawPtr T) (old value : T)
+    (hsize : 0 < repr.size) :
+    Triple (pointsTo repr p old) (MutRawPtr.write repr p value)
+      (fun _ => pointsTo repr p value) :=
+  Triple.guardedModify (SepLogic.write_pointsTo.spec repr p old value hsize)
 
-theorem add.spec (p : RawPtr T) (cs : List (Cell T)) (own : Bool)
-    (start target : Nat) (count : Usize)
-    (hstart : start ≤ cs.length) (htarget : target ≤ cs.length)
-    (hcount : (count.val : Int) = (target : Int) - start) :
-    Triple (sep (alloc p cs.length own) (block p cs))
-      (RawPtr.add (⟨p.base, p.index + start⟩ : RawPtr T) count)
-      (fun result h => result = ⟨p.base, p.index + target⟩ ∧
-        sep (alloc p cs.length own) (block p cs) h) := by
-  simpa [RawPtr.add, State.offset, hcount] using Triple.guardedModify
-    (SepLogic.offsetWholeBlock.spec p cs own start target hstart htarget)
+theorem offset.spec (repr : Repr T) (p : RawPtr T) (count : Isize) (length : Nat)
+    (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)
+    (hlo : 0 ≤ (p.index.val : Int) + count.val)
+    (hhi : (p.index.val : Int) + count.val ≤ length)
+    (hfit : (p.index.val : Int) + count.val < (2 ^ UScalarTy.numBits .Usize : Nat)) :
+    Triple (alloc repr ⟨p.base, ⟨0⟩⟩ length own) (RawPtr.offset repr p count)
+      (fun q h => q.base = p.base ∧ (q.index.val : Int) = (p.index.val : Int) + count.val ∧
+        alloc repr ⟨p.base, ⟨0⟩⟩ length own h) :=
+  Triple.guardedModify (SepLogic.offset.spec repr p count.val length own hsize hstart hlo hhi hfit)
 
-theorem offset.spec (p : RawPtr T) (cs : List (Cell T)) (own : Bool)
-    (start target : Nat) (count : Isize)
-    (hstart : start ≤ cs.length) (htarget : target ≤ cs.length)
-    (hcount : count.val = (target : Int) - start) :
-    Triple (sep (alloc p cs.length own) (block p cs))
-      (RawPtr.offset (⟨p.base, p.index + start⟩ : RawPtr T) count)
-      (fun result h => result = ⟨p.base, p.index + target⟩ ∧
-        sep (alloc p cs.length own) (block p cs) h) := by
-  simpa [RawPtr.offset, State.offset, hcount] using Triple.guardedModify
-    (SepLogic.offsetWholeBlock.spec p cs own start target hstart htarget)
+theorem add.spec (repr : Repr T) (p : RawPtr T) (count : Usize) (length : Nat)
+    (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)
+    (hhi : p.index.val + count.val ≤ length)
+    (hfit : p.index.val + count.val < 2 ^ UScalarTy.numBits .Usize) :
+    Triple (alloc repr ⟨p.base, ⟨0⟩⟩ length own) (RawPtr.add repr p count)
+      (fun q h => q.base = p.base ∧ q.index.val = p.index.val + count.val ∧
+        alloc repr ⟨p.base, ⟨0⟩⟩ length own h) := by
+  have hlo : 0 ≤ (p.index.val : Int) + count.val := by agrind
+  have hbound : (p.index.val : Int) + count.val ≤ length := by agrind
+  have hindex : (p.index.val : Int) + count.val < (2 ^ UScalarTy.numBits .Usize : Nat) := by
+    agrind
+  apply Triple.conseq (fun _ h => h) ?_
+    (Triple.guardedModify (SepLogic.offset.spec repr p count.val length own hsize hstart
+      hlo hbound hindex))
+  intro q h ⟨hb, hi, hp⟩
+  exact ⟨hb, by grind, hp⟩
 
-theorem intoRaw.spec (value : T) :
-    Triple emp (alloc.boxed.Box.into_raw value)
-      (fun p => sep (alloc p 1 true) (pointsTo p value)) := by
-  simpa [alloc.boxed.Box.into_raw, State.alloc, State.newBlock, Cell.full] using
-    Triple.guardedModify (SepLogic.newBlock.spec [value] true)
+theorem newBlock.spec (repr : Repr T) (value : T) (own : Bool) (s : Heap) (F : Fragment)
+    (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize)
+    (hl : repr.size < 2 ^ UScalarTy.numBits .Usize) :
+    Spec (Result.guardedModify (State.newBlock repr [value] own))
+      (fun p s' => s'.next.val = s.next.val + 1 ∧
+        ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
+          sep (alloc repr p 1 own) (pointsTo repr p value) h) s := by
+  apply Spec.guardedModify.mpr
+  obtain ⟨data, decoded⟩ := repr.complete value
+  obtain ⟨p, s', hs⟩ := Heap.newBlock.enabled repr [data] own s hi hc (by simpa using hl)
+  refine ⟨⟨p, s', [data], by simp [decoded], hs⟩, ?_⟩
+  rintro p s' ⟨encodings, hd, hs⟩
+  have he : ∃ encoding, encodings = [encoding] ∧ repr.decode encoding = some value := by
+    cases encodings
+    · simp at hd
+    · rename_i encoding tail
+      have h := List.cons.inj hd
+      have ht : tail = [] := by simpa using h.2
+      exact ⟨encoding, by simp [ht], h.1⟩
+  obtain ⟨encoding, rfl, decoded⟩ := he
+  obtain ⟨hb, hoff, hn, hown⟩ := newBlock_single.resources hs
+  let a := allocHeap repr p.base 1 own
+  let b := cellsHeap repr.align p.base 0 (encoding.map (Cell.shared 0 ∘ some)).toList
+  have hfresh : ∀ r, (a ∪ b) r → r.base = s.next := by
+    rintro r (rfl | ⟨i, hi, rfl⟩)
+    · exact hb
+    · exact hb
+  have hab : a.Disjoint b := by
+    rintro _ rfl _ ⟨i, hi, rfl⟩
+    right
+    simp [Resource.key]
+  exact ⟨hn, a ∪ b, fresh_disjoint hi hm hfresh,
+    (Fragment.matches_union _ _ _).mpr ⟨hown, newBlock_single.frame hi hm hs⟩,
+    Heap.newBlock.inv hi hs, a, b, hab, rfl, ⟨hoff, rfl⟩,
+    encoding, decoded, by simp [block, b, hoff]⟩
 
-theorem fromRaw.spec (p : RawPtr T) (value : T) :
-    Triple (sep (alloc p 1 true) (pointsTo p value)) (alloc.boxed.Box.from_raw p)
+theorem intoRaw.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
+    (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize)
+    (hl : repr.size < 2 ^ UScalarTy.numBits .Usize) :
+    Spec (alloc.boxed.Box.into_raw repr value)
+      (fun p s' => s'.next.val = s.next.val + 1 ∧
+        ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
+          sep (alloc repr p 1 true) (pointsTo repr p value) h) s :=
+  newBlock.spec repr value true s F hi hm hc hl
+
+theorem allocExposure.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
+    (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize)
+    (hl : repr.size < 2 ^ UScalarTy.numBits .Usize) :
+    Spec (RawPtr.allocExposure repr [value])
+      (fun p s' => s'.next.val = s.next.val + 1 ∧
+        ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
+          sep (alloc repr p 1 false) (pointsTo repr p value) h) s :=
+  newBlock.spec repr value false s F hi hm hc hl
+
+theorem read_free.spec (repr : Repr T) (p : RawPtr T) (value : T)
+    (own : Bool) (hsize : 0 < repr.size) :
+    Triple (sep (alloc repr p 1 own) (pointsTo repr p value))
+      (do let value ← RawPtr.read repr p
+          Result.guardedModify (fun s (_ : Unit) s' => Heap.freeBlock repr p 1 own s = some s')
+          pure value)
       (fun x h => x = value ∧ emp h) := by
-  unfold alloc.boxed.Box.from_raw
   apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun x h hp => (sep_and_left (x = value)
-      (pointsTo p value) (alloc p 1 true) h).mp hp)
-    (frame (R := alloc p 1 true) (read.spec p value 0)))
+      (pointsTo repr p value) (alloc repr p 1 own) h).mp hp)
+    (frame (R := alloc repr p 1 own) (read.spec repr p value 0 hsize)))
   intro x
   apply Triple.pure_pre
   intro hx
   subst x
   apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
-    (fun _ _ h => h) (Triple.guardedModify
-      (SepLogic.freeBlock.spec p [.shared 0 (some value)] true (by simp [Cell.writable]))))
+    (fun _ _ h => h) (Triple.guardedModify (free_pointsTo.spec repr p value own)))
   intro _
   exact Triple.pure emp value
 
-theorem borrowRange.spec (p : RawPtr T) (values : List T)
-    (hsize : values = [] ∨ 0 < Heap.size T) :
-    Triple (block p (Cell.full values)) (RawPtr.borrowRange p values.length)
-      (fun x h => x = values ∧ block p (List.replicate values.length .borrowed) h) :=
-  Triple.guardedModify (SepLogic.borrowRange.spec p values hsize)
+theorem fromRaw.spec (repr : Repr T) (p : RawPtr T) (value : T) (hsize : 0 < repr.size) :
+    Triple (sep (alloc repr p 1 true) (pointsTo repr p value)) (alloc.boxed.Box.from_raw repr p)
+      (fun x h => x = value ∧ emp h) :=
+  read_free.spec repr p value true hsize
 
-theorem endBorrowRange.spec (p : RawPtr T) (values : List T) :
-    Triple (block p (List.replicate values.length .borrowed)) (RawPtr.endBorrowRange p values)
-      (fun _ => block p (Cell.full values)) :=
-  Triple.guardedModify (SepLogic.endBorrowRange.spec p values)
-
-theorem shareRange.spec (p : RawPtr T) (values : List T) (depth : Nat) :
-    Triple (block p (values.map (Cell.shared depth ∘ some))) (RawPtr.shareRange p values.length)
-      (fun x h => x = values ∧ block p (values.map (Cell.shared (depth + 1) ∘ some)) h) :=
-  Triple.guardedModify (SepLogic.shareRange.spec p values depth)
-
-theorem endShareRange.spec (p : RawPtr T) (values : List T) (depth : Nat) :
-    Triple (block p (values.map (Cell.shared (depth + 1) ∘ some)))
-      (RawPtr.endShareRange p values)
-      (fun _ => block p (values.map (Cell.shared depth ∘ some))) :=
-  Triple.guardedModify (SepLogic.endShareRange.spec p values depth)
+theorem end_from_mut.spec (repr : Repr T) (p : RawPtr T) (value : T) (hsize : 0 < repr.size) :
+    Triple (sep (alloc repr p 1 false) (pointsTo repr p value)) (core.ptr.end_from_mut repr p)
+      (fun x h => x = value ∧ emp h) :=
+  read_free.spec repr p value false hsize
 
 end Aeneas.Std.HeapWP

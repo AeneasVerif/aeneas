@@ -122,4 +122,52 @@ def separateAllocations : Option (List U8) := do
 
 example : separateAllocations = some [8#u8] := by native_decide
 
+def crossTypePermissions : Option Bool := do
+  let (p, s₀) ← Heap.newBlock alignedByteRepr [#v[7#u8, 8#u8]] true Heap.empty
+  let byte : RawPtr U8 := ⟨p.base, 1#usize⟩
+  let s₁ ← Heap.share byteRepr byte s₀
+  let value ← Heap.read alignedByteRepr p s₁
+  if value != 7#u8 ||
+      (Heap.write alignedByteRepr p 9#u8 #v[9#u8, 0#u8] rfl s₁).isSome then none else do
+    let s₂ ← Heap.endShare byteRepr byte s₁
+    let s₃ ← Heap.borrow byteRepr byte s₂
+    if (Heap.read alignedByteRepr p s₃).isSome ||
+        (Heap.write alignedByteRepr p 9#u8 #v[9#u8, 0#u8] rfl s₃).isSome ||
+        (Heap.freeBlock alignedByteRepr p 1 true s₃).isSome then none else do
+      let s₄ ← Heap.endBorrow byteRepr byte 9#u8 #v[9#u8] rfl s₃
+      let first ← Heap.read alignedByteRepr p s₄
+      let second ← Heap.read byteRepr byte s₄
+      let _ ← Heap.freeBlock alignedByteRepr p 1 true s₄
+      some (first == 7#u8 && second == 9#u8)
+
+example : crossTypePermissions = some true := by native_decide
+
+def zeroRepr : Repr Unit where
+  size := 0
+  align := ⟨1, 0, rfl⟩
+  decode _ := some ()
+  aligned := by decide
+  complete value := ⟨#v[], by cases value; rfl⟩
+
+def zeroSize : Option Bool := do
+  let (p, s₀) ← Heap.alloc zeroRepr 1 Heap.empty
+  if (Heap.read zeroRepr p s₀).isSome ||
+      (Heap.borrowRange zeroRepr p 1 s₀).isSome then none else do
+    let s₁ ← Heap.borrowRange zeroRepr p 0 s₀
+    let _ ← Heap.offset zeroRepr p 0 s₁
+    let s₂ ← Heap.freeBlock zeroRepr p 1 true s₁
+    some ((s₂.allocations p.base).isNone)
+
+example : zeroSize = some true := by native_decide
+
+/- Direct restoration calls are privileged; the byte store cannot authenticate
+the matching Rust backward continuation. -/
+def restoration_is_privileged : Option U8 := do
+  let (p, s₀) ← Heap.newSharedExposure byteRepr [#v[7#u8]] Heap.empty
+  let s₁ ← Heap.endShareRange byteRepr p 1 s₀
+  let s₂ ← Heap.write byteRepr p 9#u8 #v[9#u8] rfl s₁
+  Heap.read byteRepr p s₂
+
+example : restoration_is_privileged = some 9#u8 := by native_decide
+
 end Aeneas.Std.HeapTests

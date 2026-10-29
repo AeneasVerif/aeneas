@@ -14,7 +14,7 @@ abbrev State := Heap
 namespace State
 
 abbrev empty := Heap.empty
-abbrev Inv := Heap.Inv
+abbrev Inv (s : State) : Prop := Heap.Inv s
 
 def newBlock (repr : Repr ty) (values : List ty) (own : Bool)
     (s₀ : State) (p : RawPtr ty) (s₁ : State) : Prop :=

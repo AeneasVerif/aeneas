@@ -4,38 +4,44 @@ public import Aeneas.Std.Heap.Separation
 import all Aeneas.Std.Heap.Separation
 import all Aeneas.Std.Heap.Model
 
+/-! Byte fragments and their connection to typed reads. Encodings in assertions
+are witnesses, not a global encoder or extra heap metadata. -/
+
 @[expose] public section
 
 namespace Aeneas.Std.SepLogic
 
-universe u
+def cellsHeap (alignment : Alignment) (base : BasePtr) (start : Nat)
+    (cells : List (Cell U8)) : Fragment :=
+  fun r => ∃ (i : Nat) (hi : i < cells.length),
+    r = .cell base (start + i) alignment cells[i]
 
-def cellsHeap (p : RawPtr ty) (cs : List (Cell ty)) : Fragment :=
-  fun r => ∃ (i : Nat) (hi : i < cs.length), r = .cell ty (⟨p.base, p.index + i⟩) cs[i]
+def allocHeap (repr : Repr ty) (base : BasePtr) (count : Nat) (own : Bool) : Fragment :=
+  Fragment.single (.cleanup base (count * repr.size) repr.align own)
 
-def allocHeap (ty : Type u) (base : BasePtr) (count : Nat) (own : Bool) : Fragment :=
-  Fragment.single (.cleanup ty base count own)
+def block (repr : Repr ty) (p : RawPtr ty) (cells : List (Cell U8)) : Assertion :=
+  fun h => h = cellsHeap repr.align p.base (p.index.val * repr.size) cells
 
-def block (p : RawPtr ty) (cs : List (Cell ty)) : Assertion :=
-  fun h => h = cellsHeap p cs
+def alloc (repr : Repr ty) (p : RawPtr ty) (count : Nat) (own : Bool) : Assertion :=
+  fun h => p.index.val = 0 ∧ h = allocHeap repr p.base count own
 
-def alloc (p : RawPtr ty) (count : Nat) (own : Bool) : Assertion :=
-  fun h => p.index = 0 ∧ h = allocHeap ty p.base count own
+def pointsTo (repr : Repr ty) (p : RawPtr ty) (value : ty) (depth : Nat := 0) : Assertion :=
+  fun h => ∃ data : Vector U8 repr.size, repr.decode data = some value ∧
+    block repr p (data.map (Cell.shared depth ∘ some)).toList h
 
-abbrev pointsTo (p : RawPtr ty) (value : ty) : Assertion :=
-  block p [.shared 0 (some value)]
-
-@[simp] theorem cellsHeap_nil (p : RawPtr ty) : cellsHeap p [] = ∅ := by
+@[simp] theorem cellsHeap_nil (alignment : Alignment) (base : BasePtr) (start : Nat) :
+    cellsHeap alignment base start [] = ∅ := by
   funext r
-  change (∃ (i : Nat) (hi : i < 0), r = .cell ty (⟨p.base, p.index + i⟩) [][i]) = False
   apply propext
   constructor
   · rintro ⟨i, hi, _⟩
     exact (Nat.not_lt_zero i hi).elim
   · exact False.elim
 
-theorem cellsHeap_append (p : RawPtr ty) (a b : List (Cell ty)) :
-    cellsHeap p (a ++ b) = cellsHeap p a ∪ cellsHeap (⟨p.base, p.index + a.length⟩) b := by
+theorem cellsHeap_append (alignment : Alignment) (base : BasePtr) (start : Nat)
+    (a b : List (Cell U8)) :
+    cellsHeap alignment base start (a ++ b) =
+      cellsHeap alignment base start a ∪ cellsHeap alignment base (start + a.length) b := by
   funext r
   apply propext
   constructor
@@ -53,137 +59,131 @@ theorem cellsHeap_append (p : RawPtr ty) (a b : List (Cell ty)) :
     · refine ⟨a.length + i, by simp; grind, ?_⟩
       simp [Nat.add_assoc]
 
-theorem disjoint_cellsHeap_append (p : RawPtr ty) (a b : List (Cell ty)) :
-    (cellsHeap p a).Disjoint (cellsHeap (⟨p.base, p.index + a.length⟩) b) := by
+theorem disjoint_cellsHeap_append (alignment : Alignment) (base : BasePtr) (start : Nat)
+    (a b : List (Cell U8)) :
+    (cellsHeap alignment base start a).Disjoint
+      (cellsHeap alignment base (start + a.length) b) := by
   rintro _ ⟨i, hi, rfl⟩ _ ⟨j, hj, rfl⟩
   right
-  refine ⟨rfl, ?_⟩
-  simp only [Resource.key]
+  simp only [Resource.key, ne_eq, Option.some.injEq]
   grind
 
-theorem block_append (p : RawPtr ty) (a b : List (Cell ty)) (h : Fragment) :
-    block p (a ++ b) h ↔ sep (block p a) (block (⟨p.base, p.index + a.length⟩) b) h := by
-  constructor
-  · intro he
-    exact ⟨_, _, disjoint_cellsHeap_append p a b, he.trans (cellsHeap_append p a b), rfl, rfl⟩
-  · rintro ⟨_, _, _, rfl, rfl, rfl⟩
-    exact (cellsHeap_append p a b).symm
-
-theorem disjoint_alloc_cells (p : RawPtr ty) (n : Nat) (own : Bool)
-    (cs : List (Cell ty)) :
-    (allocHeap ty p.base n own).Disjoint (cellsHeap p cs) := by
-  rintro _ rfl _ ⟨i, hi, rfl⟩
-  exact .inr ⟨rfl, by simp [Resource.key]⟩
-
-theorem matches_cellsHeap {s : Heap Std.Block.{u}}
-    {p : RawPtr ty} {cs : List (Cell ty)} :
-    Fragment.Matches s (cellsHeap p cs) ↔
-      ∀ (i : Nat) (hi : i < cs.length),
-        ∃ r, s.cells p.base = some r ∧ Heap.Aligned ty s p.base ∧
-          Std.Block.view ty r (p.index + i) cs[i] := by
+theorem matches_cellsHeap {s : Heap} {alignment : Alignment} {base : BasePtr}
+    {start : Nat} {cells : List (Cell U8)} :
+    Fragment.Matches s (cellsHeap alignment base start cells) ↔
+      ∀ (i : Nat) (hi : i < cells.length), ∃ block,
+        s.allocations base = some block ∧ alignment.val ∣ block.alignment.val ∧
+        block.repr[start + i]? = some cells[i] := by
   constructor
   · intro h i hi
     exact h _ ⟨i, hi, rfl⟩
   · rintro h _ ⟨i, hi, rfl⟩
     exact h i hi
 
-theorem matches_views {s : Heap Std.Block.{u}}
-    (p : RawPtr ty) (cs : List (Cell ty)) {r : Std.Block.{u}}
-    (hs : s.cells p.base = some r) (ha : Heap.Aligned ty s p.base)
-    (hv : Std.Block.Views ty r p.index cs) :
-    Fragment.Matches s (cellsHeap p cs) := by
-  rw [matches_cellsHeap]
-  intro i hi
-  exact ⟨r, hs, ha, hv i hi⟩
+theorem bytes_of_matches {s : Heap} {repr : Repr ty} {p : RawPtr ty}
+    {data : Vector (Cell U8) repr.size} (hsize : 0 < repr.size)
+    (hm : Fragment.Matches s (cellsHeap repr.align p.base (p.index.val * repr.size) data.toList)) :
+    ∃ (block : Block) (hi : (p.index.val + 1) * repr.size ≤ block.repr.length),
+      s.allocations p.base = some block ∧ repr.align.val ∣ block.alignment.val ∧
+      repr.select block.bytes p.index.val hi = data := by
+  obtain ⟨block, hs, ha, _⟩ := matches_cellsHeap.mp hm 0 (by simpa using hsize)
+  have hp : ∀ (i : Nat) (hi : i < repr.size),
+      block.repr[p.index.val * repr.size + i]? = some data[i] := by
+    intro i hi
+    obtain ⟨actual, hs', _, hv⟩ := matches_cellsHeap.mp hm i (by simpa using hi)
+    have he : actual = block := Option.some.inj (hs'.symm.trans hs)
+    simpa [he] using hv
+  have hb : (p.index.val + 1) * repr.size ≤ block.repr.length := by
+    have hx := hp (repr.size - 1) (by grind)
+    have hh := List.getElem?_eq_some_iff.mp hx |>.1
+    grind [Nat.add_mul]
+  refine ⟨block, hb, hs, ha, ?_⟩
+  apply Vector.toList_inj.mp
+  apply List.ext_getElem?
+  intro i
+  rw [Repr.select_toList]
+  by_cases hi : i < repr.size
+  · simpa [hi, Block.bytes] using hp i hi
+  · simp [hi]
+    grind
 
-theorem views_unique {s : Heap Std.Block.{u}}
-    {p : RawPtr ty} {cs other : List (Cell ty)} {r : Std.Block.{u}}
-    (hm : Fragment.Matches s (cellsHeap p cs)) (hl : cs.length = other.length)
-    (hs : s.cells p.base = some r) (hv : Std.Block.Views ty r p.index other) : cs = other := by
-  apply List.ext_getElem hl
-  intro i hi hi'
-  obtain ⟨actual, ha, _, hv⟩ := matches_cellsHeap.mp hm i hi
-  have he : actual = r := Option.some.inj (ha.symm.trans hs)
-  subst actual
-  exact Std.Block.view_unique ty r _ _ _ hv (‹Std.Block.Views ty r p.index other› i hi')
+theorem read_of_pointsTo {s : Heap} {repr : Repr ty} {p : RawPtr ty}
+    {value : ty} {depth : Nat} {h : Fragment} (hs : 0 < repr.size)
+    (hp : pointsTo repr p value depth h) (hm : Fragment.Matches s h) :
+    Heap.read repr p s = some value := by
+  obtain ⟨data, hd, rfl⟩ := hp
+  obtain ⟨block, hi, hl, ha, he⟩ := bytes_of_matches hs hm
+  simp [Heap.read, hl, ha, Repr.read, hs, hi, he, Repr.readBytes_shared, hd]
 
-theorem disjoint_cellsHeap_congr {p : RawPtr ty} {a b : List (Cell ty)} {F : Fragment}
-    (hl : a.length = b.length) (hd : (cellsHeap p a).Disjoint F) :
-    (cellsHeap p b).Disjoint F := by
+theorem disjoint_cellsHeap_congr {alignment : Alignment} {base : BasePtr} {start : Nat}
+    {old new : List (Cell U8)} {F : Fragment}
+    (hl : old.length = new.length) (hd : (cellsHeap alignment base start old).Disjoint F) :
+    (cellsHeap alignment base start new).Disjoint F := by
   rintro _ ⟨i, hi, rfl⟩ r hr
-  have hi' : i < a.length := by grind
+  have hi' : i < old.length := by grind
   exact hd _ ⟨i, hi', rfl⟩ r hr
 
-/-- Nonempty logical ranges identify one live representation and its local observations. -/
-theorem views_of_matches {s : Heap Std.Block.{u}}
-    {p : RawPtr ty} {cs : List (Cell ty)} (hne : cs ≠ [])
-    (hm : Fragment.Matches s (cellsHeap p cs)) :
-    ∃ r, s.cells p.base = some r ∧ Heap.Aligned ty s p.base ∧
-      Std.Block.Views ty r p.index cs := by
-  have hp : 0 < cs.length := List.length_pos_iff.mpr hne
-  obtain ⟨r, hs, ha, _⟩ := matches_cellsHeap.mp hm 0 hp
-  refine ⟨r, hs, ha, fun i hi => ?_⟩
-  obtain ⟨r', hs', _, hv⟩ := matches_cellsHeap.mp hm i hi
-  have he : r' = r := Option.some.inj (hs'.symm.trans hs)
-  simpa [he] using hv
+theorem matches_update {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
+    (hl : s.allocations p.base = some block) (ha : repr.align.val ∣ block.alignment.val)
+    (hi : (p.index.val + 1) * repr.size ≤ block.repr.length)
+    (data : Vector (Cell U8) repr.size) :
+    Fragment.Matches (s.storeRepr p.base (repr.update block.bytes p.index.val hi data).toList)
+      (cellsHeap repr.align p.base (p.index.val * repr.size) data.toList) := by
+  rw [matches_cellsHeap]
+  intro i hi'
+  refine ⟨{ block with repr := (repr.update block.bytes p.index.val hi data).toList },
+    by simp [hl], ha, ?_⟩
+  simpa using Repr.update_inside repr block.bytes p.index.val hi data i (by simpa using hi')
 
-theorem matches_updates_frame {s : Heap Std.Block.{u}}
-    {p : RawPtr ty} {old new : List (Cell ty)} {r r' : Std.Block.{u}} {F : Fragment.{u}}
-    (hne : old ≠ []) (hl : old.length = new.length)
-    (hs : s.cells p.base = some r) (hu : Std.Block.Updates ty p.index new r r')
-    (hd : (cellsHeap p old).Disjoint F) (hm : Fragment.Matches s F) :
-    Fragment.Matches (s.storeRepr p.base r') F := by
+theorem matches_update_frame {s : Heap} {repr : Repr ty} {p : RawPtr ty}
+    {block : Block} {old data : Vector (Cell U8) repr.size} {F : Fragment}
+    (hl : s.allocations p.base = some block)
+    (hi : (p.index.val + 1) * repr.size ≤ block.repr.length)
+    (hd : (cellsHeap repr.align p.base (p.index.val * repr.size) old.toList).Disjoint F)
+    (hm : Fragment.Matches s F) :
+    Fragment.Matches (s.storeRepr p.base (repr.update block.bytes p.index.val hi data).toList) F := by
   intro resource hr
-  have hhold := hm resource hr
+  have hh := hm resource hr
   by_cases hb : resource.base = p.base
-  · obtain ⟨i, hi⟩ : ∃ i, i < old.length := ⟨0, List.length_pos_iff.mpr hne⟩
-    have hc := hd _ ⟨i, hi, rfl⟩ resource hr
-    have ht : ty = resource.ty := by
-      rcases hc with hb' | ⟨ht, _⟩
-      · exact (hb' hb.symm).elim
-      · exact ht
-    cases resource
-    · rename_i otherTy q value
-      change ty = otherTy at ht
-      subst otherTy
-      obtain ⟨actual, ha, halign, hv⟩ := hhold
-      have hqb : q.base = p.base := hb
-      have he : actual = r := by
-        rw [hqb] at ha
-        exact Option.some.inj (ha.symm.trans hs)
-      have hout : q.index < p.index ∨ p.index + old.length ≤ q.index := by
-        by_cases hleft : q.index < p.index
-        · exact .inl hleft
-        right
-        apply Nat.le_of_not_gt
-        intro hright
-        have hidx : q.index - p.index < old.length := by grind
-        have hc' := hd _ ⟨q.index - p.index, hidx, rfl⟩ _ hr
-        simp [Resource.Compatible, Resource.base, Resource.ty, Resource.key, hqb] at hc'
-        grind
-      subst actual
-      exact ⟨r', by simp [hqb, hs], by simpa using halign,
-        (hu.outside (by simpa [hl] using hout) value).mpr hv⟩
-    · rename_i otherTy base count own
-      change ty = otherTy at ht
-      subst otherTy
-      change base = p.base at hb
-      obtain ⟨ha, actual, hs', halign, hn, hbytes⟩ := hhold
-      have he : actual = r := by
-        rw [hb] at hs'
-        exact Option.some.inj (hs'.symm.trans hs)
-      exact ⟨by simpa using ha, r', by simp [hb, hs], by simpa using halign,
-        by simpa [hu.extent ty, he] using hn,
-        by simpa [hu.bytes_length, he] using hbytes⟩
   · cases resource
-    · rename_i otherTy q value
-      change q.base ≠ p.base at hb
-      obtain ⟨actual, ha, halign, hv⟩ := hhold
-      exact ⟨actual, by simpa [hb] using ha, by simpa using halign, hv⟩
-    · rename_i otherTy base count own
+    · rename_i base index alignment value
+      obtain ⟨actual, hs, ha, hv⟩ := hh
+      change base = p.base at hb
+      subst base
+      have he : actual = block := Option.some.inj (hs.symm.trans hl)
+      subst actual
+      have hout : index < p.index.val * repr.size ∨ (p.index.val + 1) * repr.size ≤ index := by
+        by_cases hlt : index < p.index.val * repr.size
+        · exact .inl hlt
+        right
+        by_cases hge : (p.index.val + 1) * repr.size ≤ index
+        · exact hge
+        have hidx : index - p.index.val * repr.size < old.toList.length := by
+          simp only [Vector.length_toList]
+          grind [Nat.add_mul]
+        have hc := hd _ ⟨index - p.index.val * repr.size, hidx, rfl⟩ _ hr
+        have he : p.index.val * repr.size + (index - p.index.val * repr.size) = index := by grind
+        simp [Resource.Compatible, Resource.base, Resource.key, he] at hc
+      refine ⟨{ block with repr := (repr.update block.bytes p.index.val hi data).toList },
+        by simp [hl], ha, ?_⟩
+      rw [Repr.update_outside _ _ _ _ _ index hout]
+      simpa [Block.bytes] using hv
+    · rename_i base size alignment own
+      obtain ⟨actual, hs, hn, ha, ho⟩ := hh
+      change base = p.base at hb
+      subst base
+      have he : actual = block := Option.some.inj (hs.symm.trans hl)
+      subst actual
+      exact ⟨{ block with repr := (repr.update block.bytes p.index.val hi data).toList },
+        by simp [hl], by simpa only [Vector.length_toList] using hn, ha, ho⟩
+  · cases resource
+    · rename_i base index alignment value
+      obtain ⟨actual, hs, ha, hv⟩ := hh
       change base ≠ p.base at hb
-      obtain ⟨ha, actual, hs', halign, hn⟩ := hhold
-      exact ⟨by simpa using ha, actual, by simpa [hb] using hs',
-        by simpa using halign, hn⟩
+      exact ⟨actual, by simpa [hb] using hs, ha, hv⟩
+    · rename_i base size alignment own
+      obtain ⟨actual, hs, hn, ha, ho⟩ := hh
+      change base ≠ p.base at hb
+      exact ⟨actual, by simpa [hb] using hs, hn, ha, ho⟩
 
 end Aeneas.Std.SepLogic
