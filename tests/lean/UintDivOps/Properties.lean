@@ -1,5 +1,8 @@
-import Aeneas
-import UintDivOps.UintDivOps
+module
+public import Aeneas
+public import UintDivOps.UintDivOps
+public section
+
 open Aeneas Aeneas.Std Result
 
 /-! Proofs about the extracted `tests/src/uint-div-ops.rs`, using the specification theorems of the
