@@ -98,14 +98,14 @@ def RawPtr.cast_scalar {T} (T' : Type) (_ : Mutability) [IsScalar T] [IsScalar T
   .fail .undef
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
-def RawPtr.add (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
-  Result.guardedModify (State.offset q count.val)
+def RawPtr.add (repr : Repr T) (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
+  Result.guardedModify (State.offset repr q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::offset"]
-def RawPtr.offset (q : RawPtr T) (count : Isize) : Result (RawPtr T) :=
-  Result.guardedModify (State.offset q count.val)
+def RawPtr.offset (repr : Repr T) (q : RawPtr T) (count : Isize) : Result (RawPtr T) :=
+  Result.guardedModify (State.offset repr q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset"] RawPtr.offset
 
@@ -116,8 +116,8 @@ def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
 namespace RawPtr
 
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
-def read (q : RawPtr T) : Result T :=
-  Result.guardedModify (State.read q)
+def read (repr : Repr T) (q : RawPtr T) : Result T :=
+  Result.guardedModify (State.read repr q)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
 attribute [rust_fun "core::ptr::read"] read
@@ -125,8 +125,8 @@ attribute [rust_fun "core::ptr::read"] read
 end RawPtr
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
-def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (State.write q value)
+def MutRawPtr.write (repr : Repr T) (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.guardedModify (State.write repr q value)
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
@@ -136,61 +136,57 @@ Aeneas builds its models of Rust's raw-pointer functions (`from_mut`, `as_ptr`, 
 directly. -/
 
 /-- Transfers full cells into an exclusive borrow, blocking raw access to these cells. -/
-def RawPtr.borrowRange (q : RawPtr T) (count : Nat) : Result (List T) :=
-  Result.guardedModify (State.borrowRange q count)
+def RawPtr.borrowRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List T) :=
+  Result.guardedModify (State.borrowRange repr q count)
 
 /-- `endBorrow` on the `values.length` cells from `q` on. -/
-def RawPtr.endBorrowRange (q : RawPtr T) (values : List T) : Result Unit :=
-  Result.guardedModify (State.endBorrowRange q values)
+def RawPtr.endBorrowRange (repr : Repr T) (q : RawPtr T) (values : List T) : Result Unit :=
+  Result.guardedModify (State.endBorrowRange repr q values)
 
-def RawPtr.borrow (q : RawPtr T) : Result T := do
-  match ← q.borrowRange 1 with
+def RawPtr.borrow (repr : Repr T) (q : RawPtr T) : Result T := do
+  match ← q.borrowRange repr 1 with
   | [value] => .ok value
   | _ => .fail .undef
 
-def RawPtr.endBorrow (q : RawPtr T) (value : T) : Result Unit :=
-  q.endBorrowRange [value]
+def RawPtr.endBorrow (repr : Repr T) (q : RawPtr T) (value : T) : Result Unit :=
+  q.endBorrowRange repr [value]
 
-def RawPtr.shareRange (q : RawPtr T) (count : Nat) : Result (List T) :=
-  Result.guardedModify (State.shareRange q count)
+def RawPtr.shareRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List T) :=
+  Result.guardedModify (State.shareRange repr q count)
 
-def RawPtr.endShareRange (q : RawPtr T) (values : List T) : Result Unit :=
-  Result.guardedModify (State.endShareRange q values)
+def RawPtr.endShareRange (repr : Repr T) (q : RawPtr T) (values : List T) : Result Unit :=
+  Result.guardedModify (State.endShareRange repr q values)
 
 /-- `read` on the `n` cells from `q` on. -/
-def RawPtr.readRange (q : RawPtr T) : Nat → Result (List T)
-  | 0 => .ok []
-  | n + 1 => do
-    let value ← q.read
-    let values ← (⟨q.base, q.index + 1⟩ : RawPtr T).readRange n
-    .ok (value :: values)
+def RawPtr.readRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List T) :=
+  Result.guardedModify (State.readRange repr q count)
 
 /-- Exposes a safe mutable place, represented functionally without an address, as raw memory.
 Used by `from_mut` and `as_mut_ptr`. The fresh block holds `values` with full access
 (`State.newExposure`); the matching backward computation removes it with `endExposure`. -/
-def RawPtr.allocExposure (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (State.newExposure values)
+def RawPtr.allocExposure (repr : Repr T) (values : List T) : Result (MutRawPtr T) :=
+  Result.guardedModify (State.newExposure repr values)
 
 /-- Exposes a shared safe borrow with read-only cells (`shared 1`), as used by `as_ptr`.
 Casting the returned pointer to mutable does not change those permissions. -/
-def RawPtr.allocSharedExposure (values : List T) : Result (ConstRawPtr T) :=
-  Result.guardedModify (State.newSharedExposure values)
+def RawPtr.allocSharedExposure (repr : Repr T) (values : List T) : Result (ConstRawPtr T) :=
+  Result.guardedModify (State.newSharedExposure repr values)
 
-def RawPtr.endExposure (q : RawPtr T) (count : Nat) : Result Unit :=
-  Result.guardedModify (State.removeExposure q count)
+def RawPtr.endExposure (repr : Repr T) (q : RawPtr T) (count : Nat) : Result Unit :=
+  Result.guardedModify (State.removeExposure repr q count)
 
-def RawPtr.endSharedExposure (q : RawPtr T) (original : List T) : Result Unit :=
-  Result.guardedModify (State.endSharedExposure q original)
+def RawPtr.endSharedExposure (repr : Repr T) (q : RawPtr T) (original : List T) : Result Unit :=
+  Result.guardedModify (State.endSharedExposure repr q original)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the exposure, so that the pointer can't be used anymore. -/
-def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
-  let value ← p.read
-  p.endExposure 1
+def core.ptr.end_from_mut (repr : Repr T) (p : MutRawPtr T) : Result T := do
+  let value ← p.read repr
+  p.endExposure repr 1
   .ok value
 
 /-- Exposes `r` as raw memory; the back computation runs when the borrow ends. -/
-def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
-  Aeneas.Std.bind (RawPtr.allocExposure [r]) fun p => .ok (p, core.ptr.end_from_mut p)
+def core.ptr.from_mut (repr : Repr T) (r : T) : Result (MutRawPtr T × Result T) :=
+  Aeneas.Std.bind (RawPtr.allocExposure repr [r]) fun p => .ok (p, core.ptr.end_from_mut repr p)
 
 end Aeneas.Std

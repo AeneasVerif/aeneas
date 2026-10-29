@@ -69,8 +69,8 @@ call the global allocator: the box was already allocated by `Box::new`, and `int
 the pointer. But the model of `Box<T>` is `T`, which has no address, so the block is created here,
 with the meta operation `State.alloc`. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
-def alloc.boxed.Box.into_raw (b : T) : Result (MutRawPtr T) :=
-  Result.guardedModify (State.alloc [b])
+def alloc.boxed.Box.into_raw (repr : Repr T) (b : T) : Result (MutRawPtr T) :=
+  Result.guardedModify (State.alloc repr [b])
 
 /-- Moves the value out of memory, and removes its block with the meta operation `State.dealloc`.
 In Rust, `from_raw` doesn't call the global allocator either: it only converts the pointer, and
@@ -78,9 +78,9 @@ the memory is freed when the box is dropped. But the model of `Box<T>` is `T`, s
 stay in memory. Converting the box to a raw pointer again creates a new block: this is sound, but
 loses the address of the box. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
-def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
-  let value ← RawPtr.read p
-  Result.guardedModify (State.dealloc p 1)
+def alloc.boxed.Box.from_raw (repr : Repr T) (p : MutRawPtr T) : Result T := do
+  let value ← RawPtr.read repr p
+  Result.guardedModify (State.dealloc repr p 1)
   pure value
 
 end Aeneas.Std

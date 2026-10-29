@@ -52,7 +52,7 @@ def IScalarTy.numBits (ty : IScalarTy) : Nat :=
 structure IScalar (ty : IScalarTy) where
   /- The internal representation is a bit-vector -/
   bv : BitVec ty.numBits
-deriving Repr, BEq, DecidableEq
+deriving _root_.Repr, BEq, DecidableEq
 
 @[expose, implicit_reducible] def IScalar.val {ty} (x : IScalar ty) : ℤ := x.bv.toInt
 

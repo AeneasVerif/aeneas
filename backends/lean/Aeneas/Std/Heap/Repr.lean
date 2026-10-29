@@ -1,6 +1,7 @@
 module
 
-public import Aeneas.Std.Heap.Types
+public import Lean
+public import Aeneas.Std.Scalar.Types
 
 /-! Byte-level operations take a representation explicitly. They do not track
 pointer validity or the authority to restore a borrow. Empty footprints carry
@@ -8,9 +9,60 @@ no byte permissions; observing a zero-sized cell therefore returns `none`. -/
 
 @[expose] public section
 
-namespace Aeneas.Std.Repr
+namespace Aeneas.Std
 
 universe u
+
+abbrev Alignment := { n : Nat // ∃ k : Nat, n = 2 ^ k }
+
+/-- A fixed-size byte representation of a type. -/
+structure Repr (ty : Type u) where
+  size : Nat
+  align : Alignment
+  decode : Vector U8 size -> Option ty
+  aligned : align.val ∣ size
+  complete : ∀ v : ty, ∃ bytes : Vector U8 size, decode bytes = v
+
+inductive Cell (ty : Type u) where
+  | shared (depth : Nat) (value : Option ty)
+  | borrowed
+
+@[simp] def Cell.depth : Cell ty → Option Nat
+  | .shared depth _ => some depth
+  | .borrowed => none
+
+def Cell.writable (c : Cell ty) : Prop := c.depth = some 0
+
+def Cell.read : Cell ty → Option ty
+  | .shared _ value => value
+  | _ => none
+
+def Cell.write (cell : Cell ty) (value : ty) : Option (Cell ty) :=
+  match cell with
+  | .shared 0 _ => some (.shared 0 (some value))
+  | _ => none
+
+def Cell.borrow : Cell ty → Option (Cell ty)
+  | .shared 0 _ => some .borrowed
+  | _ => none
+
+def Cell.endBorrow (cell : Cell ty) (value : ty) : Option (Cell ty) :=
+  match cell with
+  | .borrowed => some (.shared 0 (some value))
+  | _ => none
+
+def Cell.share : Cell ty → Option (Cell ty)
+  | .shared depth value => some (.shared (depth + 1) value)
+  | .borrowed => none
+
+def Cell.endShare : Cell ty → Option (Cell ty)
+  | .shared (depth + 1) value => some (.shared depth value)
+  | _ => none
+
+def Cell.full (values : List ty) : List (Cell ty) :=
+  values.map (Cell.shared 0 ∘ some)
+
+namespace Repr
 
 variable {ty : Type u} {r : Nat}
 
@@ -47,17 +99,14 @@ def read (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) : Option ty :=
     (readBytes repr.size (repr.select bytes i h.2)).bind repr.decode
   else none
 
-inductive create (repr : Repr ty) : List (Cell ty) → List (Cell U8) → Prop where
-  | nil : create repr [] []
-  | uninit (depth : Nat) {cs bytes} (rest : create repr cs bytes) :
-      create repr (.shared depth none :: cs)
-        (List.replicate repr.size (.shared depth none) ++ bytes)
-  | initialized (depth : Nat) (value : ty) (data : Vector U8 repr.size)
-      (decoded : repr.decode data = some value) {cs bytes} (rest : create repr cs bytes) :
-      create repr (.shared depth (some value) :: cs)
-        (data.toList.map (Cell.shared depth ∘ some) ++ bytes)
-  | borrowed {cs bytes} (rest : create repr cs bytes) :
-      create repr (.borrowed :: cs) (List.replicate repr.size .borrowed ++ bytes)
+/-- Expand encoded cells into bytes, preserving their permissions. -/
+def create (repr : Repr ty) {n : Nat}
+    (cells : Vector (Cell (Vector U8 repr.size)) n) :
+    Vector (Cell U8) (n * repr.size) :=
+  cells.flatMap fun
+    | .shared depth (some data) => data.map (Cell.shared depth ∘ some)
+    | .shared depth none => Vector.replicate repr.size (.shared depth none)
+    | .borrowed => Vector.replicate repr.size .borrowed
 
 /-- Write a value using the supplied byte representation. -/
 def write (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
@@ -104,4 +153,5 @@ def endShare (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
     | none => none
   else none
 
-end Aeneas.Std.Repr
+end Repr
+end Aeneas.Std

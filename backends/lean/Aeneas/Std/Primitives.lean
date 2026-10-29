@@ -45,12 +45,12 @@ inductive Error where
    | maximumSizeExceeded: Error
    | panic: Error
    | undef: Error
-deriving Repr, BEq
+deriving _root_.Repr, BEq
 
 open Error
 
 inductive RustEffect.Input : Type 1 where
-| guardedModify (α : Type) (modify : State.{0} → α → State.{0} → Prop) : RustEffect.Input
+| guardedModify (α : Type) (modify : State → α → State → Prop) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
 @[implicit_reducible]
@@ -68,9 +68,8 @@ def RustEffect : Effect := {
 -- We need Result to be irreducible outside this file (to not break metaprograms which normalize
 -- types), but reducible within. The `unseal` command only affects the local scope.
 -- `Result α` lives at least in `Type 1` because of `RustEffect.Input`.
--- Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
--- (a closure, a function pointer, a trait-instance structure) cannot be stored behind a raw pointer:
--- that would need a higher-order store. Such pointers fail with a universe error.
+-- The effect boundary only returns values in `Type`; higher-universe values, such as
+-- structures containing `Result`-returning functions, cannot be loaded by this effect.
 @[irreducible]
 def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
 unseal Result
@@ -132,7 +131,7 @@ theorem Result.match.fail {α : Type u} {e} :
   simp [Result.fail_eq_vis]
 
 /-- The `Repr` instance for `Result`, so that `#eval` on `Result`-producing expressions prints `Aeneas.Std.Result.ok`/`fail`/`div`. -/
-instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
+instance Result.reprInst {α : Type u} [_root_.Repr α] : _root_.Repr (Result α) where
   reprPrec r _ :=
     match Result.match r with
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
@@ -459,7 +458,7 @@ attribute [simp, grind =] Function.uncurry_apply_pair
 inductive ControlFlow (α : Type u) (β : Type v) where
   | cont (v : α) -- continue
   | done (v : β) -- break
-deriving Repr, BEq
+deriving _root_.Repr, BEq
 
 def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
   bind (body x) fun r =>
@@ -470,7 +469,7 @@ partial_fixpoint
 
 /-- An operation on the memory, given as a relation `modify s x s'` between the initial state `s`,
 the result `x` and the final state `s'`. It is undefined behaviour if `s` has no successor. -/
-def Result.guardedModify {α : Type} (modify : State.{0} → α → State.{0} → Prop) : Result α :=
+def Result.guardedModify {α : Type} (modify : State → α → State → Prop) : Result α :=
   Result.vis (.guardedModify α modify) fun answer =>
     Result.ok answer.down
 
