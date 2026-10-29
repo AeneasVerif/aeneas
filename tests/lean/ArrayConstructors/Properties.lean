@@ -1,5 +1,8 @@
-import Aeneas
-import ArrayConstructors.ArrayConstructors
+module
+public import Aeneas
+public import ArrayConstructors.ArrayConstructors
+public section
+
 open Aeneas Aeneas.Std Result
 
 /-! Proofs about the extracted `tests/src/array-constructors.rs`, using the specification
