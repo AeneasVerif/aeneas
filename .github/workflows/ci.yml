@@ -59,7 +59,7 @@ jobs:
       - id: lean_cache_key
         # The key covers every input of the Lean build
         run: |
-          prefix='lean-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json', 'tests/lean/lake-manifest.json') }}-'
+          prefix='lean-build-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json', 'tests/lean/lake-manifest.json') }}-'
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
           echo "key=$prefix${{ hashFiles('backends/lean/**', 'tests/lean/**', '!**/.lake/**') }}" >> "$GITHUB_OUTPUT"
       - id: lean_cache_lookup
@@ -79,7 +79,7 @@ jobs:
               echo 'A Lean build with these inputs already succeeded.'
               echo "CHECK_LEAN=false" >> "$GITHUB_ENV"
           else
-              echo 'Either the Lean files have changed of no cache is available for another reason.'
+              echo 'Either the Lean files have changed or no cache is available for another reason.'
               echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
           fi
           # Two OCaml files are derivatives of the Lean code so we check if they were changed.
@@ -126,13 +126,6 @@ jobs:
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
         run: nix develop --command bash -c "cd tests/lean && make"
       - if: >-
-          needs.diff_lean_files.outputs.check_lean == 'true' &&
-          (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
-        uses: actions/cache/save@v6
-        with:
-          path: *lean_build_paths
-          key: ${{ needs.diff_lean_files.outputs.lean_cache_key }}
-      - if: >-
           needs.diff_lean_files.outputs.check_lean == 'true' ||
           needs.diff_lean_files.outputs.check_extract_builtin == 'true'
         # Confirm that ExtractBuiltinLean.ml is up to date.
@@ -156,6 +149,14 @@ jobs:
             echo "ERROR: LeanKeywords.ml is out of date. Run 'make extract-lean-keywords'."
             exit 1
           fi
+      - if: >-
+          needs.diff_lean_files.outputs.check_lean == 'true' &&
+          (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        # Save last, so that a cache only exists if all the Lean checks above passed.
+        uses: actions/cache/save@v6
+        with:
+          path: *lean_build_paths
+          key: ${{ needs.diff_lean_files.outputs.lean_cache_key }}
 
   charon-pin-is-forward:
     needs: [select-runner]
