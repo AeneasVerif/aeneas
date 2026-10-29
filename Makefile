@@ -210,6 +210,15 @@ cargo-test:
 timed-lean:
 	cd tests/lean && find . -type f -iname "*.lean" -not -path "./.lake/*" -exec printf "\n{}\n" \; -exec lake env time lean {} \;
 
+.PHONY: verify-raw-box
+verify-raw-box:
+	cd backends/lean && lake build Aeneas.Std.Heap.EffectSpecs
+	@set -eu; tmp=$$(mktemp -d); \
+	trap 'rm -f "$$tmp/RawBox.olean" "$$tmp/RawBox.olean.private" "$$tmp/RawBox.olean.server" "$$tmp/RawBox.ir" "$$tmp/RawBox.ir.sig"; rmdir "$$tmp"' EXIT; \
+	cd backends/lean; \
+	lake env lean --root=../../tests/lean ../../tests/lean/RawBox.lean -o "$$tmp/RawBox.olean"; \
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawBoxProofs.lean
+
 # =============================================================================
 # Nix
 # =============================================================================

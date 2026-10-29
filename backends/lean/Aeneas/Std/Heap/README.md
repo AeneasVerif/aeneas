@@ -139,11 +139,43 @@ feedback is needed on the read law's re-encoding strength, the write law's
 authorization/footprint boundary, the same-type logical ownership restriction,
 and the explicit trusted-translation boundary for borrow restoration.
 
+## Effect-aware verification
+
+`Effects.lean` defines a separate heap-aware interpretation of `Result` using the
+existing interaction-tree `DWP`. A guarded heap effect requires a successor to
+exist and its continuation to hold for every successor. Failure, divergence, and
+disabled effects are rejected. The ordinary effect-free `WP.effectWP` is unchanged.
+
+`HeapWP.Triple` gives the generated `Result` program a framed separation contract.
+The generic `Triple.guardedModify` rule lifts existing relational heap triples;
+pure, bind, consequence, and frame rules compose them without reconstructing the
+program. `EffectSpecs.lean` supplies rules for the actual Box, read/write, and
+borrow/share/restoration wrappers. These effect-boundary theorems use the existing
+fixed `layout` assumption; the underlying relational proofs remain parametric.
+
+`tests/src/raw_box.rs` and its unmodified extraction `tests/lean/RawBox.lean`
+exercise two lifecycles: Box exposure, write/read, and recovery; and a second Box
+containing the first Box's raw pointer, loaded and used to update the target.
+`RawBoxProofs.lean` proves that both return the replacement for arbitrary `u32`
+inputs, consuming their allocation resources and preserving every disjoint frame.
+No pointer equality, new axioms, or proof holes are used. This is validation of
+the extracted programs against the handwritten Rust models, not a proof of
+compiler or model soundness with respect to Rust's operational semantics.
+
+From the repository root:
+
+```sh
+make verify-raw-box
+```
+
+See `tests/lean/EXTRACTION.md` for the exact extraction command and executable
+provenance, including the newer compiler/Charon pair used read-only for this run.
+
 Remaining validation and scope:
 
 - Audit the translation's matching-continuation discipline and run relevant Rust
-  extraction examples; the current lifecycle programs reproduce the relational
-  effects, not automatically extracted Rust programs. The existing
+  extraction examples involving array views and restoration; the Box examples
+  above do not exercise backward continuations. The existing
   `tests/src/raw_pointers.rs` fixture is marked as a Lean known failure; it has
   not been re-extracted here.
 - Decide whether to retain single-type logical ownership or introduce the
@@ -152,5 +184,6 @@ Remaining validation and scope:
 - Assess the laws against the intended byte/alignment interpretation. A concrete
   `Repr` instance is deliberately not part of this experiment.
 
-The relational connector is not an integration with the ordinary `WP.effectWP`,
-which rejects effects in the starting branch. Such an integration is separate work.
+The separate heap-aware contracts do not yet have the ordinary `step` tactic's
+automation. Cross-type framing, physical byte layout, and higher-order storage of
+`Result`-returning closures are not established by these examples.
