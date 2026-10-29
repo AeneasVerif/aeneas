@@ -59,7 +59,6 @@ jobs:
       - id: lean_cache_key
         # The key covers every input of the Lean build
         run: |
-          set -o pipefail
           deps=$(git rev-parse HEAD:backends/lean/lean-toolchain HEAD:backends/lean/lake-manifest.json HEAD:tests/lean/lake-manifest.json | sha256sum | cut -c1-16)
           content=$(git rev-parse HEAD:backends/lean HEAD:tests/lean | sha256sum | cut -c1-16)
           prefix="lean-build-$deps-"
