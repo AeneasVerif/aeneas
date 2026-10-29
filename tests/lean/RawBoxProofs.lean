@@ -20,7 +20,7 @@ theorem round_trip.spec (initial replacement : U32) :
   intro p
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ h => h) (HeapWP.frame (R := alloc p 1 true)
-      (HeapWP.write.spec p (.shared 0 initial) replacement True.intro)))
+      (HeapWP.write.spec p (.shared 0 (some initial)) replacement rfl)))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun value h hp => (sep_and_left (value = replacement)
@@ -70,7 +70,7 @@ theorem stored_pointer.spec (initial replacement : U32) :
       (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
         (fun _ _ h => (sep_comm _ _ _).mp h)
         (HeapWP.frame (R := alloc target 1 true)
-          (HeapWP.write.spec target (.shared 0 initial) replacement True.intro)))))
+          (HeapWP.write.spec target (.shared 0 (some initial)) replacement rfl)))))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq
     (fun h hp => (sep_comm _ _ h).mp hp)
@@ -85,13 +85,55 @@ theorem stored_pointer.spec (initial replacement : U32) :
 end raw_box
 
 /--
-info: 'raw_box.round_trip.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_box.round_trip.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.create,
+ Block.create_bytes,
+ Block.create_exists,
+ Block.create_extent,
+ Block.create_view,
+ Block.extent,
+ Block.setCell,
+ Block.set_bytes_length,
+ Block.set_exists,
+ Block.set_extent,
+ Block.set_frame,
+ Block.set_view,
+ Block.view,
+ Block.view_bound,
+ Block.view_bytes,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_box.round_trip.spec
 
 /--
-info: 'raw_box.stored_pointer.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_box.stored_pointer.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.create,
+ Block.create_bytes,
+ Block.create_exists,
+ Block.create_extent,
+ Block.create_view,
+ Block.extent,
+ Block.setCell,
+ Block.set_bytes_length,
+ Block.set_exists,
+ Block.set_extent,
+ Block.set_frame,
+ Block.set_view,
+ Block.view,
+ Block.view_bound,
+ Block.view_bytes,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_box.stored_pointer.spec

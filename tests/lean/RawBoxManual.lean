@@ -26,7 +26,7 @@ theorem read_write_read.spec (p : MutRawPtr U32) (initial : U32) :
   intro hbefore
   subst before
   apply HeapWP.Triple.bind
-    (HeapWP.write.spec p (.shared 0 initial) 1#u32 True.intro)
+    (HeapWP.write.spec p (.shared 0 (some initial)) 1#u32 rfl)
   intro _
   apply HeapWP.Triple.bind (HeapWP.read.spec p 1#u32 0)
   intro after
@@ -45,7 +45,7 @@ theorem discarded_read.spec (p : MutRawPtr U32) (initial : U32) :
   apply HeapWP.Triple.pure_pre
   intro _
   apply HeapWP.Triple.bind
-    (HeapWP.write.spec p (.shared 0 initial) 1#u32 True.intro)
+    (HeapWP.write.spec p (.shared 0 (some initial)) 1#u32 rfl)
   intro _
   exact HeapWP.read.spec p 1#u32 0
 
@@ -69,7 +69,7 @@ theorem alias_write.spec (initial replacement : U32) :
   intro hbefore
   subst before
   apply HeapWP.Triple.bind (HeapWP.frame (R := alloc p 1 true)
-    (HeapWP.write.spec p (.shared 0 initial) replacement True.intro))
+    (HeapWP.write.spec p (.shared 0 (some initial)) replacement rfl))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun value h hp => (sep_and_left (value = replacement)
@@ -149,7 +149,7 @@ theorem end_from_mut.spec (p : MutRawPtr T) (value : T) :
   subst x
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ h => h) (HeapWP.Triple.guardedModify
-      (SepLogic.freeBlock.spec p [.shared 0 value] false (by simp [Cell.writable]))))
+      (SepLogic.freeBlock.spec p [.shared 0 (some value)] false (by simp [Cell.writable]))))
   intro _
   exact HeapWP.Triple.pure emp value
 
@@ -187,7 +187,7 @@ theorem borrowed_box.spec (initial replacement : U32) :
   intro hbefore
   subst before
   apply HeapWP.Triple.bind (HeapWP.frame (R := alloc p 1 false)
-    (HeapWP.write.spec p (.shared 0 initial) replacement True.intro))
+    (HeapWP.write.spec p (.shared 0 (some initial)) replacement rfl))
   intro _
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ h => h) (hback replacement))
@@ -200,31 +200,119 @@ theorem borrowed_box.spec (initial replacement : U32) :
 end raw_box_manual
 
 /--
-info: 'raw_read_write_read.read_write_read.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_read_write_read.read_write_read.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.extent,
+ Block.setCell,
+ Block.set_bytes_length,
+ Block.set_exists,
+ Block.set_extent,
+ Block.set_frame,
+ Block.set_view,
+ Block.view,
+ Block.view_bound,
+ Block.view_bytes,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_read_write_read.read_write_read.spec
 
 /--
-info: 'raw_read_write_read.discarded_read.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_read_write_read.discarded_read.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.extent,
+ Block.setCell,
+ Block.set_bytes_length,
+ Block.set_exists,
+ Block.set_extent,
+ Block.set_frame,
+ Block.set_view,
+ Block.view,
+ Block.view_bound,
+ Block.view_bytes,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_read_write_read.discarded_read.spec
 
 /--
-info: 'raw_box.alias_write.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_box.alias_write.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.create,
+ Block.create_bytes,
+ Block.create_exists,
+ Block.create_extent,
+ Block.create_view,
+ Block.extent,
+ Block.setCell,
+ Block.set_bytes_length,
+ Block.set_exists,
+ Block.set_extent,
+ Block.set_frame,
+ Block.set_view,
+ Block.view,
+ Block.view_bound,
+ Block.view_bytes,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_box.alias_write.spec
 
 /--
-info: 'raw_box_manual.into_raw.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_box_manual.into_raw.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.create,
+ Block.create_bytes,
+ Block.create_exists,
+ Block.create_extent,
+ Block.create_view,
+ Block.extent,
+ Block.view,
+ Block.view_bound,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_box_manual.into_raw.spec
 
 /--
-info: 'raw_box_manual.borrowed_box.spec' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'raw_box_manual.borrowed_box.spec' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound,
+ Block,
+ Block.bytes,
+ Block.create,
+ Block.create_bytes,
+ Block.create_exists,
+ Block.create_extent,
+ Block.create_view,
+ Block.extent,
+ Block.setCell,
+ Block.set_bytes_length,
+ Block.set_exists,
+ Block.set_extent,
+ Block.set_frame,
+ Block.set_view,
+ Block.view,
+ Block.view_bound,
+ Block.view_bytes,
+ Block.view_unique,
+ Heap.repr]
 -/
 #guard_msgs in
 #print axioms raw_box_manual.borrowed_box.spec

@@ -83,12 +83,12 @@ theorem Spec.guardedModify {modify : State.{0} → α → State.{0} → Prop} :
 
 /-- A framed separation contract for the generated computation itself. -/
 def Triple (P : Assertion.{0}) (c : Result α) (Q : α → Assertion.{0}) : Prop :=
-  ∀ h F s, P h → h.Disjoint F → Fragment.Matches layout s (h ∪ F) → s.Inv →
+  ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
     Spec c (fun x s' => ∃ h', h'.Disjoint F ∧
-      Fragment.Matches layout s' (h' ∪ F) ∧ s'.Inv ∧ Q x h') s
+      Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h') s
 
 theorem Triple.guardedModify {modify : State.{0} → α → State.{0} → Prop}
-    (ht : SepLogic.Triple layout P modify Q) :
+    (ht : SepLogic.Triple P modify Q) :
     Triple P (Result.guardedModify modify) Q := by
   intro h F s hp hd hm hi
   exact Spec.guardedModify.mpr (ht h F s hp hd hm hi)

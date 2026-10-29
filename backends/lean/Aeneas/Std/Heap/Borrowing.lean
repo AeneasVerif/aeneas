@@ -17,10 +17,10 @@ universe u
 
 @[simp] theorem Cell.full_inj {xs ys : List ty} :
     Cell.full xs = Cell.full ys ↔ xs = ys :=
-  List.map_inj_right fun _ _ h => (Cell.shared.inj h).2
+  List.map_inj_right fun _ _ h => Option.some.inj (Cell.shared.inj h).2
 
 theorem Cell.shared_values_eq {xs ys : List ty} {f g : Nat}
-    (h : (xs.map (Cell.shared f)) = (ys.map (Cell.shared g))) : xs = ys := by
+    (h : (xs.map (Cell.shared f ∘ some)) = (ys.map (Cell.shared g ∘ some))) : xs = ys := by
   induction xs generalizing ys
   · have hy : ys = [] := by simpa using h.symm
     exact hy.symm
@@ -29,11 +29,11 @@ theorem Cell.shared_values_eq {xs ys : List ty} {f g : Nat}
     · simp at h
     · rename_i y ys
       have hh := List.cons.inj h
-      rw [(Cell.shared.inj hh.1).2, ih hh.2]
+      rw [Option.some.inj (Cell.shared.inj hh.1).2, ih hh.2]
 
 theorem Cell.shared_succ_eq {xs ys : List ty} {f g : Nat}
-    (h : (xs.map (Cell.shared f)) = (ys.map (Cell.shared g))) :
-    (xs.map (Cell.shared (f + 1))) = (ys.map (Cell.shared (g + 1))) := by
+    (h : (xs.map (Cell.shared f ∘ some)) = (ys.map (Cell.shared g ∘ some))) :
+    (xs.map (Cell.shared (f + 1) ∘ some)) = (ys.map (Cell.shared (g + 1) ∘ some)) := by
   have hv := Cell.shared_values_eq h
   subst ys
   cases xs
@@ -43,8 +43,8 @@ theorem Cell.shared_succ_eq {xs ys : List ty} {f g : Nat}
     rfl
 
 theorem Cell.shared_pred_eq {xs : List ty} {f g : Nat}
-    (h : (xs.map (Cell.shared (f + 1))) = (xs.map (Cell.shared (g + 1)))) :
-    (xs.map (Cell.shared f)) = (xs.map (Cell.shared g)) := by
+    (h : (xs.map (Cell.shared (f + 1) ∘ some)) = (xs.map (Cell.shared (g + 1) ∘ some))) :
+    (xs.map (Cell.shared f ∘ some)) = (xs.map (Cell.shared g ∘ some)) := by
   cases xs
   · rfl
   · have hf := Nat.add_right_cancel (Cell.shared.inj (List.cons.inj h).1).1
@@ -53,11 +53,9 @@ theorem Cell.shared_pred_eq {xs : List ty} {f g : Nat}
 
 namespace SepLogic
 
-variable {m : Layout.{u}}
-
 theorem borrowRange.spec (p : RawPtr ty) (values : List ty)
-    (hsize : values = [] ∨ 0 < m.byteLength ty) :
-    Triple m (block p (Cell.full values)) (Heap.borrowRange m p values.length)
+    (hsize : values = [] ∨ 0 < Heap.size ty) :
+    Triple (block p (Cell.full values)) (Heap.borrowRange p values.length)
       (fun result h => result = values ∧
         block p (List.replicate values.length .borrowed) h) := by
   apply triple_replaceRange (old := Cell.full values)
@@ -75,22 +73,22 @@ theorem borrowRange.spec (p : RawPtr ty) (values : List ty)
     exact ⟨rfl, hu⟩
 
 theorem endBorrowRange.spec (p : RawPtr ty) (values : List ty) :
-    Triple m (block p (List.replicate values.length .borrowed)) (Heap.endBorrowRange m p values)
+    Triple (block p (List.replicate values.length .borrowed)) (Heap.endBorrowRange p values)
       (fun _ => block p (Cell.full values)) :=
   replaceRange.spec p _ _ (by simp [Cell.full])
 
 theorem shareRange.spec (p : RawPtr ty) (values : List ty) (depth : Nat) :
-    Triple m (block p (values.map (Cell.shared depth))) (Heap.shareRange m p values.length)
-      (fun result h => result = values ∧ block p (values.map (Cell.shared (depth + 1))) h) := by
-  apply triple_replaceRange (old := (values.map (Cell.shared depth)))
-    (new := (values.map (Cell.shared (depth + 1))))
+    Triple (block p (values.map (Cell.shared depth ∘ some))) (Heap.shareRange p values.length)
+      (fun result h => result = values ∧ block p (values.map (Cell.shared (depth + 1) ∘ some)) h) := by
+  apply triple_replaceRange (old := (values.map (Cell.shared depth ∘ some)))
+    (new := (values.map (Cell.shared (depth + 1) ∘ some)))
   · intro s hm
-    have hl : (values.map (Cell.shared depth)).length =
-        (values.map (Cell.shared (depth + 1))).length := by simp
+    have hl : (values.map (Cell.shared depth ∘ some)).length =
+        (values.map (Cell.shared (depth + 1) ∘ some)).length := by simp
     obtain ⟨s', hu⟩ := replaceRange.exists hl hm
     exact ⟨values, s', rfl, depth, hu⟩
   · rintro s result s' hm ⟨hlen, f, hu⟩
-    have hl : (values.map (Cell.shared depth)).length = (result.map (Cell.shared f)).length := by
+    have hl : (values.map (Cell.shared depth ∘ some)).length = (result.map (Cell.shared f ∘ some)).length := by
       simp [hlen]
     have he := replaceRange.old_eq hm hl hu
     have hv := Cell.shared_values_eq he
@@ -100,21 +98,21 @@ theorem shareRange.spec (p : RawPtr ty) (values : List ty) (depth : Nat) :
     exact ⟨rfl, hu⟩
 
 theorem endShareRange.spec (p : RawPtr ty) (values : List ty) (depth : Nat) :
-    Triple m (block p (values.map (Cell.shared (depth + 1)))) (Heap.endShareRange m p values)
-      (fun _ => block p (values.map (Cell.shared depth))) := by
-  apply Triple.conseq (P' := block p (values.map (Cell.shared (depth + 1))))
-    (Q' := fun (_ : Unit) h => True ∧ block p (values.map (Cell.shared depth)) h)
+    Triple (block p (values.map (Cell.shared (depth + 1) ∘ some))) (Heap.endShareRange p values)
+      (fun _ => block p (values.map (Cell.shared depth ∘ some))) := by
+  apply Triple.conseq (P' := block p (values.map (Cell.shared (depth + 1) ∘ some)))
+    (Q' := fun (_ : Unit) h => True ∧ block p (values.map (Cell.shared depth ∘ some)) h)
     (fun _ h => h) (fun _ _ h => h.2)
-  apply triple_replaceRange (old := (values.map (Cell.shared (depth + 1))))
-    (new := (values.map (Cell.shared depth)))
+  apply triple_replaceRange (old := (values.map (Cell.shared (depth + 1) ∘ some)))
+    (new := (values.map (Cell.shared depth ∘ some)))
   · intro s hm
-    have hl : (values.map (Cell.shared (depth + 1))).length =
-        (values.map (Cell.shared depth)).length := by simp
+    have hl : (values.map (Cell.shared (depth + 1) ∘ some)).length =
+        (values.map (Cell.shared depth ∘ some)).length := by simp
     obtain ⟨s', hu⟩ := replaceRange.exists hl hm
     exact ⟨(), s', depth, hu⟩
   · rintro s _ s' hm ⟨f, hu⟩
-    have hl : (values.map (Cell.shared (depth + 1))).length =
-        (values.map (Cell.shared (f + 1))).length := by simp
+    have hl : (values.map (Cell.shared (depth + 1) ∘ some)).length =
+        (values.map (Cell.shared (f + 1) ∘ some)).length := by simp
     have he := replaceRange.old_eq hm hl hu
     have hn := Cell.shared_pred_eq he
     rw [← he, ← hn] at hu
@@ -122,16 +120,16 @@ theorem endShareRange.spec (p : RawPtr ty) (values : List ty) (depth : Nat) :
 
 theorem offset.spec (p : RawPtr ty) (cs : List (Cell ty)) (start target : Nat)
     (hne : cs ≠ []) (hstart : start ≤ cs.length) (htarget : target ≤ cs.length) :
-    Triple m (block p cs)
-      (Heap.offset m (⟨p.base, p.index + start⟩ : RawPtr ty) ((target : Int) - start))
+    Triple (block p cs)
+      (Heap.offset (⟨p.base, p.index + start⟩ : RawPtr ty) ((target : Int) - start))
       (fun result h => result = ⟨p.base, p.index + target⟩ ∧ block p cs h) := by
   intro h F s rfl hd hm hi
-  obtain ⟨hown, _⟩ := (Fragment.matches_union _ _ _ _).mp hm
-  obtain ⟨r, hs, hv⟩ := views_of_matches hne hown
+  obtain ⟨hown, _⟩ := (Fragment.matches_union _ _ _).mp hm
+  obtain ⟨r, hs, ha, hv⟩ := views_of_matches hne hown
   have hrange := hv.bound hne
-  have hb : p.index + start ≤ m.extent ty r ∧ p.index + target ≤ m.extent ty r := by grind
-  have hextent : s.extent m ty p.base = some (m.extent ty r) := by
-    simp [Heap.extent, hs]
+  have hb : p.index + start ≤ Std.Block.extent ty r ∧ p.index + target ≤ Std.Block.extent ty r := by grind
+  have hextent : s.extent ty p.base = some (Std.Block.extent ty r) := by
+    simp [Heap.extent, hs, ha]
   refine ⟨⟨⟨p.base, p.index + target⟩, s, ⟨_, hextent, hb⟩, rfl, ?_, rfl⟩, ?_⟩
   · grind
   · rintro result _ ⟨_, hbase, hindex, rfl⟩
@@ -145,8 +143,8 @@ theorem offset.spec (p : RawPtr ty) (cs : List (Cell ty)) (start target : Nat)
 /-- Cleanup authority records the extent even when there are no cell resources. -/
 theorem offsetWholeBlock.spec (p : RawPtr ty) (cs : List (Cell ty)) (own : Bool)
     (start target : Nat) (hstart : start ≤ cs.length) (htarget : target ≤ cs.length) :
-    Triple m (sep (alloc p cs.length own) (block p cs))
-      (Heap.offset m (⟨p.base, p.index + start⟩ : RawPtr ty) ((target : Int) - start))
+    Triple (sep (alloc p cs.length own) (block p cs))
+      (Heap.offset (⟨p.base, p.index + start⟩ : RawPtr ty) ((target : Int) - start))
       (fun result h => result = ⟨p.base, p.index + target⟩ ∧
         sep (alloc p cs.length own) (block p cs) h) := by
   intro h F s hp hd hm hi
@@ -154,11 +152,12 @@ theorem offsetWholeBlock.spec (p : RawPtr ty) (cs : List (Cell ty)) (own : Bool)
   obtain ⟨a, b, _, he, ⟨hoff, ha⟩, hb⟩ := hp
   change b = cellsHeap p cs at hb
   subst h a b
-  obtain ⟨hab, _⟩ := (Fragment.matches_union _ _ _ _).mp hm
-  obtain ⟨ha', hc⟩ := (Fragment.matches_union _ _ _ _).mp hab
+  obtain ⟨hab, _⟩ := (Fragment.matches_union _ _ _).mp hm
+  obtain ⟨ha', hc⟩ := (Fragment.matches_union _ _ _).mp hab
   obtain ⟨_, hs⟩ := whole_of_matches hoff ha' hc
-  obtain ⟨r, hs, hn, _⟩ := hs
-  have hextent : s.extent m ty p.base = some cs.length := by simp [Heap.extent, hs, hn]
+  obtain ⟨r, hs, halign, hn, _⟩ := hs
+  have hextent : s.extent ty p.base = some cs.length := by
+    simp [Heap.extent, hs, halign, hn]
   have hb : p.index + start ≤ cs.length ∧ p.index + target ≤ cs.length := by
     simpa [hoff] using And.intro hstart htarget
   refine ⟨⟨⟨p.base, p.index + target⟩, s, ⟨cs.length, hextent, hb⟩, rfl, ?_, rfl⟩, ?_⟩

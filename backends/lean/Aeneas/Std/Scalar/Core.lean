@@ -1,6 +1,7 @@
 module
 public import Lean
 public import Lean.Meta.Tactic.Simp
+public import Aeneas.Std.Scalar.Types
 public import Aeneas.Std.Core.Core
 public import Aeneas.Tactic.Step.Init
 public import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
@@ -27,16 +28,6 @@ signed integers, and another for unsigned integers. Inside of each class, we fac
 
 open Result Error
 
-/-- Kinds of unsigned integers -/
-inductive UScalarTy where
-| Usize
-| U8
-| U16
-| U32
-| U64
-| U128
-deriving BvEnumToBitVec
-
 /-- Kinds of signed integers -/
 inductive IScalarTy where
 | Isize
@@ -48,16 +39,6 @@ inductive IScalarTy where
 deriving BvEnumToBitVec
 
 @[expose, implicit_reducible]
-def UScalarTy.numBits (ty : UScalarTy) : Nat :=
-  match ty with
-  | Usize => System.Platform.numBits
-  | U8 => 8
-  | U16 => 16
-  | U32 => 32
-  | U64 => 64
-  | U128 => 128
-
-@[expose, implicit_reducible]
 def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   match ty with
   | Isize => System.Platform.numBits
@@ -66,14 +47,6 @@ def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   | I32 => 32
   | I64 => 64
   | I128 => 128
-
-/-- Unsigned integer -/
-structure UScalar (ty : UScalarTy) where
-  /- The internal representation is a bit-vector -/
-  bv : BitVec ty.numBits
-deriving Repr, BEq, DecidableEq
-
-@[expose, implicit_reducible] def UScalar.val {ty} (x : UScalar ty) : ℕ := x.bv.toNat
 
 /-- Signed integer -/
 structure IScalar (ty : IScalarTy) where
@@ -665,12 +638,6 @@ theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
   cases ty <;> simp
 
 /-! The scalar types. -/
-abbrev  Usize := UScalar .Usize
-abbrev  U8    := UScalar .U8
-abbrev  U16   := UScalar .U16
-abbrev  U32   := UScalar .U32
-abbrev  U64   := UScalar .U64
-abbrev  U128  := UScalar .U128
 abbrev  Isize := IScalar .Isize
 abbrev  I8    := IScalar .I8
 abbrev  I16   := IScalar .I16

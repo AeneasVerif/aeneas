@@ -50,7 +50,7 @@ fun a => do
 #guard_msgs in
 #print recPF1_add
 /--
-info: 'Aeneas.Command.Decompose.TestsRec.recPF1_eq' depends on axioms: [propext, Classical.choice, Quot.sound, layout]
+info: 'Aeneas.Command.Decompose.TestsRec.recPF1_eq' depends on axioms: [propext, Classical.choice, Quot.sound, Block]
 -/
 #guard_msgs in
 #print axioms recPF1_eq
@@ -238,7 +238,7 @@ example (n : Nat) (borrow : Result (Nat × (Nat → Result Nat))) :
 info: 'Aeneas.Command.Decompose.TestsRec.crossUniverseLoop.fold' depends on axioms: [propext,
  Classical.choice,
  Quot.sound,
- layout]
+ Block]
 -/
 #guard_msgs in
 #print axioms crossUniverseLoop.fold

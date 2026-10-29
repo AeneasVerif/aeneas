@@ -2,12 +2,12 @@ module
 
 public import Aeneas.Std.Heap.Lemmas
 
-/-! Logical fragments, not fragments of `Repr`.
+/-! Logical fragments, not fragments of `Block`.
 
 A cell resource observes one typed cell; a cleanup resource observes cleanup authority and
 the current typed extent. The extent is a logical fact, not extra allocation metadata.
-The connector retains same-type logical fragments at a base; the underlying layout
-additionally provides byte-disjoint cross-type framing and byte-wise authorization.
+The connector retains same-type logical fragments at a base; the block relations
+additionally provide byte-disjoint cross-type framing and byte-wise authorization.
 
 Cell permissions are part of the observed cell. Separating conjunction does not duplicate
 shared cells; splitting and rejoining safe borrows are explicit memory operations.
@@ -46,16 +46,16 @@ theorem Compatible.symm {a b : Resource.{u}} (h : a.Compatible b) : b.Compatible
 theorem not_compatible_self (a : Resource.{u}) : ¬ a.Compatible a := by
   simp [Compatible]
 
-def Holds (m : Layout.{u}) (s : Heap m.Repr) : Resource.{u} → Prop
+def Holds (s : Heap Std.Block.{u}) : Resource.{u} → Prop
   | .cell ty p c =>
-    ∃ r, s.cells p.base = some r ∧ m.view ty r p.index c
+    ∃ r, s.cells p.base = some r ∧ Heap.Aligned ty s p.base ∧ Std.Block.view ty r p.index c
   | .cleanup ty base count own =>
     s.allocated base = own ∧
-      ∃ r, s.cells base = some r ∧ m.extent ty r = count ∧
-        (m.bytes r).length = count * m.byteLength ty
+      ∃ r, s.cells base = some r ∧ Heap.Aligned ty s base ∧ Std.Block.extent ty r = count ∧
+        (Std.Block.bytes r).length = count * Heap.size ty
 
-theorem Holds.live {m : Layout.{u}} {s : Heap m.Repr} {r : Resource.{u}}
-    (h : r.Holds m s) : ∃ repr, s.cells r.base = some repr := by
+theorem Holds.live {s : Heap Std.Block.{u}} {r : Resource.{u}}
+    (h : r.Holds s) : ∃ repr, s.cells r.base = some repr := by
   cases r
   · exact h.imp fun _ hc => hc.1
   · exact h.2.imp fun _ hc => hc.1
@@ -76,8 +76,8 @@ instance : Union Fragment.{u} := ⟨union⟩
 def Disjoint (a b : Fragment.{u}) : Prop :=
   ∀ r, a r → ∀ r', b r' → r.Compatible r'
 
-def Matches (m : Layout.{u}) (s : Heap m.Repr) (h : Fragment.{u}) : Prop :=
-  ∀ r, h r → r.Holds m s
+def Matches (s : Heap Std.Block.{u}) (h : Fragment.{u}) : Prop :=
+  ∀ r, h r → r.Holds s
 
 @[simp] theorem empty_union (h : Fragment.{u}) : ∅ ∪ h = h := by
   funext r
@@ -123,11 +123,11 @@ theorem disjoint_union_right {a b c : Fragment.{u}} :
     · exact hb r hr r' hr'
     · exact hc r hr r' hr'
 
-@[simp] theorem matches_empty (m : Layout.{u}) (s : Heap m.Repr) :
-    Matches m s ∅ := fun _ h => h.elim
+@[simp] theorem matches_empty (s : Heap Std.Block.{u}) :
+    Matches s ∅ := fun _ h => h.elim
 
-@[simp] theorem matches_union (m : Layout.{u}) (s : Heap m.Repr)
-    (a b : Fragment.{u}) : Matches m s (a ∪ b) ↔ Matches m s a ∧ Matches m s b := by
+@[simp] theorem matches_union (s : Heap Std.Block.{u})
+    (a b : Fragment.{u}) : Matches s (a ∪ b) ↔ Matches s a ∧ Matches s b := by
   constructor
   · intro h
     exact ⟨fun _ ha => h _ (.inl ha), fun _ hb => h _ (.inr hb)⟩
@@ -135,8 +135,8 @@ theorem disjoint_union_right {a b c : Fragment.{u}} :
     · exact ha r hr
     · exact hb r hr
 
-@[simp] theorem matches_single (m : Layout.{u}) (s : Heap m.Repr) (r : Resource.{u}) :
-    Matches m s (single r) ↔ r.Holds m s := by
+@[simp] theorem matches_single (s : Heap Std.Block.{u}) (r : Resource.{u}) :
+    Matches s (single r) ↔ r.Holds s := by
   constructor
   · exact fun h => h r rfl
   · rintro h _ rfl
@@ -181,24 +181,24 @@ theorem sep_emp_left (P : Assertion.{u}) (h : Fragment.{u}) :
   · intro hp
     exact ⟨∅, h, Fragment.disjoint_empty_left h, by simp, rfl, hp⟩
 
-abbrev Cmd (m : Layout.{u}) (α : Type w) := Heap m.Repr → α → Heap m.Repr → Prop
+abbrev Cmd (α : Type w) := Heap Std.Block.{u} → α → Heap Std.Block.{u} → Prop
 
-def Cmd.pure (m : Layout.{u}) (x : α) : Cmd m α := fun s y s' => y = x ∧ s' = s
-def Cmd.bind {m : Layout.{u}} (c : Cmd m α) (k : α → Cmd m β) : Cmd m β :=
+def Cmd.pure (x : α) : Cmd α := fun s y s' => y = x ∧ s' = s
+def Cmd.bind (c : Cmd α) (k : α → Cmd β) : Cmd β :=
   fun s y s'' => ∃ x s', c s x s' ∧ k x s' y s''
 
 /-- Successor existence plus demonic safety, for every matching disjoint frame.
 Dropped resources remain in the physical heap but are no longer owned. -/
-def Triple (m : Layout.{u}) (P : Assertion.{u}) (c : Cmd m α)
+def Triple (P : Assertion.{u}) (c : Cmd α)
     (Q : α → Assertion.{u}) : Prop :=
-  ∀ h F s, P h → h.Disjoint F → Fragment.Matches m s (h ∪ F) → s.Inv →
+  ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
     (∃ x s', c s x s') ∧
     ∀ x s', c s x s' →
-      ∃ h', h'.Disjoint F ∧ Fragment.Matches m s' (h' ∪ F) ∧ s'.Inv ∧ Q x h'
+      ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h'
 
-theorem frame {m : Layout.{u}} {P R : Assertion.{u}} {c : Cmd m α}
-    {Q : α → Assertion.{u}} (ht : Triple m P c Q) :
-    Triple m (sep P R) c (fun x => sep (Q x) R) := by
+theorem frame {P R : Assertion.{u}} {c : Cmd α}
+    {Q : α → Assertion.{u}} (ht : Triple P c Q) :
+    Triple (sep P R) c (fun x => sep (Q x) R) := by
   intro h F s ⟨a, b, hab, he, hp, hr⟩ hf hm hi
   subst h
   obtain ⟨haF, hbF⟩ := Fragment.disjoint_union_left.mp hf
@@ -211,50 +211,50 @@ theorem frame {m : Layout.{u}} {P R : Assertion.{u}} {c : Cmd m α}
   exact ⟨a' ∪ b, Fragment.disjoint_union_left.mpr ⟨ha'F, hbF⟩,
     by simpa [Fragment.union_assoc] using hm', hi', a', b, ha'b, rfl, hq, hr⟩
 
-theorem Triple.drop {m : Layout.{u}} {P R : Assertion.{u}} {c : Cmd m α}
-    {Q : α → Assertion.{u}} (ht : Triple m P c (fun x => sep (Q x) R)) :
-    Triple m P c Q := by
+theorem Triple.drop {P R : Assertion.{u}} {c : Cmd α}
+    {Q : α → Assertion.{u}} (ht : Triple P c (fun x => sep (Q x) R)) :
+    Triple P c Q := by
   intro h F s hp hd hm hi
   obtain ⟨hsafe, hpost⟩ := ht h F s hp hd hm hi
   refine ⟨hsafe, fun x s' hrun => ?_⟩
   obtain ⟨_, hd', hm', hi', a, b, _, rfl, hq, _⟩ := hpost x s' hrun
   obtain ⟨haF, _⟩ := Fragment.disjoint_union_left.mp hd'
-  obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _ _).mp hm'
-  exact ⟨a, haF, (Fragment.matches_union _ _ _ _).mpr
-    ⟨(Fragment.matches_union _ _ _ _).mp hab |>.1, hF⟩, hi', hq⟩
+  obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _).mp hm'
+  exact ⟨a, haF, (Fragment.matches_union _ _ _).mpr
+    ⟨(Fragment.matches_union _ _ _).mp hab |>.1, hF⟩, hi', hq⟩
 
-theorem Triple.conseq {m : Layout.{u}} {P P' : Assertion.{u}} {c : Cmd m α}
+theorem Triple.conseq {P P' : Assertion.{u}} {c : Cmd α}
     {Q Q' : α → Assertion.{u}} (hp : ∀ h, P h → P' h)
-    (hq : ∀ x h, Q' x h → Q x h) (ht : Triple m P' c Q') : Triple m P c Q := by
+    (hq : ∀ x h, Q' x h → Q x h) (ht : Triple P' c Q') : Triple P c Q := by
   intro h F s hP hd hm hi
   obtain ⟨hsafe, hpost⟩ := ht h F s (hp h hP) hd hm hi
   refine ⟨hsafe, fun x s' hrun => ?_⟩
   obtain ⟨h', hd', hm', hi', hQ⟩ := hpost x s' hrun
   exact ⟨h', hd', hm', hi', hq x h' hQ⟩
 
-theorem Triple.pure_pre {m : Layout.{u}} {A : Prop} {P : Assertion.{u}}
-    {c : Cmd m α} {Q : α → Assertion.{u}} (ht : A → Triple m P c Q) :
-    Triple m (fun h => A ∧ P h) c Q := by
+theorem Triple.pure_pre {A : Prop} {P : Assertion.{u}}
+    {c : Cmd α} {Q : α → Assertion.{u}} (ht : A → Triple P c Q) :
+    Triple (fun h => A ∧ P h) c Q := by
   intro h F s ⟨ha, hp⟩ hd hm hi
   exact ht ha h F s hp hd hm hi
 
-theorem Triple.pure (m : Layout.{u}) (P : Assertion.{u}) (x : α) :
-    Triple m P (Cmd.pure m x) (fun y h => y = x ∧ P h) := by
+theorem Triple.pure (P : Assertion.{u}) (x : α) :
+    Triple P (Cmd.pure x) (fun y h => y = x ∧ P h) := by
   intro h F s hp hd hm hi
   refine ⟨⟨x, s, rfl, rfl⟩, ?_⟩
   rintro _ _ ⟨rfl, rfl⟩
   exact ⟨h, hd, hm, hi, rfl, hp⟩
 
-theorem Triple.bind {m : Layout.{u}} {P : Assertion.{u}} {c : Cmd m α}
-    {k : α → Cmd m β} {Q : α → Assertion.{u}} {R : β → Assertion.{u}}
-    (hc : Triple m P c Q) (hk : ∀ x, Triple m (Q x) (k x) R) :
-    Triple m P (c.bind k) R := by
+theorem Triple.bind {P : Assertion.{u}} {c : Cmd α}
+    {k : α → Cmd β} {Q : α → Assertion.{u}} {R : β → Assertion.{u}}
+    (hc : Triple P c Q) (hk : ∀ x, Triple (Q x) (k x) R) :
+    Triple P (c.bind k) R := by
   intro h F s hp hd hm hi
   obtain ⟨⟨x, s', hrun⟩, hpost⟩ := hc h F s hp hd hm hi
   have hnext : ∀ x s', c s x s' →
       (∃ y s'', k x s' y s'') ∧
       ∀ y s'', k x s' y s'' →
-        ∃ h'', h''.Disjoint F ∧ Fragment.Matches m s'' (h'' ∪ F) ∧ s''.Inv ∧ R y h'' := by
+        ∃ h'', h''.Disjoint F ∧ Fragment.Matches s'' (h'' ∪ F) ∧ s''.Inv ∧ R y h'' := by
     intro x s' hx
     obtain ⟨h', hd', hm', hi', hq⟩ := hpost x s' hx
     exact hk x h' F s' hq hd' hm' hi'
