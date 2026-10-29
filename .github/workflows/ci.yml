@@ -56,14 +56,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # deep clone in order to get access to other commits
+      - id: lean_cache_key
+        # The key covers every input of the Lean build
+        run: |
+          prefix='lean-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json', 'tests/lean/lake-manifest.json') }}-'
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix${{ hashFiles('backends/lean/**', 'tests/lean/**', '!**/.lake/**') }}" >> "$GITHUB_OUTPUT"
+      - id: lean_cache_lookup
+        uses: actions/cache/restore@v6
+        with:
+          path: &lean_build_paths |
+            backends/lean/.lake/build/lib
+            backends/lean/.lake/build/ir
+            tests/lean/.lake/build/lib
+            tests/lean/.lake/build/ir
+          key: ${{ steps.lean_cache_key.outputs.key }}
+          lookup-only: true
       - id: skip_check
         run: |
-          # Compares this version with `main`, and checks whether the lean files changed.
-          if git diff origin/main --quiet -- tests/lean && git diff origin/main --quiet -- backends/lean; then
-              echo 'lean files were not changed in this PR.'
+          # A cache is only saved after a successful build so if one exists for these inputs we don't need to build again
+          if [ "${{ steps.lean_cache_lookup.outputs.cache-hit }}" = true ]; then
+              echo 'A Lean build with these inputs already succeeded.'
               echo "CHECK_LEAN=false" >> "$GITHUB_ENV"
           else
-              echo 'lean files were changed in this PR.'
+              echo 'Either the Lean files have changed of no cache is available for another reason.'
               echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
           fi
           # Two OCaml files are derivatives of the Lean code so we check if they were changed.
@@ -79,15 +95,12 @@ jobs:
               echo 'LeanKeywords.ml was changed in this PR'
               echo "CHECK_LEAN_KEYWORDS=true" >> "$GITHUB_ENV"
           fi
-          # On `main`, always build so that it saves a cache for PRs to use.
-          if [ "$GITHUB_REF" = refs/heads/main ]; then
-              echo 'On main: building lean to update the cache.'
-              echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
-          fi
     outputs:
       check_lean: ${{ env.CHECK_LEAN }}
       check_extract_builtin: ${{ env.CHECK_EXTRACT_BUILTIN }}
       check_lean_keywords: ${{ env.CHECK_LEAN_KEYWORDS }}
+      lean_cache_key: ${{ steps.lean_cache_key.outputs.key }}
+      lean_cache_prefix: ${{ steps.lean_cache_key.outputs.prefix }}
 
   lean:
     needs: [select-runner, diff_lean_files]
@@ -96,18 +109,17 @@ jobs:
       - *install_nix
       - *setup_cachix_push
       - uses: actions/checkout@v4
-      - if: needs.diff_lean_files.outputs.check_lean == 'true'
-        # Cache only our own build outputs.
-        id: lean_build_cache
+      - if: >-
+          needs.diff_lean_files.outputs.check_lean == 'true' ||
+          needs.diff_lean_files.outputs.check_extract_builtin == 'true' ||
+          needs.diff_lean_files.outputs.check_lean_keywords == 'true'
+        # Cache only our own build outputs: the dependencies come from `lake exe cache get`.
+        # Without an exact hit, start from the latest build with the same dependencies.
         uses: actions/cache/restore@v6
         with:
-          path: &lean_build_paths |
-            backends/lean/.lake/build/lib
-            backends/lean/.lake/build/ir
-            tests/lean/.lake/build/lib
-            tests/lean/.lake/build/ir
-          key: lean-build-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json', 'tests/lean/lake-manifest.json') }}-${{ github.sha }}
-          restore-keys: lean-build-${{ hashFiles('backends/lean/lean-toolchain', 'backends/lean/lake-manifest.json', 'tests/lean/lake-manifest.json') }}-
+          path: *lean_build_paths
+          key: ${{ needs.diff_lean_files.outputs.lean_cache_key }}
+          restore-keys: ${{ needs.diff_lean_files.outputs.lean_cache_prefix }}
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
         run: nix develop --command bash -c "cd backends/lean && lake exe cache get && lake build Aeneas AeneasMeta --wfail"
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
@@ -119,7 +131,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: *lean_build_paths
-          key: ${{ steps.lean_build_cache.outputs.cache-primary-key }}
+          key: ${{ needs.diff_lean_files.outputs.lean_cache_key }}
       - if: >-
           needs.diff_lean_files.outputs.check_lean == 'true' ||
           needs.diff_lean_files.outputs.check_extract_builtin == 'true'
