@@ -1,0 +1,6 @@
+[[92mInfo[39m ] Imported: tests/llbc/diverging_call.llbc
+[[91mError[39m] evaluate_function_symbolic failed on: diverging_call::arm
+Unexpected result: Cps.Unit
+Source: 'tests/src/diverging-call.rs', lines 9:0-14:1
+Compiler source: interp/Interp.ml, line 661
+
