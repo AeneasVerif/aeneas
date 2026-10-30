@@ -1513,8 +1513,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
         (fun abs_id ->
           (* Lookup the abstraction *)
           let abs = ctx_lookup_abs ctx abs_id in
+          (* Check if the keep-alive hint is set. *)
+          (not
+             (Option.is_some abs.alive_hint && abs_has_borrows_or_loans ctx abs))
           (* Check if it has parents *)
-          AbsId.Set.is_empty abs.parents
+          && AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
                (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span abs 0
