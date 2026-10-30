@@ -21,12 +21,9 @@ theorem pushed_is_empty_spec : pushed_is_empty ⦃ b => b = false ⦄ := by
 
 /-- `is_empty` guarding an index: its spec gives the bound needed to index the vector. -/
 theorem first_or_spec (v : alloc.vec.Vec Std.U32) (d : Std.U32) :
-    first_or v d ⦃ x => x = v.val.headD d ⦄ := by
+    first_or v d ⦃ x => x = if v.length = 0 then d else v.val[0]! ⦄ := by
   unfold first_or
   step*
-  · simp_all
-  · subst_vars
-    rw [List.headD_eq_head?_getD, List.head?_eq_getElem?, List.getElem?_eq_getElem]
-    rfl
+  grind
 
 end vec_methods

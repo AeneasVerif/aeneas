@@ -4,7 +4,7 @@
 #![register_tool(verify)]
 //! Tests for the Lean models of `Vec` methods (`Vec::is_empty`).
 //!
-//! `new_is_empty` and `pushed_is_empty` are the example of the documentation of
+//! `new_is_empty` and `pushed_is_empty` are the examples of the documentation of
 //! `Vec::is_empty` (<https://doc.rust-lang.org/std/vec/struct.Vec.html#method.is_empty>).
 
 pub fn new_is_empty() -> bool {
