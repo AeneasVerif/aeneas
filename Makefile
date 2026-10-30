@@ -214,12 +214,13 @@ timed-lean:
 verify-raw-box:
 	cd backends/lean && lake build Aeneas.Std.Heap.EffectSpecs
 	@set -eu; tmp=$$(mktemp -d); \
-	trap 'for module in RawBox RawReadWriteRead; do rm -f "$$tmp/$$module.olean" "$$tmp/$$module.olean.private" "$$tmp/$$module.olean.server" "$$tmp/$$module.ir" "$$tmp/$$module.ir.sig"; done; rmdir "$$tmp"' EXIT; \
+	trap 'for module in RawBox RawReadWriteRead RawBoxProofs; do rm -f "$$tmp/$$module.olean" "$$tmp/$$module.olean.private" "$$tmp/$$module.olean.server" "$$tmp/$$module.ir" "$$tmp/$$module.ir.sig"; done; rmdir "$$tmp"' EXIT; \
 	cd backends/lean; \
 	lake env lean --root=../../tests/lean ../../tests/lean/RawBox.lean -o "$$tmp/RawBox.olean"; \
 	lake env lean --root=../../tests/lean ../../tests/lean/RawReadWriteRead.lean -o "$$tmp/RawReadWriteRead.olean"; \
-	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawBoxProofs.lean; \
-	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawBoxManual.lean
+	LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean ../../tests/lean/RawBoxProofs.lean -o "$$tmp/RawBoxProofs.olean"; \
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawBoxManual.lean; \
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawTransmute.lean
 
 # =============================================================================
 # Nix

@@ -153,3 +153,33 @@ These proofs use singleton-range contracts, not general multi-element contracts.
 `make verify-raw-box` checks all the callback and API compositions, including
 exact axiom guards. The native `raw_box.rs` unit test covers both new borrowed
 examples. The existing compiler and shared setup remain unchanged.
+
+## Byte offsets, checked failures, and transmute examples
+
+Raw pointers now carry a byte offset, not a descriptor-dependent element index.
+The approved pure `RawPtr.cast` preserves that offset and the allocation identity;
+typed arithmetic scales by descriptor size, while accesses check both base and
+offset alignment. Existing Box and borrow proofs have been propagated. No compiler
+was changed or extraction rerun, and the legacy compiler-facing scalar cast
+wrapper remains unsupported.
+
+Heap wrappers now use the shared `Result.checkedModify` boundary. A failed
+operation's always-enabled request returns `none` at the unchanged heap, and its
+continuation emits `.fail .undef`; the successful transitions and correctness
+obligations are unchanged. This logical totalization retains the relational
+interpretation rather than adding an executable relation interpreter. Encoding
+choice remains demonic over the supplied descriptor's valid encodings.
+
+`tests/src/raw_transmute.rs` adds native tests using raw pointer transmutes on the
+second element of a `u32` array. `RawTransmute.lean` is entirely handwritten,
+not extracted: its framed same-type round-trip contracts prove the raw-pointer
+bodies for arbitrary positive-sized descriptors. Its cross-type countermodels
+execute the concrete heap operations with alternative little-/big-endian word
+descriptors and an identity byte descriptor. They establish the absence of a
+uniform cross-type numeric prediction, not nondeterminism of a fixed decoder or
+correctness of a compiler transmute translation. Whole-array safe exposure and
+restoration and framed contracts for the cross-type bodies remain future work.
+
+`make verify-raw-box` now also checks `RawTransmute.lean`, with exact standard-axiom
+guards on its two same-type round-trip proofs. General multi-element separation
+and permission contracts remain outside this milestone.

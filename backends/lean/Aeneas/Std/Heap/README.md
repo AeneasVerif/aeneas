@@ -45,7 +45,7 @@ The only permission-bearing cell type is
 | `borrowed` | No | No |
 
 `create` expands encoded cells into byte cells, preserving their permissions.
-`select` and `update` operate on footprint `[i * size, (i + 1) * size)`.
+`select` and `update` take a byte offset `i` and operate on `[i, i + size)`.
 `read` collects readable initialized bytes, then decodes them. Their sharing
 depths need not agree. `write` checks every byte's write permission before
 replacing the footprint. Invalid typed contents can therefore be overwritten.
@@ -65,8 +65,10 @@ Padding must currently be initialized to read the whole footprint.
 
 ### Heap and pointers (`Model.lean`)
 
-`RawPtr T` contains a bounded `Usize` base identifier and a bounded `Usize` index
-counted in `T` entries. The phantom type contributes no runtime metadata.
+`RawPtr T` contains a bounded `Usize` base identifier and a bounded `Usize`
+`byteOffset`, independent of `T` and its descriptor. The phantom type contributes
+no runtime metadata. Offset one can therefore represent a misaligned `u32`
+pointer without pretending it points to the second `u32`.
 `MutRawPtr` and `ConstRawPtr` abbreviate the same type; changing constness does
 not grant permissions.
 
@@ -82,26 +84,32 @@ cleanup authority. Allocation checks byte length, counter capacity, and vacancy
 of the next slot. The greatest base identifier is an exhausted-counter sentinel.
 `Heap.Inv` requires every slot at or above the counter to be absent.
 
-Access requires the requested alignment to divide the block's guarantee. The
-aligned stride then suffices for typed displacement. `modify` commits a
+Access requires the requested alignment to divide both the block's guarantee
+and the pointer's byte offset. Single and range reads, writes, and permission
+transfers use these checks uniformly. `modify` commits a
 length-preserving transformation only on success. Range operations transform
 all selected footprints before committing once: failure exposes no partial update.
-Empty ranges still require a live aligned base and an in-bounds position.
+Empty ranges still require a live aligned base, an aligned offset, and an
+in-bounds position. Element `i` of a range starts at `byteOffset + i * size`.
 
-`freeBlock` requires index zero, the matching owned flag, alignment, **exact**
+`freeBlock` requires byte offset zero, the matching owned flag, alignment, **exact**
 byte coverage, and depth-zero permissions throughout. It cannot hide protected
 trailing bytes through floor division. Shared-exposure cleanup instead requires
 `owned = false` and depth one throughout.
 
-`offset` takes an `Int` displacement. Both endpoints must lie in the typed extent,
-including one-past, and the result must fit `Usize`. Movement before the beginning
-is rejected, not truncated. Extent requires a live aligned base, but not readable
-contents. Rust `add` and `offset` use this checked operation.
+`offset` takes an `Int` displacement in typed elements and computes
+`byteOffset + displacement * size`. Both byte endpoints must lie in the live
+block, including one-past, and the result must fit `Usize`. Movement before the
+beginning is rejected, not truncated. Forming a pointer does not require
+alignment or readable contents. Rust `add` and `offset` use this checked operation.
 
-Physical pointer equality, pointer-integer conversions, usable cross-type cast
-wrappers, unaligned access, and arbitrary byte-offset pointers are not provided.
-Different descriptors can inspect a common base directly in model examples;
-that alone does not implement Rust's cast API.
+`RawPtr.cast U p` preserves the base and byte offset exactly. It needs no
+descriptor and performs no access checks; casting back restores the original
+pointer, even at nonzero or misaligned offsets. It changes no bytes or permissions
+and assumes no equation between source and target decoders. This pure helper is
+used by manual transmute examples, not inserted by the compiler. The legacy
+`cast_scalar` wrapper still fails. Physical pointer equality, pointer-integer
+conversions, and unaligned-access operations are not provided.
 
 ## Rust boundary and Boxes
 
@@ -114,6 +122,16 @@ Translated callers do not supply encoding bytes or decode-back proofs. The
 explicit descriptor arguments in the current fixtures are still manual
 adaptations; they are not emitted by the compiler.
 Safe borrow boundaries read typed values before transferring byte permissions.
+
+Heap wrappers use `Result.checkedModify`, a common failure boundary around their
+relations. `State.checked` returns a successful answer exactly when the original
+relation permits it; if no successor exists, its only answer is `none` at the
+unchanged input heap. The continuation maps `none` to `.fail .undef`. Permission,
+alignment, bounds, decoding, and allocation failures therefore explicitly fail
+rather than leaving a disabled heap request. Earlier successful operations are
+not rolled back. This is logical totalization, not an executable decision
+procedure for arbitrary relations. Encoding choice remains on `guardedModify`,
+with enabling established by completeness.
 
 Safe `Box<T>` values remain represented by `T`. `Box.into_raw` creates a one-value
 owned block. `Box.from_raw` reads and removes that entire allocation; it cannot
@@ -144,6 +162,8 @@ Rust programs. `HeapTests.restoration_is_privileged` demonstrates this boundary.
 | `EffectSpecs.lean` | Rust read/write, singleton-range access/permission transfer, movement, Box and mutable-exposure allocation/cleanup contracts |
 
 Cell resources claim individual byte positions and an alignment guarantee.
+Typed `block` and `pointsTo` assertions additionally require the pointer offset
+to satisfy the descriptor's alignment.
 Compatibility is byte-disjointness, independent of the originating type.
 Cleanup resources separately record exact byte length, alignment, and ownership.
 Fragments can therefore frame differently typed, disjoint footprints at one base.
@@ -193,6 +213,19 @@ translations: nested sharing with const-pointer range reads, exclusive
 borrow/update/restoration, and their composition at the same pointer. Their
 contracts preserve arbitrary matching frames and identify every returned value.
 
+`RawTransmute.lean` supplies manual raw-pointer bodies matching
+`tests/src/raw_transmute.rs`. The native caller accesses the second element of a
+two-`u32` array as both `u8` and `u32`. Framed contracts prove same-type write/read
+round trips, including pointer casts away and back. These contracts start at the
+raw-pointer boundary; safe array exposure/restoration is not yet verified.
+Concrete heap executions at byte offset four give different cross-type results
+under complete little- and big-endian descriptors, proving there is no
+descriptor-independent numeric prediction in either direction. They are
+countermodels, not framed correctness proofs for the two cross-type `Result`
+bodies. A fixed calibrated decoder can predict cross-type values; the model
+does not inject havoc after a differently typed write. For generic descriptors,
+such a read can also fail to decode.
+
 The fixture headers mark manual descriptor adaptations and repeated-read repairs.
 The compiler was not changed or rerun; re-extraction would overwrite those edits.
 See `tests/lean/EXTRACTION.md` for the recorded extraction provenance.
@@ -217,4 +250,6 @@ mixed sharing, cross-type byte protection, alignment, atomic range failure,
 signed/one-past movement, finite allocation exhaustion, empty footprints, and the
 privileged-restoration boundary.
 It also checks that monadic choice preserves the heap and leaves an ignored
-encoding byte genuinely unconstrained.
+encoding byte genuinely unconstrained. Failure observations inspect the actual
+read request: permission denial and invalid typed contents force its continuation
+to `.fail .undef` and preserve the failed operation's input heap.
