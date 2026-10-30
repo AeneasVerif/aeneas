@@ -227,6 +227,18 @@ verify-raw-box:
 	done; \
 	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawTransmuteExternals.lean
 
+.PHONY: verify-raw-doubly-linked
+verify-raw-doubly-linked:
+	cd backends/lean && lake build Aeneas.Std.Heap.EffectSpecs
+	@set -eu; tmp=$$(mktemp -d); \
+	trap 'for module in Types FunsExternal Funs Properties ListProperties Ownership SafeProperties; do rm -f "$$tmp/RawDoublyLinked/$$module.olean" "$$tmp/RawDoublyLinked/$$module.olean.private" "$$tmp/RawDoublyLinked/$$module.olean.server" "$$tmp/RawDoublyLinked/$$module.ir" "$$tmp/RawDoublyLinked/$$module.ir.sig"; done; rmdir "$$tmp/RawDoublyLinked" "$$tmp"' EXIT; \
+	mkdir "$$tmp/RawDoublyLinked"; \
+	cd backends/lean; \
+	for module in Types FunsExternal Funs Properties ListProperties Ownership SafeProperties; do \
+	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/RawDoublyLinked/$$module.lean" -o "$$tmp/RawDoublyLinked/$$module.olean"; \
+	done; \
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawDoublyLinked.lean
+
 # =============================================================================
 # Nix
 # =============================================================================

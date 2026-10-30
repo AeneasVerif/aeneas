@@ -225,3 +225,104 @@ outside the extracted proof boundary.
 
 Replay the Lean checks with `make verify-raw-box`. Native Rust checks and
 `rustfmt --check --edition 2021 tests/src/raw_transmute_externals.rs` also pass.
+
+## 2026-10-30 — Stored-pointer doubly-linked-list kernel
+
+```text
+command    : make test-raw_doubly_linked.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+rust       : https://github.com/AeneasVerif/aeneas.git, fournet/wip-memory-model, based on 141f10647b0f9b60c9e89830eec48ded751ee83e
+source     : tests/src/raw_doubly_linked.rs, Git blob 1d56b70a8248f195c2d9605415557eec89089f47
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; same read-only executable as above
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; same read-only executable as above
+charon-pin : shared compiler 26abff028ced534ebf8e861f2d3dd1743e2aa318; experiment remains de8736f7c995ac54dc490345cef9ea5143c06c62
+rustc      : Charon nightly-2026-09-17; native rustc 1.98.0-nightly (14210df0e 2026-05-31)
+options    : Charon --opaque=crate::ext; Lean -split-files -all-computable; test runner supplies -checks and the usual diagnostic flags
+```
+
+Outcome: all six link-operation callers and the derived clone implementation
+were emitted. Opaque wrappers directly call Rust's `ptr::read` and `ptr::write`.
+`FunsExternal_Template.lean` is the unedited generated template; it is not
+imported. `FunsExternal.lean` supplies transparent read/write models taking
+an explicit `Repr Node`, not axioms.
+
+Post-extraction edits: `Types.lean` could not elaborate as generated because
+Lean rejects the occurrence of recursive `Node` under the phantom parameter of
+`RawPtr Node`. Replace its constructor with
+`Node.stored : MutRawPtr Unit → MutRawPtr Unit → U32 → Node`, define the original
+`Node.mk` as a smart constructor copying both pointer fields' base/byteOffset,
+and restore the `Node` phantom tag in `Node.prev` and `Node.next`. The existing
+projection equations still hold by `rfl`; `Node.mk_eta` proves the converse.
+No pointer identifier or offset is discarded.
+
+`Funs.lean` was manually adapted only to add an explicit `Repr Node` argument
+to `init`, `set_next`, `set_prev`, `insert_after`, `remove`, and `remove_after`,
+and forward it to every affected call. Control flow and the order of every
+stored-pointer read and write are unchanged. Re-extraction overwrites these
+two marked adaptations; replay them before checking. There is no patch to
+Charon, Aeneas, or the shared setup.
+
+`Properties.lean` proves the local link operations, including empty-ring,
+last-node, and detached-node aliasing cases. `ListProperties.lean` proves exact
+list-cons/list-tail contracts for arbitrary finite rings with all payloads and
+links owned, preserving arbitrary disjoint matching frames. These are heap-WP
+contracts, not ordinary effect-free `@[step]` theorems. Descriptor completeness
+is a parameter, not a memory-model axiom or a Rust ABI claim. No safe owning
+wrapper, traversal proof, allocation/deallocation, or uninitialized-node
+initialization proof is included. `make verify-raw-doubly-linked` checks the
+entire proof closure with exact standard-axiom guards and no `sorry`.
+
+## 2026-10-30 — Safe owning doubly-linked-list interface
+
+```text
+command    : make test-raw_doubly_linked.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+rust       : https://github.com/AeneasVerif/aeneas.git, fournet/wip-memory-model, based on 141f10647b0f9b60c9e89830eec48ded751ee83e
+source     : tests/src/raw_doubly_linked.rs, Git blob 96aa1e24c1806005628ac558e476457b0a0a2774
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; unchanged shared read-only executable
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; unchanged shared read-only executable
+charon-pin : shared compiler 26abff028ced534ebf8e861f2d3dd1743e2aa318; experiment remains de8736f7c995ac54dc490345cef9ea5143c06c62
+rustc      : Charon nightly-2026-09-17; native rustc 1.98.0-nightly (14210df0e 2026-05-31)
+options    : Charon --opaque=crate::ext; Lean -split-files -all-computable -loops-to-rec; test runner supplies -checks and diagnostic flags
+```
+
+The fixture now adds `LinkedList` with private root/length fields and safe
+`new`, `len`, `is_empty`, `front`, `back`, `push_front`, `pop_front`, and `clear`
+methods, plus `Drop`. Sentinel and payload nodes have stable Box allocations;
+moving the list does not move its nodes. No raw pointer escapes this interface.
+The payload is copied `u32`, not an arbitrary type with a user destructor.
+
+The external Rust module now has four opaque wrappers: read, write, allocate,
+and take/free. Its hand-written Lean models delegate to the existing pointer
+and Box operations. `allocate_node` uses `Box.into_raw` on a blank node;
+`take_node` uses `Box.from_raw`, matching the Rust move-out/free wrapper.
+The generated four-axiom template remains unedited and unimported.
+
+Post-extraction edits: replay the lossless recursive-pointer phantom repair
+and explicit `Repr Node` threading documented above. Thread the descriptor
+through every heap-touching safe method, the recursive clear helper, Drop,
+and its trait dictionary as well. Leave the new `LinkedList` structure and
+all extracted control flow unchanged. `-loops-to-rec` emits `clear_loop`
+with `partial_fixpoint`; `clear_loop_owned` proves total correctness by
+induction on the finite owned sequence, not by assuming loop termination.
+
+`Ownership.lean` extends the existing finite-ring assertion with cleanup
+authority for every payload allocation and the sentinel, and an exact length.
+It proves endpoint reads, allocating insertion's continuation, reclaiming pop,
+total clear, and Drop consuming the entire footprint. `SafeProperties.lean`
+proves all nine public contracts against plain-list operations. `ListState`
+includes the direct equation `self.toList repr heap = some values`, where
+`toList` is a deterministic heap decoder; hidden node addresses serve only
+as internal separation-logic witnesses.
+
+These are parametric memory-model proofs, not a proof of Rust's node ABI,
+stored-pointer encoding, or compiler correctness. No concrete `Repr Node`
+witness is instantiated here; supplying and calibrating one remains separate
+work. New/push contracts state
+the finite heap-counter and descriptor-size bounds; push also states the
+checked length bound. No new axiom or `sorry` is used. Drop's public post
+preserves the external frame and heap invariant after consuming list ownership;
+it does not enumerate an exact whole-heap allocation-map difference.
+
+`make verify-raw-doubly-linked` includes both new modules and exact axiom guards
+for every public theorem. The four native tests include a safe-only sequence
+comparison, moves, empty cases, clear/reuse, and destruction of a nonempty list;
+they also pass with address/leak sanitization.

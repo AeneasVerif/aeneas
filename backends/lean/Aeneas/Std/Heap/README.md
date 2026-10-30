@@ -244,6 +244,60 @@ fixture was extracted with the existing binaries, used read-only. This workaroun
 does not add support for intrinsic transmute IR or general value/fat-pointer casts.
 See `tests/lean/EXTRACTION.md` for the recorded extraction provenance.
 
+`RawDoublyLinked/` adds an intrusive circular doubly-linked list with a sentinel,
+backed by `tests/src/raw_doubly_linked.rs`. Nodes store actual raw `prev` and
+`next` pointers and a `u32` payload. Two opaque primitives perform whole-node
+reads and writes; the link operations remain transparent Rust.
+`Properties.lean` proves exact framed contracts for link setters, insertion
+between distinct neighbours, insertion into an empty ring, unlinking between
+distinct neighbours, removing the last node, and removing an already detached
+node. The last two cases handle neighbour aliasing without assuming three
+distinct allocations. `ListProperties.lean` defines ownership of every link and
+payload in a finite ring and proves insertion at the sentinel implements list
+cons; removal of the first node returns that exact pointer, leaves it detached,
+and preserves the remaining sequence. Both contracts cover arbitrary finite
+lengths and preserve arbitrary disjoint matching frames by the generic heap-WP
+frame rule.
+
+This list milestone has two explicit manual translation adaptations. The
+generated recursive `Node` containing `RawPtr Node` is rejected by Lean's
+positivity checker; its stored pointer phantom tags are erased to `Unit` and
+restored in `Node.mk`/accessors, preserving both base and byte offset. The
+constructor/accessor round trip is proved. Callers also thread an explicit
+`Repr Node` through the external models. These contracts are parametric
+in a positive-sized complete descriptor, including its stored-pointer encoding;
+no concrete `Repr Node` is instantiated, and no Rust node ABI or pointer
+representation is proved. Re-extraction
+overwrites both adaptations. Neither Charon nor the shared Aeneas compiler was
+changed.
+
+The same fixture now supplies a safe owning `LinkedList` with private root and
+length fields. `new`, `len`, `is_empty`, `front`, `back`, `push_front`, `pop_front`,
+`clear`, and `Drop` have proved contracts in `SafeProperties.lean`. Their public
+state assertion includes the deterministic heap observation
+`self.toList repr heap = some values`: push implements cons, pop returns
+head/tail, front/back return the first/last payload, and clear produces `[]`.
+`Ownership.lean` tracks cleanup authority for every payload node and the
+sentinel as well as the exact ring and length. Pop reclaims its detached node;
+total clear releases payload nodes, and Drop consumes the remaining sentinel
+through the concrete Box model. Its public post preserves the external frame
+and heap invariant, not an explicit whole-heap allocation-map difference.
+Two additional opaque wrappers provide Box allocation and reclamation.
+Heap-counter/descriptor-size capacity is explicit for allocation, as is checked
+length capacity for push. No automatic lifetime analysis or Rust ABI refinement
+is claimed; these are proofs about the documented adapted extraction.
+
+The lower-level intrusive interface still accepts caller-provided stable
+storage and unlinks without freeing it. `init.spec` covers initialized writable
+storage, which the owning wrapper's allocator supplies; initializing arbitrary
+uninitialized storage has no list-specific contract yet. Native tests check
+both traversal directions, all 36 pairs of three-node insertion/removal orders,
+detached-node idempotence, an untouched neighbouring canary, and a safe-only
+sequence comparison including moves, clear/reuse, and nonempty destruction.
+All four tests also pass with address/leak sanitization. Exact axiom guards
+on the local/global ring contracts, all public safe contracts, and the heap
+observation bridge allow only `propext`, `Classical.choice`, and `Quot.sound`.
+
 ## Checks
 
 From `backends/lean`:
@@ -257,6 +311,7 @@ From the repository root, without re-extraction:
 
 ```sh
 make verify-raw-box
+make verify-raw-doubly-linked
 ```
 
 `HeapTests.lean` exercises lifecycle and cleanup, uninitialized borrow/restoration,
