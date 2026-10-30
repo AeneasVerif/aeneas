@@ -381,14 +381,7 @@ let ctx_lookup_dummy_var (span : Meta.span) (ctx : eval_ctx)
   in
   lookup_var ctx.env
 
-let erase_regions (ty : ty) : ty =
-  let v =
-    object
-      inherit [_] map_ty
-      method! visit_region _ _ = RErased
-    end
-  in
-  v#visit_ty () ty
+let erase_regions = TypesUtils.ty_erase_regions
 
 (** Push an uninitialized variable (which thus maps to
     {!constructor:Values.value.VBottom}) *)
