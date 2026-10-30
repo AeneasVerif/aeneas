@@ -1101,9 +1101,26 @@ and translate_trait_method_sig (decls_ctx : C.decls_ctx)
   let inputs = List.map (ty_substitute subst) flat_sig.inputs in
   let output = ty_substitute subst flat_sig.output in
 
-  let explicit_info = compute_explicit_info method_generics inputs in
-  let known_from_trait_refs =
-    compute_known_info explicit_info method_generics
+  (* We can't compute the explicit information from [inputs]: the variables
+     of the trait and of the method live at different binder levels but may
+     have the same ids. We use the flat signature instead, and drop the prefix
+     which accounts for the trait generics. *)
+  let explicit_info, known_from_trait_refs =
+    let open Collections.List in
+    let num_tys = length trait_generics.types in
+    let num_cgs = length trait_generics.const_generics in
+    let { explicit_types; explicit_const_generics } = flat_sig.explicit_info in
+    let { known_types; known_const_generics } =
+      flat_sig.known_from_trait_refs
+    in
+    ( {
+        explicit_types = drop num_tys explicit_types;
+        explicit_const_generics = drop num_cgs explicit_const_generics;
+      },
+      {
+        known_types = drop num_tys known_types;
+        known_const_generics = drop num_cgs known_const_generics;
+      } )
   in
   {
     flat_sig with
