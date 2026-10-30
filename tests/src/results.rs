@@ -7,16 +7,6 @@
 //! `doubled` adapts the example of the documentation of `Result::map`
 //! (<https://doc.rust-lang.org/std/result/enum.Result.html#method.map>).
 
-/// The doc example prints, for each line of a string which parses as an `i32`, the parsed number
-/// doubled:
-/// ```text
-/// match num.parse::<i32>().map(|i| i * 2) {
-///     Ok(n) => println!("{n}"),
-///     Err(..) => {}
-/// }
-/// ```
-/// String parsing and printing have no Lean models, so this takes the result of `parse` and
-/// returns what is printed.
 pub fn doubled(num: Result<i32, ()>) -> Option<i32> {
     match num.map(|i| i * 2) {
         Ok(n) => Some(n),
@@ -24,8 +14,6 @@ pub fn doubled(num: Result<i32, ()>) -> Option<i32> {
     }
 }
 
-/// The doc example parses the lines of `"1\n2\n3\n4\n"` and prints `2`, `4`, `6`, `8`; a line
-/// which doesn't parse prints nothing.
 #[verify::test]
 pub fn test_doubled() {
     assert!(matches!(doubled(Ok(1)), Some(2)));

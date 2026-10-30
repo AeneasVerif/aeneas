@@ -10,23 +10,16 @@ namespace Aeneas.Std
 open Result
 
 /-- Model of `Result::map` (<https://doc.rust-lang.org/std/result/enum.Result.html#method.map>).
-    Rust (`library/core/src/result.rs`):
-    `pub fn map<U, F: FnOnce(T) -> U>(self, op: F) -> Result<U, E>`, which is
-    `match self { Ok(t) => Ok(op(t)), Err(e) => Err(e) }`: the closure is called exactly once on
-    `Ok`, and never on `Err`; `map` itself can't panic, but the closure can. -/
+The closure is called exactly once on `Ok`, and never on `Err`; `map` itself can't panic, but the closure can. -/
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::map"]
-def core.result.Result.map
-  {T E U F : Type _} (fnOnce : core.ops.function.FnOnce F T U)
-  (x : core.result.Result T E) (f : F) :
-  Std.Result (core.result.Result U E) :=
+def core.result.Result.map {T E U F : Type _} (fnOnce : core.ops.function.FnOnce F T U)
+  (x : core.result.Result T E) (f : F) : Std.Result (core.result.Result U E) :=
   match x with
   | .Ok value => do
       let mapped ← fnOnce.call_once f value
       ok (.Ok mapped)
   | .Err error => ok (.Err error)
 
--- Note: the lemmas are named after the constructors (`map_Ok`/`map_Err`) because
--- `core.result.Result.map_err` is already the model of `Result::map_err`.
 @[simp]
 theorem core.result.Result.map_Ok
   {T E U F : Type _} (fnOnce : core.ops.function.FnOnce F T U) (value : T) (f : F) :
@@ -40,9 +33,8 @@ theorem core.result.Result.map_Err
   core.result.Result.map fnOnce (.Err error : core.result.Result T E) f =
     ok (core.result.Result.Err error : core.result.Result U E) := rfl
 
-/-- **Spec theorem for `core::result::Result::map`** on `Ok value`: the result is `Ok` of the
-    closure's result. `post` is the postcondition of the closure, which `step` can infer with
-    `+inferPost`. -/
+/-- `core::result::Result::map` on `Ok value`: the result is `Ok` of the closure's result. `post` is
+the postcondition of the closure, which `step` can infer with `+inferPost`. -/
 @[step]
 theorem core.result.Result.map.spec_Ok {T E U F : Type _}
     (fnOnce : core.ops.function.FnOnce F T U) (value : T) (f : F) {post : T → U → Prop}
@@ -53,8 +45,7 @@ theorem core.result.Result.map.spec_Ok {T E U F : Type _}
   intro mapped h
   simp [h]
 
-/-- **Spec theorem for `core::result::Result::map`** on `Err error`: the result is `Err error`,
-    and the closure is not called. -/
+/-- `core::result::Result::map` on `Err error`: result is `Err error`, the closure is not called. -/
 @[step]
 theorem core.result.Result.map.spec_Err {T E U F : Type _}
     (fnOnce : core.ops.function.FnOnce F T U) (error : E) (f : F) :
@@ -62,9 +53,8 @@ theorem core.result.Result.map.spec_Err {T E U F : Type _}
       y = (.Err error : core.result.Result U E) ⦄ := by
   simp
 
-/-- **Spec theorem for `core::result::Result::map`**, for any `x`: an `Ok value` becomes `Ok` of
-    the closure's result, and an `Err` is left untouched. When `x` is a constructor, `step` uses
-    `map.spec_Ok` / `map.spec_Err` instead; this one is for a variable `x`, through `step with`. -/
+/-- `core::result::Result::map`**, for any `x`: an `Ok value` becomes `Ok` of the closure's result,
+and an `Err` is left untouched. -/
 theorem core.result.Result.map.spec {T E U F : Type _}
     (fnOnce : core.ops.function.FnOnce F T U) (x : core.result.Result T E) (f : F)
     {post : T → U → Prop}
@@ -73,12 +63,9 @@ theorem core.result.Result.map.spec {T E U F : Type _}
       (∀ value, x = .Ok value → ∃ mapped, y = .Ok mapped ∧ post value mapped) ∧
       (∀ error, x = .Err error → y = .Err error) ⦄ := by
   cases x
-  · -- Ok
-    apply WP.spec_bind (hf _ rfl)
-    intro mapped h
-    simp [h]
-  · -- Err
-    simp
+  · apply WP.spec_bind (hf _ rfl)
+    grind
+  · simp
 
 /-- Pure model of `Result::map_err`: leaves `Ok` untouched and maps the payload
     of `Err` through `fnOnce`. -/

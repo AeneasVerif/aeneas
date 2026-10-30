@@ -5,9 +5,7 @@ public section
 
 open Aeneas Aeneas.Std Result
 
-/-! Proofs about the extracted `tests/src/results.rs`, using the specification theorems of the model
-of `Result::map` through `step`: on `Ok`, `step* +inferPost` infers the postcondition of the
-closure from its body; on `Err`, the closure isn't called. -/
+/-! Proofs for the `Result::map` examples. -/
 
 namespace results
 
