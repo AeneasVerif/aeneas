@@ -1545,10 +1545,12 @@ let extract_by_file (ctx : gen_ctx) (crate : crate)
               if dep.is_dropped then None else Some dep.import_name)
             (SCC.SccId.Set.elements deps)
         in
-        (* A component with several source files lists them in its header. *)
+        (* A component with several Rust modules lists them in its header. *)
         let sources_msg =
-          if List.length m.source_files > 1 then
-            ": merged from " ^ String.concat ", " m.source_files
+          if List.length m.modules > 1 then
+            ": merged from "
+            ^ String.concat ", "
+                (List.map FileGraph.module_path_to_string m.modules)
           else ""
         in
         (* Each subsequent layer just imports the previous one. *)

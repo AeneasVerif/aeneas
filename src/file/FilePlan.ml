@@ -23,14 +23,14 @@ type component_layer = {
           transitively). This is [false] for opaque layers. *)
 }
 
-(** One strongly connected component of the file graph: source files that use
-    each other (usually a single file), or an external bucket. It is extracted
+(** One strongly connected component of the file graph: Rust modules that use
+    each other (usually a single module), or an external bucket. It is extracted
     under a single Lean name, in one or more {!component_layer}s. *)
 type component = {
   scc_id : SCC.SccId.id;
   buckets : bucket list;  (** Its buckets in the file graph. *)
-  source_files : string list;
-      (** Its source files, relative to the crate's source root. Empty for an
+  modules : string list list;
+      (** Its Rust modules, by their paths without the crate name. Empty for an
           external component. *)
   is_external : bool;
       (** [true] for the external modules ([TypesExternal] / [FunsExternal]). *)
@@ -246,12 +246,12 @@ let module_files ~(import_prefix : string) ~(module_root_dir : string)
     [used], [base] is renamed to [base_2], [base_3], ... (with a warning). Adds
     the modules to [used], and returns the base we used. *)
 let unique_module_files ~(import_prefix : string) ~(module_root_dir : string)
-    ~(used : Collections.StringSet.t ref) ~(source_files : string list)
+    ~(used : Collections.StringSet.t ref) ~(modules : string list list)
     (base : string list) (layers : (bool * LlbcAst.declaration_group list) list)
     ~(noncomputable : bool list) :
     string list * (string option * component_layer list) =
   (* The Lean modules we write for [base]: its plain name, and its layers. *)
-  let modules base (layers : component_layer list) : string list =
+  let lean_modules base (layers : component_layer list) : string list =
     if layers = [] then []
     else
       (import_prefix ^ FileMapping.dotted_module_name base)
@@ -268,7 +268,7 @@ let unique_module_files ~(import_prefix : string) ~(module_root_dir : string)
     if
       List.exists
         (fun m -> Collections.StringSet.mem m !used)
-        (modules base' layers')
+        (lean_modules base' layers')
     then find (index + 1)
     else (base', (aggregator, layers'))
   in
@@ -278,23 +278,24 @@ let unique_module_files ~(import_prefix : string) ~(module_root_dir : string)
       ("Multi-file extraction: two modules are named " ^ import_prefix
       ^ FileMapping.dotted_module_name base
       ^ "; the one for "
-      ^ (if source_files = [] then "external declarations"
-         else String.concat ", " source_files)
+      ^ (if modules = [] then "external declarations"
+         else
+           String.concat ", " (List.map FileGraph.module_path_to_string modules))
       ^ " is renamed to " ^ import_prefix
       ^ FileMapping.dotted_module_name base');
   used :=
     Collections.StringSet.union !used
-      (Collections.StringSet.of_list (modules base' layers'));
+      (Collections.StringSet.of_list (lean_modules base' layers'));
   (base', files)
 
 (** The Lean files to write for each component of the file graph, dependencies
     first.
 
-    A component is named after its source file, or after all of them in the SCC
-    If its declarations need several layers ({!cut_layers}), each layer is its
-    own file and the component's name is an aggregator that imports them all.
-    Declarations without metadata are left out ({!FileGraph.compute} warns about
-    them). *)
+    A component is named after its Rust module, or after all the modules of the
+    SCC ({!FileMapping.merged_module_components}). If its declarations need
+    several layers ({!cut_layers}), each layer is its own file and the
+    component's name is an aggregator that imports them all. Declarations
+    without metadata are left out ({!FileGraph.compute} warns about them). *)
 let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
     ~(import_prefix : string) ~(module_root_dir : string)
     ~(all_computable : bool) : component list =
@@ -400,27 +401,28 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
   let used = ref Collections.StringSet.empty in
   List.map
     (fun (scc_id, buckets) ->
-      let source_files =
+      let modules =
         List.filter_map
           (function
-            | BFile p -> Some p
+            | BModule p -> Some p
             | BExternalTypes | BExternalFuns -> None)
           buckets
       in
       let is_external =
         List.exists
           (function
-            | BFile _ -> false
+            | BModule _ -> false
             | BExternalTypes | BExternalFuns -> true)
           buckets
       in
       (* SCCs that mix external and non-external buckets are impossible, since
          an external declaration can't use a local one. *)
-      if is_external && source_files <> [] then
+      if is_external && modules <> [] then
         [%craise_opt_span] None
           ("Multi-file extraction: external declarations ended up in a \
-            dependency cycle with local source file(s) ("
-          ^ String.concat ", " source_files
+            dependency cycle with local module(s) ("
+          ^ String.concat ", "
+              (List.map FileGraph.module_path_to_string modules)
           ^ ").");
       let groups =
         Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
@@ -449,8 +451,8 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
           in
           [ suffix ]
         else
-          match source_files with
-          | [ p ] -> FileMapping.module_components_of_file p
+          match modules with
+          | [ p ] -> FileMapping.module_components p
           | paths -> FileMapping.merged_module_components paths
       in
       let layers =
@@ -477,13 +479,13 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
              imports_opaques layers)
       in
       let base, (aggregator, layers) =
-        unique_module_files ~import_prefix ~module_root_dir ~used ~source_files
-          base layers ~noncomputable
+        unique_module_files ~import_prefix ~module_root_dir ~used ~modules base
+          layers ~noncomputable
       in
       {
         scc_id;
         buckets;
-        source_files;
+        modules;
         is_external;
         is_dropped;
         import_name = import_prefix ^ FileMapping.dotted_module_name base;
@@ -526,8 +528,11 @@ let placement_to_string ~(dest_dir : string) ~(entry_point : string option)
       let role =
         if c.is_external then "external declarations"
         else
-          let src = String.concat " + " c.source_files in
-          if List.length c.source_files > 1 then "merged: " ^ src else src
+          let src =
+            String.concat " + "
+              (List.map FileGraph.module_path_to_string c.modules)
+          in
+          if List.length c.modules > 1 then "merged: " ^ src else src
       in
       line "  %s" c.import_name;
       line "      %s" role;
