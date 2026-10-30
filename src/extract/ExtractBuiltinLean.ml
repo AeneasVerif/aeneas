@@ -1073,16 +1073,16 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Convert.lean", line: 76 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::is_ok"
       "core.result.Result.is_ok";
-    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 17 *)
+    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 14 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::map"
       "core.result.Result.map";
-    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 85 *)
+    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 72 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::map_err"
       "core.result.Result.map_err";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 22 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
-    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 112 *)
+    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 99 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap_or"
       "core.result.Result.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 156 *)

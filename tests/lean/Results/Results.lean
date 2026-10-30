@@ -21,18 +21,18 @@ set_option maxRecDepth 2048
 namespace results
 
 /-- [results::doubled::{closure}]
-    Source: 'tests/src/results.rs', lines 21:18-21:27 -/
+    Source: 'tests/src/results.rs', lines 11:18-11:27 -/
 @[reducible]
 def doubled.closure := Unit
 
 /-- [results::doubled::{impl core::ops::function::FnOnce<(i32,), i32> for results::doubled::{closure}}::call_once]:
-    Source: 'tests/src/results.rs', lines 21:18-21:27 -/
+    Source: 'tests/src/results.rs', lines 11:18-11:27 -/
 def doubled.closure.Insts.CoreOpsFunctionFnOnceTupleI32I32.call_once
   (c : doubled.closure) (tupled_args : Std.I32) : Result Std.I32 := do
   tupled_args * 2#i32
 
 /-- Trait implementation: [results::doubled::{impl core::ops::function::FnOnce<(i32,), i32> for results::doubled::{closure}}]
-    Source: 'tests/src/results.rs', lines 21:18-21:27 -/
+    Source: 'tests/src/results.rs', lines 11:18-11:27 -/
 @[reducible]
 def doubled.closure.Insts.CoreOpsFunctionFnOnceTupleI32I32 :
   core.ops.function.FnOnce doubled.closure Std.I32 Std.I32 := {
@@ -40,7 +40,7 @@ def doubled.closure.Insts.CoreOpsFunctionFnOnceTupleI32I32 :
 }
 
 /-- [results::doubled]:
-    Source: 'tests/src/results.rs', lines 20:0-25:1
+    Source: 'tests/src/results.rs', lines 10:0-15:1
     Visibility: public -/
 def doubled
   (num : core.result.Result Std.I32 Unit) : Result (Option Std.I32) := do
@@ -52,7 +52,7 @@ def doubled
   | core.result.Result.Err _ => ok none
 
 /-- [results::test_doubled]:
-    Source: 'tests/src/results.rs', lines 30:0-36:1
+    Source: 'tests/src/results.rs', lines 18:0-24:1
     Visibility: public -/
 def test_doubled : Result Unit := do
   let o ← doubled (core.result.Result.Ok 1#i32)
@@ -97,18 +97,18 @@ def test_doubled : Result Unit := do
 #guard (test_doubled).reducesTo ()
 
 /-- [results::scale::{closure}]
-    Source: 'tests/src/results.rs', lines 40:10-40:24 -/
+    Source: 'tests/src/results.rs', lines 28:10-28:24 -/
 @[reducible]
 def scale.closure := Std.U32
 
 /-- [results::scale::{impl core::ops::function::FnOnce<(u32,), u32> for results::scale::{closure}}::call_once]:
-    Source: 'tests/src/results.rs', lines 40:10-40:24 -/
+    Source: 'tests/src/results.rs', lines 28:10-28:24 -/
 def scale.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   (c : scale.closure) (tupled_args : Std.U32) : Result Std.U32 := do
   tupled_args * c
 
 /-- Trait implementation: [results::scale::{impl core::ops::function::FnOnce<(u32,), u32> for results::scale::{closure}}]
-    Source: 'tests/src/results.rs', lines 40:10-40:24 -/
+    Source: 'tests/src/results.rs', lines 28:10-28:24 -/
 @[reducible]
 def scale.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
   core.ops.function.FnOnce scale.closure Std.U32 Std.U32 := {
@@ -116,7 +116,7 @@ def scale.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
 }
 
 /-- [results::scale]:
-    Source: 'tests/src/results.rs', lines 39:0-41:1
+    Source: 'tests/src/results.rs', lines 27:0-29:1
     Visibility: public -/
 def scale
   (r : core.result.Result Std.U32 Bool) (y : Std.U32) :
@@ -126,7 +126,7 @@ def scale
     y
 
 /-- [results::test_scale]:
-    Source: 'tests/src/results.rs', lines 44:0-47:1
+    Source: 'tests/src/results.rs', lines 32:0-35:1
     Visibility: public -/
 def test_scale : Result Unit := do
   let r ← scale (core.result.Result.Ok 3#u32) 5#u32
