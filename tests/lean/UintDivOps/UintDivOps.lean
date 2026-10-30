@@ -21,13 +21,13 @@ set_option maxRecDepth 2048
 namespace uint_div_ops
 
 /-- [uint_div_ops::ceil_u8]:
-    Source: 'tests/src/uint-div-ops.rs', lines 11:0-13:1
+    Source: 'tests/src/uint-div-ops.rs', lines 10:0-12:1
     Visibility: public -/
 def ceil_u8 (x : Std.U8) (y : Std.U8) : Result Std.U8 := do
   core.num.U8.div_ceil x y
 
 /-- [uint_div_ops::test_ceil_u8]:
-    Source: 'tests/src/uint-div-ops.rs', lines 16:0-24:1
+    Source: 'tests/src/uint-div-ops.rs', lines 15:0-23:1
     Visibility: public -/
 def test_ceil_u8 : Result Unit := do
   let left_val ← ceil_u8 7#u8 4#u8
@@ -49,13 +49,13 @@ def test_ceil_u8 : Result Unit := do
 #guard (test_ceil_u8).reducesTo ()
 
 /-- [uint_div_ops::ceil_u16]:
-    Source: 'tests/src/uint-div-ops.rs', lines 26:0-28:1
+    Source: 'tests/src/uint-div-ops.rs', lines 25:0-27:1
     Visibility: public -/
 def ceil_u16 (x : Std.U16) (y : Std.U16) : Result Std.U16 := do
   core.num.U16.div_ceil x y
 
 /-- [uint_div_ops::test_ceil_u16]:
-    Source: 'tests/src/uint-div-ops.rs', lines 31:0-33:1
+    Source: 'tests/src/uint-div-ops.rs', lines 30:0-32:1
     Visibility: public -/
 def test_ceil_u16 : Result Unit := do
   let left_val ← ceil_u16 7#u16 4#u16
@@ -65,13 +65,13 @@ def test_ceil_u16 : Result Unit := do
 #guard (test_ceil_u16).reducesTo ()
 
 /-- [uint_div_ops::ceil_u32]:
-    Source: 'tests/src/uint-div-ops.rs', lines 35:0-37:1
+    Source: 'tests/src/uint-div-ops.rs', lines 34:0-36:1
     Visibility: public -/
 def ceil_u32 (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
   core.num.U32.div_ceil x y
 
 /-- [uint_div_ops::test_ceil_u32]:
-    Source: 'tests/src/uint-div-ops.rs', lines 40:0-42:1
+    Source: 'tests/src/uint-div-ops.rs', lines 39:0-41:1
     Visibility: public -/
 def test_ceil_u32 : Result Unit := do
   let left_val ← ceil_u32 7#u32 4#u32
@@ -81,13 +81,13 @@ def test_ceil_u32 : Result Unit := do
 #guard (test_ceil_u32).reducesTo ()
 
 /-- [uint_div_ops::ceil_u64]:
-    Source: 'tests/src/uint-div-ops.rs', lines 44:0-46:1
+    Source: 'tests/src/uint-div-ops.rs', lines 43:0-45:1
     Visibility: public -/
 def ceil_u64 (x : Std.U64) (y : Std.U64) : Result Std.U64 := do
   core.num.U64.div_ceil x y
 
 /-- [uint_div_ops::test_ceil_u64]:
-    Source: 'tests/src/uint-div-ops.rs', lines 49:0-51:1
+    Source: 'tests/src/uint-div-ops.rs', lines 48:0-50:1
     Visibility: public -/
 def test_ceil_u64 : Result Unit := do
   let left_val ← ceil_u64 7#u64 4#u64
@@ -97,13 +97,13 @@ def test_ceil_u64 : Result Unit := do
 #guard (test_ceil_u64).reducesTo ()
 
 /-- [uint_div_ops::ceil_u128]:
-    Source: 'tests/src/uint-div-ops.rs', lines 53:0-55:1
+    Source: 'tests/src/uint-div-ops.rs', lines 52:0-54:1
     Visibility: public -/
 def ceil_u128 (x : Std.U128) (y : Std.U128) : Result Std.U128 := do
   core.num.U128.div_ceil x y
 
 /-- [uint_div_ops::test_ceil_u128]:
-    Source: 'tests/src/uint-div-ops.rs', lines 58:0-60:1
+    Source: 'tests/src/uint-div-ops.rs', lines 57:0-59:1
     Visibility: public -/
 def test_ceil_u128 : Result Unit := do
   let left_val ← ceil_u128 7#u128 4#u128
@@ -113,13 +113,13 @@ def test_ceil_u128 : Result Unit := do
 #guard (test_ceil_u128).reducesTo ()
 
 /-- [uint_div_ops::ceil_usize]:
-    Source: 'tests/src/uint-div-ops.rs', lines 62:0-64:1
+    Source: 'tests/src/uint-div-ops.rs', lines 61:0-63:1
     Visibility: public -/
 def ceil_usize (x : Std.Usize) (y : Std.Usize) : Result Std.Usize := do
   core.num.Usize.div_ceil x y
 
 /-- [uint_div_ops::test_ceil_usize]:
-    Source: 'tests/src/uint-div-ops.rs', lines 68:0-77:1
+    Source: 'tests/src/uint-div-ops.rs', lines 67:0-74:1
     Visibility: public -/
 def test_ceil_usize : Result Unit := do
   let left_val ← ceil_usize 7#usize 4#usize
@@ -140,13 +140,13 @@ def test_ceil_usize : Result Unit := do
 #guard (test_ceil_usize).reducesTo ()
 
 /-- [uint_div_ops::num_chunks]:
-    Source: 'tests/src/uint-div-ops.rs', lines 80:0-82:1
+    Source: 'tests/src/uint-div-ops.rs', lines 77:0-79:1
     Visibility: public -/
 def num_chunks (len : Std.Usize) (chunk : Std.Usize) : Result Std.Usize := do
   core.num.Usize.div_ceil len chunk
 
 /-- [uint_div_ops::test_num_chunks]:
-    Source: 'tests/src/uint-div-ops.rs', lines 85:0-89:1
+    Source: 'tests/src/uint-div-ops.rs', lines 82:0-86:1
     Visibility: public -/
 def test_num_chunks : Result Unit := do
   let left_val ← num_chunks 10#usize 3#usize
