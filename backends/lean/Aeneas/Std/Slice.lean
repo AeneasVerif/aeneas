@@ -258,6 +258,14 @@ theorem Slice.getElem_Nat_setAtNat_ne
   (v.setAtNat i x).val[j] = v.val[j] := by
   simp only [setAtNat]; grind
 
+/-- `Slice.getElem!_Nat_setAtNat_eq` and `Slice.getElem!_Nat_setAtNat_ne` in one statement. -/
+theorem Slice.getElem!_Nat_setAtNat
+  {α : Type u} [Inhabited α] (v: Slice α) (i j: Nat) (x: α)
+  (h : i < v.length) : (v.setAtNat i x).val[j]! = if j = i then x else v.val[j]! := by
+  split
+  · subst_vars; exact Slice.getElem!_Nat_setAtNat_eq _ _ _ h
+  · exact Slice.getElem!_Nat_setAtNat_ne _ _ _ _ (Ne.symm ‹_›)
+
 @[expose] def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice α) :=
   match v.val[i.val]? with
   | none => fail .arrayOutOfBounds
