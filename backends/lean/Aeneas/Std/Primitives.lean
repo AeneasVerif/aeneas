@@ -5,6 +5,7 @@ public import Aeneas.Extract
 public import AeneasMeta.BvEnumToBitVec
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Std.Heap
 public section
 
 namespace Aeneas
@@ -44,16 +45,18 @@ inductive Error where
    | maximumSizeExceeded: Error
    | panic: Error
    | undef: Error
-deriving Repr, BEq
+deriving _root_.Repr, BEq
 
 open Error
 
-inductive RustEffect.Input : Type where
+inductive RustEffect.Input : Type 1 where
+| guardedModify (α : Type) (modify : State → α → State → Prop) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
 @[implicit_reducible]
-def RustEffect.Output (i : RustEffect.Input) : Type :=
+def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
   match i with
+  | .guardedModify α _ => ULift α
   | .fail _ => PEmpty
 
 @[implicit_reducible]
@@ -64,8 +67,11 @@ def RustEffect : Effect := {
 
 -- We need Result to be irreducible outside this file (to not break metaprograms which normalize
 -- types), but reducible within. The `unseal` command only affects the local scope.
+-- `Result α` lives at least in `Type 1` because of `RustEffect.Input`.
+-- The effect boundary only returns values in `Type`; higher-universe values, such as
+-- structures containing `Result`-returning functions, cannot be loaded by this effect.
 @[irreducible]
-def Result (α : Type u) : Type u := ITree RustEffect α
+def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
 unseal Result
 attribute [local implicit_reducible] Result
 
@@ -99,7 +105,7 @@ def Result.cases {R}
     (div :  motive (Result.div))
     : motive t := ITree.cases ret div vis t
 
-inductive MatchResult (α : Type u) : Type u where
+inductive MatchResult (α : Type u) : Type (max u 1) where
 | ok : (a : α) → MatchResult α
 | div : MatchResult α
 | vis : (eff : RustEffect.Input) → (RustEffect.Output eff → Result α) → MatchResult α
@@ -107,7 +113,7 @@ inductive MatchResult (α : Type u) : Type u where
 /-!
 Can simulate a match on the Result type by matching on the output of this function.
 -/
-def Result.match.{u} {α : Type u} (r : Result α) : MatchResult α :=
+def Result.match {α : Type u} (r : Result α) : MatchResult α :=
   r.cases .ok .vis .div
 
 @[simp, grind =]
@@ -125,12 +131,13 @@ theorem Result.match.fail {α : Type u} {e} :
   simp [Result.fail_eq_vis]
 
 /-- The `Repr` instance for `Result`, so that `#eval` on `Result`-producing expressions prints `Aeneas.Std.Result.ok`/`fail`/`div`. -/
-instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
+instance Result.reprInst {α : Type u} [_root_.Repr α] : _root_.Repr (Result α) where
   reprPrec r _ :=
     match Result.match r with
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
     | .div => "Aeneas.Std.Result.div"
     | .vis (.fail e) _ => "Aeneas.Std.Result.fail " ++ repr e
+    | .vis (.guardedModify ..) _ => "Aeneas.Std.Result.guardedModify"
 
 /-!
 `Result` not being an inductive type it has no built-in constructor facts that grind
@@ -151,7 +158,10 @@ theorem Result.ok_injective {α} : Function.Injective (@Result.ok α) := by
 /-- `Result.fail` is opaque, so its injectivity has to be stated separately. -/
 @[grind inj]
 theorem Result.fail_injective {α} : Function.Injective (@Result.fail α) := by
-  intro a b h; simpa using congrArg Result.match h
+  intro a b h
+  have h := congrArg Result.match h
+  simp only [Result.match.fail, MatchResult.vis.injEq, RustEffect.Input.fail.injEq] at h
+  exact h.1
 
 /-! The disequality lemmas for the constructors of `Result`. They all follow from the fact that
 `Result.match` maps the constructors to *distinct* constructors of the inductive `MatchResult`. -/
@@ -332,12 +342,13 @@ section Order
 
 open Lean.Order
 
-instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
+instance : Lean.Order.PartialOrder (Result α) :=
+  instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : MonoBind Result := instMonoBindITree
 
 @[partial_fixpoint_monotone]
-theorem bind_mono {R : Type a} {α} {S : Type b} [PartialOrder α]
+theorem bind_mono {R : Type a} {α} {S : Type b} [Lean.Order.PartialOrder α]
   (f : α → Result R) (g : α → R → Result S) :
   monotone f →
   monotone g →
@@ -391,8 +402,8 @@ open Lean.Order
 
 @[partial_fixpoint_monotone]
 theorem monotone_uncurry
-    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
-    {γ : Sort z} [PartialOrder γ]
+    {α : Type u} {β : Type v} {φ : Sort w} [Lean.Order.PartialOrder φ]
+    {γ : Sort z} [Lean.Order.PartialOrder γ]
     (f : γ → α → β → φ)
     (hmono : monotone f) :
     monotone (fun x => uncurry (f x)) := by
@@ -402,8 +413,8 @@ theorem monotone_uncurry
 
 @[partial_fixpoint_monotone]
 theorem monotone_uncurry_applied
-    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
-    {γ : Sort z} [PartialOrder γ]
+    {α : Type u} {β : Type v} {φ : Sort w} [Lean.Order.PartialOrder φ]
+    {γ : Sort z} [Lean.Order.PartialOrder γ]
     (f : γ → α → β → φ) (p : α × β)
     (hmono : monotone f) :
     monotone (fun x => uncurry (f x) p) := by
@@ -447,7 +458,7 @@ attribute [simp, grind =] Function.uncurry_apply_pair
 inductive ControlFlow (α : Type u) (β : Type v) where
   | cont (v : α) -- continue
   | done (v : β) -- break
-deriving Repr, BEq
+deriving _root_.Repr, BEq
 
 def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
   bind (body x) fun r =>
@@ -455,6 +466,41 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+/-- An operation on the memory, given as a relation `modify s x s'` between the initial state `s`,
+the result `x` and the final state `s'`. It is undefined behaviour if `s` has no successor. -/
+def Result.guardedModify {α : Type} (modify : State → α → State → Prop) : Result α :=
+  Result.vis (.guardedModify α modify) fun answer =>
+    Result.ok answer.down
+
+/-- Totalize a heap request: `none` is the unique outcome when no successful transition exists.
+Failure preserves the input heap for this operation, not for earlier operations. -/
+def State.checked {α : Type} (modify : State → α → State → Prop)
+    (s : State) (answer : Option α) (s' : State) : Prop :=
+  match answer with
+  | some value => modify s value s'
+  | none => (¬ ∃ value next, modify s value next) ∧ s' = s
+
+/-- Heap errors explicitly continue with `fail undef`, instead of leaving a disabled effect.
+The request is always enabled; successful outcomes retain the original relation. This is a
+logical interpretation, not an algorithm for deciding whether an arbitrary relation is enabled. -/
+def Result.checkedModify {α : Type} (modify : State → α → State → Prop) : Result α :=
+  Result.vis (.guardedModify (Option α) (State.checked modify)) fun answer =>
+    Result.ofOption answer.down .undef
+
+/-- Choose any encoding decoding to `value`, without changing the state.
+`repr.complete` guarantees that the set of permitted results is nonempty. -/
+def Repr.choose (repr : Repr ty) (value : ty) :
+    Result {data : Vector U8 repr.size // repr.decode data = some value} :=
+  Result.guardedModify fun s _ s' => s' = s
+
+/-- Choose valid encodings for every value, using the same descriptor. -/
+def Repr.chooseList (repr : Repr ty) (values : List ty) :
+    Result {data : List (Vector U8 repr.size) // data.map repr.decode = values.map some} :=
+  Result.guardedModify fun s _ s' => s' = s
+
+def Result.require (p : Prop) : Result Unit :=
+  Result.guardedModify fun s _ s' => p ∧ s' = s
 
 end
 

@@ -1,5 +1,8 @@
 /-
 Tests for the #decompose command
+
+The fixed memory Block appears in the effect type of `Result`, so some axiom
+reports include `Block` even when the tested computation uses no memory effects.
 -/
 module
 import Aeneas.Command.Decompose

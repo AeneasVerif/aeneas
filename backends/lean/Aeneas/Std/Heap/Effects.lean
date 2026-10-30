@@ -1,0 +1,244 @@
+module
+
+public import Aeneas.Std.Heap.Specs
+public import Aeneas.Std.Primitives
+public import Aeneas.Data.Coinductive.ITreeWP.DWP
+import all Aeneas.Std.Heap.Separation
+import all Aeneas.Std.Primitives
+
+@[expose] public section
+
+namespace Aeneas.Std.HeapWP
+
+open Aeneas.Data.Coinductive SepLogic
+
+unseal Result
+
+/-- Heap effects require an enabled transition and accept every possible successor.
+Failure is rejected; the ordinary effect-free WP is unchanged. -/
+def effectWP : EffectWP RustEffect where
+  State := State
+  wp effect C s :=
+    match effect with
+    | .guardedModify _ modify =>
+      (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → C ⟨x⟩ s'
+    | .fail _ => False
+
+instance : effectWP.Monotonic where
+  wp_monotonic := by
+    intro effect C C' h s he
+    cases effect
+    · exact ⟨he.1, fun x s' hx => h _ _ (he.2 x s' hx)⟩
+    · exact he
+
+instance : effectWP.Conjunctive where
+  wp_conj := by
+    intro effect s demands hne hall
+    cases effect
+    · obtain ⟨C, hC⟩ := hne
+      exact ⟨(hall C hC).1, fun x s' hx C' hC' => (hall C' hC').2 x s' hx⟩
+    · obtain ⟨C, hC⟩ := hne
+      exact hall C hC
+
+instance : effectWP.ExcludedMiracle where
+  wp_excludedMiracle := by
+    intro effect s he
+    cases effect
+    · obtain ⟨x, s', hx⟩ := he.1
+      exact he.2 x s' hx
+    · exact he
+
+/-- Successful termination of an actual `Result` computation with a heap postcondition. -/
+def Spec (c : Result α) (Q : α → State → Prop) (s : State) : Prop :=
+  DWP effectWP c Q s
+
+theorem Spec.pure (x : α) (Q : α → State → Prop) (s : State) :
+    Spec (pure x) Q s ↔ Q x s :=
+  DWP.ret_iff
+
+theorem Spec.bind {α : Type u} {β : Type v} {c : Result α} {k : α → Result β}
+    {Q : α → State → Prop} {R : β → State → Prop}
+    (hc : Spec c Q s) (hk : ∀ x s', Q x s' → Spec (k x) R s') :
+    Spec (Aeneas.Std.bind c k) R s :=
+  DWP.bind hc hk
+
+theorem Spec.exists (hc : Spec c Q s) : ∃ x s', Q x s' :=
+  DWP.exists hc
+
+theorem Spec.mono (hc : Spec c Q s) (hq : ∀ x s', Q x s' → R x s') :
+    Spec c R s :=
+  DWP.mono hc hq
+
+theorem Spec.fail (e : Error) : ¬ Spec (Result.fail e : Result α) Q s := by
+  intro h
+  exact DWP.vis_view h
+
+theorem Spec.div : ¬ Spec (Result.div : Result α) Q s :=
+  DWP.div_false
+
+theorem Spec.guardedModify {modify : State → α → State → Prop} :
+    Spec (Result.guardedModify modify) Q s ↔
+      (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → Q x s' := by
+  constructor
+  · intro h
+    obtain ⟨hsafe, hpost⟩ := DWP.vis_view h
+    exact ⟨hsafe, fun x s' hx => DWP.ret_iff.mp (hpost x s' hx)⟩
+  · rintro ⟨hsafe, hpost⟩
+    exact DWP.vis ⟨hsafe, fun x s' hx => DWP.ret_iff.mpr (hpost x s' hx)⟩
+
+theorem checked.enabled (modify : State → α → State → Prop) (s : State) :
+    ∃ answer s', State.checked modify s answer s' := by
+  classical
+  by_cases h : ∃ value s', modify s value s'
+  · obtain ⟨value, s', ht⟩ := h
+    exact ⟨some value, s', ht⟩
+  · exact ⟨none, s, h, rfl⟩
+
+/-- On a disabled heap operation, the only effect answer is failure at the unchanged heap.
+`checkedModify` then maps that answer to `Result.fail .undef` via `Result.ofOption`. -/
+theorem checked.failure {modify : State → α → State → Prop}
+    (disabled : ¬ ∃ value next, modify s value next) :
+    State.checked modify s answer s' ↔ answer = none ∧ s' = s := by
+  cases answer
+  · simp [State.checked, disabled]
+  · rename_i value
+    constructor
+    · intro h
+      exact (disabled ⟨value, s', h⟩).elim
+    · rintro ⟨h, _⟩
+      cases h
+
+/-- Explicit failure has exactly the same success obligations as the old partial request. -/
+theorem Spec.checkedModify {modify : State → α → State → Prop} :
+    Spec (Result.checkedModify modify) Q s ↔
+      (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → Q x s' := by
+  classical
+  constructor
+  · intro h
+    have ht := DWP.vis_view h
+    constructor
+    · by_cases hn : ∃ x s', modify s x s'
+      · exact hn
+      · exact (Spec.fail .undef (ht.2 none s ⟨hn, rfl⟩)).elim
+    · intro x s' hx
+      exact DWP.ret_iff.mp (ht.2 (some x) s' hx)
+  · rintro ⟨henabled, hpost⟩
+    apply DWP.vis
+    refine ⟨checked.enabled modify s, ?_⟩
+    intro answer s' ht
+    cases answer
+    · exact (ht.1 henabled).elim
+    · rename_i value
+      exact DWP.ret_iff.mpr (hpost value s' ht)
+
+/-- Every encoding that decodes to the value must satisfy the continuation.
+Completeness discharges enabling, rather than leaving it to callers. -/
+theorem Spec.choose (repr : Repr ty) (value : ty)
+    (Q : {data : Vector U8 repr.size // repr.decode data = some value} → State → Prop)
+    (s : State) :
+    Spec (repr.choose value) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
+  rw [Repr.choose, Spec.guardedModify]
+  constructor
+  · rintro ⟨_, h⟩ data decoded
+    exact h ⟨data, decoded⟩ s rfl
+  · intro h
+    obtain ⟨data, decoded⟩ := repr.complete value
+    exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
+
+theorem Spec.chooseList (repr : Repr ty) (values : List ty)
+    (Q : {data : List (Vector U8 repr.size) //
+      data.map repr.decode = values.map some} → State → Prop) (s : State) :
+    Spec (repr.chooseList values) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
+  have hex : ∃ data : List (Vector U8 repr.size), data.map repr.decode = values.map some := by
+    clear Q
+    induction values
+    · exact ⟨[], rfl⟩
+    · rename_i value values ih
+      obtain ⟨data, decoded⟩ := repr.complete value
+      obtain ⟨tail, ht⟩ := ih
+      exact ⟨data :: tail, by simp only [List.map_cons, decoded, ht]⟩
+  rw [Repr.chooseList, Spec.guardedModify]
+  constructor
+  · rintro ⟨_, h⟩ data decoded
+    exact h ⟨data, decoded⟩ s rfl
+  · intro h
+    obtain ⟨data, decoded⟩ := hex
+    exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
+
+/-- Choice always terminates with bytes decoding to the requested value, and
+neither reads nor changes the heap. -/
+theorem choose.spec (repr : Repr ty) (value : ty) (s : State) :
+    Spec (repr.choose value)
+      (fun data s' => repr.decode data.val = some value ∧ s' = s) s :=
+  Spec.choose repr value _ s |>.mpr fun _ decoded => ⟨decoded, rfl⟩
+
+/-- A framed separation contract for the generated computation itself. -/
+def Triple (P : Assertion) (c : Result α) (Q : α → Assertion) : Prop :=
+  ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
+    Spec c (fun x s' => ∃ h', h'.Disjoint F ∧
+      Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h') s
+
+theorem Triple.guardedModify {modify : State → α → State → Prop}
+    (ht : SepLogic.Triple P modify Q) :
+    Triple P (Result.guardedModify modify) Q := by
+  intro h F s hp hd hm hi
+  exact Spec.guardedModify.mpr (ht h F s hp hd hm hi)
+
+theorem Triple.checkedModify {modify : State → α → State → Prop}
+    (ht : SepLogic.Triple P modify Q) :
+    Triple P (Result.checkedModify modify) Q := by
+  intro h F s hp hd hm hi
+  exact Spec.checkedModify.mpr (ht h F s hp hd hm hi)
+
+/-- The chosen encoding carries its decode-back proof and preserves the heap. -/
+theorem Triple.choose (P : Assertion) (repr : Repr ty) (value : ty) :
+    Triple P (repr.choose value) (fun _ => P) := by
+  intro h F s hp hd hm hi
+  apply Spec.choose _ _ _ _ |>.mpr
+  exact fun _ _ => ⟨h, hd, hm, hi, hp⟩
+
+theorem Triple.chooseList (P : Assertion) (repr : Repr ty) (values : List ty) :
+    Triple P (repr.chooseList values) (fun _ => P) := by
+  intro h F s hp hd hm hi
+  apply Spec.chooseList _ _ _ _ |>.mpr
+  exact fun _ _ => ⟨h, hd, hm, hi, hp⟩
+
+theorem Triple.pure (P : Assertion) (x : α) :
+    Triple P (pure x) (fun y h => y = x ∧ P h) := by
+  intro h F s hp hd hm hi
+  exact Spec.pure _ _ _ |>.mpr ⟨h, hd, hm, hi, rfl, hp⟩
+
+theorem Triple.bind {α : Type u} {β : Type v} {c : Result α} {k : α → Result β}
+    {Q : α → Assertion} {R : β → Assertion}
+    (hc : Triple P c Q) (hk : ∀ x, Triple (Q x) (k x) R) :
+    Triple P (Aeneas.Std.bind c k) R := by
+  intro h F s hp hd hm hi
+  apply Spec.bind (hc h F s hp hd hm hi)
+  rintro x s' ⟨h', hd', hm', hi', hq⟩
+  exact hk x h' F s' hq hd' hm' hi'
+
+theorem Triple.conseq (hp : ∀ h, P h → P' h)
+    (hq : ∀ x h, Q' x h → Q x h) (ht : Triple P' c Q') : Triple P c Q := by
+  intro h F s hP hd hm hi
+  exact DWP.mono (ht h F s (hp h hP) hd hm hi) fun x s' ⟨h', hd', hm', hi', hQ⟩ =>
+    ⟨h', hd', hm', hi', hq x h' hQ⟩
+
+theorem Triple.pure_pre (ht : A → Triple P c Q) :
+    Triple (fun h => A ∧ P h) c Q := by
+  intro h F s ⟨ha, hp⟩ hd hm hi
+  exact ht ha h F s hp hd hm hi
+
+theorem frame (ht : Triple P c Q) :
+    Triple (sep P R) c (fun x => sep (Q x) R) := by
+  intro h F s ⟨a, b, hab, he, hp, hr⟩ hf hm hi
+  subst h
+  obtain ⟨haF, hbF⟩ := Fragment.disjoint_union_left.mp hf
+  rw [Fragment.union_assoc] at hm
+  have ht' := ht a (b ∪ F) s hp (Fragment.disjoint_union_right.mpr ⟨hab, haF⟩) hm hi
+  apply DWP.mono ht'
+  rintro x s' ⟨a', hd, hm', hi', hq⟩
+  obtain ⟨ha'b, ha'F⟩ := Fragment.disjoint_union_right.mp hd
+  exact ⟨a' ∪ b, Fragment.disjoint_union_left.mpr ⟨ha'F, hbF⟩,
+    by simpa [Fragment.union_assoc] using hm', hi', a', b, ha'b, rfl, hq, hr⟩
+
+end Aeneas.Std.HeapWP
