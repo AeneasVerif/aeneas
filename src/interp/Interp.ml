@@ -168,7 +168,10 @@ let compute_contexts (crate : crate) : decls_ctx =
 
   let global_decls_to_extract =
     GlobalDeclId.Map.filter
-      (fun id _ -> GlobalDeclId.Set.mem id !global_decl_ids)
+      (fun id g ->
+        GlobalDeclId.Set.mem id !global_decl_ids
+        (* The globals without initializers are constants which we inline *)
+        && Option.is_some (Charon.GAstUtils.init_fun_id_of_global g))
       crate.global_decls
   in
 
