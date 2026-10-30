@@ -65,6 +65,25 @@ pub fn zero_sized_box() {
     }
 }
 
+/// Raw writes are observed when the borrowed Box is used safely again.
+pub fn borrowed_box(initial: u32, replacement: u32) -> (u32, u32) {
+    let mut b = Box::new(initial);
+    let p = core::ptr::from_mut(&mut *b);
+    let before = unsafe { p.read() };
+    unsafe { p.write(replacement) };
+    (before, *b)
+}
+
+/// Restoring a borrowed Box also recovers a whole aggregate, including aliases.
+pub fn borrowed_pair(first: u32, second: u32, replacement: u32) -> (u32, u32) {
+    let mut b = Box::new((first, second));
+    let p = core::ptr::from_mut(&mut *b);
+    let alias = p;
+    let old = unsafe { p.read() };
+    unsafe { alias.write((old.0, replacement)) };
+    *b
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -81,6 +100,14 @@ mod tests {
                 (initial, replacement)
             );
             assert_eq!(super::one_past_end(initial), initial);
+            assert_eq!(
+                super::borrowed_box(initial, replacement),
+                (initial, replacement)
+            );
+            assert_eq!(
+                super::borrowed_pair(initial, 17, replacement),
+                (initial, replacement)
+            );
         }
         super::zero_sized_box();
     }

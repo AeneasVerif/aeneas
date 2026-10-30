@@ -133,15 +133,15 @@ Rust programs. `HeapTests.restoration_is_privileged` demonstrates this boundary.
 
 | File | Responsibility |
 |---|---|
-| `Lemmas.lean` | Concrete traversal, byte selection/update, read-back, disjoint access, map and invariant laws |
+| `Lemmas.lean` | Concrete traversal, byte selection/update, read-back, singleton-range bridges, disjoint access, map and invariant laws |
 | `Separation.lean` | Byte/cleanup resources, matching, separation algebra, framed relational triples |
 | `Resources.lean` | Byte fragments, encoded `pointsTo`, splitting, matching, and update framing |
 | `Specs.lean` | Generic footprint-update rule and framed read/write contracts, including writing any chosen valid encoding |
 | `Allocation.lean` | Capacity, freshness, allocation resources, frame preservation, exact cleanup |
-| `Borrowing.lean` | Single-footprint borrow/share/restoration and checked movement contracts |
+| `Borrowing.lean` | Single-footprint byte and typed borrow/share/restoration, and checked movement contracts |
 | `Access.lean` | Byte-based read/write/cleanup denial, including overlapping different types |
 | `Effects.lean` | Total-correctness interpretation of actual `Result` effects, exact demonic choice contracts, and composition rules |
-| `EffectSpecs.lean` | Rust read/write, movement, Box and mutable-exposure allocation/cleanup contracts |
+| `EffectSpecs.lean` | Rust read/write, singleton-range access/permission transfer, movement, Box and mutable-exposure allocation/cleanup contracts |
 
 Cell resources claim individual byte positions and an alignment guarantee.
 Compatibility is byte-disjointness, independent of the originating type.
@@ -168,19 +168,30 @@ its correspondence with Rust or the correctness of its compiler adaptations.
 
 Range operations are executable and regression-tested, but their former
 general range-level separation/effect contracts have not yet been ported.
-`Borrowing.lean` currently proves single-footprint permission transfer.
+`Borrowing.lean` proves single-footprint permission transfer; `EffectSpecs.lean`
+lifts it to `borrow`, `endBorrow`, and singleton `readRange`, `borrowRange`,
+`endBorrowRange`, `shareRange`, and `endShareRange`.
 Do not treat a successful backend build as evidence of those missing contracts.
 
 Integration proofs cover Box round-trip, stored pointers, corrected alias and
-repeated-read examples, pair replacement, one-past pointer formation, and a
-handwritten borrowed-Box/callback prototype.
+repeated-read examples, pair replacement, one-past pointer formation, and
+manually adapted scalar and pair borrowed-Box examples.
 Descriptors are explicit parameters, including a separate descriptor for stored
 pointers; pointers are not assumed to fit in one word. The callback contract
 accepts any subsequently written value and consumes the exposure resources.
+The local borrowed conversion is named `to_raw`, not the consuming `into_raw`.
+Each caller invokes the backward function before dereferencing the safe Box
+again. The scalar and pair examples have matching Rust source in `raw_box.rs`;
+their callback adaptations are handwritten, not compiler-generated.
 `RawBoxProofs.lean` also supplies complete little-endian `u32` and paired-`u32`
 descriptors and instantiates the round-trip, pair, and one-past proofs with them.
 These are concrete model encodings, not a proof of Rust tuple layout or ABI.
 A true zero-sized descriptor cannot satisfy a read-success theorem here.
+
+`RawBoxManual.lean` additionally verifies model-API compositions, not Rust
+translations: nested sharing with const-pointer range reads, exclusive
+borrow/update/restoration, and their composition at the same pointer. Their
+contracts preserve arbitrary matching frames and identify every returned value.
 
 The fixture headers mark manual descriptor adaptations and repeated-read repairs.
 The compiler was not changed or rerun; re-extraction would overwrite those edits.

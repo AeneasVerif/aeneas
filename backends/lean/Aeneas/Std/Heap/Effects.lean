@@ -146,6 +146,12 @@ theorem Triple.choose (P : Assertion) (repr : Repr ty) (value : ty) :
   apply Spec.choose _ _ _ _ |>.mpr
   exact fun _ _ => ⟨h, hd, hm, hi, hp⟩
 
+theorem Triple.chooseList (P : Assertion) (repr : Repr ty) (values : List ty) :
+    Triple P (repr.chooseList values) (fun _ => P) := by
+  intro h F s hp hd hm hi
+  apply Spec.chooseList _ _ _ _ |>.mpr
+  exact fun _ _ => ⟨h, hd, hm, hi, hp⟩
+
 theorem Triple.pure (P : Assertion) (x : α) :
     Triple P (pure x) (fun y h => y = x ∧ P h) := by
   intro h F s hp hd hm hi

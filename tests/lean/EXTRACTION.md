@@ -130,3 +130,26 @@ The zero-sized fixture type-checks, but its raw read is deliberately disabled
 for an actual zero-sized descriptor; no read-success theorem is claimed.
 General range-level permission/effect contracts also remain to be ported,
 although the executable range operations have concrete regression tests.
+
+## Borrowed-Box callback adaptations and raw-API examples
+
+The scalar `borrowed_box` and aggregate `borrowed_pair` examples now have Rust
+source in `tests/src/raw_box.rs`. No extraction was run for these additions.
+Their definitions in `RawBoxManual.lean` are manually adapted translations:
+the local borrowed conversion `to_raw` returns a raw pointer and a backward
+function. The function recovers the current value and removes the temporary
+exposure; translated callers invoke it before safely dereferencing the Box.
+This is not Rust's consuming `Box::into_raw`, and exposure removal does not
+deallocate the Rust Box. In the aggregate example, writing through a copied
+pointer updates the value subsequently recovered by the callback.
+
+The `raw_api` namespace in that file is a separate model-API exercise, not
+additional translated Rust. It proves nested shared range reads through a const
+pointer, restoration of writable permissions, exclusive borrow/update/
+restoration, and their composition. Restoration calls represent the matching
+backward computations, not capabilities available to arbitrary Rust callers.
+These proofs use singleton-range contracts, not general multi-element contracts.
+
+`make verify-raw-box` checks all the callback and API compositions, including
+exact axiom guards. The native `raw_box.rs` unit test covers both new borrowed
+examples. The existing compiler and shared setup remain unchanged.

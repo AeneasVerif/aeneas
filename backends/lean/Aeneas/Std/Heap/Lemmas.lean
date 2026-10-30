@@ -339,5 +339,65 @@ theorem modify.inv {repr : Repr ty} {p : RawPtr ty}
   obtain ⟨_, data, _, _, _, rfl⟩ := modify.success h
   exact hi.storeRepr p.base data.toList
 
+theorem readRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    readRange repr p 1 s = (read repr p s).map (fun value => [value]) := by
+  cases hl : s.allocations p.base
+  · simp [readRange, read, hl]
+  · rename_i blk
+    by_cases ha : repr.align.val ∣ blk.alignment.val
+    · by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+      · simp [readRange, read, hl, ha, hb, List.range_succ, Repr.read, Option.bind_assoc]
+        apply congrArg (Option.bind _)
+        funext data
+        dsimp only [Function.comp_def]
+        cases repr.decode data
+        · rfl
+        · rfl
+      · simp [readRange, read, hl, ha, hb, Repr.read]
+    · simp [readRange, read, hl, ha]
+
+theorem borrowRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    borrowRange repr p 1 s = borrow repr p s := by
+  cases hl : s.allocations p.base
+  · simp [borrowRange, modifyRange, borrow, modify, hl]
+  · rename_i blk
+    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    · simp [borrowRange, modifyRange, borrow, modify, hl, hb, List.range_succ]
+    · simp [borrowRange, modifyRange, borrow, modify, hl, hb, Repr.borrow]
+
+theorem shareRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    shareRange repr p 1 s = share repr p s := by
+  cases hl : s.allocations p.base
+  · simp [shareRange, modifyRange, share, modify, hl]
+  · rename_i blk
+    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    · simp [shareRange, modifyRange, share, modify, hl, hb, List.range_succ]
+    · simp [shareRange, modifyRange, share, modify, hl, hb, Repr.share]
+
+theorem endShareRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    endShareRange repr p 1 s = endShare repr p s := by
+  cases hl : s.allocations p.base
+  · simp [endShareRange, modifyRange, endShare, modify, hl]
+  · rename_i blk
+    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    · simp [endShareRange, modifyRange, endShare, modify, hl, hb, List.range_succ]
+    · simp [endShareRange, modifyRange, endShare, modify, hl, hb, Repr.endShare]
+
+theorem endBorrowRange_single (repr : Repr ty) (p : RawPtr ty)
+    (data : Vector U8 repr.size) (value : ty) (decoded : repr.decode data = some value)
+    (s : Heap) :
+    endBorrowRange repr p [data] s = endBorrow repr p value data decoded s := by
+  cases hl : s.allocations p.base
+  · simp [endBorrowRange, modifyRange, endBorrow, modify, hl]
+  · rename_i blk
+    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    · simp [endBorrowRange, modifyRange, endBorrow, modify, hl, hb, List.range_succ,
+        Repr.endBorrow]
+      generalize repr.decode data = result at decoded ⊢
+      cases result
+      · cases decoded
+      · rfl
+    · simp [endBorrowRange, modifyRange, endBorrow, modify, hl, hb, Repr.endBorrow]
+
 end Heap
 end Aeneas.Std

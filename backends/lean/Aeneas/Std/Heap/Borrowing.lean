@@ -65,6 +65,46 @@ theorem endBorrow.spec (repr : Repr ty) (p : RawPtr ty)
   simp only [Function.comp_def, Cell.endBorrow]
   rw [vector_mapM_some]
 
+theorem borrow_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (value : ty)
+    (hsize : 0 < repr.size) :
+    Triple (pointsTo repr p value)
+      (fun s (_ : Unit) s' => Heap.borrow repr p s = some s')
+      (fun _ => block repr p (Vector.replicate repr.size .borrowed).toList) := by
+  intro h F s ⟨data, _, hp⟩ hd hm hi
+  have he : (data.map some).map (fun _ => (Cell.borrowed : Cell U8)) =
+      Vector.replicate repr.size .borrowed := by
+    apply Vector.ext
+    intro i hi
+    simp
+  have ht := borrow.spec repr p (data.map some) hsize
+  apply (Triple.conseq (fun _ hp => hp) (fun _ _ hp => ?_) ht) h F s ?_ hd hm hi
+  · simpa [Vector.map_map, Function.comp_def] using hp
+  · simpa only [he] using hp
+
+theorem share_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (value : ty)
+    (depth : Nat) (hsize : 0 < repr.size) :
+    Triple (pointsTo repr p value depth)
+      (fun s (_ : Unit) s' => Heap.share repr p s = some s')
+      (fun _ => pointsTo repr p value (depth + 1)) := by
+  intro h F s ⟨data, decoded, hp⟩ hd hm hi
+  have ht := share.spec repr p (data.map some) depth hsize
+  apply (Triple.conseq (fun _ hp => hp)
+    (fun _ _ hp => ⟨data, decoded, by simpa [Vector.map_map, Function.comp_def] using hp⟩)
+    ht) h F s ?_ hd hm hi
+  simpa [Vector.map_map, Function.comp_def] using hp
+
+theorem endShare_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (value : ty)
+    (depth : Nat) (hsize : 0 < repr.size) :
+    Triple (pointsTo repr p value (depth + 1))
+      (fun s (_ : Unit) s' => Heap.endShare repr p s = some s')
+      (fun _ => pointsTo repr p value depth) := by
+  intro h F s ⟨data, decoded, hp⟩ hd hm hi
+  have ht := endShare.spec repr p (data.map some) depth hsize
+  apply (Triple.conseq (fun _ hp => hp)
+    (fun _ _ hp => ⟨data, decoded, by simpa [Vector.map_map, Function.comp_def] using hp⟩)
+    ht) h F s ?_ hd hm hi
+  simpa [Vector.map_map, Function.comp_def] using hp
+
 /-- Cleanup authority supplies the extent even when no byte cells are owned. -/
 theorem offset.spec (repr : Repr ty) (p : RawPtr ty) (count : Int) (length : Nat)
     (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)

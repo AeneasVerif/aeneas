@@ -3,9 +3,10 @@ module
 public import Lean
 public import Aeneas.Std.Scalar.Types
 
-/-! Byte-level operations take a representation explicitly. They do not track
+/-! Byte-level operations take a representation explicitly (as we expect
+Charon/Aeneas to pass that information from Rust). They do not track
 pointer validity or the authority to restore a borrow. Empty footprints carry
-no byte permissions; observing a zero-sized cell therefore returns `none`. -/
+no byte permissions; observing a zero-sized cell returns `none` (aka UB). -/
 
 @[expose] public section
 
