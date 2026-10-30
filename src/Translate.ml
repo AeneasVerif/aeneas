@@ -1164,7 +1164,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           [%craise_opt_span] None "Mutually recursive globals are not supported"
         else (* Translate *)
           export_functions_group pure_funs
-    | GlobalGroup (NonRecGroup id) -> export_global id
+    | GlobalGroup (NonRecGroup id) ->
+        (* The globals without initializers are constants which we inline *)
+        let global =
+          GlobalDeclId.Map.find id ctx.trans_ctx.crate.global_decls
+        in
+        if Option.is_some (Charon.GAstUtils.init_fun_id_of_global global) then
+          export_global id
     | GlobalGroup (RecGroup _ids) ->
         [%craise_opt_span] None "Mutually recursive globals are not supported"
     | TraitDeclGroup (RecGroup ids) ->
