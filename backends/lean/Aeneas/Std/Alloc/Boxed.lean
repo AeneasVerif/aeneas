@@ -80,7 +80,7 @@ loses the address of the box. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
 def alloc.boxed.Box.from_raw (repr : Repr T) (p : MutRawPtr T) : Result T := do
   let value ← RawPtr.read repr p
-  Result.guardedModify (State.dealloc repr p 1)
+  Result.checkedModify (State.dealloc repr p 1)
   pure value
 
 end Aeneas.Std

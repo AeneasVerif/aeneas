@@ -19,7 +19,7 @@ abbrev BasePtr := Usize
 
 structure RawPtr (ty : Type u) : Type u where
   base : BasePtr
-  index : Usize
+  byteOffset : Usize
 
 instance : Inhabited (RawPtr ty) := ⟨⟨⟨0⟩, ⟨0⟩⟩⟩
 
@@ -121,7 +121,8 @@ def extent (repr : Repr ty) (s : Heap) (base : BasePtr) : Option Nat :=
 def read (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option ty :=
   match s.allocations p.base with
   | some block =>
-    if repr.align.val ∣ block.alignment.val then repr.read block.bytes p.index.val
+    if repr.align.val ∣ block.alignment.val ∧ repr.align.val ∣ p.byteOffset.val then
+      repr.read block.bytes p.byteOffset.val
     else none
   | none => none
 
@@ -129,9 +130,9 @@ def readRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) :
     Option (List ty) :=
   match s.allocations p.base with
   | some block =>
-    if repr.align.val ∣ block.alignment.val ∧ (count = 0 ∨ 0 < repr.size) ∧
-        (p.index.val + count) * repr.size ≤ block.repr.length then
-      (List.range count).mapM fun i => repr.read block.bytes (p.index.val + i)
+    if (repr.align.val ∣ block.alignment.val ∧ repr.align.val ∣ p.byteOffset.val) ∧
+        (count = 0 ∨ 0 < repr.size) ∧ p.byteOffset.val + count * repr.size ≤ block.repr.length then
+      (List.range count).mapM fun i => repr.read block.bytes (p.byteOffset.val + i * repr.size)
     else none
   | none => none
 
@@ -142,7 +143,7 @@ def modify (repr : Repr ty) (p : RawPtr ty)
     (s : Heap) : Option Heap :=
   match s.allocations p.base with
   | some block =>
-    if repr.align.val ∣ block.alignment.val then
+    if repr.align.val ∣ block.alignment.val ∧ repr.align.val ∣ p.byteOffset.val then
       match change block.bytes with
       | some bytes => some (s.storeRepr p.base bytes.toList)
       | none => none
@@ -152,39 +153,39 @@ def modify (repr : Repr ty) (p : RawPtr ty)
 def write (repr : Repr ty) (p : RawPtr ty) (value : ty)
     (data : Vector U8 repr.size) (decoded : repr.decode data = some value)
     (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.write bytes p.index.val value data decoded) s
+  modify repr p (fun bytes => repr.write bytes p.byteOffset.val value data decoded) s
 
 def borrow (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.borrow bytes p.index.val) s
+  modify repr p (fun bytes => repr.borrow bytes p.byteOffset.val) s
 
 def endBorrow (repr : Repr ty) (p : RawPtr ty) (value : ty)
     (data : Vector U8 repr.size) (decoded : repr.decode data = some value)
     (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.endBorrow bytes p.index.val value data decoded) s
+  modify repr p (fun bytes => repr.endBorrow bytes p.byteOffset.val value data decoded) s
 
 def share (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.share bytes p.index.val) s
+  modify repr p (fun bytes => repr.share bytes p.byteOffset.val) s
 
 def endShare (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.endShare bytes p.index.val) s
+  modify repr p (fun bytes => repr.endShare bytes p.byteOffset.val) s
 
 /-- Range operations compose byte transformations before committing the block. -/
 def modifyRange (repr : Repr ty) (p : RawPtr ty) (count : Nat)
     (change : ∀ {r}, Vector (Cell U8) r → Nat → Option (Vector (Cell U8) r))
     (s : Heap) : Option Heap :=
   modify repr p (fun bytes =>
-    if (count = 0 ∨ 0 < repr.size) ∧ (p.index.val + count) * repr.size ≤ bytes.size then
+    if (count = 0 ∨ 0 < repr.size) ∧ p.byteOffset.val + count * repr.size ≤ bytes.size then
       (List.range count).foldlM change bytes
     else none) s
 
 def borrowRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) : Option Heap :=
-  modifyRange repr p count (fun bytes i => repr.borrow bytes (p.index.val + i)) s
+  modifyRange repr p count (fun bytes i => repr.borrow bytes (p.byteOffset.val + i * repr.size)) s
 
 def shareRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) : Option Heap :=
-  modifyRange repr p count (fun bytes i => repr.share bytes (p.index.val + i)) s
+  modifyRange repr p count (fun bytes i => repr.share bytes (p.byteOffset.val + i * repr.size)) s
 
 def endShareRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) : Option Heap :=
-  modifyRange repr p count (fun bytes i => repr.endShare bytes (p.index.val + i)) s
+  modifyRange repr p count (fun bytes i => repr.endShare bytes (p.byteOffset.val + i * repr.size)) s
 
 /-- Each supplied encoding must decode; restoration still requires the caller's authority. -/
 def endBorrowRange (repr : Repr ty) (p : RawPtr ty)
@@ -193,17 +194,18 @@ def endBorrowRange (repr : Repr ty) (p : RawPtr ty)
     match data[i]? with
     | some encoding =>
       match h : repr.decode encoding with
-      | some value => repr.endBorrow bytes (p.index.val + i) value encoding h
+      | some value => repr.endBorrow bytes (p.byteOffset.val + i * repr.size) value encoding h
       | none => none
     | none => none) s
 
-/-- Both endpoints may be one-past, but the result must fit the pointer index. -/
+/-- Typed movement scales by the representation's byte stride. Forming a pointer
+does not check alignment; both endpoints must lie in the allocation, including one-past. -/
 def offset (repr : Repr ty) (p : RawPtr ty) (count : Int) (s : Heap) :
     Option (RawPtr ty) :=
-  match extent repr s p.base with
-  | some n =>
-    let target := (p.index.val : Int) + count
-    if p.index.val ≤ n ∧ 0 ≤ target ∧ target ≤ n ∧
+  match s.allocations p.base with
+  | some block =>
+    let target := (p.byteOffset.val : Int) + count * repr.size
+    if p.byteOffset.val ≤ block.repr.length ∧ 0 ≤ target ∧ target ≤ block.repr.length ∧
         target < (2 ^ UScalarTy.numBits .Usize : Nat) then
       some ⟨p.base, ⟨BitVec.ofNat _ target.toNat⟩⟩
     else none
@@ -214,7 +216,7 @@ def freeBlock (repr : Repr ty) (p : RawPtr ty) (count : Nat) (own : Bool)
     (s : Heap) : Option Heap :=
   match s.allocations p.base with
   | some block =>
-    if p.index.val = 0 ∧ block.owned = own ∧
+    if p.byteOffset.val = 0 ∧ block.owned = own ∧
         repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
         block.repr.all (fun cell => cell.depth == some 0) then
       some (s.remove p.base)
@@ -226,7 +228,7 @@ def endSharedExposure (repr : Repr ty) (p : RawPtr ty) (count : Nat)
     (s : Heap) : Option Heap :=
   match s.allocations p.base with
   | some block =>
-    if p.index.val = 0 ∧ block.owned = false ∧
+    if p.byteOffset.val = 0 ∧ block.owned = false ∧
         repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
         block.repr.all (fun cell => cell.depth == some 1) then
       some (s.remove p.base)

@@ -86,6 +86,51 @@ theorem Spec.guardedModify {modify : State → α → State → Prop} :
   · rintro ⟨hsafe, hpost⟩
     exact DWP.vis ⟨hsafe, fun x s' hx => DWP.ret_iff.mpr (hpost x s' hx)⟩
 
+theorem checked.enabled (modify : State → α → State → Prop) (s : State) :
+    ∃ answer s', State.checked modify s answer s' := by
+  classical
+  by_cases h : ∃ value s', modify s value s'
+  · obtain ⟨value, s', ht⟩ := h
+    exact ⟨some value, s', ht⟩
+  · exact ⟨none, s, h, rfl⟩
+
+/-- On a disabled heap operation, the only effect answer is failure at the unchanged heap.
+`checkedModify` then maps that answer to `Result.fail .undef` via `Result.ofOption`. -/
+theorem checked.failure {modify : State → α → State → Prop}
+    (disabled : ¬ ∃ value next, modify s value next) :
+    State.checked modify s answer s' ↔ answer = none ∧ s' = s := by
+  cases answer
+  · simp [State.checked, disabled]
+  · rename_i value
+    constructor
+    · intro h
+      exact (disabled ⟨value, s', h⟩).elim
+    · rintro ⟨h, _⟩
+      cases h
+
+/-- Explicit failure has exactly the same success obligations as the old partial request. -/
+theorem Spec.checkedModify {modify : State → α → State → Prop} :
+    Spec (Result.checkedModify modify) Q s ↔
+      (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → Q x s' := by
+  classical
+  constructor
+  · intro h
+    have ht := DWP.vis_view h
+    constructor
+    · by_cases hn : ∃ x s', modify s x s'
+      · exact hn
+      · exact (Spec.fail .undef (ht.2 none s ⟨hn, rfl⟩)).elim
+    · intro x s' hx
+      exact DWP.ret_iff.mp (ht.2 (some x) s' hx)
+  · rintro ⟨henabled, hpost⟩
+    apply DWP.vis
+    refine ⟨checked.enabled modify s, ?_⟩
+    intro answer s' ht
+    cases answer
+    · exact (ht.1 henabled).elim
+    · rename_i value
+      exact DWP.ret_iff.mpr (hpost value s' ht)
+
 /-- Every encoding that decodes to the value must satisfy the continuation.
 Completeness discharges enabling, rather than leaving it to callers. -/
 theorem Spec.choose (repr : Repr ty) (value : ty)
@@ -138,6 +183,12 @@ theorem Triple.guardedModify {modify : State → α → State → Prop}
     Triple P (Result.guardedModify modify) Q := by
   intro h F s hp hd hm hi
   exact Spec.guardedModify.mpr (ht h F s hp hd hm hi)
+
+theorem Triple.checkedModify {modify : State → α → State → Prop}
+    (ht : SepLogic.Triple P modify Q) :
+    Triple P (Result.checkedModify modify) Q := by
+  intro h F s hp hd hm hi
+  exact Spec.checkedModify.mpr (ht h F s hp hd hm hi)
 
 /-- The chosen encoding carries its decode-back proof and preserves the heap. -/
 theorem Triple.choose (P : Assertion) (repr : Repr ty) (value : ty) :

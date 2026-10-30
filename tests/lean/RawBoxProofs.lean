@@ -16,7 +16,7 @@ theorem u32Bytes_roundtrip (bits : BitVec 32) :
   bv_decide
 
 /-- Little-endian, four-byte `u32` descriptor; no global representation lookup. -/
-def u32Repr : Aeneas.Std.Repr U32 where
+@[expose] def u32Repr : Aeneas.Std.Repr U32 where
   size := 4
   align := ⟨4, 2, rfl⟩
   decode bytes := some ⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩
@@ -213,7 +213,8 @@ theorem replace_pair.spec (repr : Aeneas.Std.Repr (U32 × U32))
 
 theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
     (p : MutRawPtr U32) (value : U32) (hsize : 0 < repr.size)
-    (hzero : p.index.val = 0) :
+    (hfit : repr.size < 2 ^ UScalarTy.numBits .Usize)
+    (hzero : p.byteOffset.val = 0) :
     HeapWP.Triple (sep (alloc repr p 1 true) (pointsTo repr p value))
       (do let start ← RawPtr.add repr p 0#usize
           let _ ← RawPtr.add repr p 1#usize
@@ -225,19 +226,18 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
     rcases p with ⟨base, index⟩
     have he : (⟨0⟩ : Usize) = index := UScalar.eq_of_val_eq hzero.symm
     exact congrArg (RawPtr.mk base) he
-  have hstart : p.index.val ≤ 1 := by agrind
-  have hbound0 : p.index.val + (0#usize).val ≤ 1 := by simp [hzero]
-  have hbound1 : p.index.val + (1#usize).val ≤ 1 := by simp [hzero]
-  have hfit0 : p.index.val + (0#usize).val < 2 ^ UScalarTy.numBits .Usize := by
+  have hstart : p.byteOffset.val ≤ 1 * repr.size := by simp [hzero]
+  have hbound0 : p.byteOffset.val + (0#usize).val * repr.size ≤ 1 * repr.size := by simp [hzero]
+  have hbound1 : p.byteOffset.val + (1#usize).val * repr.size ≤ 1 * repr.size := by simp [hzero]
+  have hfit0 : p.byteOffset.val + (0#usize).val * repr.size < 2 ^ UScalarTy.numBits .Usize := by
     simp [hzero]
-  have hfit1 : p.index.val + (1#usize).val < 2 ^ UScalarTy.numBits .Usize := by
-    simp only [hzero, Nat.zero_add]
-    scalar_tac
+  have hfit1 : p.byteOffset.val + (1#usize).val * repr.size < 2 ^ UScalarTy.numBits .Usize := by
+    simpa [hzero] using hfit
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun start h hs => (sep_and_left (start.base = p.base)
-      (fun h => start.index.val = p.index.val + (0#usize).val ∧ alloc repr p 1 true h)
+      (fun h => start.byteOffset.val = p.byteOffset.val + (0#usize).val * repr.size ∧ alloc repr p 1 true h)
       (pointsTo repr p value) h).mp hs |>.imp_right
-        (fun hs => (sep_and_left (start.index.val = p.index.val + (0#usize).val)
+        (fun hs => (sep_and_left (start.byteOffset.val = p.byteOffset.val + (0#usize).val * repr.size)
           (alloc repr p 1 true) (pointsTo repr p value) h).mp hs))
     (HeapWP.frame (R := pointsTo repr p value)
       (by simpa only [hp] using
@@ -250,14 +250,15 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
   have he : start = p := by
     rcases start with ⟨base, index⟩
     rcases p with ⟨pbase, pindex⟩
-    have he := UScalar.eq_of_val_eq hi
+    have hi' : index.val = pindex.val := by simpa using hi
+    have he := UScalar.eq_of_val_eq hi'
     cases hb
     cases he
     rfl
   subst start
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun q h hs => sep_mono
-      (fun a (hp : q.base = p.base ∧ q.index.val = p.index.val + (1#usize).val ∧
+      (fun a (hp : q.base = p.base ∧ q.byteOffset.val = p.byteOffset.val + (1#usize).val * repr.size ∧
         alloc repr p 1 true a) => hp.2.2) (fun _ hp => hp) hs)
     (HeapWP.frame (R := pointsTo repr p value)
       (by simpa only [hp] using
@@ -289,11 +290,11 @@ theorem one_past_end.spec (repr : Aeneas.Std.Repr U32) (value : U32)
   unfold one_past_end
   apply HeapWP.Spec.bind (HeapWP.intoRaw.spec repr value s F hi hm hc hfit)
   rintro p s' ⟨_, h, hd, hm', hi', hp⟩
-  have hz : p.index.val = 0 := by
+  have hz : p.byteOffset.val = 0 := by
     obtain ⟨a, b, _, _, ha, _⟩ := hp
     exact ha.1
   apply HeapWP.Spec.mono
-    (one_past_end_tail.spec repr p value hsize hz h F s' hp hd hm' hi')
+    (one_past_end_tail.spec repr p value hsize hfit hz h F s' hp hd hm' hi')
   rintro result s'' ⟨h', _, hm'', hi'', hv, rfl⟩
   exact ⟨hv, by simpa using hm'', hi''⟩
 

@@ -75,8 +75,8 @@ theorem vector_mapM_enabled {α : Type u} {β : Type v} {f : α → Option β}
 
 def CellsDisjoint {T : Type u} {U : Type v}
     (reprT : Repr T) (i : Nat) (reprU : Repr U) (j : Nat) : Prop :=
-  (i + 1) * reprT.size ≤ j * reprU.size ∨
-    (j + 1) * reprU.size ≤ i * reprT.size
+  (i + reprT.size) ≤ j ∨
+    (j + reprU.size) ≤ i
 
 namespace Repr
 
@@ -90,59 +90,59 @@ theorem aligned_stride (repr : Repr ty) (i : Nat) :
   Nat.dvd_mul_left_of_dvd repr.aligned i
 
 @[simp] theorem select_toList (repr : Repr ty) (bytes : Vector (Cell U8) r)
-    (i : Nat) (hi : (i + 1) * repr.size ≤ r) :
-    (repr.select bytes i hi).toList = (bytes.toList.drop (i * repr.size)).take repr.size := by
-  simp [select, Vector.toList_cast, Vector.toList_extract, Nat.add_mul]
+    (i : Nat) (hi : (i + repr.size) ≤ r) :
+    (repr.select bytes i hi).toList = (bytes.toList.drop (i)).take repr.size := by
+  simp [select, Vector.toList_cast, Vector.toList_extract]
 
 theorem select_getElem? (repr : Repr ty) (bytes : Vector (Cell U8) r)
-    (i : Nat) (hi : (i + 1) * repr.size ≤ r) (j : Nat) (hj : j < repr.size) :
-    (repr.select bytes i hi)[j]? = bytes.toList[i * repr.size + j]? := by
+    (i : Nat) (hi : (i + repr.size) ≤ r) (j : Nat) (hj : j < repr.size) :
+    (repr.select bytes i hi)[j]? = bytes.toList[i + j]? := by
   rw [← Vector.getElem?_toList, select_toList, List.getElem?_take_of_lt hj,
     List.getElem?_drop]
 
 @[simp] theorem update_toList (repr : Repr ty) (bytes : Vector (Cell U8) r)
-    (i : Nat) (hi : (i + 1) * repr.size ≤ r) (data : Vector (Cell U8) repr.size) :
+    (i : Nat) (hi : (i + repr.size) ≤ r) (data : Vector (Cell U8) repr.size) :
     (repr.update bytes i hi data).toList =
-      bytes.toList.take (i * repr.size) ++ data.toList ++
-        bytes.toList.drop ((i + 1) * repr.size) := by
+      bytes.toList.take (i) ++ data.toList ++
+        bytes.toList.drop ((i + repr.size)) := by
   simp [update, Vector.toList_cast, Vector.toList_extract]
   apply List.take_of_length_le
   simp
 
 theorem select_update (repr : Repr ty) (bytes : Vector (Cell U8) r)
-    (i : Nat) (hi : (i + 1) * repr.size ≤ r) (data : Vector (Cell U8) repr.size) :
+    (i : Nat) (hi : (i + repr.size) ≤ r) (data : Vector (Cell U8) repr.size) :
     repr.select (repr.update bytes i hi data) i hi = data := by
   apply Vector.toList_inj.mp
-  have hs : i * repr.size ≤ r := by grind [Nat.add_mul]
+  have hs : i ≤ r := by grind [Nat.add_mul]
   simp [Nat.min_eq_left hs]
 
 theorem update_outside (repr : Repr ty) (bytes : Vector (Cell U8) r)
-    (i : Nat) (hi : (i + 1) * repr.size ≤ r) (data : Vector (Cell U8) repr.size)
-    (j : Nat) (hj : j < i * repr.size ∨ (i + 1) * repr.size ≤ j) :
+    (i : Nat) (hi : (i + repr.size) ≤ r) (data : Vector (Cell U8) repr.size)
+    (j : Nat) (hj : j < i ∨ (i + repr.size) ≤ j) :
     (repr.update bytes i hi data).toList[j]? = bytes.toList[j]? := by
-  have hs : i * repr.size ≤ r := by grind [Nat.add_mul]
+  have hs : i ≤ r := by grind [Nat.add_mul]
   rw [update_toList]
   rcases hj with hj | hj
   · simp [List.getElem?_append, Nat.min_eq_left hs, hj]
   · simp [List.getElem?_append, Nat.min_eq_left hs,
-      show ¬ j < i * repr.size by grind [Nat.add_mul],
-      show ¬ j - i * repr.size < repr.size by grind [Nat.add_mul],
+      show ¬ j < i by grind [Nat.add_mul],
+      show ¬ j - i < repr.size by grind [Nat.add_mul],
       List.getElem?_drop]
     apply congrArg (bytes[·]?)
     grind [Nat.add_mul]
 
 theorem update_inside (repr : Repr ty) (bytes : Vector (Cell U8) r)
-    (i : Nat) (hi : (i + 1) * repr.size ≤ r) (data : Vector (Cell U8) repr.size)
+    (i : Nat) (hi : (i + repr.size) ≤ r) (data : Vector (Cell U8) repr.size)
     (j : Nat) (hj : j < repr.size) :
-    (repr.update bytes i hi data).toList[i * repr.size + j]? = some data[j] := by
-  have hs : i * repr.size ≤ r := by grind [Nat.add_mul]
+    (repr.update bytes i hi data).toList[i + j]? = some data[j] := by
+  have hs : i ≤ r := by grind [Nat.add_mul]
   rw [update_toList]
   simp [List.getElem?_append, Nat.min_eq_left hs,
-    show ¬ i * repr.size + j < i * repr.size by grind, hj]
+    show ¬ i + j < i by grind, hj]
 
 theorem select_update_disjoint {T : Type u} {U : Type v}
     (reprT : Repr T) (reprU : Repr U) (bytes : Vector (Cell U8) r)
-    (i j : Nat) (hi : (i + 1) * reprT.size ≤ r) (hj : (j + 1) * reprU.size ≤ r)
+    (i j : Nat) (hi : (i + reprT.size) ≤ r) (hj : (j + reprU.size) ≤ r)
     (data : Vector (Cell U8) reprT.size) (hd : CellsDisjoint reprT i reprU j) :
     reprU.select (reprT.update bytes i hi data) j hj = reprU.select bytes j hj := by
   apply Vector.toList_inj.mp
@@ -150,21 +150,21 @@ theorem select_update_disjoint {T : Type u} {U : Type v}
   intro k
   simp only [select_toList]
   by_cases hk : k < reprU.size
-  · have hout : j * reprU.size + k < i * reprT.size ∨
-        (i + 1) * reprT.size ≤ j * reprU.size + k := by
+  · have hout : j + k < i ∨
+        (i + reprT.size) ≤ j + k := by
       unfold CellsDisjoint at hd
       grind [Nat.add_mul]
-    simpa [hk] using update_outside reprT bytes i hi data (j * reprU.size + k) hout
+    simpa [hk] using update_outside reprT bytes i hi data (j + k) hout
   · calc
       _ = none := List.getElem?_eq_none (by simp only [List.length_take]; grind)
       _ = _ := (List.getElem?_eq_none (by simp only [List.length_take]; grind)).symm
 
 theorem read_update_disjoint {T : Type u} {U : Type v}
     (reprT : Repr T) (reprU : Repr U) (bytes : Vector (Cell U8) r)
-    (i j : Nat) (hi : (i + 1) * reprT.size ≤ r)
+    (i j : Nat) (hi : (i + reprT.size) ≤ r)
     (data : Vector (Cell U8) reprT.size) (hd : CellsDisjoint reprT i reprU j) :
     reprU.read (reprT.update bytes i hi data) j = reprU.read bytes j := by
-  by_cases hj : 0 < reprU.size ∧ (j + 1) * reprU.size ≤ r
+  by_cases hj : 0 < reprU.size ∧ (j + reprU.size) ≤ r
   · simp [read, hj, select_update_disjoint reprT reprU bytes i j hi hj.2 data hd]
   · simp [read, hj]
 
@@ -311,9 +311,10 @@ theorem modify.spec (repr : Repr ty) (p : RawPtr ty)
     (change : ∀ {r}, Vector (Cell U8) r → Option (Vector (Cell U8) r))
     (s₀ : Heap) (block : Block) (data : Vector (Cell U8) block.repr.length)
     (hl : s₀.allocations p.base = some block)
-    (ha : repr.align.val ∣ block.alignment.val) (hc : change block.bytes = some data) :
+    (ha : repr.align.val ∣ block.alignment.val) (hp : repr.align.val ∣ p.byteOffset.val)
+    (hc : change block.bytes = some data) :
     modify repr p change s₀ = some (s₀.storeRepr p.base data.toList) := by
-  simp [modify, hl, ha, hc]
+  simp [modify, hl, ha, hp, hc]
 
 theorem modify.success {repr : Repr ty} {p : RawPtr ty}
     {change : ∀ {r}, Vector (Cell U8) r → Option (Vector (Cell U8) r)}
@@ -328,7 +329,7 @@ theorem modify.success {repr : Repr ty} {p : RawPtr ty}
     · rename_i ha
       split at h
       · rename_i data hc
-        exact ⟨block, data, hl, ha, hc, (Option.some.inj h).symm⟩
+        exact ⟨block, data, hl, ha.1, hc, (Option.some.inj h).symm⟩
       · cases h
     · cases h
   · cases h
@@ -344,8 +345,8 @@ theorem readRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
   cases hl : s.allocations p.base
   · simp [readRange, read, hl]
   · rename_i blk
-    by_cases ha : repr.align.val ∣ blk.alignment.val
-    · by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    by_cases ha : repr.align.val ∣ blk.alignment.val ∧ repr.align.val ∣ p.byteOffset.val
+    · by_cases hb : 0 < repr.size ∧ (p.byteOffset.val + repr.size) ≤ blk.repr.length
       · simp [readRange, read, hl, ha, hb, List.range_succ, Repr.read, Option.bind_assoc]
         apply congrArg (Option.bind _)
         funext data
@@ -361,7 +362,7 @@ theorem borrowRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
   cases hl : s.allocations p.base
   · simp [borrowRange, modifyRange, borrow, modify, hl]
   · rename_i blk
-    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    by_cases hb : 0 < repr.size ∧ (p.byteOffset.val + repr.size) ≤ blk.repr.length
     · simp [borrowRange, modifyRange, borrow, modify, hl, hb, List.range_succ]
     · simp [borrowRange, modifyRange, borrow, modify, hl, hb, Repr.borrow]
 
@@ -370,7 +371,7 @@ theorem shareRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
   cases hl : s.allocations p.base
   · simp [shareRange, modifyRange, share, modify, hl]
   · rename_i blk
-    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    by_cases hb : 0 < repr.size ∧ (p.byteOffset.val + repr.size) ≤ blk.repr.length
     · simp [shareRange, modifyRange, share, modify, hl, hb, List.range_succ]
     · simp [shareRange, modifyRange, share, modify, hl, hb, Repr.share]
 
@@ -379,7 +380,7 @@ theorem endShareRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
   cases hl : s.allocations p.base
   · simp [endShareRange, modifyRange, endShare, modify, hl]
   · rename_i blk
-    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    by_cases hb : 0 < repr.size ∧ (p.byteOffset.val + repr.size) ≤ blk.repr.length
     · simp [endShareRange, modifyRange, endShare, modify, hl, hb, List.range_succ]
     · simp [endShareRange, modifyRange, endShare, modify, hl, hb, Repr.endShare]
 
@@ -390,7 +391,7 @@ theorem endBorrowRange_single (repr : Repr ty) (p : RawPtr ty)
   cases hl : s.allocations p.base
   · simp [endBorrowRange, modifyRange, endBorrow, modify, hl]
   · rename_i blk
-    by_cases hb : 0 < repr.size ∧ (p.index.val + 1) * repr.size ≤ blk.repr.length
+    by_cases hb : 0 < repr.size ∧ (p.byteOffset.val + repr.size) ≤ blk.repr.length
     · simp [endBorrowRange, modifyRange, endBorrow, modify, hl, hb, List.range_succ,
         Repr.endBorrow]
       generalize repr.decode data = result at decoded ⊢

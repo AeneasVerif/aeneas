@@ -23,7 +23,7 @@ theorem read.spec (repr : Repr T) (p : RawPtr T) (value : T) (depth : Nat)
     (hsize : 0 < repr.size) :
     Triple (pointsTo repr p value depth) (RawPtr.read repr p)
       (fun x h => x = value ∧ pointsTo repr p value depth h) :=
-  Triple.guardedModify (SepLogic.read.spec repr p value depth hsize)
+  Triple.checkedModify (SepLogic.read.spec repr p value depth hsize)
 
 theorem write.spec (repr : Repr T) (p : RawPtr T) (old value : T)
     (hsize : 0 < repr.size) :
@@ -32,14 +32,14 @@ theorem write.spec (repr : Repr T) (p : RawPtr T) (old value : T)
   unfold MutRawPtr.write
   apply Triple.bind (Triple.choose (pointsTo repr p old) repr value)
   intro data
-  exact Triple.guardedModify
+  exact Triple.checkedModify
     (SepLogic.write_encoding.spec repr p old value data.val data.property hsize)
 
 theorem readRange_single.spec (repr : Repr T) (p : RawPtr T) (value : T) (depth : Nat)
     (hsize : 0 < repr.size) :
     Triple (pointsTo repr p value depth) (RawPtr.readRange repr p 1)
       (fun values h => values = [value] ∧ pointsTo repr p value depth h) := by
-  apply Triple.guardedModify
+  apply Triple.checkedModify
   intro h F s hp hd hm hi
   have hr : Heap.readRange repr p 1 s = some [value] := by
     rw [Heap.readRange_single, read_of_pointsTo hsize hp ((Fragment.matches_union _ _ _).mp hm).1]
@@ -70,7 +70,7 @@ theorem borrowRange_single.spec (repr : Repr T) (p : RawPtr T) (value : T)
     Triple (pointsTo repr p value) (RawPtr.borrowRange repr p 1)
       (fun values h => values = [value] ∧
         block repr p (Vector.replicate repr.size .borrowed).toList h) := by
-  apply Triple.guardedModify
+  apply Triple.checkedModify
   unfold State.borrowRange
   simp only [Heap.borrowRange_single]
   exact read_transfer_single.spec repr p value 0 (Heap.borrow repr p) _ hsize
@@ -92,7 +92,7 @@ theorem shareRange_single.spec (repr : Repr T) (p : RawPtr T) (value : T) (depth
     (hsize : 0 < repr.size) :
     Triple (pointsTo repr p value depth) (RawPtr.shareRange repr p 1)
       (fun values h => values = [value] ∧ pointsTo repr p value (depth + 1) h) := by
-  apply Triple.guardedModify
+  apply Triple.checkedModify
   unfold State.shareRange
   simp only [Heap.shareRange_single]
   exact read_transfer_single.spec repr p value depth (Heap.share repr p) _ hsize
@@ -102,7 +102,7 @@ theorem endShareRange_single.spec (repr : Repr T) (p : RawPtr T) (value : T) (de
     (hsize : 0 < repr.size) :
     Triple (pointsTo repr p value (depth + 1)) (RawPtr.endShareRange repr p [value])
       (fun _ => pointsTo repr p value depth) := by
-  apply Triple.guardedModify
+  apply Triple.checkedModify
   intro h F s hp hd hm hi
   have hr : Heap.readRange repr p 1 s = some [value] := by
     rw [Heap.readRange_single, read_of_pointsTo hsize hp ((Fragment.matches_union _ _ _).mp hm).1]
@@ -129,7 +129,7 @@ theorem endBorrowRange_single.spec (repr : Repr T) (p : RawPtr T) (value : T)
       have ht : tail = [] := by simpa using h.2
       exact ⟨encoding, by simp [ht], h.1⟩
   obtain ⟨encoding, rfl, decoded⟩ := he
-  apply Triple.guardedModify
+  apply Triple.checkedModify
   simpa only [Heap.endBorrowRange_single repr p encoding value decoded] using
     SepLogic.endBorrow.spec repr p encoding value decoded hsize
 
@@ -139,28 +139,28 @@ theorem endBorrow.spec (repr : Repr T) (p : RawPtr T) (value : T) (hsize : 0 < r
   endBorrowRange_single.spec repr p value hsize
 
 theorem offset.spec (repr : Repr T) (p : RawPtr T) (count : Isize) (length : Nat)
-    (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)
-    (hlo : 0 ≤ (p.index.val : Int) + count.val)
-    (hhi : (p.index.val : Int) + count.val ≤ length)
-    (hfit : (p.index.val : Int) + count.val < (2 ^ UScalarTy.numBits .Usize : Nat)) :
+    (own : Bool) (hsize : 0 < repr.size) (hstart : p.byteOffset.val ≤ length * repr.size)
+    (hlo : 0 ≤ (p.byteOffset.val : Int) + count.val * repr.size)
+    (hhi : (p.byteOffset.val : Int) + count.val * repr.size ≤ length * repr.size)
+    (hfit : (p.byteOffset.val : Int) + count.val * repr.size < (2 ^ UScalarTy.numBits .Usize : Nat)) :
     Triple (alloc repr ⟨p.base, ⟨0⟩⟩ length own) (RawPtr.offset repr p count)
-      (fun q h => q.base = p.base ∧ (q.index.val : Int) = (p.index.val : Int) + count.val ∧
+      (fun q h => q.base = p.base ∧ (q.byteOffset.val : Int) = (p.byteOffset.val : Int) + count.val * repr.size ∧
         alloc repr ⟨p.base, ⟨0⟩⟩ length own h) :=
-  Triple.guardedModify (SepLogic.offset.spec repr p count.val length own hsize hstart hlo hhi hfit)
+  Triple.checkedModify (SepLogic.offset.spec repr p count.val length own hsize hstart hlo hhi hfit)
 
 theorem add.spec (repr : Repr T) (p : RawPtr T) (count : Usize) (length : Nat)
-    (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)
-    (hhi : p.index.val + count.val ≤ length)
-    (hfit : p.index.val + count.val < 2 ^ UScalarTy.numBits .Usize) :
+    (own : Bool) (hsize : 0 < repr.size) (hstart : p.byteOffset.val ≤ length * repr.size)
+    (hhi : p.byteOffset.val + count.val * repr.size ≤ length * repr.size)
+    (hfit : p.byteOffset.val + count.val * repr.size < 2 ^ UScalarTy.numBits .Usize) :
     Triple (alloc repr ⟨p.base, ⟨0⟩⟩ length own) (RawPtr.add repr p count)
-      (fun q h => q.base = p.base ∧ q.index.val = p.index.val + count.val ∧
+      (fun q h => q.base = p.base ∧ q.byteOffset.val = p.byteOffset.val + count.val * repr.size ∧
         alloc repr ⟨p.base, ⟨0⟩⟩ length own h) := by
-  have hlo : 0 ≤ (p.index.val : Int) + count.val := by agrind
-  have hbound : (p.index.val : Int) + count.val ≤ length := by agrind
-  have hindex : (p.index.val : Int) + count.val < (2 ^ UScalarTy.numBits .Usize : Nat) := by
+  have hlo : 0 ≤ (p.byteOffset.val : Int) + count.val * repr.size := by agrind
+  have hbound : (p.byteOffset.val : Int) + count.val * repr.size ≤ length * repr.size := by agrind
+  have hindex : (p.byteOffset.val : Int) + count.val * repr.size < (2 ^ UScalarTy.numBits .Usize : Nat) := by
     agrind
   apply Triple.conseq (fun _ h => h) ?_
-    (Triple.guardedModify (SepLogic.offset.spec repr p count.val length own hsize hstart
+    (Triple.checkedModify (SepLogic.offset.spec repr p count.val length own hsize hstart
       hlo hbound hindex))
   intro q h ⟨hb, hi, hp⟩
   exact ⟨hb, by grind, hp⟩
@@ -186,7 +186,7 @@ theorem newBlock.spec (repr : Repr T) (value : T) (own : Bool) (s : Heap) (F : F
       have ht : tail = [] := by simpa using h.2
       exact ⟨encoding, by simp [ht], h.1⟩
   obtain ⟨encoding, rfl, decoded⟩ := he
-  apply Spec.guardedModify.mpr
+  apply Spec.checkedModify.mpr
   obtain ⟨p, s', hs⟩ := Heap.newBlock.enabled repr [encoding] own s hi hc (by simpa using hl)
   refine ⟨⟨p, s', hs⟩, ?_⟩
   intro p s' hs
@@ -230,7 +230,7 @@ theorem read_free.spec (repr : Repr T) (p : RawPtr T) (value : T)
     (own : Bool) (hsize : 0 < repr.size) :
     Triple (sep (alloc repr p 1 own) (pointsTo repr p value))
       (do let value ← RawPtr.read repr p
-          Result.guardedModify (fun s (_ : Unit) s' => Heap.freeBlock repr p 1 own s = some s')
+          Result.checkedModify (fun s (_ : Unit) s' => Heap.freeBlock repr p 1 own s = some s')
           pure value)
       (fun x h => x = value ∧ emp h) := by
   apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
@@ -242,7 +242,7 @@ theorem read_free.spec (repr : Repr T) (p : RawPtr T) (value : T)
   intro hx
   subst x
   apply Triple.bind (Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
-    (fun _ _ h => h) (Triple.guardedModify (free_pointsTo.spec repr p value own)))
+    (fun _ _ h => h) (Triple.checkedModify (free_pointsTo.spec repr p value own)))
   intro _
   exact Triple.pure emp value
 

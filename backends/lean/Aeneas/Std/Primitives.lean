@@ -473,6 +473,21 @@ def Result.guardedModify {α : Type} (modify : State → α → State → Prop) 
   Result.vis (.guardedModify α modify) fun answer =>
     Result.ok answer.down
 
+/-- Totalize a heap request: `none` is the unique outcome when no successful transition exists.
+Failure preserves the input heap for this operation, not for earlier operations. -/
+def State.checked {α : Type} (modify : State → α → State → Prop)
+    (s : State) (answer : Option α) (s' : State) : Prop :=
+  match answer with
+  | some value => modify s value s'
+  | none => (¬ ∃ value next, modify s value next) ∧ s' = s
+
+/-- Heap errors explicitly continue with `fail undef`, instead of leaving a disabled effect.
+The request is always enabled; successful outcomes retain the original relation. This is a
+logical interpretation, not an algorithm for deciding whether an arbitrary relation is enabled. -/
+def Result.checkedModify {α : Type} (modify : State → α → State → Prop) : Result α :=
+  Result.vis (.guardedModify (Option α) (State.checked modify)) fun answer =>
+    Result.ofOption answer.down .undef
+
 /-- Choose any encoding decoding to `value`, without changing the state.
 `repr.complete` guarantees that the set of permitted results is nonempty. -/
 def Repr.choose (repr : Repr ty) (value : ty) :

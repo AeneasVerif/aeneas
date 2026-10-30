@@ -71,19 +71,19 @@ variable {ty : Type u} {r : Nat}
 def select
   (repr : Repr ty)
   (bytes : Vector (Cell U8) r)
-  (i : Nat) (hi : (i + 1) * repr.size ≤ r) : Vector (Cell U8) repr.size :=
-  (bytes.extract (i * repr.size) ((i + 1) * repr.size)).cast
-    (by rw [Nat.min_eq_left hi]; simp [Nat.add_mul])
+  (i : Nat) (hi : (i + repr.size) ≤ r) : Vector (Cell U8) repr.size :=
+  (bytes.extract (i) ((i + repr.size))).cast
+    (by rw [Nat.min_eq_left hi]; simp)
 
 /-- Overwrite the selected cells, preserving all surrounding cells. -/
 def update
   (repr : Repr ty)
   (bytes : Vector (Cell U8) r)
-  (i : Nat) (hi : (i + 1) * repr.size ≤ r)
+  (i : Nat) (hi : (i + repr.size) ≤ r)
   (replacement : Vector (Cell U8) repr.size) : Vector (Cell U8) r :=
-  ((bytes.extract 0 (i * repr.size)) ++ replacement ++
-    bytes.extract ((i + 1) * repr.size)).cast (by
-      have hstart : i * repr.size ≤ r := by grind [Nat.add_mul]
+  ((bytes.extract 0 (i)) ++ replacement ++
+    bytes.extract ((i + repr.size))).cast (by
+      have hstart : i ≤ r := by grind [Nat.add_mul]
       simp only [Nat.min_eq_left hstart, Nat.sub_zero, Nat.min_self]
       grind [Nat.add_mul])
 
@@ -96,7 +96,7 @@ def writeBytes (n : Nat) (bytes : Vector (Cell U8) n) (data : Vector U8 n) :
   (bytes.zip data).mapM fun (cell, byte) => Cell.write cell byte
 
 def read (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) : Option ty :=
-  if h : 0 < repr.size ∧ (i + 1) * repr.size ≤ r then
+  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
     (readBytes repr.size (repr.select bytes i h.2)).bind repr.decode
   else none
 
@@ -113,7 +113,7 @@ def create (repr : Repr ty) {n : Nat}
 def write (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
     (value : ty) (data : Vector U8 repr.size)
     (_decoded : repr.decode data = some value) : Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + 1) * repr.size ≤ r then
+  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
     match writeBytes repr.size (repr.select bytes i h.2) data with
     | some cells => some (repr.update bytes i h.2 cells)
     | none => none
@@ -121,7 +121,7 @@ def write (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
 
 def borrow (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
     Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + 1) * repr.size ≤ r then
+  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
     match (repr.select bytes i h.2).mapM Cell.borrow with
     | some cells => some (repr.update bytes i h.2 cells)
     | none => none
@@ -131,7 +131,7 @@ def borrow (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
 def endBorrow (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
     (value : ty) (data : Vector U8 repr.size)
     (_decoded : repr.decode data = some value) : Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + 1) * repr.size ≤ r then
+  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
     match ((repr.select bytes i h.2).zip data).mapM (fun (cell, byte) =>
         Cell.endBorrow cell byte) with
     | some cells => some (repr.update bytes i h.2 cells)
@@ -140,7 +140,7 @@ def endBorrow (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
 
 def share (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
     Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + 1) * repr.size ≤ r then
+  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
     match (repr.select bytes i h.2).mapM Cell.share with
     | some cells => some (repr.update bytes i h.2 cells)
     | none => none
@@ -148,7 +148,7 @@ def share (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
 
 def endShare (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
     Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + 1) * repr.size ≤ r then
+  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
     match (repr.select bytes i h.2).mapM Cell.endShare with
     | some cells => some (repr.update bytes i h.2 cells)
     | none => none

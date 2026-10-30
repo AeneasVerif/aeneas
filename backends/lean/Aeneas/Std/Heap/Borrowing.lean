@@ -107,30 +107,28 @@ theorem endShare_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (value : ty)
 
 /-- Cleanup authority supplies the extent even when no byte cells are owned. -/
 theorem offset.spec (repr : Repr ty) (p : RawPtr ty) (count : Int) (length : Nat)
-    (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)
-    (hlo : 0 ≤ (p.index.val : Int) + count)
-    (hhi : (p.index.val : Int) + count ≤ length)
-    (hfit : (p.index.val : Int) + count < (2 ^ UScalarTy.numBits .Usize : Nat)) :
+    (own : Bool) (_hsize : 0 < repr.size) (hstart : p.byteOffset.val ≤ length * repr.size)
+    (hlo : 0 ≤ (p.byteOffset.val : Int) + count * repr.size)
+    (hhi : (p.byteOffset.val : Int) + count * repr.size ≤ length * repr.size)
+    (hfit : (p.byteOffset.val : Int) + count * repr.size < (2 ^ UScalarTy.numBits .Usize : Nat)) :
     Triple (alloc repr ⟨p.base, ⟨0⟩⟩ length own) (State.offset repr p count)
-      (fun q h => q.base = p.base ∧ (q.index.val : Int) = (p.index.val : Int) + count ∧
+      (fun q h => q.base = p.base ∧ (q.byteOffset.val : Int) = (p.byteOffset.val : Int) + count * repr.size ∧
         alloc repr ⟨p.base, ⟨0⟩⟩ length own h) := by
   rintro h F s ⟨_, rfl⟩ hd hm hi
-  obtain ⟨blk, hl, hn, ha, _⟩ :=
+  obtain ⟨blk, hl, hn, _, _⟩ :=
     ((Fragment.matches_union _ _ _).mp hm).1 _ rfl
-  have he : Heap.extent repr s p.base = some length := by
-    simp [Heap.extent, hl, ← ha, hn, hsize]
-  let q : RawPtr ty := ⟨p.base, ⟨BitVec.ofNat _ ((p.index.val : Int) + count).toNat⟩⟩
-  have hq : (q.index.val : Int) = (p.index.val : Int) + count := by
-    have ht : ((p.index.val : Int) + count).toNat < 2 ^ UScalarTy.numBits .Usize := by
+  let q : RawPtr ty := ⟨p.base, ⟨BitVec.ofNat _ ((p.byteOffset.val : Int) + count * repr.size).toNat⟩⟩
+  have hq : (q.byteOffset.val : Int) = (p.byteOffset.val : Int) + count * repr.size := by
+    have ht : ((p.byteOffset.val : Int) + count * repr.size).toNat < 2 ^ UScalarTy.numBits .Usize := by
       grind
     change ((BitVec.ofNat (UScalarTy.numBits .Usize)
-      ((p.index.val : Int) + count).toNat).toNat : Int) = _
+      ((p.byteOffset.val : Int) + count * repr.size).toNat).toNat : Int) = _
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt ht]
     exact Int.toNat_of_nonneg hlo
   have hr : Heap.offset repr p count s = some q := by
-    have hf : (p.index.val : Int) + count < (2 : Int) ^ UScalarTy.numBits .Usize := by
+    have hf : (p.byteOffset.val : Int) + count * repr.size < (2 : Int) ^ UScalarTy.numBits .Usize := by
       simpa using hfit
-    simp [Heap.offset, he, hstart, hlo, hhi, hf, q]
+    simp [Heap.offset, hl, hn, hstart, hlo, hhi, hf, q]
   refine ⟨⟨q, s, hr, rfl⟩, ?_⟩
   rintro result s' ⟨hs, rfl⟩
   have he := Option.some.inj (hs.symm.trans hr)

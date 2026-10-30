@@ -23,7 +23,7 @@ theorem Cell.write.writable {cell : Cell ty} {value : ty} {result : Cell ty}
 namespace Repr
 
 theorem read.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b : Nat)
-    (hlo : i * repr.size ≤ b) (hhi : b < (i + 1) * repr.size)
+    (hlo : i ≤ b) (hhi : b < (i + repr.size))
     (byte : Cell U8) (hp : bytes.toList[b]? = some byte) (hn : byte.read = none) :
     repr.read bytes i = none := by
   cases he : repr.read bytes i
@@ -33,17 +33,17 @@ theorem read.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b :
     split at he
     · rename_i hb
       obtain ⟨data, hr, _⟩ := Option.bind_eq_some_iff.mp he
-      have hk : b - i * repr.size < repr.size := by grind [Nat.add_mul]
-      have hs := select_getElem? repr bytes i hb.2 (b - i * repr.size) hk
-      have hindex : i * repr.size + (b - i * repr.size) = b := by grind
+      have hk : b - i < repr.size := by grind [Nat.add_mul]
+      have hs := select_getElem? repr bytes i hb.2 (b - i) hk
+      have hindex : i + (b - i) = b := by grind
       rw [hindex, hp, Vector.getElem?_eq_getElem hk] at hs
-      obtain ⟨v, hv⟩ := vector_mapM_enabled hr (b - i * repr.size) hk
+      obtain ⟨v, hv⟩ := vector_mapM_enabled hr (b - i) hk
       rw [Option.some.inj hs, hn] at hv
       cases hv
     · cases he
 
 theorem write.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b : Nat)
-    (hlo : i * repr.size ≤ b) (hhi : b < (i + 1) * repr.size)
+    (hlo : i ≤ b) (hhi : b < (i + repr.size))
     (byte : Cell U8) (hp : bytes.toList[b]? = some byte) (hn : ¬ byte.writable)
     (value : ty) (data : Vector U8 repr.size) (decoded : repr.decode data = some value) :
     repr.write bytes i value data decoded = none := by
@@ -54,11 +54,11 @@ theorem write.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b 
     · rename_i hb
       split at he
       · rename_i result hc
-        have hk : b - i * repr.size < repr.size := by grind [Nat.add_mul]
-        have hs := select_getElem? repr bytes i hb.2 (b - i * repr.size) hk
-        have hindex : i * repr.size + (b - i * repr.size) = b := by grind
+        have hk : b - i < repr.size := by grind [Nat.add_mul]
+        have hs := select_getElem? repr bytes i hb.2 (b - i) hk
+        have hindex : i + (b - i) = b := by grind
         rw [hindex, hp, Vector.getElem?_eq_getElem hk] at hs
-        obtain ⟨v, hv⟩ := vector_mapM_enabled hc (b - i * repr.size) hk
+        obtain ⟨v, hv⟩ := vector_mapM_enabled hc (b - i) hk
         simp only [Vector.getElem_zip] at hv
         exact (hn (Option.some.inj hs ▸ Cell.write.writable hv)).elim
       · cases he
@@ -70,10 +70,10 @@ namespace Heap
 
 theorem read.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
     (hs : s.allocations p.base = some block) (b : Nat)
-    (hlo : p.index.val * repr.size ≤ b) (hhi : b < (p.index.val + 1) * repr.size)
+    (hlo : p.byteOffset.val ≤ b) (hhi : b < (p.byteOffset.val + repr.size))
     (byte : Cell U8) (hp : block.repr[b]? = some byte) (hn : byte.read = none) :
     read repr p s = none := by
-  have hr := Repr.read.denied_by_byte repr block.bytes p.index.val b hlo hhi byte
+  have hr := Repr.read.denied_by_byte repr block.bytes p.byteOffset.val b hlo hhi byte
     (by simpa [Block.bytes] using hp) hn
   by_cases ha : repr.align.val ∣ block.alignment.val
   · simp [read, hs, ha, hr]
@@ -81,11 +81,11 @@ theorem read.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block :
 
 theorem write.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
     (hs : s.allocations p.base = some block) (b : Nat)
-    (hlo : p.index.val * repr.size ≤ b) (hhi : b < (p.index.val + 1) * repr.size)
+    (hlo : p.byteOffset.val ≤ b) (hhi : b < (p.byteOffset.val + repr.size))
     (byte : Cell U8) (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable)
     (value : ty) (data : Vector U8 repr.size) (decoded : repr.decode data = some value) :
     write repr p value data decoded s = none := by
-  have hw := Repr.write.denied_by_byte repr block.bytes p.index.val b hlo hhi byte
+  have hw := Repr.write.denied_by_byte repr block.bytes p.byteOffset.val b hlo hhi byte
     (by simpa [Block.bytes] using hp) hn value data decoded
   by_cases ha : repr.align.val ∣ block.alignment.val
   · simp [write, modify, hs, ha, hw]
@@ -95,7 +95,7 @@ theorem freeBlock.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {bl
     (hs : s.allocations p.base = some block) (b : Nat) (byte : Cell U8)
     (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable) (count : Nat) (own : Bool) :
     freeBlock repr p count own s = none := by
-  have hbad : ¬ (p.index.val = 0 ∧ block.owned = own ∧
+  have hbad : ¬ (p.byteOffset.val = 0 ∧ block.owned = own ∧
       repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
       block.repr.all (fun c => c.depth == some 0) = true) := by
     intro hg

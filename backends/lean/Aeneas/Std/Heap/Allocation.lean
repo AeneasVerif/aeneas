@@ -115,7 +115,7 @@ theorem fresh_disjoint {s : Heap} {F h : Fragment}
 theorem newBlock_single.resources {repr : Repr ty} {data : Vector U8 repr.size}
     {own : Bool} {s s' : Heap} {p : RawPtr ty}
     (h : Heap.newBlock repr [data] own s = some (p, s')) :
-    p.base = s.next ∧ p.index.val = 0 ∧ s'.next.val = s.next.val + 1 ∧
+    p.base = s.next ∧ p.byteOffset.val = 0 ∧ s'.next.val = s.next.val + 1 ∧
       Fragment.Matches s'
         (allocHeap repr p.base 1 own ∪
           cellsHeap repr.align p.base 0 (data.map (Cell.shared 0 ∘ some)).toList) := by
@@ -173,9 +173,9 @@ theorem matches_remove_frame {s : Heap} {F : Fragment} (base : BasePtr)
 
 theorem whole_of_matches {s : Heap} {repr : Repr ty} {p : RawPtr ty}
     {cells : List (Cell U8)} {count : Nat} {own : Bool}
-    (hoff : p.index.val = 0) (hlen : cells.length = count * repr.size)
+    (hoff : p.byteOffset.val = 0) (hlen : cells.length = count * repr.size)
     (ha : Fragment.Matches s (allocHeap repr p.base count own))
-    (hc : Fragment.Matches s (cellsHeap repr.align p.base (p.index.val * repr.size) cells)) :
+    (hc : Fragment.Matches s (cellsHeap repr.align p.base (p.byteOffset.val) cells)) :
     ∃ block, s.allocations p.base = some block ∧ block.repr = cells ∧
       block.alignment = repr.align ∧ block.owned = own := by
   obtain ⟨block, hl, hn, halign, ho⟩ := (Fragment.matches_single _ _).mp ha
@@ -220,7 +220,7 @@ theorem freeBlock.spec (repr : Repr ty) (p : RawPtr ty) (cells : List (Cell U8))
       (fun _ => emp) := by
   intro h F s hp hd hm hi
   obtain ⟨a, b, _, he, ⟨hoff, ha⟩, hb⟩ := hp
-  change b = cellsHeap repr.align p.base (p.index.val * repr.size) cells at hb
+  obtain ⟨_, hb⟩ := hb
   subst h a b
   obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _).mp hm
   obtain ⟨ha, hc⟩ := (Fragment.matches_union _ _ _).mp hab
@@ -231,7 +231,7 @@ theorem freeBlock.spec (repr : Repr ty) (p : RawPtr ty) (cells : List (Cell U8))
     exact beq_iff_eq.mpr (hw c hc)
   have hrun : Heap.freeBlock repr p count own s = some (s.remove p.base) := by
     have hlen' : block.repr.length = count * repr.size := hb ▸ hlen
-    have hg : p.index.val = 0 ∧ block.owned = own ∧
+    have hg : p.byteOffset.val = 0 ∧ block.owned = own ∧
         repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
         block.repr.all (fun c => c.depth == some 0) = true :=
       ⟨hoff, ho, halign ▸ Nat.dvd_refl _, hlen', hw'⟩

@@ -2,12 +2,16 @@ module
 
 import Aeneas.Std.Heap.Model
 import Aeneas.Std.Heap.Effects
+import all Aeneas.Std.Core.Ptr
+import all Aeneas.Std.Primitives
 import Aeneas.Std.Scalar.Notations
 public meta import Aeneas.Std.Scalar.Core
 
 open Aeneas.Std
 
 namespace Aeneas.Std.HeapTests
+
+unseal Result
 
 def byteRepr : Repr U8 where
   size := 1
@@ -95,7 +99,7 @@ def movement : Option Bool := do
   let (p, s) ← Heap.alloc byteRepr 2 Heap.empty
   let finish ← Heap.offset byteRepr p 2 s
   let back ← Heap.offset byteRepr finish (-2) s
-  some (back.index == p.index && finish.index == 2#usize &&
+  some (back.byteOffset == p.byteOffset && finish.byteOffset == 2#usize &&
     (Heap.read byteRepr finish s).isNone &&
     (Heap.offset byteRepr p (-1) s).isNone &&
     (Heap.offset byteRepr finish 1 s).isNone)
@@ -158,6 +162,80 @@ def crossTypePermissions : Option Bool := do
       some (first == 7#u8 && second == 9#u8)
 
 example : crossTypePermissions = some true := by native_decide
+
+example (p : RawPtr U32) : RawPtr.cast U32 (RawPtr.cast U8 p) = p := rfl
+
+/- The base is sufficiently aligned, but offset one is not. Every typed access
+and permission operation must reject it; casting itself preserves it. -/
+def misalignedAccess : Option Bool := do
+  let (p, s) ← Heap.newBlock alignedByteRepr [#v[7#u8, 8#u8], #v[9#u8, 0#u8]] true Heap.empty
+  let q : RawPtr U8 := ⟨p.base, 1#usize⟩
+  some ((Heap.read alignedByteRepr q s).isNone &&
+    (Heap.readRange alignedByteRepr q 1 s).isNone &&
+    (Heap.write alignedByteRepr q 9#u8 #v[9#u8, 0#u8] rfl s).isNone &&
+    (Heap.borrow alignedByteRepr q s).isNone &&
+    (Heap.share alignedByteRepr q s).isNone &&
+    (Heap.endShare alignedByteRepr q s).isNone &&
+    (Heap.endBorrow alignedByteRepr q 9#u8 #v[9#u8, 0#u8] rfl s).isNone &&
+    (Heap.borrowRange alignedByteRepr q 1 s).isNone &&
+    (Heap.shareRange alignedByteRepr q 1 s).isNone &&
+    (Heap.endShareRange alignedByteRepr q 1 s).isNone &&
+    (Heap.endBorrowRange alignedByteRepr q [#v[9#u8, 0#u8]] s).isNone &&
+    (Heap.read byteRepr (RawPtr.cast U8 q) s == some 8#u8))
+
+example : misalignedAccess = some true := by native_decide
+
+/- Observe the actual request and its continuation, not just the executable
+heap operation returning `none`. Every permitted response must lead to `undef`. -/
+def ObservesUndefined (s : State) (computation : Result T) : Prop :=
+  ∃ (Answer : Type) (request : State → Answer → State → Prop)
+    (resume : ULift Answer → Result T),
+    computation = Result.vis (.guardedModify Answer request) resume ∧
+    (∃ answer next, request s answer next) ∧
+    ∀ answer next, request s answer next →
+      next = s ∧ resume ⟨answer⟩ = Result.fail .undef
+
+theorem read_observes_undef (repr : Repr T) (p : RawPtr T) (s : State)
+    (failed : Heap.read repr p s = none) :
+    ObservesUndefined s (RawPtr.read repr p) := by
+  have disabled : ¬ ∃ value next, State.read repr p s value next := by
+    rintro ⟨value, next, he, _⟩
+    rw [failed] at he
+    cases he
+  refine ⟨Option T, State.checked (State.read repr p),
+    (fun answer => Result.ofOption answer.down .undef), rfl,
+    HeapWP.checked.enabled _ s, ?_⟩
+  intro answer next ht
+  obtain ⟨rfl, hs⟩ := (HeapWP.checked.failure disabled).mp ht
+  exact ⟨hs, rfl⟩
+
+def singleCellHeap (cell : Cell U8) : Heap :=
+  { allocations := fun base =>
+      if base = 0#usize then some ⟨[cell], ⟨1, 0, rfl⟩, true⟩ else none
+    next := 1#usize }
+
+def boolRepr : Repr Bool where
+  size := 1
+  align := ⟨1, 0, rfl⟩
+  decode bytes := if bytes[0] = 0#u8 then some false
+    else if bytes[0] = 1#u8 then some true else none
+  aligned := by decide
+  complete value := by
+    cases value
+    · exact ⟨#v[0#u8], by decide⟩
+    · exact ⟨#v[1#u8], by decide⟩
+
+/- Permission denial and invalid typed contents both reach the explicit
+failure continuation without changing the failed operation's input heap. -/
+example : ObservesUndefined (singleCellHeap .borrowed)
+    (RawPtr.read byteRepr ⟨0#usize, 0#usize⟩) := by
+  apply read_observes_undef
+  native_decide
+
+example : ObservesUndefined (singleCellHeap (.shared 0 (some 2#u8)))
+    (RawPtr.read boolRepr ⟨0#usize, 0#usize⟩) := by
+  apply read_observes_undef
+  native_decide
 
 def zeroRepr : Repr Unit where
   size := 0
