@@ -21,7 +21,7 @@ set_option maxRecDepth 2048
 namespace borrow
 
 /-- [borrow::check]:
-    Source: 'tests/src/borrow.rs', lines 16:0-18:1
+    Source: 'tests/src/borrow.rs', lines 10:0-12:1
     Visibility: public -/
 def check
   {T : Type _} (coreborrowBorrowTU32Inst : core.borrow.Borrow T Std.U32)
@@ -31,7 +31,7 @@ def check
   coreborrowBorrowTU32Inst.borrow s
 
 /-- [borrow::test_check]:
-    Source: 'tests/src/borrow.rs', lines 21:0-23:1
+    Source: 'tests/src/borrow.rs', lines 15:0-17:1
     Visibility: public -/
 def test_check : Result Unit := do
   let left_val ← check (core.borrow.Borrow.Blanket Std.U32) 5#u32
@@ -41,13 +41,13 @@ def test_check : Result Unit := do
 #guard (test_check).reducesTo ()
 
 /-- [borrow::direct]:
-    Source: 'tests/src/borrow.rs', lines 26:0-28:1
+    Source: 'tests/src/borrow.rs', lines 20:0-22:1
     Visibility: public -/
 def direct (x : Std.U32) : Result Std.U32 := do
   core.borrow.Borrow.Blanket.borrow x
 
 /-- [borrow::test_direct]:
-    Source: 'tests/src/borrow.rs', lines 31:0-33:1
+    Source: 'tests/src/borrow.rs', lines 25:0-27:1
     Visibility: public -/
 def test_direct : Result Unit := do
   let left_val ← direct 3#u32
