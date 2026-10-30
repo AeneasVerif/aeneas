@@ -11,11 +11,9 @@ on:
   # Makes it possible to run the forkflow by hand from GItHub's interface.
   workflow_dispatch:
 
-# One concurrency group per PR. On `main`, each run gets its own group.
+# Cancel previous versions of this job that are still running.
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{ github.event.pull_request.number ||
-    (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
