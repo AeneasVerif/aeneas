@@ -128,7 +128,7 @@ let () =
          the option -decreases-clauses" );
       ( "-split-files",
         Arg.Set split_files,
-        " Split the definitions into one module per Rust source file, \
+        " Split the definitions into one Lean module per Rust module, \
          mirroring the crate structure. Mutually exclusive with \
          -split-files-legacy." );
       ( "-split-files-legacy",
@@ -151,7 +151,7 @@ let () =
         " Emit a translation.json file alongside the Lean files (Lean only)" );
       ( "-dump-file-graph",
         Arg.Set dump_file_graph,
-        " Print the file-dependency graph and its SCCs" );
+        " Print the module-dependency graph and its SCCs" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,

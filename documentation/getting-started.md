@@ -30,22 +30,22 @@ This compiles the Rust code and produces `my_crate.llbc`, a serialized intermedi
 aeneas -backend lean my_crate.llbc -dest proofs -subdir /MyCrate/Code -split-files -namespace MyCrate
 ```
 
-With `-split-files`, Aeneas writes one Lean module per Rust source file, under
+With `-split-files`, Aeneas writes one Lean module per Rust module, under
 `proofs/MyCrate/Code/`, mirroring the crate:
 
 | Generated file                         | Contains                                                    |
 |----------------------------------------|-------------------------------------------------------------|
-| `Lib.lean`, `Foo.lean`, `Foo/Bar.lean` | The types and functions of `src/lib.rs`, `src/foo.rs`, `src/foo/bar.rs` |
-| `Foo/Baz/Opaques2_Template.lean`       | The extracted opaque definitions in the file `src/foo/baz.rs` (you complete this) |
+| `Lib.lean`, `Foo.lean`, `Foo/Bar.lean` | The types and functions of the crate root, `crate::foo`, `crate::foo::bar` |
+| `Foo/Baz/Opaques2_Template.lean`       | The extracted opaque definitions of the module `crate::foo::baz` (you complete this) |
 | `FunsExternal_Template.lean`           | Stubs for the functions from external dependencies (you complete this) |
 | `TypesExternal_Template.lean`          | Stubs for the types from external dependencies (you complete this)     |
 
 An added complexity is when there are mutual dependency relations between Rust declarations defined in
-different files. Lean does not allow for mutual recursion between files, so in these cases the extraction will
-generate bundle files that combine the contents of multiple Rust files into one.
+different modules. Lean does not allow for mutual recursion between files, so in these cases the extraction will
+generate bundle files that combine the contents of multiple Rust modules into one. 
 
 **Key aeneas flags:**
-- `-split-files` — one Lean module per Rust source file, mirroring the crate
+- `-split-files` — one Lean module per Rust module, mirroring the crate
   (used in this tutorial). Without `-subdir`, it also writes a `MyCrate.lean`
   entry point that imports every module.
 - `-dest <dir>` — output directory
@@ -107,7 +107,7 @@ Create `proofs/MyCrate/Properties/Basic.lean`:
 
 ```lean
 import Aeneas
-import MyCrate.Code.Lib -- the module of `src/lib.rs`, which defines `add_overflow`
+import MyCrate.Code.Lib -- the module of the crate root (`src/lib.rs`), which defines `add_overflow`
 
 open MyCrate
 

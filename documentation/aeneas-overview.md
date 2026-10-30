@@ -196,22 +196,25 @@ The `body` returns `ControlFlow.cont x'` to continue or `ControlFlow.done y` to 
 
 ### 3.1 Generated File Layout
 
-With `-split-files`, Aeneas writes one Lean module per Rust source file,
-mirroring the crate. For a crate `my_crate` extracted with `-dest D`:
+With `-split-files`, Aeneas writes one Lean module per Rust module, mirroring
+the crate's module tree (whatever files the modules are in). For a crate
+`my_crate` extracted with `-dest D`:
 
 | File                                                            | Contents                                                                                     |
 |-----------------------------------------------------------------|----------------------------------------------------------------------------------------------|
 | **D/MyCrate.lean**                                              | Entry point that imports every module                                                        |
-| **D/MyCrate/Foo.lean**                                          | The types and functions of `src/foo.rs` (`src/foo/bar.rs` gives `MyCrate/Foo/Bar.lean`)      |
+| **D/MyCrate/Foo.lean**                                          | The types and functions of `crate::foo` (`crate::foo::bar` gives `MyCrate/Foo/Bar.lean`)     |
+| **D/MyCrate/Lib.lean**                                          | The types and functions of the crate root (`src/lib.rs` or `src/main.rs`)                    |
 | **TypesExternal_Template.lean**, **FunsExternal_Template.lean** | Templates for hand-written models of the types and functions from external dependencies      |
 | **TypesExternal.lean**, **FunsExternal.lean**                   | The user's copies of the templates (never overwritten by Aeneas)                             |
 
-Two things can make the modules differ from the source files:
-- **Bundles:** Lean modules can't import each other in a cycle, so source files
+Two things can make the Lean modules differ from the Rust modules:
+- **Bundles:** Lean modules can't import each other in a cycle, so Rust modules
   whose declarations depend on each other in a cycle are combined into one
-  bundle module.
-- **Layers:** a file whose opaque declarations form dependency cycles with transparent
-  ones, we have to split the file into layers (e.g. `Foo/Part1.lean`,
+  bundle module. If one of them contains the others (e.g. `foo` and an inline
+  `foo::tests`), the bundle is named after it (`Foo.lean`).
+- **Layers:** a module whose opaque declarations form dependency cycles with transparent
+  ones, we have to split the module into layers (e.g. `Foo/Part1.lean`,
   `Foo/Opaques2_Template.lean`, `Foo/Part3.lean`), and `Foo.lean` imports them
   all. The `Opaques` templates are filled in like the external ones.
 
@@ -419,7 +422,7 @@ representation.
 ```
 
 Useful options:
-- `-split-files` — one Lean module per Rust source file (mirrors the crate
+- `-split-files` — one Lean module per Rust module (mirrors the crate
   structure); also emits a `Crate.lean` entry point by default (unless `-subdir`)
 - `-dest DIR` — output directory for generated files
 

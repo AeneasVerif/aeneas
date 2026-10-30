@@ -222,10 +222,10 @@ let use_fuel = ref false
     Lean. *)
 let split_files_legacy = ref false
 
-(** Split the generated definitions into one module per Rust source file,
-    mirroring the crate structure. Source files that form a usage cycle are
-    merged into a single module. Mutually exclusive with [split_files_legacy].
-*)
+(** Split the generated definitions into one Lean module per Rust module,
+    mirroring the crate structure. Rust modules that form a usage cycle are
+    merged into a single Lean module. Mutually exclusive with
+    [split_files_legacy]. *)
 let split_files = ref false
 
 (** Legacy flag, for Lean with [-split-files-legacy] only: generate an entry
@@ -241,8 +241,8 @@ let lean_gen_lakefile = ref false
 let emit_json = ref false
 
 (** Print the file-dependency graph and its strongly-connected components before
-    normal extraction. This previews which Rust source files would need to share
-    a Lean module when opting for multi-file extraction. *)
+    normal extraction. This previews which Rust modules would need to share a
+    Lean module when opting for multi-file extraction. *)
 let dump_file_graph = ref false
 
 (** If true, treat the unit functions (function taking no inputs and returning
