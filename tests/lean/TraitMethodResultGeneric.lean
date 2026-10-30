@@ -32,14 +32,14 @@ inductive Opt (F : Type _) where
     Source: 'tests/src/trait-method-result-generic.rs', lines 9:0-11:1
     Visibility: public -/
 structure Tr (Self : Type _) where
-  get : forall {F : Type}, Self → Result (Opt F)
+  get : forall (F : Type), Self → Result (Opt F)
 
 /-- [trait_method_result_generic::caller]:
     Source: 'tests/src/trait-method-result-generic.rs', lines 13:0-18:1
     Visibility: public -/
 def caller
   {X : Type _} (F : Type _) (TrInst : Tr X) (x : X) : Result Std.U32 := do
-  let o ← TrInst.get x
+  let o ← TrInst.get F x
   match o with
   | Opt.No => ok 0#u32
   | Opt.Yes _ => ok 1#u32
