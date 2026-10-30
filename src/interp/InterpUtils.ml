@@ -1036,8 +1036,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
         types = _;
         const_generics = _;
         trait_clauses;
-        regions_outlive;
-        types_outlive;
+        outlives;
         trait_type_constraints;
       } =
         generics
@@ -1059,23 +1058,11 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
       let trait_clauses =
         List.map (st_substitute_visitor#visit_trait_param subst) trait_clauses
       in
-      let regions_outlive =
+      let outlives =
         List.map
           (st_substitute_visitor#visit_region_binder
-             (st_substitute_visitor#visit_outlives_pred
-                st_substitute_visitor#visit_region
-                st_substitute_visitor#visit_region)
-             subst)
-          regions_outlive
-      in
-      let types_outlive =
-        List.map
-          (st_substitute_visitor#visit_region_binder
-             (st_substitute_visitor#visit_outlives_pred
-                st_substitute_visitor#visit_ty
-                st_substitute_visitor#visit_region)
-             subst)
-          types_outlive
+             st_substitute_visitor#visit_outlives_pred subst)
+          outlives
       in
       (* For the type variables and const generic variables we simply reuse the
          ones present in the context *)
@@ -1084,8 +1071,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
         types = ctx.type_vars;
         const_generics = ctx.const_generic_vars;
         trait_clauses;
-        regions_outlive;
-        types_outlive;
+        outlives;
         trait_type_constraints;
       }
     in
