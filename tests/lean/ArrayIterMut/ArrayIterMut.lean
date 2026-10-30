@@ -21,7 +21,7 @@ set_option maxRecDepth 2048
 namespace array_iter_mut
 
 /-- [array_iter_mut::add_two]: loop body 0:
-    Source: 'tests/src/array-iter-mut.rs', lines 14:4-16:5
+    Source: 'tests/src/array-iter-mut.rs', lines 11:4-13:5
     Visibility: public -/
 @[rust_loop_body]
 def add_two_loop.body
@@ -42,7 +42,7 @@ def add_two_loop.body
                                back im1))
 
 /-- [array_iter_mut::add_two]: loop 0:
-    Source: 'tests/src/array-iter-mut.rs', lines 14:4-16:5
+    Source: 'tests/src/array-iter-mut.rs', lines 11:4-13:5
     Visibility: public -/
 @[rust_loop]
 def add_two_loop
@@ -56,7 +56,7 @@ def add_two_loop
     (iter, back)
 
 /-- [array_iter_mut::add_two]:
-    Source: 'tests/src/array-iter-mut.rs', lines 13:0-17:1
+    Source: 'tests/src/array-iter-mut.rs', lines 10:0-14:1
     Visibility: public -/
 def add_two
   {N : Std.Usize} (x : Array Std.I32 N) : Result (Array Std.I32 N) := do
@@ -66,7 +66,7 @@ def add_two
   ok (into_iter_back back)
 
 /-- [array_iter_mut::test_add_two]:
-    Source: 'tests/src/array-iter-mut.rs', lines 20:0-24:1
+    Source: 'tests/src/array-iter-mut.rs', lines 17:0-21:1
     Visibility: public -/
 def test_add_two : Result Unit := do
   let x ← add_two (Array.make 3#usize [ 1#i32, 2#i32, 4#i32 ])

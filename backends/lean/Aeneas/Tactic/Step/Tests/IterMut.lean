@@ -18,9 +18,11 @@ example (a : Array U32 4#usize) :
 writes it. -/
 example (s : Slice U32) (h : 0 < s.length) :
     core.slice.iter.IteratorIterMut.next { slice := s }
-      ⦃ o it back => o = some s.val[0] ∧ it.i = 1 ∧
+      ⦃ o it back => o = some s.val[0]! ∧ it.i = 1 ∧
         (back it (some 7#u32)).slice.val[0]! = 7#u32 ⦄ := by
   step*
-  simp_all
+  cases o
+  · simp_all
+  · simp_all
 
 end iter_mut
