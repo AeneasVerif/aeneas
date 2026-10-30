@@ -1,5 +1,5 @@
-//! Exercises `-split-files`: one Lean module per source file, with files that
-//! form a dependency SCC merged into one module, and modules that alternate
+//! Exercises `-split-files`: one Lean module per Rust module, with modules that
+//! form a dependency SCC merged into one, and modules that alternate
 //! opaque/transparent declarations split into chains of files.
 #![feature(register_tool)]
 #![register_tool(verify)]

@@ -1,4 +1,4 @@
-//! A leaf rust file becomes a leaf Lean file
+//! A leaf Rust module becomes a leaf Lean file
 
 pub struct Point {
     pub x: i32,

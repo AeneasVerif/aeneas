@@ -2,4 +2,4 @@
 -- [wsmember]: the library entry point: importing this module brings the whole crate into scope.
 module
 public import SplitFilesWs.Util
-public import SplitFilesWs.Geometry.Mod
+public import SplitFilesWs.Geometry
