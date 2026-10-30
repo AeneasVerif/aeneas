@@ -392,6 +392,9 @@ let lean_builtin_funs =
       "core.array.Array.index_mut";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
     mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
+    (* file: "Aeneas/Std/Core/Borrow.lean", line: 17 *)
+    mk_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow"
+      "core.borrow.Borrow.Blanket.borrow";
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
@@ -1329,6 +1332,9 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::alloc::global::GlobalAlloc"
       "core.alloc.global.GlobalAlloc"
       ~methods:[ ("alloc", "alloc"); ("dealloc", "dealloc") ];
+    (* file: "Aeneas/Std/Core/Borrow.lean", line: 12 *)
+    mk_trait_decl "core::borrow::Borrow" "core.borrow.Borrow"
+      ~methods:[ ("borrow", "borrow") ];
     (* file: "Aeneas/Std/Core/Core.lean", line: 22 *)
     mk_trait_decl "core::clone::Clone" "core.clone.Clone"
       ~methods:[ ("clone", "clone"); ("clone_from", "clone_from") ]
@@ -1523,6 +1529,8 @@ let lean_builtin_trait_decls =
 
 let lean_builtin_trait_impls =
   [
+    (* file: "Aeneas/Std/Core/Borrow.lean", line: 27 *)
+    mk_trait_impl "core::borrow::Borrow<@T, @T>" "core.borrow.Borrow.Blanket";
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 48 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
