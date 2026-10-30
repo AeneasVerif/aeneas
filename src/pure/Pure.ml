@@ -651,9 +651,6 @@ and binop =
   | Mul of overflow_mode * integer_type
   | Div of overflow_mode * integer_type
   | Rem of overflow_mode * integer_type
-  | AddChecked of integer_type
-  | SubChecked of integer_type
-  | MulChecked of integer_type
   | Shl of overflow_mode * integer_type * integer_type
   | Shr of overflow_mode * integer_type * integer_type
   | Cmp of integer_type

@@ -97,7 +97,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
 
   let is_unreachable (st : statement) : bool =
     match st.kind with
-    | Call (call, _) -> (
+    | Call (call, _, _) -> (
         match call.func with
         | FnOpRegular { kind; _ } -> (
             match kind with
@@ -727,9 +727,10 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
             match rv with
             | Use _ | RvRef _ | RawPtr _ | NullaryOp _ | Aggregate _ ->
                 (can_inline, st :: ls)
-            | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
+            | BinaryOp _ | UnaryOp _ | Discriminant _ | Repeat _ ->
                 (false, st :: ls))
-        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _) -> (false, st :: ls)
+        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _, _) ->
+            (false, st :: ls)
         | _ ->
             [%craise] st.span
               ("unsupported statement: " ^ show_statement_kind st.kind))
@@ -1306,7 +1307,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_block env (block : block) =
         let is_from_str_call (st : statement) : bool =
           match st.kind with
-          | Call ({ func = FnOpRegular { kind = Fun fid; _ }; _ }, _) -> (
+          | Call ({ func = FnOpRegular { kind = Fun fid; _ }; _ }, _, _) -> (
               match FunDeclId.Map.find_opt fid crate.fun_decls with
               | Some decl -> is_from_str decl
               | None -> false)
@@ -1459,10 +1460,10 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Assert ({ cond; expected; check_kind }, on_failure, on_unwind) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
                 Assert ({ cond; expected; check_kind }, on_failure, on_unwind)
-            | Call (({ func; args; _ } as call), on_unwind) ->
+            | Call (({ func; args; _ } as call), dest, on_unwind) ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
-                Call ({ call with func; args }, on_unwind)
+                Call ({ call with func; args }, dest, on_unwind)
             | SetDiscriminant _ | StorageLive _ | StorageDead _ | PlaceMention _
             | Drop (_, _, _, _)
             | Panic _
@@ -1790,7 +1791,7 @@ let simplify_trait_calls (crate : crate) : crate =
   let is_blanket_try_into = match_pattern try_into_pat in
 
   let try_replace_call (super_visit : unit -> statement_kind) (span : Meta.span)
-      (call : call) (on_unwind : block) : statement_kind =
+      (call : call) (dest : place) (on_unwind : block) : statement_kind =
     match call.func with
     | FnOpRegular { kind = Fun fid; generics } -> (
         match FunDeclId.Map.find_opt fid crate.fun_decls with
@@ -1801,7 +1802,7 @@ let simplify_trait_calls (crate : crate) : crate =
               (* Replace the call by an assignment *)
               [%sanity_check] span (List.length call.args = 1);
               let arg = Use (List.hd call.args, NoRetag) in
-              Assign (call.dest, arg))
+              Assign (dest, arg))
             else if is_blanket_try_into d.item_meta.name then (
               [%ldebug
                 "- call: " ^ call_to_string crate call ^ "\n- generics: "
@@ -1860,7 +1861,7 @@ let simplify_trait_calls (crate : crate) : crate =
                       (* *)
                       let kind = Fun method_ref.binder_value.id in
                       let func = FnOpRegular { kind; generics } in
-                      Call ({ call with func }, on_unwind)
+                      Call ({ call with func }, dest, on_unwind)
                   | _ ->
                       (* TODO: *)
                       super_visit ())
@@ -1878,10 +1879,10 @@ let simplify_trait_calls (crate : crate) : crate =
       (* Keep track of the last span *)
       method! visit_statement _ st = super#visit_statement (Some st.span) st
 
-      method! visit_Call span call on_unwind =
+      method! visit_Call span call dest on_unwind =
         try_replace_call
-          (fun _ -> super#visit_Call span call on_unwind)
-          (Option.get span) call on_unwind
+          (fun _ -> super#visit_Call span call dest on_unwind)
+          (Option.get span) call dest on_unwind
     end
   in
   let crate = visitor#visit_crate None crate in
@@ -2214,7 +2215,6 @@ let anon_consts_to_calls (crate : crate) : crate =
                       FnOpRegular
                         { kind = Fun init_id; generics = gref.generics };
                     args = [];
-                    dest;
                     safety = Inherit;
                   }
                 in
@@ -2225,7 +2225,7 @@ let anon_consts_to_calls (crate : crate) : crate =
                   {
                     span;
                     statement_id = StatementId.zero;
-                    kind = Call (call, on_unwind);
+                    kind = Call (call, dest, on_unwind);
                     comments_before = [];
                   }
                   :: !new_statements;
