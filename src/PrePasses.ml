@@ -1270,6 +1270,18 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
       panic(core::panicking::panic_fmt)
     ]}
 
+    as well as:
+    {[
+      s := &promoted_const;
+      x := from_str<'_>(move s);
+      StorageDead ...;
+      panic(core::panicking::panic_fmt)
+
+        ~>
+
+      panic(core::panicking::panic_fmt)
+    ]}
+
     TODO: remove *)
 let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
   let pats =
@@ -1310,9 +1322,29 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
           | [] -> []
         in
 
+        let is_str_global_ref (st : statement) : bool =
+          match st.kind with
+          | Assign
+              ( _,
+                RvRef
+                  ( {
+                      kind = PlaceGlobal _;
+                      ty = TAdt { builtin = Some TStr; _ };
+                    },
+                    _,
+                    _ ) ) -> true
+          | _ -> false
+        in
+
         let rec update (stl : statement list) : statement list =
           match stl with
           | [] -> []
+          | st_str :: st0 :: stl
+            when is_str_global_ref st_str && is_from_str_call st0 -> (
+              match skip_storage_dead stl with
+              | ({ kind = Panic _; _ } as st1) :: stl1 ->
+                  self#visit_statement env st1 :: update stl1
+              | _ -> self#visit_statement env st_str :: update (st0 :: stl))
           | st0 :: stl when is_from_str_call st0 -> (
               match skip_storage_dead stl with
               | st1 :: stl1 -> (
