@@ -1,5 +1,4 @@
 //@ [!lean] skip
-//@ [lean] known-failure
 // A call to a function returning `!` which ends the block (Charon emits no
 // `undefined_behavior` after it) must be treated as diverging.
 fn die() -> ! {
