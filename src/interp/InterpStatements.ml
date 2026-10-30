@@ -416,6 +416,7 @@ let create_empty_abstractions_from_abs_region_groups
       abs_id;
       kind = kind rg_id;
       can_end;
+      alive_hint = None;
       parents;
       regions;
       ended_subabs = AbsLevelSet.empty;
