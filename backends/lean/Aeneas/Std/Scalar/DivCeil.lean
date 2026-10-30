@@ -11,20 +11,11 @@ open Result Error ScalarElab
 /-! ## `{u8,u16,...}::div_ceil`
 
 Rust defines `div_ceil` on the unsigned integers only
-(<https://doc.rust-lang.org/std/primitive.usize.html#method.div_ceil>). The implementation
-(`library/core/src/num/uint_macros.rs`) is:
-```rust
-pub const fn div_ceil(self, rhs: Self) -> Self {
-    let d = self / rhs;
-    let r = self % rhs;
-    if r > 0 { d + 1 } else { d }
-}
-```
-It panics when `rhs == 0` (the division panics, in every build mode), and `d + 1` can't overflow:
-the result is at most `self` (`div_ceil_le`). The model computes the same thing. -/
+(<https://doc.rust-lang.org/std/primitive.usize.html#method.div_ceil>).
+It panics when `rhs == 0` and `d + 1` can't overflow:
+the result is at most `self` (`div_ceil_le`). -/
 
-/-- The result of `div_ceil` is at most `x`, so it fits in the type of its arguments. (Not
-    `private`: the exposed body of `UScalar.div_ceil` uses it.) -/
+/-- The result of `div_ceil` is at most `x`, so it fits in the type of its arguments. -/
 theorem UScalar.div_ceil_le {x y : Nat} (hy : 0 < y) :
     (if 0 < x % y then x / y + 1 else x / y) ≤ x := by
   have := Nat.div_add_mod x y
@@ -64,9 +55,8 @@ theorem UScalar.div_ceil_zero {ty : UScalarTy} (x y : UScalar ty) (hy : y.val = 
     UScalar.div_ceil x y = fail divisionByZero := by
   simp [UScalar.div_ceil, hy]
 
-/-- **Spec theorem for `div_ceil`**, for every unsigned width: the result is the ceiling of
-    `x / y`, i.e. the unique `z` with `x ≤ z * y < x + y` (the per-width `@[step]` theorems below
-    are instances). -/
+/-- Spec theorem for `div_ceil`: the result is the ceiling of `x / y`, i.e. the unique `z` with
+`x ≤ z * y < x + y`. -/
 theorem UScalar.div_ceil.spec {ty : UScalarTy} (x y : UScalar ty) (hy : y.val ≠ 0) :
     UScalar.div_ceil x y ⦃ (z : UScalar ty) =>
       x.val ≤ z.val * y.val ∧ z.val * y.val < x.val + y.val ⦄ := by
@@ -78,8 +68,7 @@ theorem UScalar.div_ceil.spec {ty : UScalarTy} (x y : UScalar ty) (hy : y.val �
   · exact ⟨by agrind, by agrind⟩
 
 uscalar
-/-- **Spec theorem for `core::num::{u8,…,usize}::div_ceil`**: the ceiling of `x / y`, for `y ≠ 0`
-    (Rust panics when `y = 0`). -/
+/-- `core::num::{u8,…,usize}::div_ceil`: the ceiling of `x / y`, for `y ≠ 0`. -/
 @[step]
 theorem core.num.«%S».div_ceil.spec (x y : «%S») (hy : y.val ≠ 0) :
     core.num.«%S».div_ceil x y ⦃ (z : «%S») =>

@@ -5,8 +5,7 @@
 //! Tests for the Lean models of division operations on unsigned integers (`div_ceil`).
 //!
 //! The tests of `ceil_u8`, …, `ceil_usize` start with the example of the documentation of
-//! `div_ceil` (<https://doc.rust-lang.org/std/primitive.usize.html#method.div_ceil>), which is the
-//! same for every unsigned type.
+//! `div_ceil` (<https://doc.rust-lang.org/std/primitive.usize.html#method.div_ceil>).
 
 pub fn ceil_u8(x: u8, y: u8) -> u8 {
     x.div_ceil(y)
@@ -68,8 +67,6 @@ pub fn ceil_usize(x: usize, y: usize) -> usize {
 pub fn test_ceil_usize() {
     assert_eq!(ceil_usize(7, 4), 2);
     assert_eq!(ceil_usize(usize::MAX, 1), usize::MAX);
-    // Not inlined in `assert_eq!`: rustc would promote it to a constant using an unchecked
-    // division, which Aeneas extracts to the missing `Usize.div`.
     let half = usize::MAX / 2 + 1;
     assert_eq!(ceil_usize(usize::MAX, 2), half);
     assert_eq!(ceil_usize(usize::MAX, usize::MAX), 1);
