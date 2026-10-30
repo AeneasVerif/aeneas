@@ -164,6 +164,7 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         abs_id = ctx.fresh_abs_id ();
         kind;
         can_end;
+        alive_hint = None;
         parents = AbsId.Set.empty;
         ended_subabs = AbsLevelSet.empty;
         regions;
@@ -377,6 +378,7 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
           abs_id = ctx.fresh_abs_id ();
           kind;
           can_end;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           ended_subabs = AbsLevelSet.empty;
           regions;
@@ -765,7 +767,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | (EAbs abs0 as abs) :: env0' ->
+    | EAbs abs0 :: env0' ->
         let abs1, env1' = pop_abs abs0.abs_id env1 in
 
         (* Debug *)
@@ -786,9 +788,14 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
            points we might remove/add continuations while the presence/absence
            shouldn't have an impact on the way we match/unify contexts. *)
         [%sanity_check] span
-          (equal_abs { abs0 with cont = None } { abs1 with cont = None });
+          (equal_abs
+             { abs0 with cont = None; alive_hint = None }
+             { abs1 with cont = None; alive_hint = None });
+        let alive_hint =
+          merge_alive_hints (Some span) abs0.alive_hint abs1.alive_hint
+        in
         (* Continue *)
-        abs :: join_prefixes env0' env1'
+        EAbs { abs0 with alive_hint } :: join_prefixes env0' env1'
     | [] ->
         if env1 = [] then []
         else

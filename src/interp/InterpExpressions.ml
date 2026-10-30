@@ -298,6 +298,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                   abs_id = ctx.fresh_abs_id ();
                   kind = CopySymbolicValue;
                   can_end = true;
+                  alive_hint = None;
                   parents = AbsId.Set.empty;
                   regions = { owned };
                   ended_subabs = AbsLevelSet.empty;
@@ -917,6 +918,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
               abs_id;
               kind = CopySymbolicValue;
               can_end = true;
+              alive_hint = None;
               parents = AbsId.Set.empty;
               regions = { owned = RegionSet.singleton (RVar (Free rid)) };
               ended_subabs = AbsLevelSet.empty;

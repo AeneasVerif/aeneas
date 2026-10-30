@@ -660,3 +660,19 @@ let mk_let (span : Meta.span) (rid_set : region_set) (pat : tepat)
   let value = ELet (rid_set, pat, bound, e) in
   let ty = e.ty in
   { value; ty }
+
+(** Merge two optional [alive_hint] values when merging two abstractions:
+    - if either is [None], use the other
+    - if both are [Some] and equal, keep it
+    - if both are [Some] and different, emit a warning and return [None]. *)
+let merge_alive_hints (span : Meta.span option) (h0 : alive_hint option)
+    (h1 : alive_hint option) : alive_hint option =
+  match (h0, h1) with
+  | None, h | h, None -> h
+  | Some h0', Some h1' ->
+      if h0' = h1' then h0
+      else (
+        [%warn_opt_span] span
+          "Merging two region abstractions with conflicting alive hints (Long \
+           vs Short); dropping the hint";
+        None)
