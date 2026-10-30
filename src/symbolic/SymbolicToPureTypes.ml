@@ -936,7 +936,18 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let back_effect_info =
       compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
     in
+    let alive_hint =
+      match lookup_pure_fn_ptr_info fun_infos fun_id with
+      | Some info -> info.alive_hint
+      | None -> None
+    in
     let inputs = translate_back_inputs_for_gid gid in
+    let outputs = compute_back_outputs_for_gid gid in
+    let inputs =
+      if Option.is_some alive_hint && inputs = [] && outputs <> [] then
+        [ (0, [ (None, mk_unit_ty) ]) ]
+      else inputs
+    in
     (* We consider a backward function as stateful and potentially failing
        **only if it has inputs** (for the "potentially failing": if it has
        not inputs, we directly evaluate it in the body of the forward function).
@@ -965,7 +976,6 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         is_effectful = back_effect_info.is_effectful && b;
       }
     in
-    let outputs = compute_back_outputs_for_gid gid in
     let filter =
       !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
     in

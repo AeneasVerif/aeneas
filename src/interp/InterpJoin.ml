@@ -1545,11 +1545,30 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         if AbsId.Set.mem a2 s then AbsId.Set.add a0 (AbsId.Set.add a1 s) else s)
       final_static (List.rev merge_seq)
   in
+  let alive_hints =
+    let final_hints =
+      AbsId.Map.of_list
+        (List.filter_map
+           (fun (abs : abs) ->
+             match abs.alive_hint with
+             | Some h -> Some (abs.abs_id, h)
+             | None -> None)
+           (AbsId.Map.values (ctx_get_abs joined_ctx_not_projected)))
+    in
+    (* Propagate backward: if the result of a merge has an alive_hint,
+       propagate it to the merged abstractions *)
+    List.fold_left
+      (fun m (a0, a1, a2) ->
+        match AbsId.Map.find_opt a2 m with
+        | Some h -> AbsId.Map.add a0 h (AbsId.Map.add a1 h m)
+        | None -> m)
+      final_hints (List.rev merge_seq)
+  in
 
   (* Apply the sequence of merges to the projected context *)
   let joined_ctx =
     collapse_ctx_no_markers_following_sequence span merge_seq static_aids
-      add_borrows_seq ~with_abs_conts:true fresh_abs_kind joined_ctx
+      alive_hints add_borrows_seq ~with_abs_conts:true fresh_abs_kind joined_ctx
   in
   [%ltrace
     "After collapsing the context: joined_ctx:\n"

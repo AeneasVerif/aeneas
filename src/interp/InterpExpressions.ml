@@ -547,6 +547,16 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           in
           (cv, ctx, cc_comp cc cf)
       | CFnDef ptr ->
+          let has_keep_alive =
+            match
+              FunsAnalysis.lookup_fn_ptr_info ctx.fun_ctx.fun_infos ptr.kind
+            with
+            | Some info -> Option.is_some info.alive_hint
+            | None -> false
+          in
+          [%cassert] span (not has_keep_alive)
+            "Cannot take a function pointer to a function marked \
+             #[verify::keep_alive]";
           let sv = mk_fresh_symbolic_tvalue span ctx cv.ty in
           let cf e =
             SymbolicAst.IntroSymbolic

@@ -1573,6 +1573,7 @@ let add_shared_borrows (span : Meta.span)
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list) (static_aids : AbsId.Set.t)
+    (alive_hints : alive_hint AbsId.Map.t)
     (shared_borrows_seq : (abs_id * int * proj_marker * borrow_or_proj) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx0 : eval_ctx) :
     eval_ctx =
@@ -1642,14 +1643,29 @@ let collapse_ctx_following_sequence (span : Meta.span)
          This is sound: it is always sound to force a (non-frozen) region
          abstraction to live longer (we're just adding constraints: we might
          get stuck because we need to end it but can't). *)
-      if AbsId.Set.mem nabs static_aids then
-        match AbsId.Map.find_opt nabs !nabs_map with
-        | Some nabs' -> (
-            match ctx_lookup_abs_opt !ctx nabs' with
-            | Some abs when not (abs_owns_static abs) ->
-                ctx := InterpAbs.ctx_promote_abs_to_static span !ctx nabs'
-            | _ -> ())
-        | None -> ())
+      (if AbsId.Set.mem nabs static_aids then
+         match AbsId.Map.find_opt nabs !nabs_map with
+         | Some nabs' -> (
+             match ctx_lookup_abs_opt !ctx nabs' with
+             | Some abs when not (abs_owns_static abs) ->
+                 ctx := InterpAbs.ctx_promote_abs_to_static span !ctx nabs'
+             | _ -> ())
+         | None -> ());
+      match AbsId.Map.find_opt nabs alive_hints with
+      | Some hint -> (
+          match AbsId.Map.find_opt nabs !nabs_map with
+          | Some nabs' -> (
+              match ctx_lookup_abs_opt !ctx nabs' with
+              | Some abs ->
+                  let alive_hint =
+                    merge_alive_hints (Some span) abs.alive_hint (Some hint)
+                  in
+                  if alive_hint <> abs.alive_hint then
+                    let abs = { abs with alive_hint } in
+                    ctx := fst (ctx_subst_abs span !ctx nabs' abs)
+              | None -> ())
+          | None -> ())
+      | None -> ())
     sequence;
   let ctx = !ctx in
   [%ldebug "ctx after applying the merge sequence:\n" ^ eval_ctx_to_string ctx];
@@ -1674,10 +1690,11 @@ let collapse_ctx_following_sequence (span : Meta.span)
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list) (static_aids : AbsId.Set.t)
+    (alive_hints : alive_hint AbsId.Map.t)
     (shared_borrows_seq : (abs_id * int * proj_marker * borrow_or_proj) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
     eval_ctx =
   try
     collapse_ctx_following_sequence span ~with_abs_conts sequence static_aids
-      shared_borrows_seq fresh_abs_kind ctx
+      alive_hints shared_borrows_seq fresh_abs_kind ctx
   with ValueMatchFailure _ -> [%internal_error] span

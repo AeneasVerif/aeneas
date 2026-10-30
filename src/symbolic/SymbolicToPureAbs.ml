@@ -214,6 +214,12 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
       abs.avalues
   in
 
+  let inputs =
+    if Option.is_some abs.alive_hint && inputs = [] && outputs <> [] then
+      [ mk_unit_ty ]
+    else inputs
+  in
+
   [%ldebug
     "- abs:\n" ^ abs_to_string ctx abs ^ "\n- inputs:\n"
     ^ String.concat "\n" (List.map (pure_ty_to_string ctx) inputs)
@@ -737,6 +743,10 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
                           args
                       | _ -> [%internal_error] span
                     in
+                    let args =
+                      if args = [] && is_arrow_ty fvar.ty then [ mk_unit_texpr ]
+                      else args
+                    in
                     (Some ([%add_loc] mk_apps span fvar args), is_effectful)
               in
               (ctx, is_effectful, e)
@@ -1075,6 +1085,13 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
      as with the inputs: we do this to fix the order *)
   let outputs =
     register_outputs ctx bound_outputs abs.regions.owned abs.avalues
+  in
+
+  let ctx, inputs =
+    if Option.is_some abs.alive_hint && inputs = [] && outputs <> [] then
+      let ctx, dummy = fresh_var None mk_unit_ty ctx in
+      (ctx, [ dummy ])
+    else (ctx, inputs)
   in
 
   if inputs = [] && outputs = [] then None
