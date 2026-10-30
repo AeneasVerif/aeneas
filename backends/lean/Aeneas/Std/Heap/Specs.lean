@@ -76,4 +76,23 @@ theorem write_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (old value : ty)
   apply hh h F s ?_ hd hm hi
   simpa [Vector.map_map, Function.comp_def] using hp
 
+/-- Any chosen encoding of `value` can be written; enabling does not depend
+on which valid encoding was chosen. -/
+theorem write_encoding.spec (repr : Repr ty) (p : RawPtr ty) (old value : ty)
+    (data : Vector U8 repr.size) (decoded : repr.decode data = some value)
+    (hsize : 0 < repr.size) :
+    Triple (pointsTo repr p old)
+      (fun s (_ : Unit) s' => Heap.write repr p value data decoded s = some s')
+      (fun _ => pointsTo repr p value) := by
+  intro h F s ⟨bytes, _, hp⟩ hd hm hi
+  apply (Triple.conseq (fun _ h => h) (fun _ _ h => ⟨data, decoded, h⟩)
+    (modify.spec repr p (bytes.map (Cell.shared 0 ∘ some))
+      (data.map (Cell.shared 0 ∘ some))
+      (fun bytes => repr.write bytes p.index.val value data decoded) hsize ?_)) h F s hp hd hm hi
+  intro r contents hb he
+  have hw : Repr.writeBytes repr.size (bytes.map (Cell.shared 0 ∘ some)) data =
+      some (data.map (Cell.shared 0 ∘ some)) := by
+    simpa only [Vector.map_map] using Repr.writeBytes_shared (bytes.map some) data
+  simp [Repr.write, hsize, hb, he, hw]
+
 end Aeneas.Std.SepLogic

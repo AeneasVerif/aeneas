@@ -1,6 +1,7 @@
 module
 
 import Aeneas.Std.Heap.Model
+import Aeneas.Std.Heap.Effects
 import Aeneas.Std.Scalar.Notations
 public meta import Aeneas.Std.Scalar.Core
 
@@ -21,6 +22,22 @@ def alignedByteRepr : Repr U8 where
   decode bytes := some bytes[0]
   aligned := by decide
   complete value := ⟨#v[value, 0#u8], rfl⟩
+
+/- Both encodings are permitted. Choice must not silently fix the ignored byte
+to the particular witness used in `complete`. -/
+example (value : U8) (s : Heap) :
+    HeapWP.Spec (alignedByteRepr.choose value)
+      (fun data s' => data.val[0] = value ∧ s' = s) s := by
+  apply HeapWP.Spec.mono (HeapWP.choose.spec alignedByteRepr value s)
+  rintro data s' ⟨decoded, hs⟩
+  exact ⟨Option.some.inj decoded, hs⟩
+
+example (value : U8) (s : Heap) :
+    ¬ HeapWP.Spec (alignedByteRepr.choose value) (fun data _ => data.val[1] = 0#u8) s := by
+  intro h
+  have hx := (HeapWP.Spec.choose alignedByteRepr value _ s).mp h #v[value, 1#u8] rfl
+  change (1#u8) = 0#u8 at hx
+  exact (by decide : (1#u8) ≠ 0#u8) hx
 
 def roundTrip : Option U8 := do
   let (p, s₀) ← Heap.alloc byteRepr 1 Heap.empty

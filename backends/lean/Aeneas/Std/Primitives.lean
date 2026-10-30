@@ -473,6 +473,17 @@ def Result.guardedModify {α : Type} (modify : State → α → State → Prop) 
   Result.vis (.guardedModify α modify) fun answer =>
     Result.ok answer.down
 
+/-- Choose any encoding decoding to `value`, without changing the state.
+`repr.complete` guarantees that the set of permitted results is nonempty. -/
+def Repr.choose (repr : Repr ty) (value : ty) :
+    Result {data : Vector U8 repr.size // repr.decode data = some value} :=
+  Result.guardedModify fun s _ s' => s' = s
+
+/-- Choose valid encodings for every value, using the same descriptor. -/
+def Repr.chooseList (repr : Repr ty) (values : List ty) :
+    Result {data : List (Vector U8 repr.size) // data.map repr.decode = values.map some} :=
+  Result.guardedModify fun s _ s' => s' = s
+
 def Result.require (p : Prop) : Result Unit :=
   Result.guardedModify fun s _ s' => p ∧ s' = s
 

@@ -21,8 +21,15 @@ stride; zero size is allowed. These parameters must be calibrated separately to
 the Rust type and target.
 
 There is no canonical encoder. Executable writes receive an encoding and a proof
-that it decodes to the requested value. Rust-facing relational adapters choose
-any such encoding, justified by completeness. This does not assert a finite
+that it decodes to the requested value. `Repr.choose repr value`, defined in
+`Std/Primitives.lean`, is the monadic operation supplying both: its result is
+`{ bytes : Vector U8 repr.size // repr.decode bytes = some value }`.
+It changes no heap state. Its total-correctness contract is proved from
+`repr.complete`; its demonic WP quantifies over **every** encoding satisfying
+the decode-back equation, not just the witness used in `complete`.
+`chooseList` does the same for a list of values using that descriptor.
+Neither operation chooses the descriptor itself or introduces an axiom.
+This does not assert a finite
 encoding for arbitrary Lean types: supplying a representation is an obligation.
 In particular, an infinite type such as `Nat` cannot have this representation.
 
@@ -101,6 +108,11 @@ that alone does not implement Rust's cast API.
 `Std/Heap.lean` contains relational adapters around the executable operations;
 `Core/Ptr.lean`, `Alloc/Boxed.lean`, and slice wrappers supply Rust-facing effects.
 Descriptors are passed explicitly, not found through a typeclass or global map.
+Write, Box allocation, raw exposure, and borrow restoration call `choose` or
+`chooseList` internally before committing their executable heap operation.
+Translated callers do not supply encoding bytes or decode-back proofs. The
+explicit descriptor arguments in the current fixtures are still manual
+adaptations; they are not emitted by the compiler.
 Safe borrow boundaries read typed values before transferring byte permissions.
 
 Safe `Box<T>` values remain represented by `T`. `Box.into_raw` creates a one-value
@@ -124,11 +136,11 @@ Rust programs. `HeapTests.restoration_is_privileged` demonstrates this boundary.
 | `Lemmas.lean` | Concrete traversal, byte selection/update, read-back, disjoint access, map and invariant laws |
 | `Separation.lean` | Byte/cleanup resources, matching, separation algebra, framed relational triples |
 | `Resources.lean` | Byte fragments, encoded `pointsTo`, splitting, matching, and update framing |
-| `Specs.lean` | Generic footprint-update rule and framed read/write contracts |
+| `Specs.lean` | Generic footprint-update rule and framed read/write contracts, including writing any chosen valid encoding |
 | `Allocation.lean` | Capacity, freshness, allocation resources, frame preservation, exact cleanup |
 | `Borrowing.lean` | Single-footprint borrow/share/restoration and checked movement contracts |
 | `Access.lean` | Byte-based read/write/cleanup denial, including overlapping different types |
-| `Effects.lean` | Total-correctness interpretation of actual `Result` effects and composition rules |
+| `Effects.lean` | Total-correctness interpretation of actual `Result` effects, exact demonic choice contracts, and composition rules |
 | `EffectSpecs.lean` | Rust read/write, movement, Box and mutable-exposure allocation/cleanup contracts |
 
 Cell resources claim individual byte positions and an alignment guarantee.
@@ -160,11 +172,14 @@ general range-level separation/effect contracts have not yet been ported.
 Do not treat a successful backend build as evidence of those missing contracts.
 
 Integration proofs cover Box round-trip, stored pointers, corrected alias and
-repeated-read examples, and a handwritten borrowed-Box/callback prototype.
+repeated-read examples, pair replacement, one-past pointer formation, and a
+handwritten borrowed-Box/callback prototype.
 Descriptors are explicit parameters, including a separate descriptor for stored
 pointers; pointers are not assumed to fit in one word. The callback contract
 accepts any subsequently written value and consumes the exposure resources.
-Pair and one-past fixtures type-check but do not yet have end-to-end proofs.
+`RawBoxProofs.lean` also supplies complete little-endian `u32` and paired-`u32`
+descriptors and instantiates the round-trip, pair, and one-past proofs with them.
+These are concrete model encodings, not a proof of Rust tuple layout or ABI.
 A true zero-sized descriptor cannot satisfy a read-success theorem here.
 
 The fixture headers mark manual descriptor adaptations and repeated-read repairs.
@@ -190,3 +205,5 @@ make verify-raw-box
 mixed sharing, cross-type byte protection, alignment, atomic range failure,
 signed/one-past movement, finite allocation exhaustion, empty footprints, and the
 privileged-restoration boundary.
+It also checks that monadic choice preserves the heap and leaves an ignored
+encoding byte genuinely unconstrained.

@@ -86,6 +86,47 @@ theorem Spec.guardedModify {modify : State → α → State → Prop} :
   · rintro ⟨hsafe, hpost⟩
     exact DWP.vis ⟨hsafe, fun x s' hx => DWP.ret_iff.mpr (hpost x s' hx)⟩
 
+/-- Every encoding that decodes to the value must satisfy the continuation.
+Completeness discharges enabling, rather than leaving it to callers. -/
+theorem Spec.choose (repr : Repr ty) (value : ty)
+    (Q : {data : Vector U8 repr.size // repr.decode data = some value} → State → Prop)
+    (s : State) :
+    Spec (repr.choose value) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
+  rw [Repr.choose, Spec.guardedModify]
+  constructor
+  · rintro ⟨_, h⟩ data decoded
+    exact h ⟨data, decoded⟩ s rfl
+  · intro h
+    obtain ⟨data, decoded⟩ := repr.complete value
+    exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
+
+theorem Spec.chooseList (repr : Repr ty) (values : List ty)
+    (Q : {data : List (Vector U8 repr.size) //
+      data.map repr.decode = values.map some} → State → Prop) (s : State) :
+    Spec (repr.chooseList values) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
+  have hex : ∃ data : List (Vector U8 repr.size), data.map repr.decode = values.map some := by
+    clear Q
+    induction values
+    · exact ⟨[], rfl⟩
+    · rename_i value values ih
+      obtain ⟨data, decoded⟩ := repr.complete value
+      obtain ⟨tail, ht⟩ := ih
+      exact ⟨data :: tail, by simp only [List.map_cons, decoded, ht]⟩
+  rw [Repr.chooseList, Spec.guardedModify]
+  constructor
+  · rintro ⟨_, h⟩ data decoded
+    exact h ⟨data, decoded⟩ s rfl
+  · intro h
+    obtain ⟨data, decoded⟩ := hex
+    exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
+
+/-- Choice always terminates with bytes decoding to the requested value, and
+neither reads nor changes the heap. -/
+theorem choose.spec (repr : Repr ty) (value : ty) (s : State) :
+    Spec (repr.choose value)
+      (fun data s' => repr.decode data.val = some value ∧ s' = s) s :=
+  Spec.choose repr value _ s |>.mpr fun _ decoded => ⟨decoded, rfl⟩
+
 /-- A framed separation contract for the generated computation itself. -/
 def Triple (P : Assertion) (c : Result α) (Q : α → Assertion) : Prop :=
   ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
@@ -97,6 +138,13 @@ theorem Triple.guardedModify {modify : State → α → State → Prop}
     Triple P (Result.guardedModify modify) Q := by
   intro h F s hp hd hm hi
   exact Spec.guardedModify.mpr (ht h F s hp hd hm hi)
+
+/-- The chosen encoding carries its decode-back proof and preserves the heap. -/
+theorem Triple.choose (P : Assertion) (repr : Repr ty) (value : ty) :
+    Triple P (repr.choose value) (fun _ => P) := by
+  intro h F s hp hd hm hi
+  apply Spec.choose _ _ _ _ |>.mpr
+  exact fun _ _ => ⟨h, hd, hm, hi, hp⟩
 
 theorem Triple.pure (P : Assertion) (x : α) :
     Triple P (pure x) (fun y h => y = x ∧ P h) := by

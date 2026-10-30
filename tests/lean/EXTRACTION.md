@@ -112,10 +112,20 @@ Cross-universe composition is supplied by the common `HeapWP` bind rules.
 There is no remaining `layout`, abstract `Block`, or byte-representation axiom
 in these proof dependencies. Exact guards allow only `propext`,
 `Classical.choice`, and `Quot.sound`. The descriptors and their completeness
-proofs are explicit theorem parameters, not added axioms.
+proofs are explicit theorem parameters, not added axioms. `RawBoxProofs.lean`
+also provides complete little-endian `u32` and paired-`u32` descriptors and
+concrete instantiations of round-trip, pair replacement, and one-past examples.
+The pair encoding is a model fixture, not a Rust tuple-ABI refinement claim.
+
+Encoding-producing wrappers now call `Repr.choose` or `Repr.chooseList`
+internally. Their results carry the decode-back proof for the supplied
+descriptor. The choice contract is proved from completeness and ranges
+demonically over all valid encodings; it does not select a fresh descriptor.
+This changes the modeled backend primitives, but does not change or rerun the
+compiler or remove the fixtures' manual descriptor arguments.
 
 `make verify-raw-box` checks these migrated fixtures and proofs without
-re-extraction. Pair and pointer-addition fixtures still lack end-to-end proofs.
+re-extraction, including pair replacement and one-past pointer formation.
 The zero-sized fixture type-checks, but its raw read is deliberately disabled
 for an actual zero-sized descriptor; no read-success theorem is claimed.
 General range-level permission/effect contracts also remain to be ported,

@@ -10,6 +10,49 @@ open Aeneas.Std.SepLogic
 
 namespace raw_box
 
+theorem u32Bytes_roundtrip (bits : BitVec 32) :
+    bits.extractLsb' 24 8 ++ bits.extractLsb' 16 8 ++
+      bits.extractLsb' 8 8 ++ bits.extractLsb' 0 8 = bits := by
+  bv_decide
+
+/-- Little-endian, four-byte `u32` descriptor; no global representation lookup. -/
+def u32Repr : Aeneas.Std.Repr U32 where
+  size := 4
+  align := ⟨4, 2, rfl⟩
+  decode bytes := some ⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩
+  aligned := by decide
+  complete value := by
+    refine ⟨#v[⟨value.bv.extractLsb' 0 8⟩, ⟨value.bv.extractLsb' 8 8⟩,
+      ⟨value.bv.extractLsb' 16 8⟩, ⟨value.bv.extractLsb' 24 8⟩], ?_⟩
+    apply congrArg some
+    cases value
+    rename_i bits
+    apply congrArg UScalar.mk
+    change bits.extractLsb' 24 8 ++ bits.extractLsb' 16 8 ++
+      bits.extractLsb' 8 8 ++ bits.extractLsb' 0 8 = bits
+    exact u32Bytes_roundtrip bits
+
+/-- Two consecutive little-endian `u32`s, with four-byte alignment. -/
+def pairRepr : Aeneas.Std.Repr (U32 × U32) where
+  size := 8
+  align := ⟨4, 2, rfl⟩
+  decode bytes := some
+    (⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩,
+     ⟨bytes[7].bv ++ bytes[6].bv ++ bytes[5].bv ++ bytes[4].bv⟩)
+  aligned := by decide
+  complete value := by
+    rcases value with ⟨⟨first⟩, ⟨second⟩⟩
+    refine ⟨#v[⟨first.extractLsb' 0 8⟩, ⟨first.extractLsb' 8 8⟩,
+      ⟨first.extractLsb' 16 8⟩, ⟨first.extractLsb' 24 8⟩,
+      ⟨second.extractLsb' 0 8⟩, ⟨second.extractLsb' 8 8⟩,
+      ⟨second.extractLsb' 16 8⟩, ⟨second.extractLsb' 24 8⟩], ?_⟩
+    apply congrArg some
+    apply Prod.ext
+    · apply congrArg UScalar.mk
+      exact u32Bytes_roundtrip first
+    · apply congrArg UScalar.mk
+      exact u32Bytes_roundtrip second
+
 theorem round_trip_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
     (initial replacement : U32) (hsize : 0 < repr.size) :
     HeapWP.Triple (sep (alloc repr p 1 true) (pointsTo repr p initial))
@@ -128,6 +171,163 @@ theorem stored_pointer.spec (repr : Aeneas.Std.Repr U32)
   rintro value s' ⟨h', _, hm', hi', hv, rfl⟩
   exact ⟨hv, by simpa using hm', hi'⟩
 
+theorem replace_pair_tail.spec (repr : Aeneas.Std.Repr (U32 × U32))
+    (p : MutRawPtr (U32 × U32)) (first second replacement : U32)
+    (hsize : 0 < repr.size) :
+    HeapWP.Triple (sep (alloc repr p 1 true) (pointsTo repr p (first, second)))
+      (do let (i, _) ← RawPtr.read repr p
+          MutRawPtr.write repr p (i, replacement)
+          alloc.boxed.Box.from_raw repr p)
+      (fun value h => value = (first, replacement) ∧ emp h) := by
+  apply HeapWP.Triple.bind (HeapWP.Triple.conseq
+    (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun value h hp => (sep_and_left (value = (first, second))
+      (pointsTo repr p (first, second)) (alloc repr p 1 true) h).mp hp)
+    (HeapWP.frame (R := alloc repr p 1 true)
+      (HeapWP.read.spec repr p (first, second) 0 hsize)))
+  intro value
+  apply HeapWP.Triple.pure_pre
+  intro hv
+  subst value
+  apply HeapWP.Triple.bind (HeapWP.frame (R := alloc repr p 1 true)
+    (HeapWP.write.spec repr p (first, second) (first, replacement) hsize))
+  intro _
+  exact HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ _ hp => hp) (HeapWP.fromRaw.spec repr p (first, replacement) hsize)
+
+/-- Pair replacement preserves the first component and consumes the allocation. -/
+theorem replace_pair.spec (repr : Aeneas.Std.Repr (U32 × U32))
+    (first second replacement : U32) (hsize : 0 < repr.size)
+    (hfit : repr.size < 2 ^ UScalarTy.numBits .Usize)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (replace_pair repr first second replacement)
+      (fun value s' => value = (first, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  unfold replace_pair
+  apply HeapWP.Spec.bind (HeapWP.intoRaw.spec repr (first, second) s F hi hm hc hfit)
+  rintro p s' ⟨_, h, hd, hm', hi', hp⟩
+  apply HeapWP.Spec.mono
+    (replace_pair_tail.spec repr p first second replacement hsize h F s' hp hd hm' hi')
+  rintro value s'' ⟨h', _, hm'', hi'', hv, rfl⟩
+  exact ⟨hv, by simpa using hm'', hi''⟩
+
+theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
+    (p : MutRawPtr U32) (value : U32) (hsize : 0 < repr.size)
+    (hzero : p.index.val = 0) :
+    HeapWP.Triple (sep (alloc repr p 1 true) (pointsTo repr p value))
+      (do let start ← RawPtr.add repr p 0#usize
+          let _ ← RawPtr.add repr p 1#usize
+          let result ← RawPtr.read repr start
+          let _ ← alloc.boxed.Box.from_raw repr p
+          pure result)
+      (fun result h => result = value ∧ emp h) := by
+  have hp : (⟨p.base, ⟨0⟩⟩ : RawPtr U32) = p := by
+    rcases p with ⟨base, index⟩
+    have he : (⟨0⟩ : Usize) = index := UScalar.eq_of_val_eq hzero.symm
+    exact congrArg (RawPtr.mk base) he
+  have hstart : p.index.val ≤ 1 := by agrind
+  have hbound0 : p.index.val + (0#usize).val ≤ 1 := by simp [hzero]
+  have hbound1 : p.index.val + (1#usize).val ≤ 1 := by simp [hzero]
+  have hfit0 : p.index.val + (0#usize).val < 2 ^ UScalarTy.numBits .Usize := by
+    simp [hzero]
+  have hfit1 : p.index.val + (1#usize).val < 2 ^ UScalarTy.numBits .Usize := by
+    simp only [hzero, Nat.zero_add]
+    scalar_tac
+  apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
+    (fun start h hs => (sep_and_left (start.base = p.base)
+      (fun h => start.index.val = p.index.val + (0#usize).val ∧ alloc repr p 1 true h)
+      (pointsTo repr p value) h).mp hs |>.imp_right
+        (fun hs => (sep_and_left (start.index.val = p.index.val + (0#usize).val)
+          (alloc repr p 1 true) (pointsTo repr p value) h).mp hs))
+    (HeapWP.frame (R := pointsTo repr p value)
+      (by simpa only [hp] using
+        HeapWP.add.spec repr p 0#usize 1 true hsize hstart hbound0 hfit0)))
+  intro start
+  apply HeapWP.Triple.pure_pre
+  intro hb
+  apply HeapWP.Triple.pure_pre
+  intro hi
+  have he : start = p := by
+    rcases start with ⟨base, index⟩
+    rcases p with ⟨pbase, pindex⟩
+    have he := UScalar.eq_of_val_eq hi
+    cases hb
+    cases he
+    rfl
+  subst start
+  apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
+    (fun q h hs => sep_mono
+      (fun a (hp : q.base = p.base ∧ q.index.val = p.index.val + (1#usize).val ∧
+        alloc repr p 1 true a) => hp.2.2) (fun _ hp => hp) hs)
+    (HeapWP.frame (R := pointsTo repr p value)
+      (by simpa only [hp] using
+        HeapWP.add.spec repr p 1#usize 1 true hsize hstart hbound1 hfit1)))
+  intro _
+  apply HeapWP.Triple.bind (HeapWP.Triple.conseq
+    (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun result h hs => (sep_and_left (result = value)
+      (pointsTo repr p value) (alloc repr p 1 true) h).mp hs)
+    (HeapWP.frame (R := alloc repr p 1 true) (HeapWP.read.spec repr p value 0 hsize)))
+  intro result
+  apply HeapWP.Triple.pure_pre
+  intro hr
+  subst result
+  apply HeapWP.Triple.bind (HeapWP.Triple.conseq
+    (fun h hp => (sep_comm _ _ h).mp hp) (fun _ _ hp => hp.2)
+    (HeapWP.fromRaw.spec repr p value hsize))
+  intro _
+  exact HeapWP.Triple.pure emp value
+
+/-- Forming a one-past pointer does not authorize dereferencing it. The example
+reads the original start pointer and then consumes the allocation. -/
+theorem one_past_end.spec (repr : Aeneas.Std.Repr U32) (value : U32)
+    (hsize : 0 < repr.size) (hfit : repr.size < 2 ^ UScalarTy.numBits .Usize)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (one_past_end repr value)
+      (fun result s' => result = value ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  unfold one_past_end
+  apply HeapWP.Spec.bind (HeapWP.intoRaw.spec repr value s F hi hm hc hfit)
+  rintro p s' ⟨_, h, hd, hm', hi', hp⟩
+  have hz : p.index.val = 0 := by
+    obtain ⟨a, b, _, _, ha, _⟩ := hp
+    exact ha.1
+  apply HeapWP.Spec.mono
+    (one_past_end_tail.spec repr p value hsize hz h F s' hp hd hm' hi')
+  rintro result s'' ⟨h', _, hm'', hi'', hv, rfl⟩
+  exact ⟨hv, by simpa using hm'', hi''⟩
+
+/-- Concrete byte semantics, with no representation hypothesis left to the caller. -/
+theorem round_trip_u32.spec (initial replacement : U32)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (round_trip u32Repr initial replacement)
+      (fun value s' => value = replacement ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  have hfit : u32Repr.size < 2 ^ UScalarTy.numBits .Usize := by
+    change 4 < 2 ^ UScalarTy.numBits .Usize
+    scalar_tac
+  exact round_trip.spec u32Repr initial replacement (by decide) hfit s F hi hm hc
+
+theorem replace_pair_u32.spec (first second replacement : U32)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (replace_pair pairRepr first second replacement)
+      (fun value s' => value = (first, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  have hfit : pairRepr.size < 2 ^ UScalarTy.numBits .Usize := by
+    change 8 < 2 ^ UScalarTy.numBits .Usize
+    scalar_tac
+  exact replace_pair.spec pairRepr first second replacement (by decide) hfit s F hi hm hc
+
+theorem one_past_end_u32.spec (value : U32)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
+    HeapWP.Spec (one_past_end u32Repr value)
+      (fun result s' => result = value ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
+  have hfit : u32Repr.size < 2 ^ UScalarTy.numBits .Usize := by
+    change 4 < 2 ^ UScalarTy.numBits .Usize
+    scalar_tac
+  exact one_past_end.spec u32Repr value (by decide) hfit s F hi hm hc
+
 end raw_box
 
 /-- info: 'raw_box.round_trip.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -137,3 +337,23 @@ end raw_box
 /-- info: 'raw_box.stored_pointer.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_box.stored_pointer.spec
+
+/-- info: 'raw_box.u32Repr' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_box.u32Repr
+
+/-- info: 'raw_box.pairRepr' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_box.pairRepr
+
+/-- info: 'raw_box.replace_pair_u32.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_box.replace_pair_u32.spec
+
+/-- info: 'raw_box.one_past_end_u32.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_box.one_past_end_u32.spec
+
+/-- info: 'Aeneas.Std.HeapWP.choose.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Aeneas.Std.HeapWP.choose.spec

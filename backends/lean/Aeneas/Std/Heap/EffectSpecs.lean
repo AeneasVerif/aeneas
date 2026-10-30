@@ -27,8 +27,12 @@ theorem read.spec (repr : Repr T) (p : RawPtr T) (value : T) (depth : Nat)
 theorem write.spec (repr : Repr T) (p : RawPtr T) (old value : T)
     (hsize : 0 < repr.size) :
     Triple (pointsTo repr p old) (MutRawPtr.write repr p value)
-      (fun _ => pointsTo repr p value) :=
-  Triple.guardedModify (SepLogic.write_pointsTo.spec repr p old value hsize)
+      (fun _ => pointsTo repr p value) := by
+  unfold MutRawPtr.write
+  apply Triple.bind (Triple.choose (pointsTo repr p old) repr value)
+  intro data
+  exact Triple.guardedModify
+    (SepLogic.write_encoding.spec repr p old value data.val data.property hsize)
 
 theorem offset.spec (repr : Repr T) (p : RawPtr T) (count : Isize) (length : Nat)
     (own : Bool) (hsize : 0 < repr.size) (hstart : p.index.val ≤ length)
@@ -61,15 +65,15 @@ theorem newBlock.spec (repr : Repr T) (value : T) (own : Bool) (s : Heap) (F : F
     (hi : s.Inv) (hm : Fragment.Matches s F)
     (hc : s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize)
     (hl : repr.size < 2 ^ UScalarTy.numBits .Usize) :
-    Spec (Result.guardedModify (State.newBlock repr [value] own))
+    Spec (RawPtr.newBlock repr [value] own)
       (fun p s' => s'.next.val = s.next.val + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p 1 own) (pointsTo repr p value) h) s := by
-  apply Spec.guardedModify.mpr
-  obtain ⟨data, decoded⟩ := repr.complete value
-  obtain ⟨p, s', hs⟩ := Heap.newBlock.enabled repr [data] own s hi hc (by simpa using hl)
-  refine ⟨⟨p, s', [data], by simp [decoded], hs⟩, ?_⟩
-  rintro p s' ⟨encodings, hd, hs⟩
+  unfold RawPtr.newBlock
+  apply Spec.bind (Spec.chooseList repr [value] (fun _ s' => s' = s) s |>.mpr
+    (fun _ _ => rfl))
+  rintro ⟨encodings, hd⟩ s₀ hs₀
+  subst s₀
   have he : ∃ encoding, encodings = [encoding] ∧ repr.decode encoding = some value := by
     cases encodings
     · simp at hd
@@ -78,6 +82,10 @@ theorem newBlock.spec (repr : Repr T) (value : T) (own : Bool) (s : Heap) (F : F
       have ht : tail = [] := by simpa using h.2
       exact ⟨encoding, by simp [ht], h.1⟩
   obtain ⟨encoding, rfl, decoded⟩ := he
+  apply Spec.guardedModify.mpr
+  obtain ⟨p, s', hs⟩ := Heap.newBlock.enabled repr [encoding] own s hi hc (by simpa using hl)
+  refine ⟨⟨p, s', hs⟩, ?_⟩
+  intro p s' hs
   obtain ⟨hb, hoff, hn, hown⟩ := newBlock_single.resources hs
   let a := allocHeap repr p.base 1 own
   let b := cellsHeap repr.align p.base 0 (encoding.map (Cell.shared 0 ∘ some)).toList
