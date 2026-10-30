@@ -3,8 +3,12 @@
 module
 public import SplitFiles.External
 public import SplitFiles.Layered
+public import SplitFiles.Nested.Inner
+public import SplitFiles.Nested
 public import SplitFiles.Types
 public import SplitFiles.Ops
 public import SplitFiles.Ping_Pong_Bundle
+public import SplitFiles.Renamed
+public import SplitFiles.Scoped
 public import SplitFiles.UsesLayered
 public import SplitFiles.Viamacro

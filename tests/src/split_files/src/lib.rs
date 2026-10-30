@@ -6,9 +6,13 @@
 
 pub mod external;
 pub mod layered;
+pub mod nested;
 pub mod ops;
 pub mod ping;
 pub mod pong;
+#[path = "path_target.rs"]
+pub mod renamed;
+pub mod scoped;
 pub mod types;
 pub mod uses_layered;
 pub mod viamacro;
