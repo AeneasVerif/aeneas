@@ -78,4 +78,126 @@ def test_add_two : Result Unit := do
 /- Unit test for [array_iter_mut::test_add_two] -/
 #guard (test_add_two).reducesTo ()
 
+/-- [array_iter_mut::add_k]: loop body 0:
+    Source: 'tests/src/array-iter-mut.rs', lines 25:4-27:5
+    Visibility: public -/
+@[rust_loop_body]
+def add_k_loop.body
+  (k : Std.I32) (iter : core.slice.iter.IterMut Std.I32)
+  (back : core.slice.iter.IterMut Std.I32 → core.slice.iter.IterMut Std.I32)
+  :
+  Result (ControlFlow ((core.slice.iter.IterMut Std.I32) ×
+    (core.slice.iter.IterMut Std.I32 → core.slice.iter.IterMut Std.I32))
+    (core.slice.iter.IterMut Std.I32))
+  := do
+  let (o, iter1, next_back) ← core.slice.iter.IteratorIterMut.next iter
+  match o with
+  | none => ok (done (let im := next_back iter1 none
+                      back im))
+  | some elem =>
+    let elem1 ← elem + k
+    ok (cont (iter1, fun im => let im1 := next_back im (some elem1)
+                               back im1))
+
+/-- [array_iter_mut::add_k]: loop 0:
+    Source: 'tests/src/array-iter-mut.rs', lines 25:4-27:5
+    Visibility: public -/
+@[rust_loop]
+def add_k_loop
+  (iter : core.slice.iter.IterMut Std.I32)
+  (back : core.slice.iter.IterMut Std.I32 → core.slice.iter.IterMut Std.I32)
+  (k : Std.I32) :
+  Result (core.slice.iter.IterMut Std.I32)
+  := do
+  loop
+    (fun (iter1, back1) => add_k_loop.body k iter1 back1)
+    (iter, back)
+
+/-- [array_iter_mut::add_k]:
+    Source: 'tests/src/array-iter-mut.rs', lines 24:0-28:1
+    Visibility: public -/
+def add_k
+  {N : Std.Usize} (x : Array Std.I32 N) (k : Std.I32) :
+  Result (Array Std.I32 N)
+  := do
+  let (iter, into_iter_back) ←
+    MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter x
+  let back ← add_k_loop iter (fun im => im) k
+  ok (into_iter_back back)
+
+/-- [array_iter_mut::test_add_k]:
+    Source: 'tests/src/array-iter-mut.rs', lines 31:0-35:1
+    Visibility: public -/
+def test_add_k : Result Unit := do
+  let x ← add_k (Array.make 3#usize [ 1#i32, 2#i32, 4#i32 ]) 5#i32
+  let b ←
+    core.array.equality.PartialEqArray.eq core.cmp.PartialEqI32 x
+      (Array.make 3#usize [ 6#i32, 7#i32, 9#i32 ])
+  massert b
+
+/- Unit test for [array_iter_mut::test_add_k] -/
+#guard (test_add_k).reducesTo ()
+
+/-- [array_iter_mut::clamp]: loop body 0:
+    Source: 'tests/src/array-iter-mut.rs', lines 39:4-43:5
+    Visibility: public -/
+@[rust_loop_body]
+def clamp_loop.body
+  (m : Std.I32) (iter : core.slice.iter.IterMut Std.I32)
+  (back : core.slice.iter.IterMut Std.I32 → core.slice.iter.IterMut Std.I32)
+  :
+  Result (ControlFlow ((core.slice.iter.IterMut Std.I32) ×
+    (core.slice.iter.IterMut Std.I32 → core.slice.iter.IterMut Std.I32))
+    (core.slice.iter.IterMut Std.I32))
+  := do
+  let (o, iter1, next_back) ← core.slice.iter.IteratorIterMut.next iter
+  match o with
+  | none => ok (done (let im := next_back iter1 none
+                      back im))
+  | some elem =>
+    if elem > m
+    then ok (cont (iter1, fun im => let im1 := next_back im (some m)
+                                    back im1))
+    else ok (cont (iter1, fun im => let im1 := next_back im o
+                                    back im1))
+
+/-- [array_iter_mut::clamp]: loop 0:
+    Source: 'tests/src/array-iter-mut.rs', lines 39:4-43:5
+    Visibility: public -/
+@[rust_loop]
+def clamp_loop
+  (iter : core.slice.iter.IterMut Std.I32)
+  (back : core.slice.iter.IterMut Std.I32 → core.slice.iter.IterMut Std.I32)
+  (m : Std.I32) :
+  Result (core.slice.iter.IterMut Std.I32)
+  := do
+  loop
+    (fun (iter1, back1) => clamp_loop.body m iter1 back1)
+    (iter, back)
+
+/-- [array_iter_mut::clamp]:
+    Source: 'tests/src/array-iter-mut.rs', lines 38:0-44:1
+    Visibility: public -/
+def clamp
+  {N : Std.Usize} (x : Array Std.I32 N) (m : Std.I32) :
+  Result (Array Std.I32 N)
+  := do
+  let (iter, into_iter_back) ←
+    MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter x
+  let back ← clamp_loop iter (fun im => im) m
+  ok (into_iter_back back)
+
+/-- [array_iter_mut::test_clamp]:
+    Source: 'tests/src/array-iter-mut.rs', lines 47:0-51:1
+    Visibility: public -/
+def test_clamp : Result Unit := do
+  let x ← clamp (Array.make 3#usize [ 1#i32, 5#i32, 9#i32 ]) 4#i32
+  let b ←
+    core.array.equality.PartialEqArray.eq core.cmp.PartialEqI32 x
+      (Array.make 3#usize [ 1#i32, 4#i32, 4#i32 ])
+  massert b
+
+/- Unit test for [array_iter_mut::test_clamp] -/
+#guard (test_clamp).reducesTo ()
+
 end array_iter_mut
