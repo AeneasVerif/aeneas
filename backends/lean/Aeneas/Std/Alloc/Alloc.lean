@@ -1,5 +1,5 @@
-/- `alloc::alloc`: the global allocator. It is the only allocator: registering another one with
-`#[global_allocator]` is not modelled. -/
+/- `alloc::alloc`: the global allocator.
+It is the only allocator: registering another one with `#[global_allocator]` is currently not modelled. -/
 module
 public import Aeneas.Std.Core.Core
 public section
