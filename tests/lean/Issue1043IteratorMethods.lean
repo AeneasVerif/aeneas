@@ -18,6 +18,8 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+set_option synthInstance.maxSize 4096
+
 /- You can remove the following line by using the CLI option `-all-computable`: -/
 noncomputable section
 
@@ -49,23 +51,26 @@ axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
   core.iter.adapters.map.Map I F → Result ((Option B) ×
     (core.iter.adapters.map.Map I F))
 
+set_option backward.proofsInPublic true in
 /-- Trait implementation: [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}]
     Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 99:0-101:27
     Name pattern: [core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>] -/
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>"]
-impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
+def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
   Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
   (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
   Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
   core.ops.function.FnMut F Clause0_Item B) :
-  core.iter.traits.iterator.Iterator (core.iter.adapters.map.Map I F) B := {
-  next := core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-    traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst
-  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
-    (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
+  core.iter.traits.iterator.Iterator (core.iter.adapters.map.Map I F) B
+  := core.iter.traits.iterator.Iterator.mk
+  (next := core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
     traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst)
-}
+  (enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
+    traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst))
+  (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [issue_1043_iterator_methods::indexed_squares::{closure}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/

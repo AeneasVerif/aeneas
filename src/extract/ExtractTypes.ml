@@ -268,6 +268,33 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0)
 
+(** See {!start_fun_decl_group}: similar usage, but for the trait declarations.
+
+    For now, only Lean needs delimiters: a group of mutually recursive traits is
+    extracted to [nonpos_structure]s, which must be in a [mutual ... end] block.
+    The other backends don't support recursive traits. *)
+let start_trait_decl_group (fmt : F.formatter) (is_rec : bool)
+    (dg : Pure.trait_decl list) =
+  match backend () with
+  | Lean ->
+      if is_rec && List.length dg > 1 then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "mutual";
+        F.pp_print_space fmt ())
+  | FStar | Coq | HOL4 -> ()
+
+(** See {!start_trait_decl_group}. *)
+let end_trait_decl_group (fmt : F.formatter) (is_rec : bool)
+    (dg : Pure.trait_decl list) =
+  match backend () with
+  | Lean ->
+      if is_rec && List.length dg > 1 then (
+        F.pp_print_cut fmt ();
+        F.pp_print_string fmt "end";
+        (* Add breaks to insert new lines between definitions *)
+        F.pp_print_break fmt 0 0)
+  | FStar | Coq | HOL4 -> ()
+
 let unit_name () =
   match backend () with
   | Lean -> "Unit"
@@ -1317,14 +1344,18 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
 
 (** - [as_implicits]: if [explicit] is [None], then we use this parameter to
       control whether the parameters should be extract as explicit or implicit.
-*)
+    - [poly_types]: if [false], the type parameters of an [Item] are printed in
+      [Type] rather than [Type _] (Lean only). We need this for the traits
+      extracted as [nonpos_structure]s, whose parameters must be in a fixed
+      universe. *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    (origin : generic_origin) (generics : generic_params)
-    (explicit : explicit_info option) (type_params : string list)
-    (cg_params : string list) (trait_clauses : string list) : unit =
+    ?(poly_types : bool = true) (origin : generic_origin)
+    (generics : generic_params) (explicit : explicit_info option)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   [%cassert] span
@@ -1379,7 +1410,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               (* Generic trait-method parameters are bound inside a structure
                  field, where Lean can't infer a universe for [Type _]: they
                  stay in [Type]. *)
-              F.pp_print_string fmt (type_keyword ~poly:(origin = Item) span);
+              F.pp_print_string fmt
+                (type_keyword ~poly:(poly_types && origin = Item) span);
               (* ) *)
               right_bracket expl)
             type_params;
