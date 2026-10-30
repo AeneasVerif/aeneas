@@ -11,7 +11,8 @@ on:
   # Makes it possible to run the forkflow by hand from GItHub's interface.
   workflow_dispatch:
 
-# One concurrency group per PR. On `main` no run is cancelled.
+# One concurrency group per PR. On `main` no run is cancelled to avoid the risk of a cache-building
+# run being cancelled by one that doesn't build cache.
 concurrency:
   group: >-
     ${{ github.workflow }}-${{ github.event.pull_request.number ||
