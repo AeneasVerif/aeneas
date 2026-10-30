@@ -18,36 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace iter_map
-
-/-- [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}::next]:
-    Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 106:4-106:35
-    Name pattern: [core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
-axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-  {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
-  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
-  Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
-  core.ops.function.FnMut F Clause0_Item B) :
-  core.iter.adapters.map.Map I F → Result ((Option B) ×
-    (core.iter.adapters.map.Map I F))
-
-/-- [core::iter::traits::iterator::Iterator::map]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 845:4-848:34
-    Name pattern: [core::iter::traits::iterator::Iterator::map]
-    Visibility: public -/
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
-axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
-  (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
-  Clause0_Item B) :
-  Self → F → Result (core.iter.adapters.map.Map Self F)
 
 /-- [iter_map::first_succ::{closure}]
     Source: 'tests/src/iter-map.rs', lines 5:18-5:27 -/
@@ -98,7 +69,7 @@ def first_succ.closure.Insts.CoreOpsFunctionFnMutTupleShared0U32U32 :
 def first_succ (xs : Slice Std.U32) : Result (Option Std.U32) := do
   let i ← core.slice.Slice.iter xs
   let m ←
-    core.iter.traits.iterator.Iterator.map.default
+    core.iter.traits.iterator.Iterator.map.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32)
       first_succ.closure.Insts.CoreOpsFunctionFnMutTupleShared0U32U32 i ()
   let (o, _) ←

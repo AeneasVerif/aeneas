@@ -8,6 +8,7 @@ public import Aeneas.Std.Scalar.CloneCopy
 public import Aeneas.Std.Scalar.EqOrd
 public import Aeneas.Std.Scalar.CheckedOps
 public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Ops
 -- Generic models below bind values of different universes: they need the
 -- universe-heterogeneous `do` elaborator. Note that this changes the `do` of every module
 -- importing this one: their `do` blocks elaborate to `Std.bind` (simp with `bind_ok`, ...)
@@ -897,3 +898,34 @@ def core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_b
 structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
   iter : I
   f : F
+
+/-- `Iterator::map` default body: `Map::new(self, f)`. -/
+def core.iter.traits.iterator.Iterator.map.default
+  {Self F : Type _} :
+  Self → F → Result (core.iter.adapters.map.Map Self F) :=
+  fun self f => ok ⟨self, f⟩
+
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
+def core.iter.traits.iterator.Iterator.map.trait_default
+  {Self B F Item : Type _}
+  (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
+  (_FnMutInst : core.ops.function.FnMut F Item B) :
+  Self → F → Result (core.iter.adapters.map.Map Self F) :=
+  core.iter.traits.iterator.Iterator.map.default
+
+/-- `Map<I, F>::next` (`map.rs:106`): `self.iter.next().map(&mut self.f)`. -/
+@[rust_fun
+  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
+def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
+  {B I F Item : Type _}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item)
+  (FnMutInst : core.ops.function.FnMut F Item B) :
+  core.iter.adapters.map.Map I F →
+    Result ((Option B) × core.iter.adapters.map.Map I F) :=
+  fun self => do
+    let (o, iter) ← IteratorInst.next self.iter
+    match o with
+    | none => ok (none, ⟨iter, self.f⟩)
+    | some x => do
+      let (b, f) ← FnMutInst.call_mut self.f x
+      ok (some b, ⟨iter, f⟩)
