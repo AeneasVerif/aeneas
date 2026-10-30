@@ -96,6 +96,11 @@ theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
 grind_pattern Vec.len_val => v.length
 grind_pattern [agrind] Vec.len_val => v.length
 
+/-- Model of `Vec::clear` (<https://doc.rust-lang.org/std/vec/struct.Vec.html#method.clear>):
+    clears the vector, removing all values. -/
+@[expose, simp, step_simps, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::clear" -canFail -lift (keepParams := [true,false])]
+abbrev Vec.clear {α : Type u} (_ : Vec α) : Vec α := Vec.new α
+
 instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
