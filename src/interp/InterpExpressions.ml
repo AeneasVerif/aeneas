@@ -966,11 +966,9 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
         "Unsized cast between dynamic traits: unimplemented case";
       [%cassert] span (ty1 = ty0)
         "Unsized cast between dynamic traits: unimplemented case";
-      [%cassert] span
-        (not (tvalue_has_borrows (Some span) ctx v))
-        "Unsized cast between dynamic traits: unimplemented case";
 
-      (* Nothing to do: the cast is the identity *)
+      (* Nothing to do: the cast is the identity (in particular, we can leave
+         the borrows the value may contain untouched) *)
       (Ok v, ctx, cc)
   | _ ->
       (* Regular case *)
