@@ -127,7 +127,7 @@ format:
 	@# `|| `true` because the command returns an error if it changed anything, which we don't care about.
 	cd src && dune fmt || true
 	cd tests/test_runner && dune fmt || true
-	rustfmt $(RUSTFMT_FLAGS) $(INPUTS_DIR)/*.rs
+	rustfmt $(RUSTFMT_FLAGS) $(INPUTS_DIR)/*.rs $(wildcard $(INPUTS_DIR)/doubly_linked/*.rs)
 
 .PHONY: clean
 clean: clean-generated
@@ -165,6 +165,8 @@ verify:
 INPUTS_LIST = $(wildcard $(INPUTS_DIR)/*)
 # Remove the committed output files, as well as the temporary files
 INPUTS_LIST := $(filter-out %.out %~ .% %#,$(INPUTS_LIST))
+# Support files for the single-file doubly-linked fixture are not another crate.
+INPUTS_LIST := $(filter-out $(INPUTS_DIR)/doubly_linked,$(INPUTS_LIST))
 # Remove the directory prefix, replace with `test-`
 INPUTS_LIST := $(subst $(INPUTS_DIR)/,test-,$(INPUTS_LIST))
 
@@ -214,30 +216,34 @@ timed-lean:
 verify-raw-box:
 	cd backends/lean && lake build Aeneas.Std.Heap.EffectSpecs
 	@set -eu; tmp=$$(mktemp -d); \
-	trap 'for module in RawBox RawReadWriteRead RawBoxProofs RawTransmute RawTransmuteExternals/Types RawTransmuteExternals/FunsExternal RawTransmuteExternals/Funs RawTransmuteExternals/Properties; do rm -f "$$tmp/$$module.olean" "$$tmp/$$module.olean.private" "$$tmp/$$module.olean.server" "$$tmp/$$module.ir" "$$tmp/$$module.ir.sig"; done; rmdir "$$tmp/RawTransmuteExternals" "$$tmp"' EXIT; \
-	mkdir "$$tmp/RawTransmuteExternals"; \
+	trap 'for module in RawBox RawReadWriteRead RawBoxProofs RawTransmute RawTransmuteExternals/Types RawTransmuteExternals/ArrayRepr RawTransmuteExternals/FunsExternal RawTransmuteExternals/Funs RawTransmuteExternals/Properties RawTransmuteExternals/ArrayProperties RawValueCasts/Types RawValueCasts/Repr RawValueCasts/FunsExternal RawValueCasts/Funs RawValueCasts/Properties; do rm -f "$$tmp/$$module.olean" "$$tmp/$$module.olean.private" "$$tmp/$$module.olean.server" "$$tmp/$$module.ir" "$$tmp/$$module.ir.sig"; done; rmdir "$$tmp/RawTransmuteExternals" "$$tmp/RawValueCasts" "$$tmp"' EXIT; \
+	mkdir "$$tmp/RawTransmuteExternals" "$$tmp/RawValueCasts"; \
 	cd backends/lean; \
 	lake env lean --root=../../tests/lean ../../tests/lean/RawBox.lean -o "$$tmp/RawBox.olean"; \
 	lake env lean --root=../../tests/lean ../../tests/lean/RawReadWriteRead.lean -o "$$tmp/RawReadWriteRead.olean"; \
 	LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean ../../tests/lean/RawBoxProofs.lean -o "$$tmp/RawBoxProofs.olean"; \
 	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawBoxManual.lean; \
 	LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean ../../tests/lean/RawTransmute.lean -o "$$tmp/RawTransmute.olean"; \
-	for module in Types FunsExternal Funs Properties; do \
+	for module in Types ArrayRepr FunsExternal Funs Properties ArrayProperties; do \
 	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/RawTransmuteExternals/$$module.lean" -o "$$tmp/RawTransmuteExternals/$$module.olean"; \
 	done; \
-	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawTransmuteExternals.lean
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawTransmuteExternals.lean; \
+	for module in Types Repr FunsExternal Funs Properties; do \
+	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/RawValueCasts/$$module.lean" -o "$$tmp/RawValueCasts/$$module.olean"; \
+	done; \
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawValueCasts.lean
 
-.PHONY: verify-raw-doubly-linked
-verify-raw-doubly-linked:
+.PHONY: verify-doubly-linked
+verify-doubly-linked:
 	cd backends/lean && lake build Aeneas.Std.Heap.EffectSpecs
 	@set -eu; tmp=$$(mktemp -d); \
-	trap 'for module in Types FunsExternal Funs Properties ListProperties Ownership SafeProperties; do rm -f "$$tmp/RawDoublyLinked/$$module.olean" "$$tmp/RawDoublyLinked/$$module.olean.private" "$$tmp/RawDoublyLinked/$$module.olean.server" "$$tmp/RawDoublyLinked/$$module.ir" "$$tmp/RawDoublyLinked/$$module.ir.sig"; done; rmdir "$$tmp/RawDoublyLinked" "$$tmp"' EXIT; \
-	mkdir "$$tmp/RawDoublyLinked"; \
+	trap 'for module in Types FunsExternal Raw Safe Funs RawProperties ListProperties Ownership SafeProperties; do rm -f "$$tmp/DoublyLinked/$$module.olean" "$$tmp/DoublyLinked/$$module.olean.private" "$$tmp/DoublyLinked/$$module.olean.server" "$$tmp/DoublyLinked/$$module.ir" "$$tmp/DoublyLinked/$$module.ir.sig"; done; rmdir "$$tmp/DoublyLinked" "$$tmp"' EXIT; \
+	mkdir "$$tmp/DoublyLinked"; \
 	cd backends/lean; \
-	for module in Types FunsExternal Funs Properties ListProperties Ownership SafeProperties; do \
-	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/RawDoublyLinked/$$module.lean" -o "$$tmp/RawDoublyLinked/$$module.olean"; \
+	for module in Types FunsExternal Raw Safe Funs RawProperties ListProperties Ownership SafeProperties; do \
+	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/DoublyLinked/$$module.lean" -o "$$tmp/DoublyLinked/$$module.olean"; \
 	done; \
-	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawDoublyLinked.lean
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/DoublyLinked.lean
 
 # =============================================================================
 # Nix

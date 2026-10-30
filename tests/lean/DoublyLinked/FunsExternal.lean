@@ -1,13 +1,13 @@
 module
 
-public import RawDoublyLinked.Types
+public import DoublyLinked.Types
 public import Aeneas.Std.Heap.EffectSpecs
 
 @[expose] public section
 
 open Aeneas.Std
 
-namespace raw_doubly_linked.ext
+namespace doubly_linked.ext
 
 /- The descriptor is an explicit model parameter, including the representations
 of stored pointers. No Rust node-layout or pointer-encoding axiom is assumed. -/
@@ -26,4 +26,4 @@ def allocate_node (repr : Aeneas.Std.Repr Node) (value : U32) : Result (MutRawPt
 def take_node (repr : Aeneas.Std.Repr Node) (p : MutRawPtr Node) : Result Node :=
   alloc.boxed.Box.from_raw repr p
 
-end raw_doubly_linked.ext
+end doubly_linked.ext

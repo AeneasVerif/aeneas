@@ -1,6 +1,6 @@
 module
 
-public import RawDoublyLinked.Ownership
+public import DoublyLinked.Ownership
 import all Aeneas.Std.Heap.Resources
 import all Aeneas.Std.Scalar.CheckedOps.Add
 import all Aeneas.Std.Core.CoreOption
@@ -9,7 +9,7 @@ import all Aeneas.Std.Core.CoreOption
 
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
-namespace raw_doubly_linked
+namespace doubly_linked
 
 theorem checked_increment (x : Usize)
     (hb : x.val + 1 < 2 ^ UScalarTy.numBits .Usize) :
@@ -174,44 +174,44 @@ theorem LinkedList.drop.spec (self : LinkedList) (values : List U32)
   rw [he, Fragment.empty_union] at hm'
   exact ⟨hm', hi'⟩
 
-/-- info: 'raw_doubly_linked.LinkedList.new.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.new.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.new.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.push_front.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.push_front.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.push_front.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.pop_front.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.pop_front.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.pop_front.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.front.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.front.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.front.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.back.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.back.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.back.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.len.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.len.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.len.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.is_empty.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.is_empty.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.is_empty.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.clear.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.clear.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.clear.spec
 
-/-- info: 'raw_doubly_linked.LinkedList.drop.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.LinkedList.drop.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms LinkedList.drop.spec
 
-/-- info: 'raw_doubly_linked.owned_toList' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.owned_toList' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms owned_toList
 
-end raw_doubly_linked
+end doubly_linked

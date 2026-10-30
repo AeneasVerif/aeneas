@@ -1,6 +1,7 @@
 module
 
-public import RawDoublyLinked.ListProperties
+public import DoublyLinked.ListProperties
+public import DoublyLinked.Safe
 import all Aeneas.Std.Heap.Resources
 import all Aeneas.Std.Scalar.CheckedOps.Add
 import all Aeneas.Std.Core.CoreOption
@@ -9,7 +10,7 @@ import all Aeneas.Std.Core.CoreOption
 
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
-namespace raw_doubly_linked
+namespace doubly_linked
 
 unseal Result
 
@@ -379,4 +380,4 @@ theorem LinkedList.drop_owned (self : LinkedList) (entries : Entries) :
   exact HeapWP.Triple.conseq (fun _ hp => hp) (fun _ _ hp => hp.2)
     (HeapWP.Triple.pure emp self')
 
-end raw_doubly_linked
+end doubly_linked

@@ -326,3 +326,135 @@ it does not enumerate an exact whole-heap allocation-map difference.
 for every public theorem. The four native tests include a safe-only sequence
 comparison, moves, empty cases, clear/reuse, and destruction of a nonempty list;
 they also pass with address/leak sanitization.
+
+## 2026-10-30 — Mutable byte-array view and by-value transmute contracts
+
+```text
+commands   : make test-raw_transmute_externals.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+             make test-raw_value_casts.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+sources    : tests/src/raw_transmute_externals.rs, Git blob 850dfa3519dd5765ea1b55739efb466075dbefaf
+             tests/src/raw_value_casts.rs, Git blob 5a75cb16c2f8b4aa49f62233813666241d1f18c9
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; unchanged shared read-only executable
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; unchanged shared read-only executable
+charon-pin : experiment remains de8736f7c995ac54dc490345cef9ea5143c06c62
+rustc      : Charon nightly-2026-09-17; native rustc 1.98.0-nightly (14210df0e 2026-05-31)
+options    : Charon --opaque=crate::ext; Lean -split-files -all-computable; test runner supplies -checks and diagnostic flags
+```
+
+The array fixture adds opaque four-byte read/write/borrow wrappers, transparent
+raw array-pointer callers, and safe `bytes_view(&mut u32) -> &mut [u8; 4]`.
+Its regenerated external template records the actual compiler signatures:
+`core.ptr.from_mut` returns a pointer plus the old functional value, and
+`ext.borrow_four` returns an array plus a pure `Array -> Unit` backward function.
+The template is retained unedited and is not imported.
+
+Post-extraction adaptation, confined to `RawTransmuteExternals/Funs.lean`:
+replace only `bytes_view`'s return type and borrow plumbing with effectful
+backward computations. Pass `raw_box.u32Repr` to the existing `from_mut` model,
+then preserve the Rust call order: expose word, cast pointer, borrow array.
+The returned callback first restores updated array bytes with `endBorrow`,
+then reads the word and consumes its exposure through the matching `from_mut`
+callback. Explicit cross-universe binds support this effectful result. The
+other generated callers and `Types.lean` are unchanged. Re-extraction overwrites
+the marked adaptation; no shared compiler, Charon, or compiler-facing primitive
+was changed. The handwritten external model deliberately differs from the
+template's pure backward signature and must be reconciled with this adaptation.
+
+`ArrayRepr.lean` supplies the complete four-byte identity descriptor and exact
+little-endian conversions. `ArrayProperties.lean` proves raw pointer identity,
+framed exact array reads and overwrites, and the safe mutable view's complete
+forward/backward contract. Every replacement array restores its exact word;
+the callback consumes exposure resources and preserves arbitrary frames.
+Access through alignment-one arrays retains the original alignment-four word
+resources. Rust native tests use native endian; these model proofs explicitly
+instantiate little endian and do not establish Rust-target ABI refinement.
+
+The by-value fixture has four opaque conversions and four transparent callers.
+Its `Types.lean`, `Funs.lean`, and four-axiom `FunsExternal_Template.lean` are
+unedited extraction output; the template is not imported. The second extraction
+refreshes source spans after allowing the deliberate unnecessary-transmute lint.
+Handwritten external definitions use `reinterpret`: demonic choice of any
+source encoding followed by target decoding, not a canonical encoder.
+`reinterpret.spec` proves exact result and unchanged heap from equal sizes and
+the requirement that every source encoding decodes to the specified target
+value. The concrete contracts prove bool/byte and signed/unsigned round trips,
+checked byte-to-bool for every input, and bool-byte copying with unchanged
+source. Byte 2's failed bool decoding witnesses why initialization alone is
+insufficient. These are models for the specific wrappers, not a new compiler
+rule for arbitrary transmute, padding, pointers, lifetimes, or destructors.
+
+`make verify-raw-box` now checks both roots and exact axiom guards on the
+end-to-end array/value contracts and the generic compatibility theorem.
+Only `propext`, `Classical.choice`, and `Quot.sound` occur; no memory-model
+axiom or `sorry` is introduced. Rustfmt passes for both fixtures, the native
+value test covers all 256 checked bool inputs and signed boundaries, and the
+three native array tests pass with address/leak sanitization.
+
+The heap's [TRANSMUTE.md](../../backends/lean/Aeneas/Std/Heap/TRANSMUTE.md)
+compares bytemuck 1.25.2 and zerocopy 0.8.63 with the pair-specific
+representation obligations. Library experiments remain session
+artifacts, not repository dependencies or translated fixtures. They confirm
+checked mutable byte-to-bool acceptance, bool-to-byte mutable rejection,
+padding and static-alignment rejection, and the distinct Box allocation-layout
+requirement. Neither library's checked mutable cast accepts bool as the source
+of a bool-to-two-discriminant-enum view, despite the candidate pairwise
+compatibility; that more precise mutable wrapper is not proved here.
+
+## 2026-10-30 — DoublyLinked rename and raw/safe source separation
+
+The earlier `RawDoublyLinked` entries above retain their historical names and
+source hashes. The current example is named `DoublyLinked`, with Rust crate and
+Lean namespace `doubly_linked`.
+
+```text
+command    : make test-doubly_linked.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+rust       : https://github.com/AeneasVerif/aeneas.git, fournet/wip-memory-model, based on b023a12efe278035d8ad2d0017b735de00b1141a
+sources    : tests/src/doubly_linked.rs, Git blob f60b2e52229038639902e215d9bc82a6fd01317d
+             tests/src/doubly_linked/raw.rs, Git blob a466b58c77197f05bb4f9d7bd6b3861b1aca969f
+             tests/src/doubly_linked/safe.rs, Git blob 767f1306d62ff31acffe0bbd94a4039ac44d5a46
+             tests/src/doubly_linked/tests.rs, Git blob c6f5720a446092e37c74f72daa59f886b0f05edc
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; unchanged shared read-only executable
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; unchanged shared read-only executable
+charon-pin : experiment remains de8736f7c995ac54dc490345cef9ea5143c06c62
+rustc      : Charon nightly-2026-09-17; native rustc 1.98.0-nightly (14210df0e 2026-05-31)
+options    : Charon --opaque=crate::ext; Lean -split-files -all-computable -loops-to-rec; existing test runner supplies -checks and diagnostic flags
+```
+
+The Rust entry point includes `raw.rs` (Node, opaque primitive wrappers, and
+unsafe ring operations) and `safe.rs` (the private-field owning LinkedList and
+Drop). This separates the APIs into source files without introducing new
+module-qualified symbols or changing the opaque `crate::ext` boundary.
+The four original native tests live in a separate `tests.rs`, with distinct
+raw and safe-client test modules; the safe client imports only `LinkedList`.
+The Makefile excludes the support directory from independent extraction and
+includes its files in formatting; the root's test module preserves native
+test discovery.
+
+Re-extraction with the unchanged shared binaries emitted fresh `Types.lean`,
+`Funs.lean`, and `FunsExternal_Template.lean`, with correct split-source spans.
+The external template remains unedited and unimported; the handwritten
+external models are unchanged except for the namespace/import rename.
+
+Post-extraction edits: replay the lossless recursive-pointer phantom repair in
+`Types.lean` and explicit `Repr Node` threading documented in the earlier list
+entries. Factor `Funs.lean` at the first `LinkedList.new` declaration into
+`Raw.lean` (Node trait implementations and intrusive operations) and `Safe.lean`
+(all owning methods, clear's recursive helper, and Drop), preserving source
+annotations. `Safe.lean` imports `Raw.lean`; replace `Funs.lean` with an import
+aggregator for `Safe.lean`. Mark both function files as factored/adapted output.
+The adapted function and type bodies are token-identical to the previous
+adapted example after the namespace rename, ignoring comments and whitespace.
+Re-extraction overwrites the aggregator and type repair; replay the factoring
+and descriptor adaptations before checking proofs.
+
+Rename the local raw contracts to `RawProperties.lean`; they import only
+`Raw.lean`. `ListProperties.lean` builds the raw-ring sequence contracts.
+`Ownership.lean` additionally imports `Safe.lean`, and `SafeProperties.lean`
+retains all nine public plain-list contracts. No proof statement, proof body,
+or axiom guard is weakened. The library registration and focused verification
+target are now `DoublyLinked` and `make verify-doubly-linked`.
+
+The focused Lean closure and exact standard-axiom guards pass. All four native
+tests pass both normally and with address/leak sanitization; Rustfmt also
+passes for the entry point, both API files, and the test file. No shared tool
+or compiler setup is modified.

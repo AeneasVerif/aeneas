@@ -21,6 +21,13 @@ set_option maxHeartbeats 1000000
 set_option maxRecDepth 2048
 open raw_transmute_externals
 
+/-- [core::ptr::from_mut]:
+    Source: '/rustc/library/core/src/ptr/mod.rs', lines 1175:0-1175:59
+    Name pattern: [core::ptr::from_mut]
+    Visibility: public -/
+@[rust_fun "core::ptr::from_mut"]
+axiom core.ptr.from_mut {T : Type _} : T → Result ((MutRawPtr T) × T)
+
 /-- [raw_transmute_externals::ext::transmute_mut]:
     Source: 'tests/src/raw_transmute_externals.rs', lines 11:4-13:5
     Visibility: public -/
@@ -52,4 +59,24 @@ axiom ext.read_byte : MutRawPtr Std.U8 → Result Std.U8
     Source: 'tests/src/raw_transmute_externals.rs', lines 41:4-43:5
     Visibility: public -/
 axiom ext.write_byte : MutRawPtr Std.U8 → Std.U8 → Result Unit
+
+/-- [raw_transmute_externals::ext::read_four]:
+    Source: 'tests/src/raw_transmute_externals.rs', lines 47:4-49:5
+    Visibility: public -/
+axiom ext.read_four
+  : MutRawPtr (Array Std.U8 4#usize) → Result (Array Std.U8 4#usize)
+
+/-- [raw_transmute_externals::ext::write_four]:
+    Source: 'tests/src/raw_transmute_externals.rs', lines 53:4-55:5
+    Visibility: public -/
+axiom ext.write_four
+  : MutRawPtr (Array Std.U8 4#usize) → Array Std.U8 4#usize → Result Unit
+
+/-- [raw_transmute_externals::ext::borrow_four]:
+    Source: 'tests/src/raw_transmute_externals.rs', lines 59:4-61:5
+    Visibility: public -/
+axiom ext.borrow_four
+  :
+  MutRawPtr (Array Std.U8 4#usize) → Result ((Array Std.U8 4#usize) × (Array
+    Std.U8 4#usize → Unit))
 

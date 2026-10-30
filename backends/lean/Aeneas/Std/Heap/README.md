@@ -213,42 +213,29 @@ translations: nested sharing with const-pointer range reads, exclusive
 borrow/update/restoration, and their composition at the same pointer. Their
 contracts preserve arbitrary matching frames and identify every returned value.
 
-`RawTransmute.lean` supplies manual raw-pointer bodies matching
-`tests/src/raw_transmute.rs`. The native caller accesses the second element of a
-two-`u32` array as both `u8` and `u32`. Framed contracts prove same-type write/read
-round trips, including pointer casts away and back. These contracts start at the
-raw-pointer boundary; safe array exposure/restoration is not yet verified.
-Concrete heap executions at byte offset four give different cross-type results
-under complete little- and big-endian descriptors, proving there is no
-descriptor-independent numeric prediction in either direction. They are
-countermodels, not framed correctness proofs for the two cross-type `Result`
-bodies. A fixed calibrated decoder can predict cross-type values; the model
-does not inject havoc after a differently typed write. For generic descriptors,
-such a read can also fail to decode.
+The transmute-specific design, pitfalls, bytemuck/zerocopy comparison, and
+Rust-to-Lean example map are documented separately in [TRANSMUTE.md](TRANSMUTE.md).
+The proved examples cover thin raw-pointer round trips, exact by-value
+representation conversions, and the safe mutable word/byte-array view.
+The document distinguishes model proofs from ABI calibration, handwritten
+external models, and manual extraction adaptations.
 
-`RawTransmuteExternals/` tests an extraction workaround without changing Charon,
-Aeneas, or the backend cast mapping. In `tests/src/raw_transmute_externals.rs`,
-small opaque Rust wrappers turn thin-pointer transmutes into ordinary external
-calls. Additional opaque read/write wrappers supply the explicit descriptors
-missing from the existing compiler-facing access signatures. The generated
-callers are unedited; `FunsExternal.lean` implements the six wrappers as transparent
-definitions, using the fixture's little-endian word and identity-byte descriptors.
-Ordinary WP proves mutable and const pointer round trips; framed heap contracts
-prove both same-type write/read callers. Two equality bridges connect the
-generated cross-type callers to the manual models above, without claiming their
-framed correctness. The safe-array native test is not extracted.
+`DoublyLinked/` provides separate raw and safe doubly-linked-list APIs:
 
-The older fixture headers mark manual descriptor adaptations and repeated-read
-repairs; re-extraction would overwrite those edits. The new external-wrapper
-fixture was extracted with the existing binaries, used read-only. This workaround
-does not add support for intrinsic transmute IR or general value/fat-pointer casts.
-See `tests/lean/EXTRACTION.md` for the recorded extraction provenance.
+| Layer | Rust | Lean implementation | Contracts |
+|---|---|---|---|
+| Raw intrusive sentinel ring | [raw.rs](../../../../../tests/src/doubly_linked/raw.rs) | [Raw.lean](../../../../../tests/lean/DoublyLinked/Raw.lean) | [RawProperties.lean](../../../../../tests/lean/DoublyLinked/RawProperties.lean), [ListProperties.lean](../../../../../tests/lean/DoublyLinked/ListProperties.lean) |
+| Safe owning list | [safe.rs](../../../../../tests/src/doubly_linked/safe.rs) | [Safe.lean](../../../../../tests/lean/DoublyLinked/Safe.lean) | [Ownership.lean](../../../../../tests/lean/DoublyLinked/Ownership.lean), [SafeProperties.lean](../../../../../tests/lean/DoublyLinked/SafeProperties.lean) |
 
-`RawDoublyLinked/` adds an intrusive circular doubly-linked list with a sentinel,
-backed by `tests/src/raw_doubly_linked.rs`. Nodes store actual raw `prev` and
+The [Rust entry point](../../../../../tests/src/doubly_linked.rs) includes both
+APIs in one crate namespace, preserving the `crate::ext` extraction boundary.
+[tests.rs](../../../../../tests/src/doubly_linked/tests.rs) keeps raw-ring tests
+separate from the safe-only client test. `DoublyLinked/Funs.lean` is an import
+aggregator for the two factored Lean APIs, not a second set of definitions.
+Nodes store actual raw `prev` and
 `next` pointers and a `u32` payload. Two opaque primitives perform whole-node
 reads and writes; the link operations remain transparent Rust.
-`Properties.lean` proves exact framed contracts for link setters, insertion
+`RawProperties.lean` proves exact framed contracts for link setters, insertion
 between distinct neighbours, insertion into an empty ring, unlinking between
 distinct neighbours, removing the last node, and removing an already detached
 node. The last two cases handle neighbour aliasing without assuming three
@@ -267,8 +254,12 @@ constructor/accessor round trip is proved. Callers also thread an explicit
 `Repr Node` through the external models. These contracts are parametric
 in a positive-sized complete descriptor, including its stored-pointer encoding;
 no concrete `Repr Node` is instantiated, and no Rust node ABI or pointer
-representation is proved. Re-extraction
-overwrites both adaptations. Neither Charon nor the shared Aeneas compiler was
+representation is proved. The generated function file is also manually
+factored into `Raw.lean` and `Safe.lean`; its bodies and control flow are
+unchanged apart from the descriptor arguments. Re-extraction overwrites the
+type repair and function aggregator, requiring both adaptations and factoring
+to be replayed as documented in `tests/lean/EXTRACTION.md`.
+Neither Charon nor the shared Aeneas compiler was
 changed.
 
 The same fixture now supplies a safe owning `LinkedList` with private root and
@@ -311,7 +302,7 @@ From the repository root, without re-extraction:
 
 ```sh
 make verify-raw-box
-make verify-raw-doubly-linked
+make verify-doubly-linked
 ```
 
 `HeapTests.lean` exercises lifecycle and cleanup, uninitialized borrow/restoration,

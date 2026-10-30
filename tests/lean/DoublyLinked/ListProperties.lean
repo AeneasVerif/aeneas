@@ -1,13 +1,13 @@
 module
 
-public import RawDoublyLinked.Properties
+public import DoublyLinked.RawProperties
 import all Aeneas.Std.Heap.Separation
 
 @[expose] public section
 
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
-namespace raw_doubly_linked
+namespace doubly_linked
 
 abbrev Entries := List (Ptr × U32)
 
@@ -134,12 +134,12 @@ theorem remove_after.spec (root node : Ptr) (sv value : U32) (rest : Entries) :
   intro _
   exact HeapWP.Triple.pure _ node
 
-/-- info: 'raw_doubly_linked.insert_after.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.insert_after.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms insert_after.spec
 
-/-- info: 'raw_doubly_linked.remove_after.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.remove_after.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms remove_after.spec
 
-end raw_doubly_linked
+end doubly_linked

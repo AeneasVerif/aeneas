@@ -1,13 +1,13 @@
 module
 
-public import RawDoublyLinked.Funs
+public import DoublyLinked.Raw
 import all Aeneas.Std.Heap.Separation
 
 @[expose] public section
 
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
-namespace raw_doubly_linked
+namespace doubly_linked
 
 abbrev Ptr := MutRawPtr Node
 
@@ -197,24 +197,24 @@ theorem remove.detached_spec (node : Ptr) (value : U32) :
   intro _
   exact init.spec repr hsize node (.mk node node value) value
 
-/-- info: 'raw_doubly_linked.insert_after.distinct_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.insert_after.distinct_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms insert_after.distinct_spec
 
-/-- info: 'raw_doubly_linked.insert_after.empty_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.insert_after.empty_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms insert_after.empty_spec
 
-/-- info: 'raw_doubly_linked.remove.distinct_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.remove.distinct_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms remove.distinct_spec
 
-/-- info: 'raw_doubly_linked.remove.last_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.remove.last_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms remove.last_spec
 
-/-- info: 'raw_doubly_linked.remove.detached_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'doubly_linked.remove.detached_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms remove.detached_spec
 
-end raw_doubly_linked
+end doubly_linked
