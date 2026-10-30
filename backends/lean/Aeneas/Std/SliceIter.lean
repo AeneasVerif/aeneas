@@ -514,7 +514,8 @@ private meta def iterMutBodyName (tgt : Expr) : MetaM Name :=
     return n
 
 /-- Proves that a generated loop body is `IterMut.updateBody g` (the body of
-`for x in it { *x = g(*x) }`). -/
+`for x in it { *x = g(*x) }`). Conditional writes (`if c { *x = v }`) are handled by splitting on
+the condition, with `g` the corresponding `if`. -/
 syntax (name := iterMutUpdateBody) "iter_mut_update_body" : tactic
 
 open Lean Elab Tactic Meta in
@@ -523,7 +524,7 @@ meta def evalIterMutUpdateBody : Tactic := fun _ => withMainContext do
   let id := mkIdent (← iterMutBodyName (← getMainTarget))
   evalTactic (← `(tactic|
     (intro it back; unfold $id:ident iter.IterMut.updateBody; fcongr 1;
-     funext ⟨o, _, _⟩; cases o <;> rfl)))
+     funext ⟨o, _, _⟩; cases o <;> first | rfl | (simp only [uncurry]; split <;> simp_all))))
 
 /-- Loops generated for `for x in it { *x = g(*x) }` over a fresh `IterMut` (index `0`, no write
 yet): every element `x` of the slice is replaced by a value `y` with `P j x y`, given a spec of `g`
