@@ -55,6 +55,7 @@ let region_in_set ?(allow_erased = false) (r : region) (rset : region_set) :
   | RBody _ ->
       [%craise_opt_span] None
         "region_in_set shouldn't be called on body regions"
+  | RLub _ -> [%craise_opt_span] None "Unexpected Lub region"
   | RVar (Bound _) ->
       [%craise_opt_span] None
         "region_in_set shouldn't be called on bound regions"
@@ -92,6 +93,7 @@ let ty_regions (ty : ty) : RegionId.Set.t =
   let add_region (r : region) =
     match r with
     | RStatic -> ()
+    | RLub _ -> [%craise_opt_span] None "Unexpected Lub region"
     | RErased | RBody _ ->
         raise
           (Failure "ty_regions shouldn't be called on erased or body regions")
@@ -477,13 +479,14 @@ let ty_has_mut_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
 
 (** Small helper *)
 let raise_if_not_rty_visitor =
-  object
+  object (self)
     inherit [_] iter_ty as super
 
     method! visit_region _ r =
       match r with
       | RVar (Bound _) | RErased -> raise Found
       | RStatic | RVar (Free _) -> ()
+      | RLub ty -> self#visit_ty () ty
       | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
 
     method! visit_TDynTrait env tr =
@@ -502,13 +505,14 @@ let ty_is_rty (ty : ty) : bool =
 
 (** Small helper *)
 let raise_if_not_erased_ty_visitor =
-  object
+  object (self)
     inherit [_] iter_ty
 
     method! visit_region _ r =
       match r with
       | RStatic | RVar _ -> raise Found
       | RErased -> ()
+      | RLub ty -> self#visit_ty () ty
       | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
   end
 
@@ -524,11 +528,7 @@ let ty_erase_body_regions ty =
   let visitor =
     object
       inherit [_] map_ty
-
-      method! visit_region _ r =
-        match r with
-        | RStatic | RVar _ | RErased -> r
-        | RBody _ -> RErased
+      method! visit_RBody _ _ = RErased
     end
   in
   visitor#visit_ty () ty
@@ -537,7 +537,12 @@ let ty_erase_regions ty =
   let visitor =
     object
       inherit [_] map_ty
-      method! visit_region _ _ = RErased
+
+      (* Preserve [RLub] wrappers in outlives predicates, erasing the regions
+         of their types as well. *)
+      method! visit_RStatic _ = RErased
+      method! visit_RVar _ _ = RErased
+      method! visit_RBody _ _ = RErased
     end
   in
   visitor#visit_ty () ty
