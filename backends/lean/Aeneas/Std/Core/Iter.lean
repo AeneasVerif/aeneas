@@ -67,6 +67,13 @@ structure core.iter.adapters.zip.Zip (A : Type u) (B : Type v) where
   fst : A
   snd : B
 
+/-- `core::iter::adapters::chain::Chain` — the `a.chain(b)` adapter. As in Rust,
+    `a` is set to `none` once exhausted. -/
+@[rust_type "core::iter::adapters::chain::Chain"]
+structure core.iter.adapters.chain.Chain (A : Type u) (B : Type v) where
+  a : Option A
+  b : Option B
+
 def core.iter.traits.iterator.Iterator.step_by.default
   {Self : Type _} (self: Self) (step_by : Std.Usize) :
   Result (core.iter.adapters.step_by.StepBy Self) :=
@@ -716,6 +723,23 @@ def core.iter.traits.iterator.Iterator.zip.trait_default
   Self → U → Result (core.iter.adapters.zip.Zip Self IntoIter) :=
   core.iter.traits.iterator.Iterator.zip.default IntoIterInst.into_iter
 
+/-- `Iterator::chain` default body: `Chain::new(self, other.into_iter())`. -/
+def core.iter.traits.iterator.Iterator.chain.default
+  {Self U IntoIter : Type _}
+  (into_iter : U → Result IntoIter) :
+  Self → U → Result (core.iter.adapters.chain.Chain Self IntoIter) :=
+  fun self other => do
+    let b ← into_iter other
+    ok ⟨some self, some b⟩
+
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::chain"]
+def core.iter.traits.iterator.Iterator.chain.trait_default
+  {Self U Item IntoIter : Type _}
+  (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
+  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter) :
+  Self → U → Result (core.iter.adapters.chain.Chain Self IntoIter) :=
+  core.iter.traits.iterator.Iterator.chain.default IntoIterInst.into_iter
+
 /-- `Iterator::rev` default body: `Rev { iter: self }`. -/
 def core.iter.traits.iterator.Iterator.rev.default
   {Self : Type _} :
@@ -929,3 +953,34 @@ def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
     | some x => do
       let (b, f) ← FnMutInst.call_mut self.f x
       ok (some b, ⟨iter, f⟩)
+
+/-- `Chain<A, B>::next` (`chain.rs`):
+    ```rust
+    and_then_or_clear(&mut self.a, Iterator::next)
+      .or_else(|| self.b.as_mut()?.next())
+    ```
+    -/
+@[rust_fun
+  "core::iter::adapters::chain::{core::iter::traits::iterator::Iterator<core::iter::adapters::chain::Chain<@A, @B>, @Clause0_Item>}::next"]
+def core.iter.adapters.chain.Chain.Insts.CoreIterTraitsIteratorIterator.next
+  {A B Item : Type _}
+  (IA : core.iter.traits.iterator.Iterator A Item)
+  (IB : core.iter.traits.iterator.Iterator B Item)
+  (self : core.iter.adapters.chain.Chain A B) :
+  Result ((Option Item) × core.iter.adapters.chain.Chain A B) := do
+  -- `and_then_or_clear`: advance `a`, clearing it once exhausted
+  let (oa, a) ← match self.a with
+    | none => ok (none, none)
+    | some a => do
+      let (o, a') ← IA.next a
+      match o with
+      | some x => ok (some x, some a')
+      | none => ok (none, none)
+  match oa with
+  | some x => ok (some x, ⟨a, self.b⟩)
+  | none =>
+    match self.b with
+    | none => ok (none, ⟨a, none⟩)
+    | some b => do
+      let (o, b') ← IB.next b
+      ok (o, ⟨a, some b'⟩)

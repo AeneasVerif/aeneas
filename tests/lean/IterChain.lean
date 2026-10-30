@@ -18,43 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace iter_chain
-
-/-- [core::iter::adapters::chain::Chain]
-    Source: '/rustc/library/core/src/iter/adapters/chain.rs', lines 23:0-23:22
-    Name pattern: [core::iter::adapters::chain::Chain]
-    Visibility: public -/
-@[rust_type "core::iter::adapters::chain::Chain"]
-axiom core.iter.adapters.chain.Chain (A : Type _) (B : Type _) : Type
-
-/-- [core::iter::adapters::chain::{impl core::iter::traits::iterator::Iterator<Clause0_Item> for core::iter::adapters::chain::Chain<A, B>}::next]:
-    Source: '/rustc/library/core/src/iter/adapters/chain.rs', lines 81:4-81:41
-    Name pattern: [core::iter::adapters::chain::{core::iter::traits::iterator::Iterator<core::iter::adapters::chain::Chain<@A, @B>, @Clause0_Item>}::next]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::chain::{core::iter::traits::iterator::Iterator<core::iter::adapters::chain::Chain<@A, @B>, @Clause0_Item>}::next"]
-axiom core.iter.adapters.chain.Chain.Insts.CoreIterTraitsIteratorIterator.next
-  {A : Type _} {B : Type _} {Clause0_Item : Type _} (traitsiteratorIteratorInst
-  : core.iter.traits.iterator.Iterator A Clause0_Item)
-  (traitsiteratorIteratorInst1 : core.iter.traits.iterator.Iterator B
-  Clause0_Item) :
-  core.iter.adapters.chain.Chain A B → Result ((Option Clause0_Item) ×
-    (core.iter.adapters.chain.Chain A B))
-
-/-- [core::iter::traits::iterator::Iterator::chain]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 524:4-527:51
-    Name pattern: [core::iter::traits::iterator::Iterator::chain]
-    Visibility: public -/
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::chain"]
-axiom core.iter.traits.iterator.Iterator.chain.default
-  {Self : Type _} {U : Type _} {Clause0_Item : Type _} {Clause1_IntoIter :
-  Type _} (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
-  (collectIntoIteratorInst : core.iter.traits.collect.IntoIterator U
-  Clause0_Item Clause1_IntoIter) :
-  Self → U → Result (core.iter.adapters.chain.Chain Self Clause1_IntoIter)
 
 /-- [iter_chain::first]:
     Source: 'tests/src/iter-chain.rs', lines 4:0-6:1
@@ -64,7 +28,7 @@ def first
   let i ← core.slice.Slice.iter xs
   let i1 ← core.slice.Slice.iter ys
   let c ←
-    core.iter.traits.iterator.Iterator.chain.default
+    core.iter.traits.iterator.Iterator.chain.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32)
       (core.iter.traits.collect.IntoIterator.Blanket
       (core.iter.traits.iterator.IteratorSliceIter Std.U32)) i i1
