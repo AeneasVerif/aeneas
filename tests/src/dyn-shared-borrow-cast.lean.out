@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/dyn_shared_borrow_cast.llbc
+[[91mError[39m] Unsized cast between dynamic traits: unimplemented case
+Source: 'tests/src/dyn-shared-borrow-cast.rs', lines 16:4-16:5
+Compiler source: interp/InterpExpressions.ml, line 969
+
