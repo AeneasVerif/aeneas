@@ -114,15 +114,7 @@ def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter
 -- ============================================================================
 
 /-- Model for `IntoIterator::into_iter` for `&mut [T; N]`
-(<https://doc.rust-lang.org/std/primitive.array.html#impl-IntoIterator-for-%26mut+%5BT;+N%5D>).
-Mirrors Rust (`library/core/src/array/mod.rs`: `self.iter_mut()`): returns an `IterMut<T>` over
-the array viewed as a slice, starting at index 0, together with the back function which writes
-the (possibly updated) slice held by the iterator back into the array.
-
-There is no matching `rust_trait_impl` record: `IterMut::next` returns a back function, so
-`IterMut` has no `Iterator` instance and the `IntoIterator` structure (whose `iteratorInst` field
-requires one) can't be filled. Code which calls `into_iter` directly (e.g. `for` loops) only needs
-this function. -/
+(<https://doc.rust-lang.org/std/primitive.array.html#impl-IntoIterator-for-%26mut+%5BT;+N%5D>). -/
 @[rust_fun
   "core::array::{core::iter::traits::collect::IntoIterator<&'a mut [@T; @N], &'a mut @T, core::slice::iter::IterMut<'a, @T>>}::into_iter"]
 def MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter
@@ -361,52 +353,54 @@ private def collectNestedStepBy
 -- Step specs for SharedArray.into_iter and SharedSlice.into_iter
 -- ============================================================================
 
+namespace core.slice
+
 @[step]
 theorem SharedArray.into_iter.spec {T : Type _} {N : Usize} (a : Array T N) :
     SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter a
-    ⦃ (iter : core.slice.iter.Iter T) =>
+    ⦃ (iter : iter.Iter T) =>
       iter.slice.val = a.val ∧ iter.i = 0 ⦄ := by
   simp [SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
 
 @[step]
 theorem SharedSlice.into_iter.spec {T : Type _} (s : Slice T) :
     SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter s
-    ⦃ (iter : core.slice.iter.Iter T) =>
+    ⦃ (iter : iter.Iter T) =>
       iter.slice = s ∧ iter.i = 0 ⦄ := by
   simp [SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
 
-/-- **Spec theorem for `<&mut [T; N] as IntoIterator>::into_iter`**: the iterator ranges over the
-    whole array from index `0`, and the back function writes the iterator's slice back into the
-    array. -/
+/-- `<&mut [T; N] as IntoIterator>::into_iter`: the iterator ranges over the array from index `0`,
+and the back function writes the iterator's slice back into the array. -/
 @[step]
 theorem MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter.spec
     {T : Type _} {N : Usize} (a : Array T N) :
     MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter a
-    ⦃ (iter : core.slice.iter.IterMut T) (back : core.slice.iter.IterMut T → Array T N) =>
+    ⦃ (iter : iter.IterMut T) (back : core.slice.iter.IterMut T → Array T N) =>
       iter.slice.val = a.val ∧ iter.i = 0 ∧
       ∀ iter' : core.slice.iter.IterMut T, iter'.slice.length = N.val →
         (back iter').val = iter'.slice.val ⦄ := by
   simp only [MutAArray.Insts.CoreIterTraitsCollectIntoIteratorMutATIterMut.into_iter, WP.spec_ok]
   refine ⟨by simp, rfl, fun iter' h => Array.from_slice_val _ _ (by simpa using h)⟩
 
-/-- **Spec theorem for `<IterMut<T> as Iterator>::next`**: returns the element at the current index
-    (`none` at the end) and advances the index, on the same slice. The back function writes the new
-    value of that element (given as `some x`) into a slice; given `none`, it changes nothing. This
-    is what loops over `IterMut` (e.g. `for elem in &mut a`) need to describe their accumulated
-    back function. -/
+/-- `<IterMut<T> as Iterator>::next`: returns the element at the current index (`none` at the end)
+and advances the index, on the same slice. The back function writes the new value of that element
+(given as `some x`) into a slice. -/
 @[step]
-theorem core.slice.iter.IteratorIterMut.next.spec {T : Type _} (it : core.slice.iter.IterMut T) :
-    core.slice.iter.IteratorIterMut.next it ⦃ o it' back =>
+theorem iter.IteratorIterMut.next.spec {T : Type _} (it : iter.IterMut T) :
+    iter.IteratorIterMut.next it ⦃ o it' back =>
       o = it.slice.val[it.i]? ∧ it'.slice = it.slice ∧
       it'.i = (if it.i < it.slice.length then it.i + 1 else it.i) ∧
       (∀ it'', back it'' none = it'') ∧
       (it.i < it.slice.length → ∀ it'' x,
         back it'' (some x) = { it'' with slice := it''.slice.setAtNat it.i x }) ⦄ := by
-  unfold core.slice.iter.IteratorIterMut.next
+  unfold iter.IteratorIterMut.next
   split
   · rename_i h
     have hi : it.i < it.slice.val.length := by simpa using h
     simp [hi]
     rfl
   · simp_all
+
+end core.slice
+
 end Aeneas.Std

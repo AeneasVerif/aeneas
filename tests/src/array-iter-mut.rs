@@ -4,12 +4,9 @@
 #![register_tool(verify)]
 //! Tests for the Lean model of `IntoIterator for &mut [T; N]`.
 //!
-//! `add_two` adapts the example of the documentation of `slice::iter_mut`
-//! (<https://doc.rust-lang.org/std/primitive.slice.html#method.iter_mut>), which
-//! `IntoIterator for &mut [T; N]` calls.
+//! `add_two` adapts the example of the documentation
+//! (<https://doc.rust-lang.org/std/primitive.slice.html#method.iter_mut>).
 
-/// The doc example iterates over `x.iter_mut()`: to exercise this model, the loop iterates over
-/// `x` (an `&mut [i32; N]`) directly.
 pub fn add_two<const N: usize>(x: &mut [i32; N]) {
     for elem in x {
         *elem += 2;

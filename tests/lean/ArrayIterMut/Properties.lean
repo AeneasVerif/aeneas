@@ -5,13 +5,7 @@ public section
 
 open Aeneas Aeneas.Std Result core.slice.iter
 
-/-! Proofs about the extracted `tests/src/array-iter-mut.rs`, using the specification theorems of
-the models of `IntoIterator for &mut [T; N]` and `IterMut::next` through `step`.
-
-The loop over `&mut [i32; N]` is extracted in backward style: each iteration returns the advanced
-iterator and a back function which accumulates the writes done so far. The invariant `Inv` says
-that the iterator ranges over the original slice, and that the back function adds `2` to the
-elements already visited and leaves the others as they are. -/
+/-! Proofs for the `IntoIterator for &mut [T; N]` and `IterMut::next` examples. -/
 
 namespace array_iter_mut
 
