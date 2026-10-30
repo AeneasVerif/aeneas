@@ -611,7 +611,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
-          | CastPtrExposeProvenance ->
+          | CastPtrExposeProvenance _ ->
               [%craise] ctx.span "Unsupported: pointer to address casts"
           | CastPtrWithExposedProvenance _ ->
               [%craise] ctx.span "Unsupported: address to pointer casts"
@@ -689,9 +689,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | Expressions.Mul om -> Mul (om, get_single_int_ty ())
               | Expressions.Div om -> Div (om, get_single_int_ty ())
               | Expressions.Rem om -> Rem (om, get_single_int_ty ())
-              | Expressions.AddChecked -> AddChecked (get_single_int_ty ())
-              | Expressions.SubChecked -> SubChecked (get_single_int_ty ())
-              | Expressions.MulChecked -> MulChecked (get_single_int_ty ())
               | Expressions.Shl om ->
                   let ty0 = ty_as_integer ctx.span arg0.ty in
                   let ty1 = ty_as_integer ctx.span arg1.ty in

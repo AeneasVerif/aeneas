@@ -152,12 +152,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 self#may_fail true
             | Use _
             | RvRef ({ kind = PlaceLocal _ | PlaceProjection _; _ }, _, _)
-            | Discriminant _
-            | Aggregate _
-            | Len _
-            | NullaryOp _
-            | RawPtr _
-            | Repeat _ -> ()
+            | Discriminant _ | Aggregate _ | NullaryOp _ | RawPtr _ | Repeat _
+              -> ()
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 
@@ -180,7 +176,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
 
-          method! visit_Call env call on_unwind =
+          method! visit_Call env call dest on_unwind =
             (match call.func with
             | FnOpDynamic _ ->
                 (* Ignoring this: we lookup the called function upon creating
@@ -194,7 +190,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                        TODO: this may cause issues if we use use a fuel parameter.
                     *)
                     can_fail := true));
-            super#visit_Call env call on_unwind
+            super#visit_Call env call dest on_unwind
 
           method! visit_Panic env =
             self#may_fail true;
