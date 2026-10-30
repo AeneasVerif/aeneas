@@ -106,6 +106,7 @@ package «tests» {}
 @[default_target] lean_lib RawBoxManual
 @[default_target] lean_lib RawBoxProofs
 @[default_target] lean_lib RawTransmute
+@[default_target] lean_lib RawTransmuteExternals
 @[default_target] lean_lib RawReadWriteRead
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues

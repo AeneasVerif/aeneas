@@ -183,3 +183,45 @@ restoration and framed contracts for the cross-type bodies remain future work.
 `make verify-raw-box` now also checks `RawTransmute.lean`, with exact standard-axiom
 guards on its two same-type round-trip proofs. General multi-element separation
 and permission contracts remain outside this milestone.
+
+## 2026-10-30 — Unedited extraction through opaque pointer-operation wrappers
+
+```text
+command    : make test-raw_transmute_externals.rs IN_CI=1 AENEAS_EXE=/workspaces/aeneas/bin/aeneas TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+rust       : https://github.com/AeneasVerif/aeneas.git, fournet/wip-memory-model, based on 8872d5e0029caf38268d146ec67fff2cf3a94017
+source     : tests/src/raw_transmute_externals.rs, Git blob 69e4aa02ee11de74b00f3d476423b410b4293270
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; same read-only executable and SHA-256 as above
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; same read-only executable as above
+charon-pin : shared compiler 26abff028ced534ebf8e861f2d3dd1743e2aa318; experiment remains de8736f7c995ac54dc490345cef9ea5143c06c62
+rustc      : Charon toolchain nightly-2026-09-17, rustc 1.100.0-nightly (923c95cdf 2026-09-16); native test rustc 1.98.0-nightly (14210df0e 2026-05-31)
+options    : Charon --opaque=crate::ext; Lean -split-files -all-computable; test runner supplies -checks and the usual diagnostic flags
+```
+
+Outcome: all six public callers extracted successfully. `Types.lean`,
+`Funs.lean`, and `FunsExternal_Template.lean` in `RawTransmuteExternals/` are
+unedited generated artifacts. The template's six axioms are not imported by the
+proofs: the separate handwritten `FunsExternal.lean` provides transparent
+definitions. The existing test runner regenerates only the template, leaving the
+unsuffixed model file untouched; reconcile signatures against the template after
+future extractions. No Charon, compiler, or backend source was patched.
+
+The generic Rust transmute wrappers have default `Sized` bounds, so both sides
+are thin pointers. Their models simply return `RawPtr.cast`, preserving base and
+byte offset without accesses or heap effects. Opaque word/byte access wrappers are
+also necessary here: their models supply the already-defined little-endian
+`raw_box.u32Repr` and identity `raw_transmute.byteRepr` descriptors. This is a
+calibrated model boundary, not a proof of Rust's target layout or of the wrappers'
+Rust bodies.
+
+`Properties.lean` proves ordinary-WP mutable/const pointer round trips and framed
+heap-WP same-type word/byte write-read contracts directly about the generated
+callers, reusing the manual model proofs through proved equality bridges.
+Exact axiom guards allow only `propext`, `Classical.choice`, and `Quot.sound`.
+The generated cross-type callers are also proved equal to the corresponding
+manual models with these descriptors; no new framed cross-type contract or
+descriptor-independent numeric prediction is claimed. Native tests exercise the
+second element of a two-word array, but safe-array exposure/restoration remains
+outside the extracted proof boundary.
+
+Replay the Lean checks with `make verify-raw-box`. Native Rust checks and
+`rustfmt --check --edition 2021 tests/src/raw_transmute_externals.rs` also pass.

@@ -107,8 +107,8 @@ alignment or readable contents. Rust `add` and `offset` use this checked operati
 descriptor and performs no access checks; casting back restores the original
 pointer, even at nonzero or misaligned offsets. It changes no bytes or permissions
 and assumes no equation between source and target decoders. This pure helper is
-used by manual transmute examples, not inserted by the compiler. The legacy
-`cast_scalar` wrapper still fails. Physical pointer equality, pointer-integer
+used by manual transmute examples and explicit external models, not inserted by
+the compiler. The legacy `cast_scalar` wrapper still fails. Physical pointer equality, pointer-integer
 conversions, and unaligned-access operations are not provided.
 
 ## Rust boundary and Boxes
@@ -226,8 +226,22 @@ bodies. A fixed calibrated decoder can predict cross-type values; the model
 does not inject havoc after a differently typed write. For generic descriptors,
 such a read can also fail to decode.
 
-The fixture headers mark manual descriptor adaptations and repeated-read repairs.
-The compiler was not changed or rerun; re-extraction would overwrite those edits.
+`RawTransmuteExternals/` tests an extraction workaround without changing Charon,
+Aeneas, or the backend cast mapping. In `tests/src/raw_transmute_externals.rs`,
+small opaque Rust wrappers turn thin-pointer transmutes into ordinary external
+calls. Additional opaque read/write wrappers supply the explicit descriptors
+missing from the existing compiler-facing access signatures. The generated
+callers are unedited; `FunsExternal.lean` implements the six wrappers as transparent
+definitions, using the fixture's little-endian word and identity-byte descriptors.
+Ordinary WP proves mutable and const pointer round trips; framed heap contracts
+prove both same-type write/read callers. Two equality bridges connect the
+generated cross-type callers to the manual models above, without claiming their
+framed correctness. The safe-array native test is not extracted.
+
+The older fixture headers mark manual descriptor adaptations and repeated-read
+repairs; re-extraction would overwrite those edits. The new external-wrapper
+fixture was extracted with the existing binaries, used read-only. This workaround
+does not add support for intrinsic transmute IR or general value/fat-pointer casts.
 See `tests/lean/EXTRACTION.md` for the recorded extraction provenance.
 
 ## Checks
