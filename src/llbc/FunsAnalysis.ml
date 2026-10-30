@@ -30,12 +30,24 @@ type fun_info = {
   *)
   is_rec : bool;
       (* [true] if the function is recursive (or in a mutually recursive group) *)
+  alive_hint : Values.alive_hint option;
 }
 [@@deriving show]
 
 (** Various information about a module's functions and trait methods. *)
 type modules_funs_info = { infos : fun_info FunOrMethodId.Map.t }
 [@@deriving show]
+
+let parse_keep_alive (item_meta : Types.item_meta) : Values.alive_hint option =
+  let has_keep_alive =
+    List.exists
+      (fun (attr : Meta.attribute) ->
+        match attr with
+        | AttrUnknown { path; _ } -> path = "verify::keep_alive"
+        | _ -> false)
+      item_meta.attr_info.attributes
+  in
+  if has_keep_alive then Some Values.Long else None
 
 let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
     fun_info option =
@@ -67,16 +79,27 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     register_info (FunOrMethodId.Fun id) info
   in
   let register_trait_method_info (trait_decl_id : TraitDeclId.id)
-      (method_id : Types.TraitMethodId.id) : unit =
+      (method_id : Types.TraitMethodId.id) (m : trait_method Types.binder) :
+      unit =
+    let item_meta = m.binder_value.item_meta in
+    if Option.is_some (parse_keep_alive item_meta) then
+      [%save_error] item_meta.span
+        "#[verify::keep_alive] is not allowed on trait methods";
     register_info
       (FunOrMethodId.Method (trait_decl_id, method_id))
-      { can_fail = true; stateful = false; can_diverge = false; is_rec = false }
+      {
+        can_fail = true;
+        stateful = false;
+        can_diverge = false;
+        is_rec = false;
+        alive_hint = None;
+      }
   in
 
   TraitDeclId.Map.iter
     (fun trait_decl_id (trait_decl : trait_decl) ->
       Types.TraitMethodId.Map.iter
-        (fun method_id _ -> register_trait_method_info trait_decl_id method_id)
+        (fun method_id m -> register_trait_method_info trait_decl_id method_id m)
         trait_decl.methods)
     m.trait_decls;
 
@@ -150,6 +173,17 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 (* We consider that trait constants can fail, similarly to
                    trait methods. *)
                 self#may_fail true
+            | Use (Constant { kind = CFnDef ptr; _ }, _) -> (
+                match ptr.kind with
+                | Fun fid -> (
+                    match FunDeclId.Map.find_opt fid funs_map with
+                    | Some fdecl
+                      when Option.is_some (parse_keep_alive fdecl.item_meta) ->
+                        [%save_error] env
+                          "Cannot take a function pointer to a function marked \
+                           #[verify::keep_alive]"
+                    | _ -> ())
+                | TraitMethod _ -> ())
             | Use _
             | RvRef ({ kind = PlaceLocal _ | PlaceProjection _; _ }, _, _)
             | Discriminant _ | Aggregate _ | NullaryOp _ | RawPtr _ | Repeat _
@@ -252,6 +286,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       stateful = !stateful;
       can_diverge = !can_diverge;
       is_rec = !is_rec;
+      alive_hint = None;
     }
   in
 
@@ -266,7 +301,22 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.TreeSet.of_list fun_ids in
     let info = analyze_fun_decls fun_ids funs in
-    List.iter (fun (f : fun_decl) -> register_fun_decl_info f.def_id info) funs
+    List.iter
+      (fun (f : fun_decl) ->
+        let alive_hint =
+          match parse_keep_alive f.item_meta with
+          | None -> None
+          | Some _ as hint -> (
+              match f.src with
+              | TraitDefaultFun _ | TraitImplFun _ ->
+                  [%save_error] f.item_meta.span
+                    "#[verify::keep_alive] is not allowed on trait methods";
+                  None
+              | _ -> hint)
+        in
+        let info = { info with alive_hint } in
+        register_fun_decl_info f.def_id info)
+      funs
   in
 
   let rec analyze_decl_groups (decls : declaration_group list) : unit =

@@ -1138,6 +1138,11 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       if List.length mpl = List.length abs.avalues then Some mpl else None
     in
     let ctx, outputs = abs_to_given_back output_mpl abs abs_level ctx in
+    let back_inputs =
+      if Option.is_some abs.alive_hint && back_inputs = [] && outputs <> [] then
+        [ mk_unit_texpr ]
+      else back_inputs
+    in
     (* Group the output values together *)
     let output = mk_simpl_tuple_pat outputs in
     (* Translate the next expression *)
@@ -1249,6 +1254,26 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     let ctx, given_back = abs_to_given_back_no_mp abs abs_level ctx in
     [%ltrace
       "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
+    (* If the function being synthesized has an [alive_hint] (from
+       [#[verify::keep_alive]]) and its return value contains no mutable borrows
+       for this region group ([given_back = []]), [back_sg.inputs] has a single
+       synthesized dummy [Unit] input that does not correspond to any borrow inside
+       the [SynthRet] abstraction. Ignore it here. *)
+    let inputs =
+      match (given_back, inputs) with
+      | [], [ input ] when input.ty = mk_unit_ty ->
+          let has_alive_hint =
+            match
+              FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos
+                ctx.fun_decl.def_id
+            with
+            | Some info -> Option.is_some info.alive_hint
+            | None -> false
+          in
+          [%sanity_check] ctx.span has_alive_hint;
+          []
+      | _ -> inputs
+    in
     [%sanity_check] ctx.span (List.length given_back = List.length inputs);
     (* Link the inputs to those given back values - note that this also
      checks we have the same number of values, of course *)
@@ -1289,6 +1314,11 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
   (* Compute the input and output values *)
   let back_inputs = abs_to_consumed ctx ectx abs abs_level in
   let ctx, outputs = abs_to_given_back None abs abs_level ctx in
+  let back_inputs =
+    if Option.is_some abs.alive_hint && back_inputs = [] && outputs <> [] then
+      [ mk_unit_texpr ]
+    else back_inputs
+  in
   let output = mk_simpl_tuple_pat outputs in
   (* Lookup the continuation to check if the abstraction is output by a join
      or a loop - note that it might not be there if the backward function was

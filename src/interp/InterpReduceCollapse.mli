@@ -125,6 +125,7 @@ val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
   (abs_id * abs_id * abs_id) list ->
   AbsId.Set.t ->
+  alive_hint AbsId.Map.t ->
   (abs_id * int * proj_marker * borrow_or_proj * ty) list ->
   abs_kind ->
   with_abs_conts:bool ->

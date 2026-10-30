@@ -305,7 +305,7 @@ type abs_kind =
 [@@deriving show, eq, ord]
 
 (** Hint controlling whether a region abstraction without loans should be kept
-    alive or ended eagerly. *)
+    alive, and if yes, for how long. *)
 type alive_hint = Long | Short [@@deriving show, eq, ord]
 
 module AbsBVarId = OrdIdGen ()
