@@ -458,3 +458,57 @@ The focused Lean closure and exact standard-axiom guards pass. All four native
 tests pass both normally and with address/leak sanitization; Rustfmt also
 passes for the entry point, both API files, and the test file. No shared tool
 or compiler setup is modified.
+
+## Local raw-pointer API examples
+
+```
+captured   : 2026-10-30 18:33 UTC
+parent     : efe1de18f3f3d768b61c1448f7efbca7d795f0aa
+source     : tests/src/raw_pointer_ops.rs, Git blob d8caf26c8a1650efea90b0720dc55cb761e4895e
+aeneas     : 985460dbbf187af891aab0201a8c046a2ed98ffe; unchanged shared read-only executable
+charon     : 26abff028ced534ebf8e861f2d3dd1743e2aa318; unchanged shared read-only executable
+charon-pin : experiment remains de8736f7c995ac54dc490345cef9ea5143c06c62
+rustc      : Charon nightly-2026-09-17 (1.100.0-nightly, 923c95cdf 2026-09-16)
+options    : Charon --opaque=crate::ext; Lean -split-files -all-computable; existing test runner supplies -checks and diagnostic flags
+```
+
+Command, run from the isolated experiment checkout:
+
+```sh
+make test-raw_pointer_ops.rs IN_CI=1 \
+  AENEAS_EXE=/workspaces/aeneas/bin/aeneas \
+  TEST_RUNNER_EXE=/workspaces/aeneas/bin/test_runner \
+  CHARON_EXE=/workspaces/aeneas/charon/bin/charon
+```
+
+`IN_CI=1` skips the development compiler build. The shared binaries, sources,
+and configuration were not changed. The actual Charon revision above differs
+from the experiment's historical pin; this entry records the tools actually
+used rather than claiming pin synchronization.
+
+The fixture emits `RawPointerOps/Types.lean`, `Funs.lean`, and
+`FunsExternal_Template.lean`; all three are preserved without post-extraction
+edits. No descriptor-threading or positivity repair is needed for these
+callers. The external template remains unimported. `FunsExternal.lean` supplies
+transparent handwritten models for all twelve opaque wrappers, with explicit
+descriptors and a borrow/restore model for the slice-fill wrapper. Thus this
+fixture checks callers against an explicit external-model boundary, not
+automatic translation of the standard-library pointer implementations.
+
+The opt-in backend models add replace, restricted swap, unaligned access,
+byte movement, and same-allocation distance without builtin registrations.
+Separate proof modules cover arbitrary-writable initialization, general
+nonempty range permission transfer/restoration, and live aligned empty ranges.
+`Properties.lean` proves exact framed contracts for every generated caller;
+`Checks.lean` exercises initialization, alignment, permission denial, atomic
+range rejection, pointer-distance restrictions, and explicit failure for
+unsupported partial-overlap swap.
+
+`make verify-raw-pointer-api` checks the backend proof closure, generated
+callers, external models, contracts, concrete checks, and exact axiom guards.
+The guarded contracts depend only on `propext`, `Classical.choice`, and
+`Quot.sound`; native computation checks are separate. All eight native Rust
+tests also pass with address/leak sanitization using nightly-2026-09-17.
+Rustfmt passes, as do the existing `verify-raw-box` and `verify-doubly-linked`
+regressions. These results establish model contracts and executable-example
+behavior, not Rust ABI correspondence or compiler correctness.
