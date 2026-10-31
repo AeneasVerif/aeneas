@@ -245,6 +245,18 @@ verify-doubly-linked:
 	done; \
 	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/DoublyLinked.lean
 
+.PHONY: verify-raw-pointer-api
+verify-raw-pointer-api:
+	cd backends/lean && lake build Aeneas.Std.Heap.PointerOps Aeneas.Std.Heap.PointerMovement Aeneas.Std.Heap.RangeRestoration
+	@set -eu; tmp=$$(mktemp -d); \
+	trap 'for module in RawBox RawBoxProofs RawTransmute RawValueCasts/Repr RawPointerOps/Types RawPointerOps/FunsExternal RawPointerOps/Funs RawPointerOps/Properties RawPointerOps/Checks; do rm -f "$$tmp/$$module.olean" "$$tmp/$$module.olean.private" "$$tmp/$$module.olean.server" "$$tmp/$$module.ir" "$$tmp/$$module.ir.sig"; done; rmdir "$$tmp/RawPointerOps" "$$tmp/RawValueCasts" "$$tmp"' EXIT; \
+	mkdir "$$tmp/RawPointerOps" "$$tmp/RawValueCasts"; \
+	cd backends/lean; \
+	for module in RawBox RawBoxProofs RawTransmute RawValueCasts/Repr RawPointerOps/Types RawPointerOps/FunsExternal RawPointerOps/Funs RawPointerOps/Properties RawPointerOps/Checks; do \
+	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/$$module.lean" -o "$$tmp/$$module.olean"; \
+	done; \
+	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/RawPointerOps.lean
+
 # =============================================================================
 # Nix
 # =============================================================================

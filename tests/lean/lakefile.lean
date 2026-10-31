@@ -105,6 +105,7 @@ package «tests» {}
 @[default_target] lean_lib RawBox
 @[default_target] lean_lib RawBoxManual
 @[default_target] lean_lib RawBoxProofs
+@[default_target] lean_lib RawPointerOps
 @[default_target] lean_lib DoublyLinked
 @[default_target] lean_lib RawTransmute
 @[default_target] lean_lib RawTransmuteExternals

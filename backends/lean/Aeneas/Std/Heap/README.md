@@ -160,6 +160,11 @@ Rust programs. `HeapTests.restoration_is_privileged` demonstrates this boundary.
 | `Access.lean` | Byte-based read/write/cleanup denial, including overlapping different types |
 | `Effects.lean` | Total-correctness interpretation of actual `Result` effects, exact demonic choice contracts, and composition rules |
 | `EffectSpecs.lean` | Rust read/write, singleton-range access/permission transfer, movement, Box and mutable-exposure allocation/cleanup contracts |
+| `Initialization.lean` | Effectful writes from arbitrary writable optional bytes, including wholly uninitialized storage |
+| `Ranges.lean` | Exact range assertions, adjacent byte-footprint splitting/recombination, atomic updates, and nonempty read/borrow/share contracts |
+| `RangeRestoration.lean` | Demonic range restoration and explicit live-allocation contracts for empty ranges |
+| `PointerOps.lean` | Framed replace, disjoint/identical swap, and unaligned read/write contracts |
+| `PointerMovement.lean` | Framed byte movement and restricted same-allocation signed distance contracts |
 
 Cell resources claim individual byte positions and an alignment guarantee.
 Typed `block` and `pointsTo` assertions additionally require the pointer offset
@@ -186,12 +191,51 @@ its correspondence with Rust or the correctness of its compiler adaptations.
 
 ### Coverage boundaries
 
-Range operations are executable and regression-tested, but their former
-general range-level separation/effect contracts have not yet been ported.
-`Borrowing.lean` proves single-footprint permission transfer; `EffectSpecs.lean`
-lifts it to `borrow`, `endBorrow`, and singleton `readRange`, `borrowRange`,
-`endBorrowRange`, `shareRange`, and `endShareRange`.
-Do not treat a successful backend build as evidence of those missing contracts.
+`Ranges.lean` and `RangeRestoration.lean` prove general nonempty range read,
+borrow, share, end-share, and end-borrow contracts. They identify every returned
+or restored value, preserve arbitrary matching frames, and cover every valid
+encoding chosen during restoration. Range updates are atomic. Empty ranges
+have separate input-state contracts: they preserve the entire heap but still
+require a live allocation, descriptor alignment, and an in-bounds position
+(including one-past). Restoration remains privileged to the matching backward
+continuation, as above.
+
+### Opt-in raw-pointer extensions
+
+The additions are isolated in `Core/PtrOps.lean`, `Core/PtrMovement.lean`, and
+the proof modules listed above. They register no compiler builtins and change
+neither existing runtime definitions nor existing theorem signatures.
+Descriptors remain explicit; integration with Aeneas main's extraction and
+backward-function generation is separate work.
+
+| API | Contract and scope |
+|---|---|
+| Initialization | Write a valid new value over arbitrary depth-zero writable bytes, without reading or requiring validity of the old contents; covers uninitialized storage and an invalid old bool encoding |
+| Ranges | Exact element sequences, byte-footprint splitting/recombination, framed permission transfers, and effectful restoration |
+| `replace`, `swap` | Return the old value or exchange values; swap supports disjoint footprints and identical pointers, but explicitly rejects partial overlap |
+| `read_unaligned`, `write_unaligned` | Relax alignment to one without weakening bounds, initialization, decoding, or permission checks |
+| `byte_offset`, `byte_add`, `offset_from` | Preserve allocation identity and heap contents; allow one-past positions and give exact byte offsets or signed element distances |
+
+`offset_from` requires a live common allocation, positive element size,
+integral element distance, and representable signed byte and element distances.
+`byte_add` is restricted to counts representable as a nonnegative `isize`.
+These APIs do not interpret allocation IDs as physical addresses or add
+integer-pointer conversions, general pointer comparison, general copying, or
+zero-sized distance. The raw-memory contracts do not establish destructor or
+nested-resource ownership for arbitrary Rust owning values.
+
+The [Rust examples](../../../../../tests/src/raw_pointer_ops.rs) use real
+standard-library operations, including initialization, a misaligned word,
+same-pointer swap, and borrow/fill/restore of a strict subrange.
+[Generated callers](../../../../../tests/lean/RawPointerOps/Funs.lean) remain
+unedited; their opaque primitives have
+[handwritten external models](../../../../../tests/lean/RawPointerOps/FunsExternal.lean),
+[exact contracts](../../../../../tests/lean/RawPointerOps/Properties.lean), and
+[behavior/rejection and axiom checks](../../../../../tests/lean/RawPointerOps/Checks.lean).
+`MaybeUninit` is a native storage harness here, not a new modeled representation.
+Reproduce the focused Lean closure with `make verify-raw-pointer-api`; extraction
+provenance is recorded in [EXTRACTION.md](../../../../../tests/lean/EXTRACTION.md).
+These remain model proofs, not a compiler-correctness or Rust ABI refinement.
 
 Integration proofs cover Box round-trip, stored pointers, corrected alias and
 repeated-read examples, pair replacement, one-past pointer formation, and
