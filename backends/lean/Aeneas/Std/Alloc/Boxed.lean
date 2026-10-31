@@ -67,7 +67,10 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
 In Rust, `into_raw` doesn't
 call the global allocator: the box was already allocated by `Box::new`, and `into_raw` only converts
 the pointer. But the model of `Box<T>` is `T`, which has no address, so the block is created here,
-using `RawPtr.newBlock`, including its monadic encoding choice. -/
+using `RawPtr.newBlock`, including its monadic encoding choice.
+The finite model counter can therefore make this conversion fail, unlike Rust.
+Cleanup does not recycle identifiers, so repeated conversions consume cumulative
+capacity; this is an artificial model restriction, not a Rust precondition. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
 def alloc.boxed.Box.into_raw (repr : Repr T) (b : T) : Result (MutRawPtr T) :=
   RawPtr.newBlock repr [b] true

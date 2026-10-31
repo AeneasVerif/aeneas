@@ -83,6 +83,11 @@ The latter two also use `create`. Empty allocations still have an identity and
 cleanup authority. Allocation checks byte length, counter capacity, and vacancy
 of the next slot. The greatest base identifier is an exhausted-counter sentinel.
 `Heap.Inv` requires every slot at or above the counter to be absent.
+Consequently, modeled `Box::into_raw` and borrowed `to_raw` exposures can fail
+from identifier exhaustion, although the corresponding Rust conversions do
+not allocate or fail for this reason. Cleanup does not recycle identifiers, so
+repeated conversions/exposures consume cumulative capacity. This is an
+artificial model restriction, not a Rust precondition.
 
 Access requires the requested alignment to divide both the block's guarantee
 and the pointer's byte offset. Single and range reads, writes, and permission
