@@ -1407,6 +1407,8 @@ let lean_builtin_trait_decls =
           ("steps_between", "steps_between");
           ("forward_checked", "forward_checked");
           ("backward_checked", "backward_checked");
+          ("forward_overflowing", "forward_overflowing");
+          ("backward_overflowing", "backward_overflowing");
         ];
     (* file: "Aeneas/Std/Core/Iter.lean", line: 169 *)
     mk_trait_decl "core::iter::traits::accum::Product"
