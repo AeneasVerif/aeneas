@@ -1,268 +1,431 @@
 module
 
-import Aeneas.Std.Heap.Model
+import Aeneas.Std.Heap.Provenance
 import Aeneas.Std.Heap.Effects
-import all Aeneas.Std.Core.Ptr
-import all Aeneas.Std.Primitives
-import Aeneas.Std.Scalar.Notations
+import Aeneas.Std.Heap.Borrowing
+import Aeneas.Std.Scalar.Core
+public meta import Aeneas.Std.Heap.Model
 public meta import Aeneas.Std.Scalar.Core
 
-open Aeneas.Std
+/-! Executable regressions for the concrete-address/provenance replacement.
+Native checks are not premises of the generic, kernel-checked core laws. -/
 
 namespace Aeneas.Std.HeapTests
 
-unseal Result
+def addr (n : Nat) : Usize := ⟨BitVec.ofNat _ n⟩
+def byte (n : Nat) : U8 := ⟨BitVec.ofNat _ n⟩
+def enc (values : List U8) : List (Vector Byte 1) :=
+  values.map fun value => #v[Byte.data value]
+def require (condition : Bool) : Option Unit := if condition then some () else none
+def shift (p : RawPtr T) (offset : Nat) : RawPtr T := ⟨p.base, addr offset⟩
+def put (p : RawPtr U8) (value : U8) (s : Heap) : Option Heap :=
+  Heap.write Repr.u8 p value #v[Byte.data value] rfl s
 
-def byteRepr : Repr U8 where
-  size := 1
-  align := ⟨1, 0, rfl⟩
-  decode bytes := some bytes[0]
-  aligned := by decide
-  complete value := ⟨#v[value], rfl⟩
+def nestedSlices : Option (List U8) := do
+  let values := (List.range 8).map byte
+  let (a, s₀) ← Heap.newBlock Repr.u8 (enc values) true (addr 256) none Heap.empty
+  let s₁ ← Heap.borrowRange Repr.u8 a 8 s₀
+  let (b, s₂) ← Heap.newBlock Repr.u8 (enc (values.drop 1 |>.take 6))
+    false (addr 257) (some a.base) s₁
+  let s₃ ← Heap.borrowRange Repr.u8 (shift b 1) 4 s₂
+  let (c, s₄) ← Heap.newBlock Repr.u8 (enc (values.drop 2 |>.take 4))
+    false (addr 258) (some a.base) s₃
+  require ((Heap.dealloc Repr.u8 a 8 s₄).isNone &&
+    (Heap.read Repr.u8 (shift b 1) s₄).isNone && (put (shift a 2) (byte 99) s₄).isNone)
+  let s₅ ← (([90, 91, 92, 93].map byte).zipIdx).foldlM
+    (fun s (value, i) => put (shift c i) value s) s₄
+  let inner ← Heap.readRange Repr.u8 c 4 s₅
+  let s₆ ← Heap.endExposureAt Repr.u8 c 4 0 s₅
+  let s₇ ← Heap.endBorrowRange Repr.u8 (shift b 1) (enc inner) s₆
+  let middle ← Heap.readRange Repr.u8 b 6 s₇
+  require (middle == [1, 90, 91, 92, 93, 6].map byte)
+  let s₈ ← Heap.endExposureAt Repr.u8 b 6 0 s₇
+  let s₉ ← Heap.endBorrowRange Repr.u8 a (enc ([byte 0] ++ middle ++ [byte 7])) s₈
+  let result ← Heap.readRange Repr.u8 a 8 s₉
+  let _ ← Heap.dealloc Repr.u8 a 8 s₉
+  some result
 
-def alignedByteRepr : Repr U8 where
+example : nestedSlices = some ([0, 1, 90, 91, 92, 93, 6, 7].map byte) := by native_decide
+
+def sharedAliases : Option Unit := do
+  let data := enc [byte 7, byte 8]
+  let (a, s₀) ← Heap.newBlock Repr.u8 data true (addr 256) none Heap.empty
+  let s₁ ← Heap.shareRange Repr.u8 a 2 s₀
+  let (b, s₂) ← Heap.newSharedExposure Repr.u8 data (addr 256) (some a.base) s₁
+  let s₃ ← Heap.shareRange Repr.u8 b 2 s₂
+  let (c, s₄) ← Heap.newSharedExposure Repr.u8 data (addr 256) (some a.base) s₃
+  require ((Heap.endShareRange Repr.u8 a 2 s₄).isNone &&
+    (Heap.newSharedExposure Repr.u8 (enc [byte 9, byte 8])
+      (addr 256) (some a.base) s₄).isNone &&
+    Heap.ptrEq s₄ a b == some true && a.base != b.base)
+  let s₅ ← Heap.endSharedExposure Repr.u8 c 2 s₄
+  let s₆ ← Heap.endShareRange Repr.u8 b 2 s₅
+  let s₇ ← Heap.endSharedExposure Repr.u8 b 2 s₆
+  let s₈ ← Heap.endShareRange Repr.u8 a 2 s₇
+  let s₉ ← put a (byte 9) s₈
+  require (Heap.read Repr.u8 a s₉ == some (byte 9))
+
+example : sharedAliases = some () := by native_decide
+
+def uninitializedShares : Option Unit := do
+  let (a, s₀) ← Heap.alloc Repr.u8 1 (addr 256) Heap.empty
+  let s₁ ← Heap.share Repr.u8 a s₀
+  require ((Heap.read Repr.u8 a s₁).isNone && (put a (byte 7) s₁).isNone &&
+    (Heap.borrow Repr.u8 a s₁).isNone && (Heap.dealloc Repr.u8 a 1 s₁).isNone)
+  let (b, s₂) ← Heap.newSharedExposure Repr.u8 [#v[Byte.uninit]]
+    (addr 256) (some a.base) s₁
+  require ((Heap.endShare Repr.u8 a s₂).isNone)
+  let s₃ ← Heap.endSharedExposure Repr.u8 b 1 s₂
+  let s₄ ← Heap.endShare Repr.u8 a s₃
+  let s₅ ← put a (byte 7) s₄
+  let _ ← Heap.dealloc Repr.u8 a 1 s₅
+  some ()
+
+example : uninitializedShares = some () := by native_decide
+
+def pointerStorage : Option Unit := do
+  let (target, s₀) ← Heap.newBlock Repr.u8 (enc [byte 7])
+    true (addr 258) none Heap.empty
+  let (slot, s₁) ← Heap.newBlock (Repr.pointer U8) [Repr.pointerEncoding target]
+    true (addr 512) none s₀
+  let (copy, s₂) ← Heap.alloc (Repr.pointer U8) 1 (addr 520) s₁
+  let s₃ ← Heap.copyBytes slot copy 8 s₂
+  let loaded ← Heap.read (Repr.pointer U8) copy s₃
+  require (loaded == target && s₃.next == s₂.next &&
+    Heap.read Repr.u8 (slot.cast U8) s₃ == some (byte 2))
+  let s₄ ← put (slot.cast U8) (byte 2) s₃
+  require ((Heap.read (Repr.pointer U8) slot s₄).isNone &&
+    Heap.read (Repr.pointer U8) copy s₄ == some target)
+  let s₅ ← Heap.dealloc Repr.u8 target 1 s₄
+  require (Heap.read (Repr.pointer U8) copy s₅ == some target &&
+    (Heap.read Repr.u8 target s₅).isNone &&
+    Heap.read Repr.u8 (copy.cast U8) s₅ == some (byte 2))
+  let (replacement, s₆) ← Heap.newBlock Repr.u8 (enc [byte 9])
+    true (addr 258) none s₅
+  require (Heap.ptrEq s₆ target replacement == some true &&
+    target.base != replacement.base &&
+    (Heap.read Repr.u8 target s₆).isNone &&
+    Heap.read Repr.u8 replacement s₆ == some (byte 9))
+
+example : pointerStorage = some () := by native_decide
+
+def laneCoherence : Option Unit := do
+  let (a, s₀) ← Heap.newBlock Repr.u8 (enc [byte 7]) true (addr 258) none Heap.empty
+  let s₁ ← Heap.share Repr.u8 a s₀
+  let (b, s₂) ← Heap.newSharedExposure Repr.u8 (enc [byte 7])
+    (addr 258) (some a.base) s₁
+  let first := Repr.pointerEncoding a
+  let mixed := first.set 1 (.pointer (b.cast Unit) 1)
+  let same := first.set 1 (.pointer (a.cast Unit) 1)
+  require (Heap.ptrEq s₂ a b == some true &&
+    (Repr.decodePointer (T := U8) mixed).isNone &&
+    Repr.decodePointer (T := U8) same == some a)
+
+example : laneCoherence = some () := by native_decide
+
+def owningReturn : Option Unit := do
+  let data := enc [byte 7]
+  let (a, s₀) ← Heap.newBlock Repr.u8 data true (addr 256) none Heap.empty
+  let s₁ ← Heap.returnOwned Repr.u8 a 1 s₀
+  require ((Heap.read Repr.u8 a s₁).isNone && s₁.address a == some (addr 256) &&
+    ((s₁.allocations a.base).map Block.alive).getD false)
+  let (b, s₂) ← Heap.newBlock Repr.u8 data true (addr 256) (some a.base) s₁
+  require (b.base == a.base + 1 && Heap.ptrEq s₂ a b == some true &&
+    (Heap.read Repr.u8 a s₂).isNone)
+  let s₃ ← Heap.dealloc Repr.u8 b 1 s₂
+  require (!((s₃.allocations a.base).map Block.alive).getD true &&
+    s₃.address a == some (addr 256) && (Heap.read Repr.u8 b s₃).isNone)
+  let (_, _) ← Heap.newBlock Repr.u8 data true (addr 256) none s₃
+  some ()
+
+example : owningReturn = some () := by native_decide
+
+/- A foreign-root alias cannot bypass owner cleanup, even while fully borrowed. -/
+def rootAndLoanGuards : Option Unit := do
+  let (a, s₀) ← Heap.newBlock Repr.u8 (enc [byte 7]) true (addr 256) none Heap.empty
+  let s₁ ← Heap.borrow Repr.u8 a s₀
+  require ((Heap.newBlock Repr.u8 (enc [byte 7]) false (addr 256) none s₁).isNone)
+  let (b, s₂) ← Heap.newBlock Repr.u8 (enc [byte 7])
+    false (addr 256) (some a.base) s₁
+  let s₃ ← Heap.borrow Repr.u8 b s₂
+  let s₄ ← Heap.endBorrow Repr.u8 a #v[Byte.data (byte 7)] s₃
+  require ((Heap.dealloc Repr.u8 a 1 s₄).isNone)
+
+example : rootAndLoanGuards = some () := by native_decide
+
+/-- Direct premature restoration remains possible: matching continuation order
+is a stated boundary assumption, not a dynamically authenticated loan tree. -/
+example : (do
+    let (a, s₀) ← Heap.alloc Repr.u8 1 (addr 256) Heap.empty
+    let s₁ ← Heap.borrow Repr.u8 a s₀
+    let (_, s₂) ← Heap.newBlock Repr.u8 (enc [byte 7])
+      false (addr 256) (some a.base) s₁
+    let s₃ ← Heap.borrow Repr.u8 ⟨1, addr 0⟩ s₂
+    let s₄ ← Heap.endBorrow Repr.u8 a #v[Byte.data (byte 7)] s₃
+    Heap.read Repr.u8 a s₄) = some (byte 7) := by native_decide
+
+def padded : Repr U8 where
   size := 2
-  align := ⟨2, 1, rfl⟩
-  decode bytes := some bytes[0]
+  align := ⟨2, ⟨1, rfl⟩⟩
+  decode := fun addresses bytes => bytes[0].numeric addresses
+  encodes := fun value bytes =>
+    bytes[0] = .data value ∧ ∃ padding : U8, bytes[1] = .data padding
+  pointers := fun _ => []
   aligned := by decide
-  complete value := ⟨#v[value, 0#u8], rfl⟩
+  complete := fun value => ⟨#v[Byte.data value, Byte.data (byte 0)], rfl, byte 0, rfl⟩
+  encode_decode := by
+    intro addresses value bytes h
+    simp [h.1, Byte.numeric]
+  encodes_support := by
+    intro value bytes i h
+    obtain ⟨h0, padding, h1⟩ := h
+    have hi : i.val = 0 ∨ i.val = 1 := by grind
+    rcases hi with hi | hi
+    · simp [hi, h0]
+    · simp [hi, h1]
 
-/- Both encodings are permitted. Choice must not silently fix the ignored byte
-to the particular witness used in `complete`. -/
-example (value : U8) (s : Heap) :
-    HeapWP.Spec (alignedByteRepr.choose value)
-      (fun data s' => data.val[0] = value ∧ s' = s) s := by
-  apply HeapWP.Spec.mono (HeapWP.choose.spec alignedByteRepr value s)
-  rintro data s' ⟨decoded, hs⟩
-  exact ⟨Option.some.inj decoded, hs⟩
+def jointChoice : Option Unit := do
+  let data := [#v[Byte.data (byte 7), Byte.data (byte 0)]]
+  let (a, s₀) ← Heap.newBlock padded data true (addr 256) none Heap.empty
+  let s₁ ← Heap.shareRange padded a 1 s₀
+  require ((Heap.newSharedExposure padded [#v[Byte.data (byte 7), Byte.data (byte 1)]]
+    (addr 256) (some a.base) s₁).isNone)
+  let (_, s₂) ← Heap.newSharedExposure padded data (addr 256) (some a.base) s₁
+  require (s₂.check)
 
-example (value : U8) (s : Heap) :
-    ¬ HeapWP.Spec (alignedByteRepr.choose value) (fun data _ => data.val[1] = 0#u8) s := by
+example : jointChoice = some () := by native_decide
+
+def alignmentAndBounds : Option Unit := do
+  let (a, s₀) ← Heap.newBlock Repr.u8 (enc ([0, 1, 2, 3].map byte))
+    true (addr 256) none Heap.empty
+  let s₁ ← Heap.borrowRange Repr.u8 a 4 s₀
+  let (b, s₂) ← Heap.newBlock Repr.u8 (enc ([1, 2, 3].map byte))
+    false (addr 257) (some a.base) s₁
+  require ((Heap.read padded (b.cast U8) s₂).isNone &&
+    Heap.read padded (shift b 1) s₂ == some (byte 2) &&
+    Heap.distance Repr.u8 (shift b 1) a s₂ == some 2)
+  let finish ← Heap.offset Repr.u8 b 3 s₂
+  require (s₂.address finish == some (addr 260) &&
+    (Heap.read Repr.u8 finish s₂).isNone &&
+    (Heap.offset Repr.u8 finish 1 s₂).isNone &&
+    (Heap.offset Repr.u8 b (-1) s₂).isNone &&
+    (Heap.alloc Repr.u8 2 (addr (2 ^ UScalarTy.numBits .Usize - 2)) Heap.empty).isNone)
+
+example : alignmentAndBounds = some () := by native_decide
+
+def copyInitializationAndAtomicity : Option Unit := do
+  let (source, s₀) ← Heap.alloc Repr.u8 2 (addr 256) Heap.empty
+  let (destination, s₁) ← Heap.newBlock Repr.u8 (enc [byte 7, byte 8])
+    true (addr 512) none s₀
+  let s₂ ← Heap.share Repr.u8 (shift destination 1) s₁
+  require ((Heap.copyBytes source destination 2 s₂).isNone &&
+    Heap.readRange Repr.u8 destination 2 s₂ == some [byte 7, byte 8])
+  let s₃ ← Heap.endShare Repr.u8 (shift destination 1) s₂
+  let s₄ ← Heap.copyBytes source destination 2 s₃
+  require ((Heap.read Repr.u8 destination s₄).isNone &&
+    ((s₄.cells destination.base).getD []).all (fun c => c == .shared 0 .uninit))
+
+example : copyInitializationAndAtomicity = some () := by native_decide
+
+def pointerLoanTarget : RawPtr U8 := ⟨0, addr 0⟩
+def pointerLoanSlot : Block :=
+  ⟨addr 512, 1, (Repr.pointerEncoding pointerLoanTarget).toList.map (Cell.shared 1),
+    true, true, true⟩
+def pointerLoanHeap : Heap :=
+  ⟨fun id => if id = 0 then
+      some ⟨addr 258, 0, [.shared 0 (.data (byte 7))], true, true, true⟩
+    else if id = 1 then some pointerLoanSlot else none, 2⟩
+def pointerLoanAlias : RawPtr U8 := ⟨2, ⟨0⟩⟩
+def pointerLoanBytes : Vector Byte 1 :=
+  #v[Byte.pointer (pointerLoanTarget.cast Unit) 0]
+def pointerLoanResult : Heap :=
+  { allocations := update pointerLoanHeap.allocations 2
+      (some ⟨addr 512, 1, [.shared 1 (.pointer (pointerLoanTarget.cast Unit) 0)],
+        false, true, true⟩)
+    next := 3 }
+
+/-- Same-address shared exposure preserves pointer metadata without treating
+those lanes as admissible scalar writes. This is an actual State-relation witness. -/
+example : State.newSharedExposure Repr.u8 [byte 2]
+    pointerLoanHeap pointerLoanAlias pointerLoanResult := by
+  refine ⟨[pointerLoanBytes], addr 512, some 1, ?_, ?_⟩
+  · change State.exposes Repr.u8 pointerLoanHeap (addr 512).val
+      (byte 2) pointerLoanBytes ∧ True
+    refine ⟨⟨?_, ?_⟩, trivial⟩
+    · native_decide
+    · intro i
+      have hlt : i.val < 1 := i.isLt
+      have hi : i.val = 0 := by grind
+      have he : i = ⟨0, by decide⟩ := Fin.ext hi
+      subst i
+      change Byte.pointer (pointerLoanTarget.cast Unit) 0 ≠ Byte.uninit ∧ _
+      refine ⟨by decide, .inr ?_⟩
+      exact ⟨1, pointerLoanSlot, 0, 1, rfl, by native_decide, rfl, rfl⟩
+  · have hv : pointerLoanResult.check = true := by native_decide
+    have ha : Repr.u8.align.val ∣ (addr 512).val := Nat.one_dvd _
+    unfold Heap.newSharedExposure
+    rw [ite_eq_left ha]
+    unfold Heap.createRepr
+    change ((Heap.commit pointerLoanResult).map (fun s => (2, s))).map
+      (fun (id, s) => (⟨id, ⟨0⟩⟩, s)) = some (pointerLoanAlias, pointerLoanResult)
+    rw [Heap.commit, ite_eq_left hv]
+    rfl
+
+/-- Typed scalar writes still cannot encode the pointer fragment just exposed. -/
+theorem pointerLane_not_scalar : ¬ Repr.u8.encodes (byte 2) pointerLoanBytes := by
+  change pointerLoanBytes ≠ #v[Byte.data (byte 2)]
   intro h
-  have hx := (HeapWP.Spec.choose alignedByteRepr value _ s).mp h #v[value, 1#u8] rfl
-  change (1#u8) = 0#u8 at hx
-  exact (by decide : (1#u8) ≠ 0#u8) hx
+  have he := congrArg (fun bytes : Vector Byte 1 => bytes[0]) h
+  change Byte.pointer (pointerLoanTarget.cast Unit) 0 = Byte.data (byte 2) at he
+  cases he
 
-def roundTrip : Option U8 := do
-  let (p, s₀) ← Heap.alloc byteRepr 1 Heap.empty
-  if (Heap.read byteRepr p s₀).isSome then none else do
-    let s₁ ← Heap.write byteRepr p 7#u8 #v[7#u8] rfl s₀
-    let value ← Heap.read byteRepr p s₁
-    let s₂ ← Heap.freeBlock byteRepr p 1 true s₁
-    if (s₂.allocations p.base).isNone then some value else none
+/-- The safe mutable-loan boundary rejects representation-crossing numerical
+borrows until it can distinguish untouched storage from same-value writes. -/
+def pointerMutableLoanSlot : Block :=
+  { pointerLoanSlot with
+    repr := (Repr.pointerEncoding pointerLoanTarget).toList.map (Cell.shared 0) }
+def pointerMutableLoanHeap : Heap :=
+  { pointerLoanHeap with
+    allocations := update pointerLoanHeap.allocations 1 (some pointerMutableLoanSlot) }
 
-example : roundTrip = some 7#u8 := by native_decide
-
-def borrowUninitialized : Option (List U8) := do
-  let (p, s₀) ← Heap.alloc byteRepr 2 Heap.empty
-  let s₁ ← Heap.borrowRange byteRepr p 2 s₀
-  if (Heap.read byteRepr p s₁).isSome ||
-      (Heap.write byteRepr p 7#u8 #v[7#u8] rfl s₁).isSome ||
-      (Heap.freeBlock byteRepr p 2 true s₁).isSome then none else do
-    let s₂ ← Heap.endBorrowRange byteRepr p [#v[7#u8], #v[8#u8]] s₁
-    Heap.readRange byteRepr p 2 s₂
-
-example : borrowUninitialized = some [7#u8, 8#u8] := by native_decide
-
-def mixedSharing : Option (List U8) := do
-  let (p, s₀) ← Heap.newBlock byteRepr [#v[7#u8], #v[8#u8]] true Heap.empty
-  let s₁ ← Heap.share byteRepr p s₀
-  let s₂ ← Heap.shareRange byteRepr p 2 s₁
-  let values ← Heap.readRange byteRepr p 2 s₂
-  if (Heap.borrowRange byteRepr p 2 s₂).isSome ||
-      (Heap.freeBlock byteRepr p 2 true s₂).isSome then none else do
-    let s₃ ← Heap.endShareRange byteRepr p 2 s₂
-    let s₄ ← Heap.endShare byteRepr p s₃
-    let _ ← Heap.freeBlock byteRepr p 2 true s₄
-    some values
-
-example : mixedSharing = some [7#u8, 8#u8] := by native_decide
-
-def rangeFailure : Option (List U8) := do
-  let (p, s₀) ← Heap.newBlock byteRepr [#v[7#u8], #v[8#u8]] true Heap.empty
-  let s₁ ← Heap.share byteRepr ⟨p.base, 1#usize⟩ s₀
-  if (Heap.borrowRange byteRepr p 2 s₁).isSome then none
-  else Heap.readRange byteRepr p 2 s₁
-
-example : rangeFailure = some [7#u8, 8#u8] := by native_decide
-
-def alignmentFailure : Option Bool := do
-  let (p, s) ← Heap.newBlock byteRepr [#v[7#u8], #v[8#u8]] true Heap.empty
-  some ((Heap.read alignedByteRepr p s).isNone &&
-    (Heap.borrow alignedByteRepr p s).isNone &&
-    (Heap.write alignedByteRepr p 9#u8 #v[9#u8, 0#u8] rfl s).isNone &&
-    (Heap.freeBlock alignedByteRepr p 1 true s).isNone)
-
-example : alignmentFailure = some true := by native_decide
-
-def movement : Option Bool := do
-  let (p, s) ← Heap.alloc byteRepr 2 Heap.empty
-  let finish ← Heap.offset byteRepr p 2 s
-  let back ← Heap.offset byteRepr finish (-2) s
-  some (back.byteOffset == p.byteOffset && finish.byteOffset == 2#usize &&
-    (Heap.read byteRepr finish s).isNone &&
-    (Heap.offset byteRepr p (-1) s).isNone &&
-    (Heap.offset byteRepr finish 1 s).isNone)
-
-example : movement = some true := by native_decide
-
-def cleanupAuthority : Option Bool := do
-  let (p, s₀) ← Heap.newBlock byteRepr [#v[7#u8], #v[8#u8]] false Heap.empty
-  if (Heap.freeBlock byteRepr p 2 true s₀).isSome ||
-      (Heap.freeBlock byteRepr p 1 false s₀).isSome then none else do
-    let s₁ ← Heap.freeBlock byteRepr p 2 false s₀
-    some ((Heap.read byteRepr p s₁).isNone)
-
-example : cleanupAuthority = some true := by native_decide
-
-def sharedExposure : Option Bool := do
-  let (p, s₀) ← Heap.newSharedExposure byteRepr [#v[7#u8]] Heap.empty
-  let s₁ ← Heap.share byteRepr p s₀
-  if (Heap.endSharedExposure byteRepr p 1 s₁).isSome ||
-      (Heap.write byteRepr p 7#u8 #v[7#u8] rfl s₁).isSome then none else do
-    let s₂ ← Heap.endShare byteRepr p s₁
-    let s₃ ← Heap.endSharedExposure byteRepr p 1 s₂
-    some ((s₃.allocations p.base).isNone)
-
-example : sharedExposure = some true := by native_decide
-
-example :
-    (Heap.alloc byteRepr 1
-      { Heap.empty with next := ⟨BitVec.allOnes _⟩ }).isNone = true := by native_decide
-
-example :
-    (Heap.alloc byteRepr (2 ^ UScalarTy.numBits .Usize) Heap.empty).isNone = true := by
+example : pointerMutableLoanHeap.check = true ∧
+    (Heap.borrowRange Repr.u8 ⟨1, addr 0⟩ 1 pointerMutableLoanHeap).isSome = true := by
   native_decide
 
-def separateAllocations : Option (List U8) := do
-  let (p, s₀) ← Heap.newBlock byteRepr [#v[7#u8], #v[8#u8]] true Heap.empty
-  let (q, s₁) ← Heap.newBlock byteRepr [#v[9#u8]] true s₀
-  let s₂ ← Heap.borrow byteRepr p s₁
-  let s₃ ← Heap.freeBlock byteRepr q 1 true s₂
-  Heap.readRange byteRepr ⟨p.base, 1#usize⟩ 1 s₃
+example : ¬ State.mutableValues Repr.u8 ⟨1, addr 0⟩ [byte 2] pointerMutableLoanHeap := by
+  rintro ⟨blk, hb, values⟩
+  have he : blk = pointerMutableLoanSlot := by
+    simpa [pointerMutableLoanHeap, update] using hb.symm
+  subst blk
+  obtain ⟨bytes, bounds, hread, encoded⟩ := values 0 (by decide)
+  have hselect : Repr.u8.select pointerMutableLoanSlot.bytes
+      ((addr 0).val + 0 * Repr.u8.size) bounds =
+      pointerLoanBytes.map (Cell.shared 0) := by
+    apply Vector.toList_inj.mp
+    rw [Repr.select_toList]
+    native_decide
+  have initialized : ∀ i : Fin 1, pointerLoanBytes[i.val] ≠ .uninit := by
+    intro i
+    simp [pointerLoanBytes]
+  have hr : Repr.readBytes 1
+      (Repr.u8.select pointerMutableLoanSlot.bytes ((addr 0).val + 0 * Repr.u8.size) bounds) =
+        some pointerLoanBytes := by
+    rw [hselect]
+    exact Repr.readBytes_shared pointerLoanBytes 0 initialized
+  have hbytes := Option.some.inj (hr.symm.trans hread)
+  rw [← hbytes] at encoded
+  exact pointerLane_not_scalar encoded
 
-example : separateAllocations = some [8#u8] := by native_decide
+def symbolicSwap : Option Unit := do
+  let (target, s₀) ← Heap.newBlock Repr.u8 (enc [byte 7])
+    true (addr 258) none Heap.empty
+  let (slot, s₁) ← Heap.newBlock (Repr.pointer U8) [Repr.pointerEncoding target]
+    true (addr 512) none s₀
+  let s₂ ← Heap.swapBytes Repr.u8 (slot.cast U8) (slot.cast U8) s₁
+  require (Heap.read (Repr.pointer U8) slot s₂ == some target)
+  let (other, s₃) ← Heap.alloc (Repr.pointer U8) 1 (addr 520) s₂
+  let s₄ ← Heap.swapBytes (Repr.pointer U8) slot other s₃
+  require ((Heap.read (Repr.pointer U8) slot s₄).isNone &&
+    Heap.read (Repr.pointer U8) other s₄ == some target)
+  let (values, s₅) ← Heap.newBlock Repr.u8 (enc ([1, 2, 3, 4].map byte))
+    true (addr 768) none s₄
+  let s₆ ← Heap.swapBytes padded values (shift values 2) s₅
+  require (Heap.readRange Repr.u8 values 4 s₆ == some ([3, 4, 1, 2].map byte) &&
+    (Heap.swapBytes padded values (shift values 1) s₆).isNone)
 
-def crossTypePermissions : Option Bool := do
-  let (p, s₀) ← Heap.newBlock alignedByteRepr [#v[7#u8, 8#u8]] true Heap.empty
-  let byte : RawPtr U8 := ⟨p.base, 1#usize⟩
-  let s₁ ← Heap.share byteRepr byte s₀
-  let value ← Heap.read alignedByteRepr p s₁
-  if value != 7#u8 ||
-      (Heap.write alignedByteRepr p 9#u8 #v[9#u8, 0#u8] rfl s₁).isSome then none else do
-    let s₂ ← Heap.endShare byteRepr byte s₁
-    let s₃ ← Heap.borrow byteRepr byte s₂
-    if (Heap.read alignedByteRepr p s₃).isSome ||
-        (Heap.write alignedByteRepr p 9#u8 #v[9#u8, 0#u8] rfl s₃).isSome ||
-        (Heap.freeBlock alignedByteRepr p 1 true s₃).isSome then none else do
-      let s₄ ← Heap.endBorrow byteRepr byte 9#u8 #v[9#u8] rfl s₃
-      let first ← Heap.read alignedByteRepr p s₄
-      let second ← Heap.read byteRepr byte s₄
-      let _ ← Heap.freeBlock alignedByteRepr p 1 true s₄
-      some (first == 7#u8 && second == 9#u8)
+example : symbolicSwap = some () := by native_decide
 
-example : crossTypePermissions = some true := by native_decide
+def framedWriter : RawPtr U8 := ⟨1, ⟨0⟩⟩
+def framedWriterBlock : Block :=
+  ⟨addr 256, 0, [.shared 0 (.data (byte 7))], false, true, true⟩
+def framedWriterHeap : Heap :=
+  ⟨fun id => if id = 0 then
+      some ⟨addr 256, 0, [.borrowed], true, true, true⟩
+    else if id = 1 then some framedWriterBlock else none, 2⟩
 
-example (p : RawPtr U32) : RawPtr.cast U32 (RawPtr.cast U8 p) = p := rfl
+/-- A real checked write with a physically overlapping borrowed ancestor frame.
+The contract retains the frame and proves read-back of the updated scalar. -/
+example : HeapWP.Spec
+    (Result.checkedModify (State.write Repr.u8 framedWriter (byte 9)))
+    (fun _ s' =>
+      SepLogic.Fragment.Matches s'
+        (SepLogic.cellsHeap (addr 256) 0 0 [.borrowed]) ∧
+      Heap.read Repr.u8 framedWriter s' = some (byte 9)) framedWriterHeap := by
+  have hb : framedWriter.byteOffset.val + Repr.u8.size ≤ framedWriterBlock.repr.length := by
+    native_decide
+  have ha : Repr.u8.align.val ∣ framedWriterBlock.bptr.val + framedWriter.byteOffset.val :=
+    Nat.one_dvd _
+  have hs : Repr.u8.select framedWriterBlock.bytes framedWriter.byteOffset.val hb =
+      (#v[Byte.data (byte 7)]).map (Cell.shared 0) := by
+    apply Vector.toList_inj.mp
+    rw [Repr.select_toList]
+    native_decide
+  have init : ∀ bytes, Repr.u8.encodes (byte 9) bytes →
+      ∀ i : Fin 1, bytes[i.val] ≠ .uninit := by
+    intro bytes encoded i
+    change bytes = #v[Byte.data (byte 9)] at encoded
+    subst bytes
+    have hz : i.val = 0 := by grind
+    have he : i = ⟨0, by decide⟩ := Fin.ext hz
+    subst i
+    change Byte.data (byte 9) ≠ Byte.uninit
+    decide
+  have witness : ∃ data, Repr.u8.encodes (byte 9) data ∧
+      (framedWriterHeap.storeRepr framedWriter.base
+        (Repr.u8.update framedWriterBlock.bytes framedWriter.byteOffset.val hb
+          (data.map (Cell.shared 0))).toList).check = true :=
+    ⟨#v[Byte.data (byte 9)], rfl, by rw [Repr.update_toList]; native_decide⟩
+  have contract := SepLogic.write.spec Repr.u8 framedWriter framedWriterHeap framedWriterBlock
+    #v[Byte.data (byte 7)] (byte 9) (by decide) hb rfl (by native_decide) ha hs init witness
+  let h := SepLogic.cellsHeap (addr 256) 1 0 [.shared 0 (.data (byte 7))]
+  let F := SepLogic.cellsHeap (addr 256) 0 0 [.borrowed]
+  have hoff : framedWriter.byteOffset.val = 0 := by native_decide
+  have hp : SepLogic.block Repr.u8 framedWriter (addr 256)
+      ((#v[Byte.data (byte 7)]).map (Cell.shared 0)).toList h := by
+    refine ⟨ha, ?_⟩
+    rw [hoff]
+    simp [h, framedWriter]
+  have hd : h.Disjoint F := SepLogic.disjoint_views _ _ _ _ _ _ _ _ (by decide)
+  have hm : SepLogic.Fragment.Matches framedWriterHeap (h ∪ F) := by
+    apply (SepLogic.Fragment.matches_union _ _ _).mpr
+    constructor
+    · rw [SepLogic.matches_cellsHeap]
+      intro i hi
+      have he : i = 0 := by change i < 1 at hi; grind
+      subst i
+      exact ⟨framedWriterBlock, rfl, by native_decide, rfl, rfl⟩
+    · rw [SepLogic.matches_cellsHeap]
+      intro i hi
+      have he : i = 0 := by change i < 1 at hi; grind
+      subst i
+      exact ⟨⟨addr 256, 0, [.borrowed], true, true, true⟩,
+        rfl, by native_decide, rfl, rfl⟩
+  have hinv : framedWriterHeap.Inv := by
+    refine ⟨?_, by native_decide⟩
+    intro id hi
+    change 2 ≤ id at hi
+    have hzero : id ≠ 0 := by grind
+    have hone : id ≠ 1 := by grind
+    simp [framedWriterHeap, hzero, hone]
+  have run := HeapWP.TripleAt.checkedModify contract h F hp hd hm hinv
+  apply HeapWP.Spec.mono run
+  rintro _ s' ⟨h', _, hm', _, hp'⟩
+  have parts := SepLogic.Fragment.matches_union _ _ _ |>.mp hm'
+  exact ⟨parts.2, SepLogic.read_of_pointsTo (by decide) hp' parts.1⟩
 
-/- The base is sufficiently aligned, but offset one is not. Every typed access
-and permission operation must reject it; casting itself preserves it. -/
-def misalignedAccess : Option Bool := do
-  let (p, s) ← Heap.newBlock alignedByteRepr [#v[7#u8, 8#u8], #v[9#u8, 0#u8]] true Heap.empty
-  let q : RawPtr U8 := ⟨p.base, 1#usize⟩
-  some ((Heap.read alignedByteRepr q s).isNone &&
-    (Heap.readRange alignedByteRepr q 1 s).isNone &&
-    (Heap.write alignedByteRepr q 9#u8 #v[9#u8, 0#u8] rfl s).isNone &&
-    (Heap.borrow alignedByteRepr q s).isNone &&
-    (Heap.share alignedByteRepr q s).isNone &&
-    (Heap.endShare alignedByteRepr q s).isNone &&
-    (Heap.endBorrow alignedByteRepr q 9#u8 #v[9#u8, 0#u8] rfl s).isNone &&
-    (Heap.borrowRange alignedByteRepr q 1 s).isNone &&
-    (Heap.shareRange alignedByteRepr q 1 s).isNone &&
-    (Heap.endShareRange alignedByteRepr q 1 s).isNone &&
-    (Heap.endBorrowRange alignedByteRepr q [#v[9#u8, 0#u8]] s).isNone &&
-    (Heap.read byteRepr (RawPtr.cast U8 q) s == some 8#u8))
-
-example : misalignedAccess = some true := by native_decide
-
-/- Observe the actual request and its continuation, not just the executable
-heap operation returning `none`. Every permitted response must lead to `undef`. -/
-def ObservesUndefined (s : State) (computation : Result T) : Prop :=
-  ∃ (Answer : Type) (request : State → Answer → State → Prop)
-    (resume : ULift Answer → Result T),
-    computation = Result.vis (.guardedModify Answer request) resume ∧
-    (∃ answer next, request s answer next) ∧
-    ∀ answer next, request s answer next →
-      next = s ∧ resume ⟨answer⟩ = Result.fail .undef
-
-theorem read_observes_undef (repr : Repr T) (p : RawPtr T) (s : State)
-    (failed : Heap.read repr p s = none) :
-    ObservesUndefined s (RawPtr.read repr p) := by
-  have disabled : ¬ ∃ value next, State.read repr p s value next := by
-    rintro ⟨value, next, he, _⟩
-    rw [failed] at he
-    cases he
-  refine ⟨Option T, State.checked (State.read repr p),
-    (fun answer => Result.ofOption answer.down .undef), rfl,
-    HeapWP.checked.enabled _ s, ?_⟩
-  intro answer next ht
-  obtain ⟨rfl, hs⟩ := (HeapWP.checked.failure disabled).mp ht
-  exact ⟨hs, rfl⟩
-
-def singleCellHeap (cell : Cell U8) : Heap :=
-  { allocations := fun base =>
-      if base = 0#usize then some ⟨[cell], ⟨1, 0, rfl⟩, true⟩ else none
-    next := 1#usize }
-
-def boolRepr : Repr Bool where
-  size := 1
-  align := ⟨1, 0, rfl⟩
-  decode bytes := if bytes[0] = 0#u8 then some false
-    else if bytes[0] = 1#u8 then some true else none
-  aligned := by decide
-  complete value := by
-    cases value
-    · exact ⟨#v[0#u8], by decide⟩
-    · exact ⟨#v[1#u8], by decide⟩
-
-/- Permission denial and invalid typed contents both reach the explicit
-failure continuation without changing the failed operation's input heap. -/
-example : ObservesUndefined (singleCellHeap .borrowed)
-    (RawPtr.read byteRepr ⟨0#usize, 0#usize⟩) := by
-  apply read_observes_undef
-  native_decide
-
-example : ObservesUndefined (singleCellHeap (.shared 0 (some 2#u8)))
-    (RawPtr.read boolRepr ⟨0#usize, 0#usize⟩) := by
-  apply read_observes_undef
-  native_decide
-
-def zeroRepr : Repr Unit where
-  size := 0
-  align := ⟨1, 0, rfl⟩
-  decode _ := some ()
-  aligned := by decide
-  complete value := ⟨#v[], by cases value; rfl⟩
-
-def zeroSize : Option Bool := do
-  let (p, s₀) ← Heap.alloc zeroRepr 1 Heap.empty
-  if (Heap.read zeroRepr p s₀).isSome ||
-      (Heap.borrowRange zeroRepr p 1 s₀).isSome then none else do
-    let s₁ ← Heap.borrowRange zeroRepr p 0 s₀
-    let _ ← Heap.offset zeroRepr p 0 s₁
-    let s₂ ← Heap.freeBlock zeroRepr p 1 true s₁
-    some ((s₂.allocations p.base).isNone)
-
-example : zeroSize = some true := by native_decide
-
-/- Direct restoration calls are privileged; the byte store cannot authenticate
-the matching Rust backward continuation. -/
-def restoration_is_privileged : Option U8 := do
-  let (p, s₀) ← Heap.newSharedExposure byteRepr [#v[7#u8]] Heap.empty
-  let s₁ ← Heap.endShareRange byteRepr p 1 s₀
-  let s₂ ← Heap.write byteRepr p 9#u8 #v[9#u8] rfl s₁
-  Heap.read byteRepr p s₂
-
-example : restoration_is_privileged = some 9#u8 := by native_decide
+#print axioms Heap.createRepr_Inv
+#print axioms Heap.modify_Inv
+#print axioms Heap.addresses_storeRepr
+#print axioms Heap.addresses_retire
+#print axioms Repr.pointer_roundTrip
+#print axioms Repr.u8_write_data
+#print axioms Repr.encoding_no_forgery
+#print axioms Heap.compatible_writer_excludes
+#print axioms SepLogic.Resource.Holds.overlapCompatible
+#print axioms SepLogic.Resource.Holds.noAliases_unique
+#print axioms SepLogic.write.spec
+#print axioms SepLogic.endBorrow.spec
+#print axioms SepLogic.createRepr.spec
+#print axioms HeapWP.TripleAt.checkedModify
 
 end Aeneas.Std.HeapTests

@@ -97,14 +97,11 @@ def RawPtr.cast_scalar {T} (T' : Type) (_ : Mutability) [IsScalar T] [IsScalar T
     (_ : RawPtr T) : Result (RawPtr T') :=
   .fail .undef
 
-/-- Thin raw-pointer casts/transmutes preserve allocation identity and byte offset.
+/- Thin raw-pointer casts/transmutes preserve allocation identity and byte offset.
 No representation, alignment, or bounds check is needed to form the pointer. In particular,
 misaligned pointers are representable; typed accesses check alignment, bounds, permissions,
 and decoding. Casting changes neither bytes nor permissions and assumes no decoder relation.
 This helper is used by manually adapted examples, not yet inserted by the compiler. -/
-def RawPtr.cast (T' : Type) (q : RawPtr T) : RawPtr T' :=
-  ⟨q.base, q.byteOffset⟩
-
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
 def RawPtr.add (repr : Repr T) (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
   Result.checkedModify (State.offset repr q count.val)
@@ -133,10 +130,8 @@ attribute [rust_fun "core::ptr::read"] read
 end RawPtr
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
-def MutRawPtr.write (repr : Repr T) (q : MutRawPtr T) (value : T) : Result Unit := do
-  let data ← repr.choose value
-  Result.checkedModify fun s (_ : Unit) s' =>
-    Heap.write repr q value data.val data.property s = some s'
+def MutRawPtr.write (repr : Repr T) (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.checkedModify (State.write repr q value)
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
@@ -150,9 +145,8 @@ def RawPtr.borrowRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (Li
   Result.checkedModify (State.borrowRange repr q count)
 
 /-- `endBorrow` on the `values.length` cells from `q` on. -/
-def RawPtr.endBorrowRange (repr : Repr T) (q : RawPtr T) (values : List T) : Result Unit := do
-  let data ← repr.chooseList values
-  Result.checkedModify fun s (_ : Unit) s' => Heap.endBorrowRange repr q data.val s = some s'
+def RawPtr.endBorrowRange (repr : Repr T) (q : RawPtr T) (values : List T) : Result Unit :=
+  Result.checkedModify (State.endBorrowRange repr q values)
 
 def RawPtr.borrow (repr : Repr T) (q : RawPtr T) : Result T := do
   match ← q.borrowRange repr 1 with
@@ -172,10 +166,9 @@ def RawPtr.endShareRange (repr : Repr T) (q : RawPtr T) (values : List T) : Resu
 def RawPtr.readRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List T) :=
   Result.checkedModify (State.readRange repr q count)
 
-/-- Choose valid encodings before allocating their byte storage. -/
-def RawPtr.newBlock (repr : Repr T) (values : List T) (own : Bool) : Result (RawPtr T) := do
-  let data ← repr.chooseList values
-  Result.checkedModify fun s p s' => Heap.newBlock repr data.val own s = some (p, s')
+/-- Jointly choose an admissible encoding and compatible concrete placement. -/
+def RawPtr.newBlock (repr : Repr T) (values : List T) (own : Bool) : Result (RawPtr T) :=
+  Result.checkedModify (State.newBlock repr values own)
 
 /-- Exposes a safe mutable place, represented functionally without an address, as raw memory.
 Used by `from_mut` and `as_mut_ptr`. The fresh block holds `values` with full access
@@ -185,9 +178,8 @@ def RawPtr.allocExposure (repr : Repr T) (values : List T) : Result (MutRawPtr T
 
 /-- Exposes a shared safe borrow with read-only cells (`shared 1`), as used by `as_ptr`.
 Casting the returned pointer to mutable does not change those permissions. -/
-def RawPtr.allocSharedExposure (repr : Repr T) (values : List T) : Result (ConstRawPtr T) := do
-  let data ← repr.chooseList values
-  Result.checkedModify fun s p s' => Heap.newSharedExposure repr data.val s = some (p, s')
+def RawPtr.allocSharedExposure (repr : Repr T) (values : List T) : Result (ConstRawPtr T) :=
+  Result.checkedModify (State.newSharedExposure repr values)
 
 def RawPtr.endExposure (repr : Repr T) (q : RawPtr T) (count : Nat) : Result Unit :=
   Result.checkedModify (State.removeExposure repr q count)

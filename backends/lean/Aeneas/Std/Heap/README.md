@@ -1,364 +1,245 @@
-# Concrete byte memory for Aeneas (WIP)
+# Concrete addresses and provenance for Aeneas (prototype)
 
-An experiment based on
+This replaces the byte model inspired by
 [AeneasVerif/aeneas#1433](https://github.com/AeneasVerif/aeneas/pull/1433).
-It is a design-feedback model, not a refinement proof of Rust's operational
-semantics or a completed extraction pipeline.
+It is a design experiment, not a refinement proof of Rust or an automatically
+integrated extraction pipeline.
 
-## Runtime core: two files
+## The implicit safe heap
 
-`Repr.lean` defines byte representations and permission updates. `Model.lean`
-defines pointers, blocks, the heap, and executable heap operations. There is no
-`Types.lean`, abstract `Block`, global representation lookup, or representation
-axiom file.
+Safe Rust holds an **unknown implicit part of the heap**. An absent explicit
+permission does not mean that the physical byte or allocation is absent.
+Safe allocation, aliasing, and return authority are abstract boundary assumptions,
+relying on what safe Rust promises; this model does not enumerate safe memory.
 
-### Representations and permissions (`Repr.lean`)
+Exposure brings a compatible contribution into the explicit heap. Borrowing
+returns permissions to safe Rust. Neither operation necessarily allocates or
+deallocates physical storage. Numerical compatibility alone does not authorize
+restoration or identify the safe place being exposed.
 
-An explicit `Repr T` supplies `size`, `align`, partial `decode`, a proof that
-alignment divides size, and completeness: every `T` has some decoding byte vector.
-Alignment is a positive power of two. Size includes padding and is the array
-stride; zero size is allowed. These parameters must be calibrated separately to
-the Rust type and target.
+## Symbolic bytes and representations
 
-There is no canonical encoder. Executable writes receive an encoding and a proof
-that it decodes to the requested value. `Repr.choose repr value`, defined in
-`Std/Primitives.lean`, is the monadic operation supplying both: its result is
-`{ bytes : Vector U8 repr.size // repr.decode bytes = some value }`.
-It changes no heap state. Its total-correctness contract is proved from
-`repr.complete`; its demonic WP quantifies over **every** encoding satisfying
-the decode-back equation, not just the witness used in `complete`.
-`chooseList` does the same for a list of values using that descriptor.
-Neither operation chooses the descriptor itself or introduces an axiom.
-This does not assert a finite
-encoding for arbitrary Lean types: supplying a representation is an obligation.
-In particular, an infinite type such as `Nat` cannot have this representation.
+`Repr.lean` defines:
 
-The only permission-bearing cell type is
-`Cell T = shared depth (Option T) | borrowed`. Actual storage contains `Cell U8`.
+```
+RawPtr T = { base : Nat, byteOffset : Usize }
+Byte     = uninit | data U8 | pointer (RawPtr Unit) Nat
+Cell     = shared Nat Byte | borrowed
+```
 
-| Byte cell | Read | Raw write |
-|---|---|---|
-| `shared 0 (some byte)` | Yes | Yes |
-| `shared (depth + 1) (some byte)` | Yes | No |
-| `shared 0 none` | No | Yes |
-| `shared (depth + 1) none` | No | No |
-| `borrowed` | No | No |
+`base` is a ghost **view index**, not a numerical base pointer.
+Pointer copies, casts, arithmetic, and coherent pointer loads preserve it.
+`MutRawPtr` and `ConstRawPtr` are the same type: constness grants no permission.
 
-`create` expands encoded cells into byte cells, preserving their permissions.
-`select` and `update` take a byte offset `i` and operate on `[i, i + size)`.
-`read` collects readable initialized bytes, then decodes them. Their sharing
-depths need not agree. `write` checks every byte's write permission before
-replacing the footprint. Invalid typed contents can therefore be overwritten.
+`Byte.pointer p lane` carries the complete pointer payload and its byte position.
+Eight little-endian lanes model a thin pointer on the current 64-bit target.
+Coherent lanes recover the original index and offset, without minting a view or
+granting pointee access. Lanes from different pointers cannot be combined just
+because their numerical bytes match; copies of the same pointer can.
 
-`borrow`, `share`, and `endShare` change permissions, not typed values.
-Borrowing can transfer uninitialized writable bytes. `endBorrow` restores
-initialized encoded bytes. All updates preserve the surrounding bytes and length.
-An empty footprint cannot authorize an observation or single-cell mutation:
-these operations reject zero-sized representations.
+Numerical projection adds the retained base address and pointer offset, then
+extracts the requested byte. Reading a lane as data does not mutate its metadata.
+Writing ordinary data replaces metadata even when the numerical byte is unchanged.
+`copyBytes` is an untyped, atomic, memmove-style operation: it preserves pointer
+lanes and initialization state, rather than repeatedly decoding and writing `U8`.
+Copying an uninitialized representation is not a typed read of its value.
+`swapBytes` similarly exchanges two snapshots atomically, preserving symbolic
+bytes even for self-swap. It accepts identical or disjoint physical ranges;
+partial overlap is rejected.
 
-There is no extra typed-validity metadata or automatic pointer invalidation.
-Overlapping access is governed by the same byte permissions at every type.
-Whether readable bytes decode as another type is determined by that type's
-descriptor; neither decoding success nor failure is universally promised.
-Padding must currently be initialized to read the whole footprint.
-`MaybeUninit` and `UnsafeCell` are not modeled.
+`Repr T` explicitly supplies size, alignment, read interpretation (`decode`),
+admissible writes (`encodes`), and pointer payloads contained in a value
+(`pointers`). Completeness and encode/decode-back laws are proved fields.
+`encodes_support` additionally requires every written pointer lane to come from
+one of those payloads; padding cannot spontaneously introduce provenance.
+Descriptors, including their payload lists, must be calibrated to Rust types.
 
-### Heap and pointers (`Model.lean`)
+Scalar decoding may observe pointer lanes numerically, but scalar encoding must
+emit data bytes. Inverse decoding is **not** the encoding relation.
+`Repr.u8` and `Repr.pointer` implement these two cases. Symbolic bytes can carry
+unbounded ghost indices; this does not claim that finite machine bytes encode Nat.
+No canonical encoder or representation axiom is introduced.
 
-`RawPtr T` contains a bounded `Usize` base identifier and a bounded `Usize`
-`byteOffset`, independent of `T` and its descriptor. The phantom type contributes
-no runtime metadata. Offset one can therefore represent a misaligned `u32`
-pointer without pretending it points to the second `u32`.
-`MutRawPtr` and `ConstRawPtr` abbreviate the same type; changing constness does
-not grant permissions.
+Non-writing safe-to-raw exposure is different from encoding a write.
+`State.exposes` permits initialized symbolic bytes that decode to the safe
+value, retaining pointer metadata supplied by that value or already justified
+by a readable explicit contribution at the same address. This permits shared
+U8 exposures of pointer fragments without allowing scalar writes to forge them.
 
-`Block` stores a byte-cell list, a guaranteed base alignment, and an `owned` flag.
-`Heap` stores one map from bases to optional blocks and the next fresh base.
-Absence means no live allocation or exposure. Identifiers are never reused;
-they are model identities, not physical addresses.
+Typed reads require readable, initialized cells across the entire footprint,
+including padding. Single zero-sized accesses are rejected; empty ranges still
+require a live, aligned, in-bounds position.
 
-`alloc` creates uninitialized depth-zero bytes using `Repr.create`. `newBlock`
-creates supplied encodings at depth zero; `newSharedExposure` starts at depth one.
-The latter two also use `create`. Empty allocations still have an identity and
-cleanup authority. Allocation checks byte length, counter capacity, and vacancy
-of the next slot. The greatest base identifier is an exhausted-counter sentinel.
-`Heap.Inv` requires every slot at or above the counter to be absent.
-Consequently, modeled `Box::into_raw` and borrowed `to_raw` exposures can fail
-from identifier exhaustion, although the corresponding Rust conversions do
-not allocate or fail for this reason. Cleanup does not recycle identifiers, so
-repeated conversions/exposures consume cumulative capacity. This is an
-artificial model restriction, not a Rust precondition.
+## Permissions and overlapping views
 
-Access requires the requested alignment to divide both the block's guarantee
-and the pointer's byte offset. Single and range reads, writes, and permission
-transfers use these checks uniformly. `modify` commits a
-length-preserving transformation only on success. Range operations transform
-all selected footprints before committing once: failure exposes no partial update.
-Empty ranges still require a live aligned base, an aligned offset, and an
-in-bounds position. Element `i` of a range starts at `byteOffset + i * size`.
+`shared 0` is exclusive raw write permission. Positive sharing depths preserve
+read permission and record local outstanding shares; they are not fractions.
 
-`freeBlock` requires byte offset zero, the matching owned flag, alignment, **exact**
-byte coverage, and depth-zero permissions throughout. It cannot hide protected
-trailing bytes through floor division. Shared-exposure cleanup instead requires
-`owned = false` and depth one throughout.
-
-`offset` takes an `Int` displacement in typed elements and computes
-`byteOffset + displacement * size`. Both byte endpoints must lie in the live
-block, including one-past, and the result must fit `Usize`. Movement before the
-beginning is rejected, not truncated. Forming a pointer does not require
-alignment or readable contents. Rust `add` and `offset` use this checked operation.
-
-`RawPtr.cast U p` preserves the base and byte offset exactly. It needs no
-descriptor and performs no access checks; casting back restores the original
-pointer, even at nonzero or misaligned offsets. It changes no bytes or permissions
-and assumes no equation between source and target decoders. This pure helper is
-used by manual transmute examples and explicit external models, not inserted by
-the compiler. The legacy `cast_scalar` wrapper still fails. Physical pointer equality, pointer-integer
-conversions, and unaligned-access operations are not provided.
-
-## Rust boundary and Boxes
-
-`Std/Heap.lean` contains relational adapters around the executable operations;
-`Core/Ptr.lean`, `Alloc/Boxed.lean`, and slice wrappers supply Rust-facing effects.
-Descriptors are passed explicitly, not found through a typeclass or global map.
-Write, Box allocation, raw exposure, and borrow restoration call `choose` or
-`chooseList` internally before committing their executable heap operation.
-Translated callers do not supply encoding bytes or decode-back proofs. The
-explicit descriptor arguments in the current fixtures are still manual
-adaptations; they are not emitted by the compiler.
-Safe borrow boundaries read typed values before transferring byte permissions.
-
-Heap wrappers use `Result.checkedModify`, a common failure boundary around their
-relations. `State.checked` returns a successful answer exactly when the original
-relation permits it; if no successor exists, its only answer is `none` at the
-unchanged input heap. The continuation maps `none` to `.fail .undef`. Permission,
-alignment, bounds, decoding, and allocation failures therefore explicitly fail
-rather than leaving a disabled heap request. Earlier successful operations are
-not rolled back. This is logical totalization, not an executable decision
-procedure for arbitrary relations. Encoding choice remains on `guardedModify`,
-with enabling established by completeness.
-
-Safe `Box<T>` values remain represented by `T`. `Box.into_raw` creates a one-value
-owned block. `Box.from_raw` reads and removes that entire allocation; it cannot
-recover an independently owned Box from an interior field.
-
-A raw exposure is different: it temporarily puts a safe place into explicit
-storage with `owned = false`. Its matching backward computation reads the
-updated value and removes the exposure. Removing it does not deallocate the
-underlying Rust Box. Cleanup authority and byte access permissions are separate.
-
-Restoration is privileged to the matching translated backward continuation.
-The heap does not authenticate continuation identity, lifetime, or restoration
-type. Arbitrary direct Lean calls to `endShare` or `endBorrow` are not authorized
-Rust programs. `HeapTests.restoration_is_privileged` demonstrates this boundary.
-
-## Proof files
-
-| File | Responsibility |
-|---|---|
-| `Lemmas.lean` | Concrete traversal, byte selection/update, read-back, singleton-range bridges, disjoint access, map and invariant laws |
-| `Separation.lean` | Byte/cleanup resources, matching, separation algebra, framed relational triples |
-| `Resources.lean` | Byte fragments, encoded `pointsTo`, splitting, matching, and update framing |
-| `Specs.lean` | Generic footprint-update rule and framed read/write contracts, including writing any chosen valid encoding |
-| `Allocation.lean` | Capacity, freshness, allocation resources, frame preservation, exact cleanup |
-| `Borrowing.lean` | Single-footprint byte and typed borrow/share/restoration, and checked movement contracts |
-| `Access.lean` | Byte-based read/write/cleanup denial, including overlapping different types |
-| `Effects.lean` | Total-correctness interpretation of actual `Result` effects, exact demonic choice contracts, and composition rules |
-| `EffectSpecs.lean` | Rust read/write, singleton-range access/permission transfer, movement, Box and mutable-exposure allocation/cleanup contracts |
-| `Initialization.lean` | Effectful writes from arbitrary writable optional bytes, including wholly uninitialized storage |
-| `Ranges.lean` | Exact range assertions, adjacent byte-footprint splitting/recombination, atomic updates, and nonempty read/borrow/share contracts |
-| `RangeRestoration.lean` | Demonic range restoration and explicit live-allocation contracts for empty ranges |
-| `PointerOps.lean` | Framed replace, disjoint/identical swap, and unaligned read/write contracts |
-| `PointerMovement.lean` | Framed byte movement and restricted same-allocation signed distance contracts |
-
-Cell resources claim individual byte positions and an alignment guarantee.
-Typed `block` and `pointsTo` assertions additionally require the pointer offset
-to satisfy the descriptor's alignment.
-Compatibility is byte-disjointness, independent of the originating type.
-Cleanup resources separately record exact byte length, alignment, and ownership.
-Fragments can therefore frame differently typed, disjoint footprints at one base.
-Shared cells are not duplicable resources.
-
-Triples require an enabled transition and correctness of every successor,
-preserving arbitrary matching disjoint frames. `HeapWP.Spec` interprets actual
-`Result` computations using interaction-tree `DWP`; it rejects failure,
-divergence, and disabled effects. Ordinary effect-free WP is unchanged.
-
-**Finite allocation needs capacity.** Allocation contracts use `HeapWP.Spec` at
-the actual input heap, with explicit counter/size bounds. An unconditional framed
-allocation triple from `emp` would be false at an exhausted heap. Local access,
-permission transfer, movement, and cleanup retain ordinary framed triples.
-
-The concrete heap proof chain and integration proofs introduce no memory-model
-axioms or `sorry`; the integration guards allow only `propext`,
-`Classical.choice`, and `Quot.sound`. This proves properties of this model, not
-its correspondence with Rust or the correctness of its compiler adaptations.
-
-### Coverage boundaries
-
-`Ranges.lean` and `RangeRestoration.lean` prove general nonempty range read,
-borrow, share, end-share, and end-borrow contracts. They identify every returned
-or restored value, preserve arbitrary matching frames, and cover every valid
-encoding chosen during restoration. Range updates are atomic. Empty ranges
-have separate input-state contracts: they preserve the entire heap but still
-require a live allocation, descriptor alignment, and an in-bounds position
-(including one-past). Restoration remains privileged to the matching backward
-continuation, as above.
-
-### Opt-in raw-pointer extensions
-
-The additions are isolated in `Core/PtrOps.lean`, `Core/PtrMovement.lean`, and
-the proof modules listed above. They register no compiler builtins and change
-neither existing runtime definitions nor existing theorem signatures.
-Descriptors remain explicit; integration with Aeneas main's extraction and
-backward-function generation is separate work.
-
-| API | Contract and scope |
-|---|---|
-| Initialization | Write a valid new value over arbitrary depth-zero writable bytes, without reading or requiring validity of the old contents; covers uninitialized storage and an invalid old bool encoding |
-| Ranges | Exact element sequences, byte-footprint splitting/recombination, framed permission transfers, and effectful restoration |
-| `replace`, `swap` | Return the old value or exchange values; swap supports disjoint footprints and identical pointers, but explicitly rejects partial overlap |
-| `read_unaligned`, `write_unaligned` | Relax alignment to one without weakening bounds, initialization, decoding, or permission checks |
-| `byte_offset`, `byte_add`, `offset_from` | Preserve allocation identity and heap contents; allow one-past positions and give exact byte offsets or signed element distances |
-
-`offset_from` requires a live common allocation, positive element size,
-integral element distance, and representable signed byte and element distances.
-`byte_add` is restricted to counts representable as a nonnegative `isize`.
-These APIs do not interpret allocation IDs as physical addresses or add
-integer-pointer conversions, general pointer comparison, general copying, or
-zero-sized distance. The raw-memory contracts do not establish destructor or
-nested-resource ownership for arbitrary Rust owning values.
-
-The [Rust examples](../../../../../tests/src/raw_pointer_ops.rs) use real
-standard-library operations, including initialization, a misaligned word,
-same-pointer swap, and borrow/fill/restore of a strict subrange.
-[Generated callers](../../../../../tests/lean/RawPointerOps/Funs.lean) remain
-unedited; their opaque primitives have
-[handwritten external models](../../../../../tests/lean/RawPointerOps/FunsExternal.lean),
-[exact contracts](../../../../../tests/lean/RawPointerOps/Properties.lean), and
-[behavior/rejection and axiom checks](../../../../../tests/lean/RawPointerOps/Checks.lean).
-`MaybeUninit` is a native storage harness here, not a new modeled representation.
-Reproduce the focused Lean closure with `make verify-raw-pointer-api`; extraction
-provenance is recorded in [EXTRACTION.md](../../../../../tests/lean/EXTRACTION.md).
-These remain model proofs, not a compiler-correctness or Rust ABI refinement.
-
-Integration proofs cover Box round-trip, stored pointers, corrected alias and
-repeated-read examples, pair replacement, one-past pointer formation, and
-manually adapted scalar and pair borrowed-Box examples.
-Descriptors are explicit parameters, including a separate descriptor for stored
-pointers; pointers are not assumed to fit in one word. The callback contract
-accepts any subsequently written value and consumes the exposure resources.
-The local borrowed conversion is named `to_raw`, not the consuming `into_raw`.
-Each caller invokes the backward function before dereferencing the safe Box
-again. The scalar and pair examples have matching Rust source in `raw_box.rs`;
-their callback adaptations are handwritten, not compiler-generated.
-`RawBoxProofs.lean` also supplies complete little-endian `u32` and paired-`u32`
-descriptors and instantiates the round-trip, pair, and one-past proofs with them.
-These are concrete model encodings, not a proof of Rust tuple layout or ABI.
-A true zero-sized descriptor cannot satisfy a read-success theorem here.
-
-`RawBoxManual.lean` additionally verifies model-API compositions, not Rust
-translations: nested sharing with const-pointer range reads, exclusive
-borrow/update/restoration, and their composition at the same pointer. Their
-contracts preserve arbitrary matching frames and identify every returned value.
-
-The transmute-specific design, pitfalls, bytemuck/zerocopy comparison, and
-Rust-to-Lean example map are documented separately in [TRANSMUTE.md](TRANSMUTE.md).
-The proved examples cover thin raw-pointer round trips, exact by-value
-representation conversions, and the safe mutable word/byte-array view.
-The document distinguishes model proofs from ABI calibration, handwritten
-external models, and manual extraction adaptations.
-
-`DoublyLinked/` provides separate raw and safe doubly-linked-list APIs:
-
-| Layer | Rust | Lean implementation | Contracts |
+| Cell | Typed read | Write | Entire-view cleanup |
 |---|---|---|---|
-| Raw intrusive sentinel ring | [raw.rs](../../../../../tests/src/doubly_linked/raw.rs) | [Raw.lean](../../../../../tests/lean/DoublyLinked/Raw.lean) | [RawProperties.lean](../../../../../tests/lean/DoublyLinked/RawProperties.lean), [ListProperties.lean](../../../../../tests/lean/DoublyLinked/ListProperties.lean) |
-| Safe owning list | [safe.rs](../../../../../tests/src/doubly_linked/safe.rs) | [Safe.lean](../../../../../tests/lean/DoublyLinked/Safe.lean) | [Ownership.lean](../../../../../tests/lean/DoublyLinked/Ownership.lean), [SafeProperties.lean](../../../../../tests/lean/DoublyLinked/SafeProperties.lean) |
+| `shared 0 (data/pointer)` | If decoding succeeds | Yes | With matching authority |
+| `shared 0 uninit` | No | Yes | With matching authority |
+| `shared (n + 1) (data/pointer)` | If decoding succeeds | No | No exclusive cleanup |
+| `shared (n + 1) uninit` | No | No | No exclusive cleanup |
+| `borrowed` | No | No | No |
 
-The [Rust entry point](../../../../../tests/src/doubly_linked.rs) includes both
-APIs in one crate namespace, preserving the `crate::ext` extraction boundary.
-[tests.rs](../../../../../tests/src/doubly_linked/tests.rs) keeps raw-ring tests
-separate from the safe-only client test. `DoublyLinked/Funs.lean` is an import
-aggregator for the two factored Lean APIs, not a second set of definitions.
-Nodes store actual raw `prev` and
-`next` pointers and a `u32` payload. Two opaque primitives perform whole-node
-reads and writes; the link operations remain transparent Rust.
-`RawProperties.lean` proves exact framed contracts for link setters, insertion
-between distinct neighbours, insertion into an empty ring, unlinking between
-distinct neighbours, removing the last node, and removing an already detached
-node. The last two cases handle neighbour aliasing without assuming three
-distinct allocations. `ListProperties.lean` defines ownership of every link and
-payload in a finite ring and proves insertion at the sentinel implements list
-cons; removal of the first node returns that exact pointer, leaves it detached,
-and preserves the remaining sequence. Both contracts cover arbitrary finite
-lengths and preserve arbitrary disjoint matching frames by the generic heap-WP
-frame rule.
+At each numerical address, borrowed cells are raw-permission-neutral.
+Two positive shared contributions are compatible exactly when their **symbolic
+Byte payloads agree**: `shared 1 x` and `shared 2 x` are compatible.
+A writer conflicts with every other non-borrowed contribution.
+`uninit` is not a wildcard, and pointer metadata is not equivalent to equal
+numerical data bytes. Missing permissions are interpreted as held implicitly
+by safe Rust.
 
-This list milestone has two explicit manual translation adaptations. The
-generated recursive `Node` containing `RawPtr Node` is rejected by Lean's
-positivity checker; its stored pointer phantom tags are erased to `Unit` and
-restored in `Node.mk`/accessors, preserving both base and byte offset. The
-constructor/accessor round trip is proved. Callers also thread an explicit
-`Repr Node` through the external models. These contracts are parametric
-in a positive-sized complete descriptor, including its stored-pointer encoding;
-no concrete `Repr Node` is instantiated, and no Rust node ABI or pointer
-representation is proved. The generated function file is also manually
-factored into `Raw.lean` and `Safe.lean`; its bodies and control flow are
-unchanged apart from the descriptor arguments. Re-extraction overwrites the
-type repair and function aggregator, requiring both adaptations and factoring
-to be replayed as documented in `tests/lean/EXTRACTION.md`.
-Neither Charon nor the shared Aeneas compiler was
-changed.
+Authorization remains selected-view-specific. Pooling just total depths would
+lose the distinction between `A.borrowed/B.shared0` and
+`A.shared0/B.borrowed`. No second aggregate-permission store is needed.
 
-The same fixture now supplies a safe owning `LinkedList` with private root and
-length fields. `new`, `len`, `is_empty`, `front`, `back`, `push_front`, `pop_front`,
-`clear`, and `Drop` have proved contracts in `SafeProperties.lean`. Their public
-state assertion includes the deterministic heap observation
-`self.toList repr heap = some values`: push implements cons, pop returns
-head/tail, front/back return the first/last payload, and clear produces `[]`.
-`Ownership.lean` tracks cleanup authority for every payload node and the
-sentinel as well as the exact ring and length. Pop reclaims its detached node;
-total clear releases payload nodes, and Drop consumes the remaining sentinel
-through the concrete Box model. Its public post preserves the external frame
-and heap invariant, not an explicit whole-heap allocation-map difference.
-Two additional opaque wrappers provide Box allocation and reclamation.
-Heap-counter/descriptor-size capacity is explicit for allocation, as is checked
-length capacity for push. No automatic lifetime analysis or Rust ABI refinement
-is claimed; these are proofs about the documented adapted extraction.
+A writer cannot coexist with another active raw observer, so writes do not
+mirror bytes into every record. Borrowed ancestors have no readable payload;
+matching backward continuations restore their updated values later.
+The regression `nestedSlices` exercises `A[0,8)`, `B[1,7)`, and `C[2,6)`,
+writes through C, and unwinds the views while preserving exterior bytes.
+Only A owns the underlying allocation.
 
-The lower-level intrusive interface still accepts caller-provided stable
-storage and unlinks without freeing it. `init.spec` covers initialized writable
-storage, which the owning wrapper's allocator supplies; initializing arbitrary
-uninitialized storage has no list-specific contract yet. Native tests check
-both traversal directions, all 36 pairs of three-node insertion/removal orders,
-detached-node idempotence, an untouched neighbouring canary, and a safe-only
-sequence comparison including moves, clear/reuse, and nonempty destruction.
-All four tests also pass with address/leak sanitization. Exact axiom guards
-on the local/global ring contracts, all public safe contracts, and the heap
-observation bridge allow only `propext`, `Classical.choice`, and `Quot.sound`.
+Independent shared exposures retire their baseline contribution at depth one.
+They do **not** decrement it into a writer. Local nested shares decrement
+separately; exclusive access cannot resume until conflicting views retire.
 
-## Checks
+## Concrete heap and lifecycle
+
+`Model.lean` stores one map `Nat → Option Block` and a fresh Nat counter.
+Each record contains concrete `bptr : Usize`, root index, byte cells, ownership,
+explicit activity, and physical root liveness. The root is its first record;
+aliases reference it rather than needing another ID namespace or table.
+Its byte extent bounds the modeled allocation; child views must fit inside it.
+Different live roots have disjoint numerical extents, even while their
+permissions are borrowed or held implicitly.
+
+`Heap.Inv` requires no entries beyond the issued prefix, well-formed records,
+consistent roots, valid symbolic pointer metadata, and pairwise compatibility
+of active contributions. `check` computes the finite part of this invariant;
+its straightforward enumeration is intended for small prototypes, not as an
+optimized allocator.
+
+Base addresses are nonnull; mathematical base-plus-length must fit Usize without
+wrapping, including a representable one-past address. Access alignment is
+divisibility of **bptr + offset**, not an independent alignment guarantee.
+Arithmetic is deliberately view-bounded. `distance` recognizes a common root
+across distinct views; equal numerical addresses alone do not prove provenance.
+`ptrEq` compares numerical addresses, not ghost records.
+
+Retirement keeps immutable address metadata but contributes no permissions.
+Root death separately disables all views of that allocation.
+Consequently a dangling pointer can still be stored, loaded, and numerically
+observed. Reusing its address creates a new root; it cannot revive the old view.
+
+`returnOwned` transfers a complete owned view to implicit safe Rust without
+physical death. A subsequent `newBlock` can use that known inactive root,
+preserving its address while issuing a fresh view index.
+`dealloc` instead marks the root dead. Both require exact full-root coverage,
+depth-zero cells, and no other active view of that root, including fully borrowed
+aliases. Nonowning exposures retire through their matching return operation.
+These are abstract ownership transitions, not checks of an allocator's original
+layout or allocation-size/isize policy.
+
+## Rust boundary, Boxes, and failure
+
+`Std/Heap.lean` specifies transitions relationally. Placement, root relationship,
+and admissible encoding are chosen **jointly**, subject to compatibility.
+Rust wrappers in `Core/Ptr.lean` and `Alloc/Boxed.lean` use these relations
+through `Result.checkedModify`. The demonic interpretation admits every
+compatible witness; choosing an incompatible padding encoding first cannot
+cause spurious intermediate failure.
+
+If no successor exists, the checked boundary explicitly fails at the unchanged
+input heap. Earlier operations are not rolled back.
+Fresh Nat IDs cannot exhaust cumulatively. Nevertheless, `Box::into_raw` and
+borrowed `to_raw` exposure can still fail if no compatible placement exists.
+Failure-freedom requires **boundary feasibility**, not `Heap.Inv` alone.
+This remaining model limitation is not a Rust precondition.
+
+Safe `Box<T>` is still represented by pure `T`, without a place identity.
+`into_raw` materializes an owned record; `from_raw` reads it and calls
+`returnOwned`, not physical `dealloc`. Safe Rust retains ownership afterward.
+The core supports re-exposure of a **known** root, but these functional wrappers
+cannot connect repeated conversions of the same unmoved Box to that identity.
+They may choose a different address. Retaining an old pointer's address does
+not fix that address-history overapproximation.
+
+Matching translated backward continuations are trusted to return the correct
+range and value, once, after their children have returned. There is no dynamic
+loan tree or consumable return ticket. A direct Lean call can prematurely
+restore a parent while a child is borrowed; the regression explicitly
+demonstrates that boundary. Cleanup nevertheless checks independently active
+views in its pre-state. Compatibility is not a replacement for safe authority.
+
+Mutable safe loans currently require the selected representation to be an
+admissible encoding of each decoded value (`State.mutableValues`). Numerical
+U8 reads of pointer lanes remain supported, but mutable U8 loans across those
+lanes are conservatively rejected. A returned scalar value alone cannot
+distinguish untouched memory from a same-value write; supporting that boundary
+requires representation/write history in the matching backward continuation.
+
+## Scope and checking
+
+Plain-data-to-pointer recovery is rejected conservatively, not declared
+universally undefined in Rust. Integer/exposed-provenance reconstruction,
+provenance-free and null pointers, pointer tagging, wide/function pointers,
+MaybeUninit/UnsafeCell semantics, and complete allocator fidelity are not
+implemented. An unseen safe subslice cannot establish its entire physical
+allocation extent: larger later exposures need an already identified root.
+Automatic descriptor plumbing and safe-place identity tracking remain compiler
+integration work.
+
+`Provenance.lean` proves fresh-ID, immutable-address, admissible-encoding,
+writer-exclusion, and allocation/update invariant laws with only Lean's standard
+axioms. `Std/HeapTests.lean` checks nested slices, shared aliases and uninitialized
+shares, pointer copying/overwriting, coherent lanes, dangling values and address
+reuse, owning return/re-exposure, root/loan guards, joint choices, bounds,
+alignment, and atomic initialization-preserving copy.
+
+The separation primitives now distinguish **indexed resource disjointness**
+from physical address disjointness. `Resource.Holds.overlapCompatible` derives
+the exact physical Byte/permission compatibility from `Heap.Inv` for different
+view resources at the same address. Cleanup records retain concrete base and
+extent, but do not by themselves confer alias absence or safe return authority.
+
+`Specs.lean` proves uniformly enabled typed reads and exact framed symbolic
+updates/writes. `TripleAt` retains arbitrary matching frames and all permitted
+successors while recording input-state compatibility obligations. In particular,
+a write supplies a compatible initialized encoding witness; its postcondition
+covers every State.write encoding, not just that witness. General restoration
+and decrements cannot use the former unconditional mutation invariant law:
+reintroducing a writer can conflict with another logically separated view.
+Deriving operation-specific enabledness without the finite compatibility
+obligation remains part of the higher-level proof migration.
+
+`Allocation.lean` proves fresh-view creation and whole-view retirement with
+arbitrary matching frames. `Borrowing.lean` proves exact selected-view borrow,
+share, decrement, and restoration contracts, with explicit final compatibility.
+`Access.lean` proves byte-wise read/write/cleanup denial. `Effects.lean` lifts
+state-indexed contracts to the actual demonic checked effects. The regression
+suite instantiates a checked write with a physically overlapping borrowed
+ancestor frame and proves both frame retention and typed read-back.
+
+The independent Astra prototype review identified and checked fixes for
+non-writing pointer-fragment exposure, mutable representation-crossing loans,
+and untyped swap. A subsequent read-only review of the migrated core framing,
+write, and retirement contracts found no additional concrete defects.
 
 From `backends/lean`:
 
-```sh
-lake build Aeneas.Std.HeapTests
-lake build
+```
+lake build Aeneas.Std.HeapTests Aeneas.Std.Core.PtrOps \
+  Aeneas.Std.Core.PtrMovement Aeneas.Std.Alloc.Boxed Aeneas.Std.Heap.Access
 ```
 
-From the repository root, without re-extraction:
-
-```sh
-make verify-raw-box
-make verify-doubly-linked
-```
-
-`HeapTests.lean` exercises lifecycle and cleanup, uninitialized borrow/restoration,
-mixed sharing, cross-type byte protection, alignment, atomic range failure,
-signed/one-past movement, finite allocation exhaustion, empty footprints, and the
-privileged-restoration boundary.
-It also checks that monadic choice preserves the heap and leaves an ignored
-encoding byte genuinely unconstrained. Failure observations inspect the actual
-read request: permission denial and invalid typed contents force its continuation
-to `.fail .undef` and preserve the failed operation's input heap.
+**Root-specific cleanup, range/restoration/pointer-operation contracts,
+EffectSpecs, and extracted example proofs remain to be migrated.** The
+Lemmas/Separation/Resources/Specs/Allocation/Borrowing/Access/Effects core
+modules are migrated, but remaining old disjoint-index resources,
+U8-only descriptors, alignment assumptions, and lifecycle contracts do not
+establish the new model's claims. They remain present and in the unchanged
+default build; the targeted command above is not a claim that that build passes.
+No axioms, sorry definitions, or target exclusions conceal that migration work.

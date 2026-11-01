@@ -21,13 +21,7 @@ def RawPtr.replace (repr : Repr T) (p : RawPtr T) (value : T) : Result T := do
 /-- Only disjoint or identical footprints are modeled. Rust's partially
 overlapping case is deliberately rejected rather than approximated. -/
 def RawPtr.swap (repr : Repr T) (p q : RawPtr T) : Result Unit :=
-  if p.base ≠ q.base ∨ p.byteOffset.val + repr.size ≤ q.byteOffset.val ∨
-      q.byteOffset.val + repr.size ≤ p.byteOffset.val ∨ p.byteOffset.val = q.byteOffset.val then do
-    let left ← p.read repr
-    let right ← q.read repr
-    MutRawPtr.write repr p right
-    MutRawPtr.write repr q left
-  else .fail .undef
+  Result.checkedModify fun s (_ : Unit) s' => Heap.swapBytes repr p q s = some s'
 
 def RawPtr.read_unaligned (repr : Repr T) (p : RawPtr T) : Result T :=
   p.read repr.unaligned

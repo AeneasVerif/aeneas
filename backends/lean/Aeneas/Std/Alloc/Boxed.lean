@@ -67,23 +67,24 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
 In Rust, `into_raw` doesn't
 call the global allocator: the box was already allocated by `Box::new`, and `into_raw` only converts
 the pointer. But the model of `Box<T>` is `T`, which has no address, so the block is created here,
-using `RawPtr.newBlock`, including its monadic encoding choice.
-The finite model counter can therefore make this conversion fail, unlike Rust.
-Cleanup does not recycle identifiers, so repeated conversions consume cumulative
-capacity; this is an artificial model restriction, not a Rust precondition. -/
+using `RawPtr.newBlock`, jointly choosing compatible placement and encoding.
+Ghost Nat IDs cannot exhaust. Conversion can still fail if the explicit heap has
+no compatible placement; safe-boundary feasibility is an additional assumption,
+not a Rust precondition. The functional Box representation does not preserve
+address identity across repeated conversions. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
 def alloc.boxed.Box.into_raw (repr : Repr T) (b : T) : Result (MutRawPtr T) :=
   RawPtr.newBlock repr [b] true
 
-/-- Moves the value out of memory, and removes its block with the meta operation `State.dealloc`.
+/-- Moves the value out of explicit memory with `State.returnOwned`, without physical death.
 In Rust, `from_raw` doesn't call the global allocator either: it only converts the pointer, and
 the memory is freed when the box is dropped. But the model of `Box<T>` is `T`, so the value can't
-stay in memory. Converting the box to a raw pointer again creates a new block: this is sound, but
-loses the address of the box. -/
+stay explicitly active. Immutable metadata retains the old pointer's address, but converting
+the same Box back to raw still forgets its safe-place identity in this prototype. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
 def alloc.boxed.Box.from_raw (repr : Repr T) (p : MutRawPtr T) : Result T := do
   let value ← RawPtr.read repr p
-  Result.checkedModify (State.dealloc repr p 1)
+  Result.checkedModify (State.returnOwned repr p 1)
   pure value
 
 end Aeneas.Std

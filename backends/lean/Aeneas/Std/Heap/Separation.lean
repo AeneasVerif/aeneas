@@ -2,10 +2,10 @@ module
 
 public import Aeneas.Std.Heap.Lemmas
 
-/-! Logical ownership of individual byte cells and allocation cleanup authority.
-Compatibility is byte-disjointness, independently of the types used to access the
-bytes. Shared cells are not duplicated by separating conjunction. The global
-freshness counter is never split. -/
+/-! Separation splits indexed permission contributions, not physical addresses.
+Distinct views may overlap numerically; `Heap.Inv` checks their byte compatibility.
+An indexed contribution is linear, even when borrowed or positively shared.
+Cleanup records layout, not absence of other views or safe return authority. -/
 
 @[expose] public section
 
@@ -14,12 +14,12 @@ namespace Aeneas.Std.SepLogic
 universe w w'
 
 inductive Resource where
-  | cell (base : BasePtr) (index : Nat) (alignment : Alignment) (value : Cell U8)
-  | cleanup (base : BasePtr) (size : Nat) (alignment : Alignment) (owned : Bool)
+  | cell (base : Nat) (index : Nat) (bptr : BasePtr) (value : Cell)
+  | cleanup (base : Nat) (size : Nat) (bptr : BasePtr) (owned : Bool)
 
 namespace Resource
 
-def base : Resource → BasePtr
+def base : Resource → Nat
   | .cell base _ _ _ | .cleanup base _ _ _ => base
 
 def key : Resource → Option Nat
@@ -37,18 +37,62 @@ theorem not_compatible_self (a : Resource) : ¬ a.Compatible a := by
   simp [Compatible]
 
 def Holds (s : Heap) : Resource → Prop
-  | .cell base index alignment c =>
-    ∃ block, s.allocations base = some block ∧ alignment.val ∣ block.alignment.val ∧
-      block.repr[index]? = some c
-  | .cleanup base size alignment own =>
+  | .cell base index bptr c =>
+    ∃ block, s.allocations base = some block ∧ s.live block = true ∧
+      block.bptr = bptr ∧ block.repr[index]? = some c
+  | .cleanup base size bptr own =>
     ∃ block, s.allocations base = some block ∧ block.repr.length = size ∧
-      block.alignment = alignment ∧ block.owned = own
+      s.live block = true ∧ block.bptr = bptr ∧ block.owned = own
 
 theorem Holds.live {s : Heap} {r : Resource}
     (h : r.Holds s) : ∃ block, s.allocations r.base = some block := by
   cases r
   · exact h.imp fun _ hc => hc.1
   · exact h.imp fun _ hc => hc.1
+
+/-- Logical separation of views does not imply physical separation. The heap
+invariant enforces the actual permission algebra when their addresses coincide. -/
+theorem Holds.overlapCompatible {s : Heap} {i j x y : Nat} {a b : BasePtr} {c d : Cell}
+    (hinv : s.Inv) (different : i ≠ j)
+    (left : Resource.Holds s (.cell i x a c))
+    (right : Resource.Holds s (.cell j y b d))
+    (address : a.val + x = b.val + y) : Cell.compatible c d = true := by
+  obtain ⟨blk, hl, hlive, ha, hc⟩ := left
+  obtain ⟨other, hr, hrive, hb, hd⟩ := right
+  have compat := hinv.compatible hl hr different
+  have active : blk.active = true := by
+    simp only [Heap.live, Bool.and_eq_true] at hlive
+    exact hlive.1
+  have active' : other.active = true := by
+    simp only [Heap.live, Bool.and_eq_true] at hrive
+    exact hrive.1
+  simp only [Heap.compatible, active, active', Bool.not_true, Bool.false_or] at compat
+  have hm : (c, x) ∈ blk.repr.zipIdx := by
+    apply List.mem_of_getElem? (i := x)
+    simp [List.getElem?_zipIdx, hc]
+  have hm' : (d, y) ∈ other.repr.zipIdx := by
+    apply List.mem_of_getElem? (i := y)
+    simp [List.getElem?_zipIdx, hd]
+  have row := List.all_eq_true.mp compat (c, x) hm
+  have entry := List.all_eq_true.mp row (d, y) hm'
+  simpa [ha, hb, address] using entry
+
+theorem Holds.noAliases_unique {s : Heap} {r : Resource} {owner root : Nat}
+    {blk : Block} (hinv : s.Inv) (noAliases : s.noAliases owner root = true)
+    (holds : Resource.Holds s r) (lookup : s.allocations r.base = some blk)
+    (sameRoot : blk.root = root) : r.base = owner := by
+  have hv : s.live blk = true := by
+    cases r
+    · obtain ⟨actual, hl, hv, _, _⟩ := holds
+      have he := Option.some.inj (hl.symm.trans lookup)
+      exact he ▸ hv
+    · obtain ⟨actual, hl, _, hv, _, _⟩ := holds
+      have he := Option.some.inj (hl.symm.trans lookup)
+      exact he ▸ hv
+  have active : blk.active = true := by
+    simp only [Heap.live, Bool.and_eq_true] at hv
+    exact hv.1
+  exact hinv.noAliases_unique noAliases lookup active sameRoot
 
 end Resource
 
@@ -185,6 +229,34 @@ def Triple (P : Assertion) (c : Cmd α)
     (∃ x s', c s x s') ∧
     ∀ x s', c s x s' →
       ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h'
+
+/-- Input-state contract for operations whose enabledness depends on compatible
+placement, symbolic pointer metadata, or return authority. It still quantifies
+over every matching indexed frame and every permitted successor. -/
+def TripleAt (P : Assertion) (c : Cmd α) (Q : α → Assertion) (s : Heap) : Prop :=
+  ∀ h F, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
+    (∃ x s', c s x s') ∧
+    ∀ x s', c s x s' →
+      ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h'
+
+theorem Triple.at {P : Assertion} {c : Cmd α} {Q : α → Assertion}
+    (ht : Triple P c Q) (s : Heap) : TripleAt P c Q s :=
+  fun h F hp hd hm hi => ht h F s hp hd hm hi
+
+theorem frameAt {P R : Assertion} {c : Cmd α} {Q : α → Assertion} {s : Heap}
+    (ht : TripleAt P c Q s) :
+    TripleAt (sep P R) c (fun x => sep (Q x) R) s := by
+  intro h F ⟨a, b, hab, he, hp, hr⟩ hf hm hi
+  subst h
+  obtain ⟨haF, hbF⟩ := Fragment.disjoint_union_left.mp hf
+  rw [Fragment.union_assoc] at hm
+  obtain ⟨hsafe, hpost⟩ :=
+    ht a (b ∪ F) hp (Fragment.disjoint_union_right.mpr ⟨hab, haF⟩) hm hi
+  refine ⟨hsafe, fun x s' hrun => ?_⟩
+  obtain ⟨a', hd, hm', hi', hq⟩ := hpost x s' hrun
+  obtain ⟨ha'b, ha'F⟩ := Fragment.disjoint_union_right.mp hd
+  exact ⟨a' ∪ b, Fragment.disjoint_union_left.mpr ⟨ha'F, hbF⟩,
+    by simpa [Fragment.union_assoc] using hm', hi', a', b, ha'b, rfl, hq, hr⟩
 
 theorem frame {P R : Assertion} {c : Cmd α}
     {Q : α → Assertion} (ht : Triple P c Q) :

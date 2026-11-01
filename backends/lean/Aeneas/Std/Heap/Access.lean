@@ -11,7 +11,7 @@ different sharing depths. No general pointer-invalidation law is assumed. -/
 
 namespace Aeneas.Std
 
-theorem Cell.write.writable {cell : Cell ty} {value : ty} {result : Cell ty}
+theorem Cell.write.writable {cell : Cell} {value : Byte} {result : Cell}
     (h : cell.write value = some result) : cell.writable := by
   cases cell
   · rename_i depth payload
@@ -22,17 +22,19 @@ theorem Cell.write.writable {cell : Cell ty} {value : ty} {result : Cell ty}
 
 namespace Repr
 
-theorem read.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b : Nat)
+theorem read.denied_by_byte (repr : Repr ty) (addresses : AddressMap)
+    (bytes : Vector Cell r) (i b : Nat)
     (hlo : i ≤ b) (hhi : b < (i + repr.size))
-    (byte : Cell U8) (hp : bytes.toList[b]? = some byte) (hn : byte.read = none) :
-    repr.read bytes i = none := by
-  cases he : repr.read bytes i
+    (byte : Cell) (hp : bytes.toList[b]? = some byte) (hn : byte.read = none) :
+    repr.read addresses bytes i = none := by
+  cases he : repr.read addresses bytes i
   · rfl
   · rename_i value
     unfold read at he
     split at he
     · rename_i hb
       obtain ⟨data, hr, _⟩ := Option.bind_eq_some_iff.mp he
+      unfold Repr.readBytes at hr
       have hk : b - i < repr.size := by grind [Nat.add_mul]
       have hs := select_getElem? repr bytes i hb.2 (b - i) hk
       have hindex : i + (b - i) = b := by grind
@@ -42,26 +44,25 @@ theorem read.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b :
       cases hv
     · cases he
 
-theorem write.denied_by_byte (repr : Repr ty) (bytes : Vector (Cell U8) r) (i b : Nat)
+theorem write.denied_by_byte (repr : Repr ty) (bytes : Vector Cell r) (i b : Nat)
     (hlo : i ≤ b) (hhi : b < (i + repr.size))
-    (byte : Cell U8) (hp : bytes.toList[b]? = some byte) (hn : ¬ byte.writable)
-    (value : ty) (data : Vector U8 repr.size) (decoded : repr.decode data = some value) :
+    (byte : Cell) (hp : bytes.toList[b]? = some byte) (hn : ¬ byte.writable)
+    (value : ty) (data : Vector Byte repr.size) (decoded : repr.encodes value data) :
     repr.write bytes i value data decoded = none := by
   cases he : repr.write bytes i value data decoded
   · rfl
   · unfold write at he
     split at he
     · rename_i hb
-      split at he
-      · rename_i result hc
-        have hk : b - i < repr.size := by grind [Nat.add_mul]
-        have hs := select_getElem? repr bytes i hb.2 (b - i) hk
-        have hindex : i + (b - i) = b := by grind
-        rw [hindex, hp, Vector.getElem?_eq_getElem hk] at hs
-        obtain ⟨v, hv⟩ := vector_mapM_enabled hc (b - i) hk
-        simp only [Vector.getElem_zip] at hv
-        exact (hn (Option.some.inj hs ▸ Cell.write.writable hv)).elim
-      · cases he
+      obtain ⟨result, hc, _⟩ := Option.map_eq_some_iff.mp he
+      unfold Repr.writeBytes at hc
+      have hk : b - i < repr.size := by grind [Nat.add_mul]
+      have hs := select_getElem? repr bytes i hb.2 (b - i) hk
+      have hindex : i + (b - i) = b := by grind
+      rw [hindex, hp, Vector.getElem?_eq_getElem hk] at hs
+      obtain ⟨v, hv⟩ := vector_mapM_enabled hc (b - i) hk
+      simp only [Vector.getElem_zip] at hv
+      exact (hn (Option.some.inj hs ▸ Cell.write.writable hv)).elim
     · cases he
 
 end Repr
@@ -71,39 +72,52 @@ namespace Heap
 theorem read.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
     (hs : s.allocations p.base = some block) (b : Nat)
     (hlo : p.byteOffset.val ≤ b) (hhi : b < (p.byteOffset.val + repr.size))
-    (byte : Cell U8) (hp : block.repr[b]? = some byte) (hn : byte.read = none) :
+    (byte : Cell) (hp : block.repr[b]? = some byte) (hn : byte.read = none) :
     read repr p s = none := by
-  have hr := Repr.read.denied_by_byte repr block.bytes p.byteOffset.val b hlo hhi byte
+  have hr := Repr.read.denied_by_byte repr s.addresses block.bytes p.byteOffset.val b hlo hhi byte
     (by simpa [Block.bytes] using hp) hn
-  by_cases ha : repr.align.val ∣ block.alignment.val
-  · simp [read, hs, ha, hr]
-  · simp [read, hs, ha]
+  simp [read, hs, hr]
 
 theorem write.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
     (hs : s.allocations p.base = some block) (b : Nat)
     (hlo : p.byteOffset.val ≤ b) (hhi : b < (p.byteOffset.val + repr.size))
-    (byte : Cell U8) (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable)
-    (value : ty) (data : Vector U8 repr.size) (decoded : repr.decode data = some value) :
+    (byte : Cell) (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable)
+    (value : ty) (data : Vector Byte repr.size) (decoded : repr.encodes value data) :
     write repr p value data decoded s = none := by
   have hw := Repr.write.denied_by_byte repr block.bytes p.byteOffset.val b hlo hhi byte
     (by simpa [Block.bytes] using hp) hn value data decoded
-  by_cases ha : repr.align.val ∣ block.alignment.val
-  · simp [write, modify, hs, ha, hw]
-  · simp [write, modify, hs, ha]
+  simp [write, modify, hs, hw]
 
 theorem freeBlock.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
-    (hs : s.allocations p.base = some block) (b : Nat) (byte : Cell U8)
+    (hs : s.allocations p.base = some block) (b : Nat) (byte : Cell)
     (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable) (count : Nat) (own : Bool) :
     freeBlock repr p count own s = none := by
-  have hbad : ¬ (p.byteOffset.val = 0 ∧ block.owned = own ∧
-      repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
-      block.repr.all (fun c => c.depth == some 0) = true) := by
+  have hbad : block.repr.all (fun c => c.depth == some 0) ≠ true := by
     intro hg
     have hb := List.getElem?_eq_some_iff.mp hp
     have hm : byte ∈ block.repr := hb.2 ▸ List.getElem_mem hb.1
-    have hx := List.all_eq_true.mp hg.2.2.2.2 byte hm
+    have hx := List.all_eq_true.mp hg byte hm
     exact (hn (beq_iff_eq.mp hx)).elim
-  simp only [freeBlock, hs, hbad, ite_false]
+  cases own
+  · simp only [freeBlock, Bool.false_eq_true, ite_false, endExposureAt, hs]
+    dsimp only [Bind.bind, Option.bind]
+    split
+    · rename_i guard
+      simp only [Bool.and_eq_true] at guard
+      grind
+    · rfl
+  · have denied : returnOwned repr p count s = none := by
+      simp only [returnOwned, hs]
+      dsimp only [Bind.bind, Option.bind]
+      cases hr : s.allocations block.root
+      · simp
+      · dsimp only [Bind.bind, Option.bind]
+        split
+        · rename_i guard
+          simp only [Bool.and_eq_true] at guard
+          grind
+        · rfl
+    simp [freeBlock, dealloc, hs, denied]
 
 end Heap
 end Aeneas.Std

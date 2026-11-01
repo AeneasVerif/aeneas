@@ -2,8 +2,8 @@ module
 
 public import Aeneas.Std.Heap.Repr
 
-/-! Concrete heap operations. Representations and encodings are supplied explicitly.
-Borrow restoration authority belongs to the caller, not to the byte store. -/
+/-! Finite explicit views of an unknown implicit safe heap. Ghost IDs never recycle;
+numerical addresses may. Safe continuation authority is not a byte permission. -/
 
 @[expose] public section
 
@@ -15,153 +15,197 @@ def update {α : Type u} {β : Type v} [DecidableEq α]
     (f : α → β) (key : α) (value : β) : α → β :=
   fun k => if k = key then value else f k
 
-abbrev BasePtr := Usize
-
-structure RawPtr (ty : Type u) : Type u where
-  base : BasePtr
-  byteOffset : Usize
-
-instance : Inhabited (RawPtr ty) := ⟨⟨⟨0⟩, ⟨0⟩⟩⟩
-
-/-- Pointer constness is erased; cell permissions authorize access. -/
-abbrev MutRawPtr (ty : Type u) := RawPtr ty
-abbrev ConstRawPtr (ty : Type u) := RawPtr ty
-
 structure Block where
-  repr : List (Cell U8)
-  alignment : Alignment
+  bptr : BasePtr
+  root : Nat
+  repr : List Cell
   owned : Bool
+  active : Bool := true
+  alive : Bool := true
 
 structure Heap where
-  allocations : BasePtr → Option Block
-  next : BasePtr
+  allocations : Nat → Option Block
+  next : Nat
 
-namespace Block
-
-def bytes (block : Block) : Vector (Cell U8) block.repr.length :=
+def Block.bytes (block : Block) : Vector Cell block.repr.length :=
   ⟨block.repr.toArray, by simp⟩
-
-end Block
 
 namespace Heap
 
-variable {ty : Type u}
+variable {ty : Type}
 
-def empty : Heap := ⟨fun _ => none, ⟨0⟩⟩
+def empty : Heap := ⟨fun _ => none, 0⟩
 
-def cells (s : Heap) (base : BasePtr) : Option (List (Cell U8)) :=
-  (s.allocations base).map Block.repr
+def addresses (s : Heap) : AddressMap :=
+  fun id => (s.allocations id).map Block.bptr
 
-def allocated (s : Heap) (base : BasePtr) : Bool :=
-  ((s.allocations base).map Block.owned).getD false
+def address (s : Heap) (p : RawPtr ty) : Option Usize :=
+  p.address s.addresses
 
-def alignment (s : Heap) (base : BasePtr) : Option Alignment :=
-  (s.allocations base).map Block.alignment
+def ptrEq (s : Heap) (p : RawPtr T) (q : RawPtr U) : Option Bool := do
+  let a ← s.address p
+  let b ← s.address q
+  some (a == b)
 
-def Aligned (repr : Repr ty) (s : Heap) (base : BasePtr) : Prop :=
-  match s.allocations base with
-  | some block => repr.align.val ∣ block.alignment.val
-  | none => False
+def cells (s : Heap) (id : Nat) : Option (List Cell) :=
+  (s.allocations id).bind fun block => if block.active then some block.repr else none
+
+def allocated (s : Heap) (id : Nat) : Bool :=
+  ((s.allocations id).map fun block => block.active && block.owned).getD false
+
+def live (s : Heap) (block : Block) : Bool :=
+  block.active && ((s.allocations block.root).map Block.alive).getD false
+
+def bounded (block : Block) : Bool :=
+  block.bptr.val > 0 &&
+    block.bptr.val + block.repr.length < 2 ^ UScalarTy.numBits .Usize
+
+def overlaps (a b : Block) : Bool :=
+  a.bptr.val < b.bptr.val + b.repr.length &&
+    b.bptr.val < a.bptr.val + a.repr.length
+
+def validByte (s : Heap) : Byte → Bool
+  | .uninit | .data _ => true
+  | .pointer p lane => lane < pointerWidth && (s.address p).isSome
+
+def validBlock (s : Heap) (block : Block) : Bool :=
+  bounded block &&
+    (match s.allocations block.root with
+    | some root =>
+        root.root == block.root &&
+        root.bptr.val ≤ block.bptr.val &&
+        block.bptr.val + block.repr.length ≤ root.bptr.val + root.repr.length &&
+        (!block.active || root.alive)
+    | none => false) &&
+    block.repr.all (fun cell => match cell with
+      | .borrowed => true
+      | .shared _ byte => validByte s byte)
+
+def compatible (a b : Block) : Bool :=
+  !a.active || !b.active ||
+    a.repr.zipIdx.all (fun (x, i) =>
+      b.repr.zipIdx.all (fun (y, j) =>
+        a.bptr.val + i != b.bptr.val + j || x.compatible y))
+
+/-- The executable part checks all issued IDs; `Inv` also excludes hidden entries
+outside that finite prefix. Constructors preserve the latter from a valid input. -/
+def check (s : Heap) : Bool :=
+  (List.range s.next).all fun i =>
+    match s.allocations i with
+    | none => false
+    | some a => validBlock s a &&
+        (List.range s.next).all (fun j =>
+          if i = j then true else
+            match s.allocations j with
+            | some b =>
+                (!(a.root == i && b.root == j && a.alive && b.alive && overlaps a b)) &&
+                  compatible a b
+            | none => false)
 
 def Inv (s : Heap) : Prop :=
-  ∀ base, s.next.val ≤ base.val → s.allocations base = none
+  (∀ id, s.next ≤ id → s.allocations id = none) ∧ s.check = true
 
-def storeRepr (s : Heap) (base : BasePtr) (bytes : List (Cell U8)) : Heap :=
-  { s with allocations := update s.allocations base ((s.allocations base).map fun block =>
+def storeRepr (s : Heap) (id : Nat) (bytes : List Cell) : Heap :=
+  { s with allocations := update s.allocations id ((s.allocations id).map fun block =>
       { block with repr := bytes }) }
 
-def remove (s : Heap) (base : BasePtr) : Heap :=
-  { s with allocations := update s.allocations base none }
+def commit (s : Heap) : Option Heap :=
+  if s.check then some s else none
 
-/-- The greatest identifier is the exhausted-counter sentinel, never a live base.
-Checking the slot also prevents overwriting an allocation in a malformed input heap. -/
-def createRepr (s : Heap) (block : Block) : Option (BasePtr × Heap) :=
-  if s.next.val + 1 < 2 ^ UScalarTy.numBits .Usize ∧
-      block.repr.length < 2 ^ UScalarTy.numBits .Usize then
-    match s.allocations s.next with
-    | none => some (s.next,
-        { allocations := update s.allocations s.next (some block)
-          next := ⟨BitVec.ofNat _ (s.next.val + 1)⟩ })
-    | some _ => none
-  else none
+def noAliases (s : Heap) (id root : Nat) : Bool :=
+  (List.range s.next).all fun j =>
+    j == id || ((s.allocations j).map fun block =>
+      !block.active || block.root != root).getD true
 
-def alloc (repr : Repr ty) (count : Nat) (s : Heap) :
+def ownershipAvailable (s : Heap) (root : Nat) (bptr : BasePtr) (length : Nat) : Bool :=
+  ((s.allocations root).map fun block =>
+    block.root == root && block.owned && !block.active && block.alive &&
+      block.bptr == bptr && block.repr.length == length && s.noAliases root root).getD false
+
+/-- Fresh ghost identity and caller-supplied concrete placement. Joint nondeterministic
+placement/encoding is implemented by the `State` relations, not by this witness checker. -/
+def createRepr (s : Heap) (block : Block) : Option (Nat × Heap) :=
+  match s.allocations s.next with
+  | none =>
+      let s₁ := { allocations := update s.allocations s.next (some block), next := s.next + 1 }
+      (commit s₁).map fun s₁ => (s.next, s₁)
+  | some _ => none
+
+def newBlock (repr : Repr ty) (data : List (Vector Byte repr.size))
+    (own : Bool) (bptr : BasePtr) (root : Option Nat) (s : Heap) :
     Option (RawPtr ty × Heap) :=
-  if count * repr.size < 2 ^ UScalarTy.numBits .Usize then
-    match s.createRepr
-        ⟨(repr.create (Vector.replicate count (.shared 0 none))).toList, repr.align, true⟩ with
-    | some (base, s₁) => some (⟨base, ⟨0⟩⟩, s₁)
-    | none => none
+  if repr.align.val ∣ bptr.val &&
+      (!own || (match root with
+        | none => true
+        | some id => s.ownershipAvailable id bptr (data.length * repr.size))) then
+    (s.createRepr ⟨bptr, root.getD s.next, repr.create data 0, own, true, true⟩).map fun (id, s₁) =>
+      (⟨id, ⟨0⟩⟩, s₁)
   else none
 
-/-- Allocate supplied encodings. Their typed validity is checked when they are read. -/
-def newBlock (repr : Repr ty) (data : List (Vector U8 repr.size))
-    (own : Bool) (s : Heap) : Option (RawPtr ty × Heap) :=
-  match s.createRepr
-      ⟨(repr.create (data.toArray.toVector.map (Cell.shared 0 ∘ some))).toList,
-        repr.align, own⟩ with
-  | some (base, s₁) => some (⟨base, ⟨0⟩⟩, s₁)
-  | none => none
+def newSharedExposure (repr : Repr ty) (data : List (Vector Byte repr.size))
+    (bptr : BasePtr) (root : Option Nat) (s : Heap) : Option (RawPtr ty × Heap) :=
+  if repr.align.val ∣ bptr.val then
+    (s.createRepr ⟨bptr, root.getD s.next, repr.create data 1, false, true, true⟩).map fun (id, s₁) =>
+      (⟨id, ⟨0⟩⟩, s₁)
+  else none
 
-def newSharedExposure (repr : Repr ty) (data : List (Vector U8 repr.size))
-    (s : Heap) : Option (RawPtr ty × Heap) :=
-  match s.createRepr
-      ⟨(repr.create (data.toArray.toVector.map (Cell.shared 1 ∘ some))).toList,
-        repr.align, false⟩ with
-  | some (base, s₁) => some (⟨base, ⟨0⟩⟩, s₁)
-  | none => none
+def alloc (repr : Repr ty) (count : Nat) (bptr : BasePtr) (s : Heap) :
+    Option (RawPtr ty × Heap) :=
+  if repr.align.val ∣ bptr.val then
+    (s.createRepr
+      ⟨bptr, s.next, List.replicate (count * repr.size) (.shared 0 .uninit), true, true, true⟩).map
+        fun (id, s₁) => (⟨id, ⟨0⟩⟩, s₁)
+  else none
 
-def extent (repr : Repr ty) (s : Heap) (base : BasePtr) : Option Nat :=
-  match s.allocations base with
-  | some block =>
-    if repr.align.val ∣ block.alignment.val then some (block.repr.length / repr.size)
-    else none
-  | none => none
+def Aligned (repr : Repr ty) (s : Heap) (id : Nat) : Prop :=
+  match s.allocations id with
+  | some block => repr.align.val ∣ block.bptr.val
+  | none => False
 
-def read (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option ty :=
-  match s.allocations p.base with
-  | some block =>
-    if repr.align.val ∣ block.alignment.val ∧ repr.align.val ∣ p.byteOffset.val then
-      repr.read block.bytes p.byteOffset.val
-    else none
-  | none => none
+def extent (repr : Repr ty) (s : Heap) (id : Nat) : Option Nat := do
+  let block ← s.allocations id
+  if s.live block && repr.align.val ∣ block.bptr.val then
+    some (block.repr.length / repr.size)
+  else none
+
+def read (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option ty := do
+  let block ← s.allocations p.base
+  if s.live block && repr.align.val ∣ block.bptr.val + p.byteOffset.val then
+    repr.read s.addresses block.bytes p.byteOffset.val
+  else none
 
 def readRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) :
-    Option (List ty) :=
-  match s.allocations p.base with
-  | some block =>
-    if (repr.align.val ∣ block.alignment.val ∧ repr.align.val ∣ p.byteOffset.val) ∧
-        (count = 0 ∨ 0 < repr.size) ∧ p.byteOffset.val + count * repr.size ≤ block.repr.length then
-      (List.range count).mapM fun i => repr.read block.bytes (p.byteOffset.val + i * repr.size)
-    else none
-  | none => none
+    Option (List ty) := do
+  let block ← s.allocations p.base
+  if s.live block && repr.align.val ∣ block.bptr.val + p.byteOffset.val &&
+      (count = 0 ∨ 0 < repr.size) &&
+      p.byteOffset.val + count * repr.size ≤ block.repr.length then
+    (List.range count).mapM fun i =>
+      repr.read s.addresses block.bytes (p.byteOffset.val + i * repr.size)
+  else none
 
-/-- Commit an entire byte transformation only if it succeeds. Alignment,
-allocation authority, and byte length are preserved. -/
+/-- Length-preserving, atomic selected-view update, checked against every alias.
+Only this view's permissions authorize the transformation. -/
 def modify (repr : Repr ty) (p : RawPtr ty)
-    (change : ∀ {r}, Vector (Cell U8) r → Option (Vector (Cell U8) r))
-    (s : Heap) : Option Heap :=
-  match s.allocations p.base with
-  | some block =>
-    if repr.align.val ∣ block.alignment.val ∧ repr.align.val ∣ p.byteOffset.val then
-      match change block.bytes with
-      | some bytes => some (s.storeRepr p.base bytes.toList)
-      | none => none
-    else none
-  | none => none
+    (change : ∀ {r}, Vector Cell r → Option (Vector Cell r))
+    (s : Heap) : Option Heap := do
+  let block ← s.allocations p.base
+  if s.live block && repr.align.val ∣ block.bptr.val + p.byteOffset.val then
+    let bytes ← change block.bytes
+    commit (s.storeRepr p.base bytes.toList)
+  else none
 
 def write (repr : Repr ty) (p : RawPtr ty) (value : ty)
-    (data : Vector U8 repr.size) (decoded : repr.decode data = some value)
+    (data : Vector Byte repr.size) (encoded : repr.encodes value data)
     (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.write bytes p.byteOffset.val value data decoded) s
+  modify repr p (fun bytes => repr.write bytes p.byteOffset.val value data encoded) s
 
 def borrow (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
   modify repr p (fun bytes => repr.borrow bytes p.byteOffset.val) s
 
-def endBorrow (repr : Repr ty) (p : RawPtr ty) (value : ty)
-    (data : Vector U8 repr.size) (decoded : repr.decode data = some value)
-    (s : Heap) : Option Heap :=
-  modify repr p (fun bytes => repr.endBorrow bytes p.byteOffset.val value data decoded) s
+def endBorrow (repr : Repr ty) (p : RawPtr ty)
+    (data : Vector Byte repr.size) (s : Heap) : Option Heap :=
+  modify repr p (fun bytes => repr.endBorrow bytes p.byteOffset.val data) s
 
 def share (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
   modify repr p (fun bytes => repr.share bytes p.byteOffset.val) s
@@ -169,12 +213,12 @@ def share (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
 def endShare (repr : Repr ty) (p : RawPtr ty) (s : Heap) : Option Heap :=
   modify repr p (fun bytes => repr.endShare bytes p.byteOffset.val) s
 
-/-- Range operations compose byte transformations before committing the block. -/
 def modifyRange (repr : Repr ty) (p : RawPtr ty) (count : Nat)
-    (change : ∀ {r}, Vector (Cell U8) r → Nat → Option (Vector (Cell U8) r))
+    (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r))
     (s : Heap) : Option Heap :=
   modify repr p (fun bytes =>
-    if (count = 0 ∨ 0 < repr.size) ∧ p.byteOffset.val + count * repr.size ≤ bytes.size then
+    if (count = 0 ∨ 0 < repr.size) &&
+        p.byteOffset.val + count * repr.size ≤ bytes.size then
       (List.range count).foldlM change bytes
     else none) s
 
@@ -187,53 +231,124 @@ def shareRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) : Optio
 def endShareRange (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) : Option Heap :=
   modifyRange repr p count (fun bytes i => repr.endShare bytes (p.byteOffset.val + i * repr.size)) s
 
-/-- Each supplied encoding must decode; restoration still requires the caller's authority. -/
 def endBorrowRange (repr : Repr ty) (p : RawPtr ty)
-    (data : List (Vector U8 repr.size)) (s : Heap) : Option Heap :=
+    (data : List (Vector Byte repr.size)) (s : Heap) : Option Heap :=
   modifyRange repr p data.length (fun bytes i =>
-    match data[i]? with
-    | some encoding =>
-      match h : repr.decode encoding with
-      | some value => repr.endBorrow bytes (p.byteOffset.val + i * repr.size) value encoding h
-      | none => none
-    | none => none) s
+    (data[i]?).bind fun encoding =>
+      repr.endBorrow bytes (p.byteOffset.val + i * repr.size) encoding) s
 
-/-- Typed movement scales by the representation's byte stride. Forming a pointer
-does not check alignment; both endpoints must lie in the allocation, including one-past. -/
-def offset (repr : Repr ty) (p : RawPtr ty) (count : Int) (s : Heap) :
-    Option (RawPtr ty) :=
-  match s.allocations p.base with
-  | some block =>
-    let target := (p.byteOffset.val : Int) + count * repr.size
-    if p.byteOffset.val ≤ block.repr.length ∧ 0 ≤ target ∧ target ≤ block.repr.length ∧
-        target < (2 ^ UScalarTy.numBits .Usize : Nat) then
-      some ⟨p.base, ⟨BitVec.ofNat _ target.toNat⟩⟩
+/-- Untyped, memmove-style copy preserves initialization and pointer lanes.
+Reading an uninitialized representation for copying is not a typed byte read. -/
+def copyBytes (source : RawPtr T) (destination : RawPtr U) (count : Nat) (s : Heap) :
+    Option Heap := do
+  let src ← s.allocations source.base
+  let dst ← s.allocations destination.base
+  if s.live src && s.live dst &&
+      source.byteOffset.val + count ≤ src.repr.length &&
+      destination.byteOffset.val + count ≤ dst.repr.length then
+    let data ← (List.range count).mapM fun i =>
+      (src.repr[source.byteOffset.val + i]?).bind fun cell => match cell with
+        | .shared _ byte => some byte
+        | .borrowed => none
+    if ((dst.repr.drop destination.byteOffset.val).take count).all
+        (fun cell => cell.depth == some 0) then
+      commit (s.storeRepr destination.base
+        (dst.repr.take destination.byteOffset.val ++ Cell.full data ++
+          dst.repr.drop (destination.byteOffset.val + count)))
     else none
-  | none => none
+  else none
 
-/-- Cleanup covers the entire allocation, including any trailing bytes. -/
+/-- Untyped exchange snapshots both representations before changing either.
+In particular, self-swap preserves symbolic pointer lanes and uninitialized bytes. -/
+def swapBytes (repr : Repr T) (p q : RawPtr T) (s : Heap) : Option Heap := do
+    let a ← s.allocations p.base
+    let b ← s.allocations q.base
+    let pa ← s.address p
+    let qa ← s.address q
+    if s.live a && s.live b && repr.align.val ∣ pa.val && repr.align.val ∣ qa.val &&
+        p.byteOffset.val + repr.size ≤ a.repr.length &&
+        q.byteOffset.val + repr.size ≤ b.repr.length &&
+        (pa.val + repr.size ≤ qa.val ∨ qa.val + repr.size ≤ pa.val ∨ pa = qa) then
+      let left := (a.repr.drop p.byteOffset.val).take repr.size
+      let right := (b.repr.drop q.byteOffset.val).take repr.size
+      if left.all (fun cell => cell.depth == some 0) &&
+          right.all (fun cell => cell.depth == some 0) then
+        let s₁ := s.storeRepr p.base
+          (a.repr.take p.byteOffset.val ++ right ++ a.repr.drop (p.byteOffset.val + repr.size))
+        let current ← s₁.allocations q.base
+        commit (s₁.storeRepr q.base
+          (current.repr.take q.byteOffset.val ++ left ++
+            current.repr.drop (q.byteOffset.val + repr.size)))
+      else none
+    else none
+
+/-- Arithmetic is deliberately view-bounded; address observation is independent of liveness. -/
+def offset (repr : Repr ty) (p : RawPtr ty) (count : Int) (s : Heap) :
+    Option (RawPtr ty) := do
+  let block ← s.allocations p.base
+  let target := (p.byteOffset.val : Int) + count * repr.size
+  if s.live block && p.byteOffset.val ≤ block.repr.length &&
+      0 ≤ target && target ≤ block.repr.length &&
+      target < (2 ^ UScalarTy.numBits .Usize : Nat) then
+    some ⟨p.base, ⟨BitVec.ofNat _ target.toNat⟩⟩
+  else none
+
+def distance (repr : Repr ty) (p q : RawPtr ty) (s : Heap) : Option Int := do
+  let a ← s.allocations p.base
+  let b ← s.allocations q.base
+  let pa ← s.address p
+  let qa ← s.address q
+  let distance := (pa.val : Int) - qa.val
+  if s.live a && s.live b && a.root == b.root && 0 < repr.size &&
+      p.byteOffset.val ≤ a.repr.length && q.byteOffset.val ≤ b.repr.length &&
+      distance % repr.size = 0 then some (distance / repr.size) else none
+
+def retire (s : Heap) (id : Nat) : Heap :=
+  let allocations := update s.allocations id
+    ((s.allocations id).map fun block => { block with active := false })
+  { s with allocations }
+
+/-- Return an owned root to implicit safe Rust, without physical deallocation.
+The address and allocation lifetime remain observable through retained metadata. -/
+def returnOwned (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) :
+    Option Heap := do
+  let block ← s.allocations p.base
+  let root ← s.allocations block.root
+  if s.live block && block.owned && p.byteOffset.val = 0 &&
+      block.bptr == root.bptr && block.repr.length == root.repr.length &&
+      repr.align.val ∣ block.bptr.val && block.repr.length = count * repr.size &&
+      block.repr.all (fun cell => cell.depth == some 0) && s.noAliases p.base block.root then
+    commit (s.retire p.base)
+  else none
+
+/-- Physical death is distinct from return to safe Rust. This prototype checks
+abstract ownership and full byte coverage, not an allocator's original layout. -/
+def dealloc (repr : Repr ty) (p : RawPtr ty) (count : Nat) (s : Heap) : Option Heap := do
+  let block ← s.allocations p.base
+  let returned ← returnOwned repr p count s
+  let allocations := update returned.allocations block.root
+    ((returned.allocations block.root).map fun root => { root with alive := false })
+  let s₁ := { returned with allocations }
+  commit s₁
+
+/-- Retire a nonowning baseline contribution; never decrement it into a writer.
+Positive-depth uninitialized bytes remain protected until matching shares end. -/
+def endExposureAt (repr : Repr ty) (p : RawPtr ty) (count depth : Nat) (s : Heap) :
+    Option Heap := do
+  let block ← s.allocations p.base
+  if s.live block && !block.owned && p.byteOffset.val = 0 &&
+      repr.align.val ∣ block.bptr.val && block.repr.length = count * repr.size &&
+      block.repr.all (fun cell => cell.depth == some depth) then
+    commit (s.retire p.base)
+  else none
+
 def freeBlock (repr : Repr ty) (p : RawPtr ty) (count : Nat) (own : Bool)
     (s : Heap) : Option Heap :=
-  match s.allocations p.base with
-  | some block =>
-    if p.byteOffset.val = 0 ∧ block.owned = own ∧
-        repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
-        block.repr.all (fun cell => cell.depth == some 0) then
-      some (s.remove p.base)
-    else none
-  | none => none
+  if own then dealloc repr p count s else endExposureAt repr p count 0 s
 
-/-- End the exposure only after its shared permissions have returned to depth one. -/
 def endSharedExposure (repr : Repr ty) (p : RawPtr ty) (count : Nat)
     (s : Heap) : Option Heap :=
-  match s.allocations p.base with
-  | some block =>
-    if p.byteOffset.val = 0 ∧ block.owned = false ∧
-        repr.align.val ∣ block.alignment.val ∧ block.repr.length = count * repr.size ∧
-        block.repr.all (fun cell => cell.depth == some 1) then
-      some (s.remove p.base)
-    else none
-  | none => none
+  endExposureAt repr p count 1 s
 
 end Heap
 end Aeneas.Std

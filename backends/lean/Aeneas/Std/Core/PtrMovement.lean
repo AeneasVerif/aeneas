@@ -2,9 +2,8 @@ module
 
 public import Aeneas.Std.Core.Ptr
 
-/-! Byte movement and restricted same-allocation distance. Allocation identifiers
-are provenance tokens, never integer addresses. These opt-in models have no
-builtin registration and do not provide general pointer comparison. -/
+/-! Byte movement and root-aware allocation distance. These opt-in models have
+no builtin registration. The core distinguishes numerical addresses from view IDs. -/
 
 @[expose] public section
 
@@ -14,28 +13,31 @@ namespace Aeneas.Std
 def Repr.byteStride : Repr Unit where
   size := 1
   align := ⟨1, 0, rfl⟩
-  decode := fun _ => some ()
+  decode := fun _ _ => some ()
+  encodes := fun _ bytes => bytes = #v[Byte.data ⟨0⟩]
+  pointers := fun _ => []
   aligned := Nat.one_dvd _
-  complete := fun value => by cases value; exact ⟨Vector.replicate _ ⟨0⟩, rfl⟩
+  complete := fun _ => ⟨#v[Byte.data ⟨0⟩], rfl⟩
+  encode_decode := by intros; rfl
+  encodes_support := by
+    intro value bytes i h
+    subst bytes
+    simp
 
 def Heap.byteOffset (p : RawPtr T) (count : Int) (s : Heap) : Option (RawPtr T) :=
   (Heap.offset Repr.byteStride (RawPtr.cast Unit p) count s).map (RawPtr.cast T)
 
-/-- Deliberately restricted to a live common allocation, including one-past.
+/-- Restricted to live views of a common root, including one-past.
 Both byte distance and element distance must fit `isize`; ZSTs are rejected. -/
-def Heap.offsetFrom (repr : Repr T) (p origin : RawPtr T) (s : Heap) : Option Isize :=
-  if 0 < repr.size ∧ p.base = origin.base then
-    match s.allocations p.base with
-    | some block =>
-      let bytes : Int := (p.byteOffset.val : Int) - origin.byteOffset.val
-      let elements := bytes / repr.size
-      if p.byteOffset.val ≤ block.repr.length ∧ origin.byteOffset.val ≤ block.repr.length ∧
-          bytes % repr.size = 0 ∧ IScalar.cMin .Isize ≤ bytes ∧ bytes ≤ IScalar.cMax .Isize then
-        if h : IScalar.cMin .Isize ≤ elements ∧ elements ≤ IScalar.cMax .Isize then
-          some (IScalar.ofInt elements h)
-        else none
-      else none
-    | none => none
+def Heap.offsetFrom (repr : Repr T) (p origin : RawPtr T) (s : Heap) : Option Isize := do
+  let elements ← Heap.distance repr p origin s
+  let a ← s.address p
+  let b ← s.address origin
+  let bytes := (a.val : Int) - b.val
+  if IScalar.cMin .Isize ≤ bytes && bytes ≤ IScalar.cMax .Isize then
+    if h : IScalar.cMin .Isize ≤ elements ∧ elements ≤ IScalar.cMax .Isize then
+      some (IScalar.ofInt elements h)
+    else none
   else none
 
 def RawPtr.byte_offset (p : RawPtr T) (count : Isize) : Result (RawPtr T) :=

@@ -1,37 +1,40 @@
 module
 
 public import Aeneas.Std.Heap.Separation
-import all Aeneas.Std.Heap.Separation
-import all Aeneas.Std.Heap.Model
+public import Aeneas.Std.Heap.Lemmas
 
-/-! Byte fragments and their connection to typed reads. Encodings in assertions
-are witnesses, not a global encoder or extra heap metadata. -/
+/-! Indexed byte contributions carry their immutable concrete base address.
+Separating two contributions does not assert that their numerical bytes differ. -/
 
 @[expose] public section
 
 namespace Aeneas.Std.SepLogic
 
-def cellsHeap (alignment : Alignment) (base : BasePtr) (start : Nat)
-    (cells : List (Cell U8)) : Fragment :=
+def cellsHeap (bptr : BasePtr) (base start : Nat) (cells : List Cell) : Fragment :=
   fun r => ∃ (i : Nat) (hi : i < cells.length),
-    r = .cell base (start + i) alignment cells[i]
+    r = .cell base (start + i) bptr cells[i]
 
-def allocHeap (repr : Repr ty) (base : BasePtr) (count : Nat) (own : Bool) : Fragment :=
-  Fragment.single (.cleanup base (count * repr.size) repr.align own)
+def allocHeap (repr : Repr ty) (bptr : BasePtr) (base count : Nat) (own : Bool) : Fragment :=
+  Fragment.single (.cleanup base (count * repr.size) bptr own)
 
-def block (repr : Repr ty) (p : RawPtr ty) (cells : List (Cell U8)) : Assertion :=
-  fun h => repr.align.val ∣ p.byteOffset.val ∧
-    h = cellsHeap repr.align p.base p.byteOffset.val cells
+def block (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr) (cells : List Cell) : Assertion :=
+  fun h => repr.align.val ∣ bptr.val + p.byteOffset.val ∧
+    h = cellsHeap bptr p.base p.byteOffset.val cells
 
-def alloc (repr : Repr ty) (p : RawPtr ty) (count : Nat) (own : Bool) : Assertion :=
-  fun h => p.byteOffset.val = 0 ∧ h = allocHeap repr p.base count own
+def alloc (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr) (count : Nat)
+    (own : Bool) : Assertion :=
+  fun h => p.byteOffset.val = 0 ∧ h = allocHeap repr bptr p.base count own
 
-def pointsTo (repr : Repr ty) (p : RawPtr ty) (value : ty) (depth : Nat := 0) : Assertion :=
-  fun h => ∃ data : Vector U8 repr.size, repr.decode data = some value ∧
-    block repr p (data.map (Cell.shared depth ∘ some)).toList h
+/-- An initialized admissible representation, not merely equal numerical bytes.
+Raw interpretation of other symbolic payloads need not be an admissible encoding. -/
+def pointsTo (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr) (value : ty)
+    (depth : Nat := 0) : Assertion :=
+  fun h => ∃ data : Vector Byte repr.size, repr.encodes value data ∧
+    (∀ i : Fin repr.size, data[i.val] ≠ .uninit) ∧
+    block repr p bptr (data.map (Cell.shared depth)).toList h
 
-@[simp] theorem cellsHeap_nil (alignment : Alignment) (base : BasePtr) (start : Nat) :
-    cellsHeap alignment base start [] = ∅ := by
+@[simp] theorem cellsHeap_nil (bptr : BasePtr) (base start : Nat) :
+    cellsHeap bptr base start [] = ∅ := by
   funext r
   apply propext
   constructor
@@ -39,10 +42,9 @@ def pointsTo (repr : Repr ty) (p : RawPtr ty) (value : ty) (depth : Nat := 0) : 
     exact (Nat.not_lt_zero i hi).elim
   · exact False.elim
 
-theorem cellsHeap_append (alignment : Alignment) (base : BasePtr) (start : Nat)
-    (a b : List (Cell U8)) :
-    cellsHeap alignment base start (a ++ b) =
-      cellsHeap alignment base start a ∪ cellsHeap alignment base (start + a.length) b := by
+theorem cellsHeap_append (bptr : BasePtr) (base start : Nat) (a b : List Cell) :
+    cellsHeap bptr base start (a ++ b) =
+      cellsHeap bptr base start a ∪ cellsHeap bptr base (start + a.length) b := by
   funext r
   apply propext
   constructor
@@ -60,20 +62,27 @@ theorem cellsHeap_append (alignment : Alignment) (base : BasePtr) (start : Nat)
     · refine ⟨a.length + i, by simp; grind, ?_⟩
       simp [Nat.add_assoc]
 
-theorem disjoint_cellsHeap_append (alignment : Alignment) (base : BasePtr) (start : Nat)
-    (a b : List (Cell U8)) :
-    (cellsHeap alignment base start a).Disjoint
-      (cellsHeap alignment base (start + a.length) b) := by
+theorem disjoint_cellsHeap_append (bptr : BasePtr) (base start : Nat) (a b : List Cell) :
+    (cellsHeap bptr base start a).Disjoint
+      (cellsHeap bptr base (start + a.length) b) := by
   rintro _ ⟨i, hi, rfl⟩ _ ⟨j, hj, rfl⟩
   right
   simp only [Resource.key, ne_eq, Option.some.injEq]
   grind
 
-theorem matches_cellsHeap {s : Heap} {alignment : Alignment} {base : BasePtr}
-    {start : Nat} {cells : List (Cell U8)} :
-    Fragment.Matches s (cellsHeap alignment base start cells) ↔
+/-- Independent lifetime contributions use different view IDs, even at the
+same physical address. Heap matching plus `Inv` must still justify compatibility. -/
+theorem disjoint_views (a b : BasePtr) (i j start finish : Nat) (x y : List Cell)
+    (different : i ≠ j) :
+    (cellsHeap a i start x).Disjoint (cellsHeap b j finish y) := by
+  rintro _ ⟨_, _, rfl⟩ _ ⟨_, _, rfl⟩
+  exact .inl different
+
+theorem matches_cellsHeap {s : Heap} {bptr : BasePtr} {base start : Nat}
+    {cells : List Cell} :
+    Fragment.Matches s (cellsHeap bptr base start cells) ↔
       ∀ (i : Nat) (hi : i < cells.length), ∃ block,
-        s.allocations base = some block ∧ alignment.val ∣ block.alignment.val ∧
+        s.allocations base = some block ∧ s.live block = true ∧ block.bptr = bptr ∧
         block.repr[start + i]? = some cells[i] := by
   constructor
   · intro h i hi
@@ -81,24 +90,24 @@ theorem matches_cellsHeap {s : Heap} {alignment : Alignment} {base : BasePtr}
   · rintro h _ ⟨i, hi, rfl⟩
     exact h i hi
 
-theorem bytes_of_matches {s : Heap} {repr : Repr ty} {p : RawPtr ty}
-    {data : Vector (Cell U8) repr.size} (hsize : 0 < repr.size)
-    (hm : Fragment.Matches s (cellsHeap repr.align p.base (p.byteOffset.val) data.toList)) :
-    ∃ (block : Block) (hi : (p.byteOffset.val + repr.size) ≤ block.repr.length),
-      s.allocations p.base = some block ∧ repr.align.val ∣ block.alignment.val ∧
-      repr.select block.bytes p.byteOffset.val hi = data := by
-  obtain ⟨block, hs, ha, _⟩ := matches_cellsHeap.mp hm 0 (by simpa using hsize)
+theorem bytes_of_matches {s : Heap} {repr : Repr ty} {p : RawPtr ty} {bptr : BasePtr}
+    {data : Vector Cell repr.size} (hsize : 0 < repr.size)
+    (hm : Fragment.Matches s (cellsHeap bptr p.base p.byteOffset.val data.toList)) :
+    ∃ (blk : Block) (hi : p.byteOffset.val + repr.size ≤ blk.repr.length),
+      s.allocations p.base = some blk ∧ s.live blk = true ∧ blk.bptr = bptr ∧
+      repr.select blk.bytes p.byteOffset.val hi = data := by
+  obtain ⟨blk, hs, hlive, ha, _⟩ := matches_cellsHeap.mp hm 0 (by simpa using hsize)
   have hp : ∀ (i : Nat) (hi : i < repr.size),
-      block.repr[p.byteOffset.val + i]? = some data[i] := by
+      blk.repr[p.byteOffset.val + i]? = some data[i] := by
     intro i hi
-    obtain ⟨actual, hs', _, hv⟩ := matches_cellsHeap.mp hm i (by simpa using hi)
-    have he : actual = block := Option.some.inj (hs'.symm.trans hs)
+    obtain ⟨actual, hs', _, _, hv⟩ := matches_cellsHeap.mp hm i (by simpa using hi)
+    have he : actual = blk := Option.some.inj (hs'.symm.trans hs)
     simpa [he] using hv
-  have hb : (p.byteOffset.val + repr.size) ≤ block.repr.length := by
+  have hb : p.byteOffset.val + repr.size ≤ blk.repr.length := by
     have hx := hp (repr.size - 1) (by grind)
     have hh := List.getElem?_eq_some_iff.mp hx |>.1
-    grind [Nat.add_mul]
-  refine ⟨block, hb, hs, ha, ?_⟩
+    grind
+  refine ⟨blk, hb, hs, hlive, ha, ?_⟩
   apply Vector.toList_inj.mp
   apply List.ext_getElem?
   intro i
@@ -108,83 +117,91 @@ theorem bytes_of_matches {s : Heap} {repr : Repr ty} {p : RawPtr ty}
   · simp [hi]
     grind
 
-theorem read_of_pointsTo {s : Heap} {repr : Repr ty} {p : RawPtr ty}
+theorem read_of_pointsTo {s : Heap} {repr : Repr ty} {p : RawPtr ty} {bptr : BasePtr}
     {value : ty} {depth : Nat} {h : Fragment} (hs : 0 < repr.size)
-    (hp : pointsTo repr p value depth h) (hm : Fragment.Matches s h) :
+    (hp : pointsTo repr p bptr value depth h) (hm : Fragment.Matches s h) :
     Heap.read repr p s = some value := by
-  obtain ⟨data, hd, hpa, rfl⟩ := hp
-  obtain ⟨block, hi, hl, ha, he⟩ := bytes_of_matches hs hm
-  simp [Heap.read, hl, ha, hpa, Repr.read, hs, hi, he, Repr.readBytes_shared, hd]
+  obtain ⟨data, hd, initialized, hpa, rfl⟩ := hp
+  obtain ⟨blk, hi, hl, hlive, ha, he⟩ := bytes_of_matches hs hm
+  have decoded := repr.encode_decode s.addresses value data hd
+  simp [Heap.read, hl, hlive, ha, hpa, Repr.read, hs, hi, he,
+    Repr.readBytes_shared data depth initialized, decoded]
 
-theorem disjoint_cellsHeap_congr {alignment : Alignment} {base : BasePtr} {start : Nat}
-    {old new : List (Cell U8)} {F : Fragment}
-    (hl : old.length = new.length) (hd : (cellsHeap alignment base start old).Disjoint F) :
-    (cellsHeap alignment base start new).Disjoint F := by
+theorem disjoint_cellsHeap_congr {bptr : BasePtr} {base start : Nat}
+    {old new : List Cell} {F : Fragment}
+    (hl : old.length = new.length) (hd : (cellsHeap bptr base start old).Disjoint F) :
+    (cellsHeap bptr base start new).Disjoint F := by
   rintro _ ⟨i, hi, rfl⟩ r hr
   have hi' : i < old.length := by grind
   exact hd _ ⟨i, hi', rfl⟩ r hr
 
-theorem matches_update {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
-    (hl : s.allocations p.base = some block) (ha : repr.align.val ∣ block.alignment.val)
-    (hi : (p.byteOffset.val + repr.size) ≤ block.repr.length)
-    (data : Vector (Cell U8) repr.size) :
-    Fragment.Matches (s.storeRepr p.base (repr.update block.bytes p.byteOffset.val hi data).toList)
-      (cellsHeap repr.align p.base (p.byteOffset.val) data.toList) := by
+theorem matches_update {s : Heap} {repr : Repr ty} {p : RawPtr ty} {blk : Block}
+    (hl : s.allocations p.base = some blk) (hlive : s.live blk = true)
+    (hi : p.byteOffset.val + repr.size ≤ blk.repr.length) (data : Vector Cell repr.size) :
+    Fragment.Matches
+      (s.storeRepr p.base (repr.update blk.bytes p.byteOffset.val hi data).toList)
+      (cellsHeap blk.bptr p.base p.byteOffset.val data.toList) := by
   rw [matches_cellsHeap]
   intro i hi'
-  refine ⟨{ block with repr := (repr.update block.bytes p.byteOffset.val hi data).toList },
-    by simp [hl], ha, ?_⟩
-  simpa using Repr.update_inside repr block.bytes p.byteOffset.val hi data i (by simpa using hi')
+  refine ⟨{ blk with repr := (repr.update blk.bytes p.byteOffset.val hi data).toList },
+    by simp [hl], by simpa using hlive, rfl, ?_⟩
+  simpa using Repr.update_inside repr blk.bytes p.byteOffset.val hi data i (by simpa using hi')
 
+/-- All indexed frames are preserved: disjoint cells in this view, cells of
+physical aliases in other views, and immutable cleanup layout resources. -/
 theorem matches_update_frame {s : Heap} {repr : Repr ty} {p : RawPtr ty}
-    {block : Block} {old data : Vector (Cell U8) repr.size} {F : Fragment}
-    (hl : s.allocations p.base = some block)
-    (hi : (p.byteOffset.val + repr.size) ≤ block.repr.length)
-    (hd : (cellsHeap repr.align p.base (p.byteOffset.val) old.toList).Disjoint F)
+    {blk : Block} {old data : Vector Cell repr.size} {F : Fragment}
+    (hl : s.allocations p.base = some blk)
+    (hi : p.byteOffset.val + repr.size ≤ blk.repr.length)
+    (hd : (cellsHeap blk.bptr p.base p.byteOffset.val old.toList).Disjoint F)
     (hm : Fragment.Matches s F) :
-    Fragment.Matches (s.storeRepr p.base (repr.update block.bytes p.byteOffset.val hi data).toList) F := by
+    Fragment.Matches
+      (s.storeRepr p.base (repr.update blk.bytes p.byteOffset.val hi data).toList) F := by
   intro resource hr
   have hh := hm resource hr
   by_cases hb : resource.base = p.base
   · cases resource
-    · rename_i base index alignment value
-      obtain ⟨actual, hs, ha, hv⟩ := hh
+    · rename_i base index bptr value
+      obtain ⟨actual, hs, hlive, ha, hv⟩ := hh
       change base = p.base at hb
       subst base
-      have he : actual = block := Option.some.inj (hs.symm.trans hl)
+      have he : actual = blk := Option.some.inj (hs.symm.trans hl)
       subst actual
-      have hout : index < p.byteOffset.val ∨ (p.byteOffset.val + repr.size) ≤ index := by
+      have hout : index < p.byteOffset.val ∨ p.byteOffset.val + repr.size ≤ index := by
         by_cases hlt : index < p.byteOffset.val
         · exact .inl hlt
         right
-        by_cases hge : (p.byteOffset.val + repr.size) ≤ index
+        by_cases hge : p.byteOffset.val + repr.size ≤ index
         · exact hge
         have hidx : index - p.byteOffset.val < old.toList.length := by
           simp only [Vector.length_toList]
-          grind [Nat.add_mul]
+          grind
         have hc := hd _ ⟨index - p.byteOffset.val, hidx, rfl⟩ _ hr
         have he : p.byteOffset.val + (index - p.byteOffset.val) = index := by grind
         simp [Resource.Compatible, Resource.base, Resource.key, he] at hc
-      refine ⟨{ block with repr := (repr.update block.bytes p.byteOffset.val hi data).toList },
-        by simp [hl], ha, ?_⟩
+      refine ⟨{ blk with repr := (repr.update blk.bytes p.byteOffset.val hi data).toList },
+        by simp [hl], by simpa using hlive, ha, ?_⟩
       rw [Repr.update_outside _ _ _ _ _ index hout]
       simpa [Block.bytes] using hv
-    · rename_i base size alignment own
-      obtain ⟨actual, hs, hn, ha, ho⟩ := hh
+    · rename_i base size bptr own
+      obtain ⟨actual, hs, hn, hlive, ha, ho⟩ := hh
       change base = p.base at hb
       subst base
-      have he : actual = block := Option.some.inj (hs.symm.trans hl)
+      have he : actual = blk := Option.some.inj (hs.symm.trans hl)
       subst actual
-      exact ⟨{ block with repr := (repr.update block.bytes p.byteOffset.val hi data).toList },
-        by simp [hl], by simpa only [Vector.length_toList] using hn, ha, ho⟩
+      exact ⟨{ blk with repr := (repr.update blk.bytes p.byteOffset.val hi data).toList },
+        by simp [hl], by simpa only [Vector.length_toList] using hn,
+        by simpa using hlive, ha, ho⟩
   · cases resource
-    · rename_i base index alignment value
-      obtain ⟨actual, hs, ha, hv⟩ := hh
+    · rename_i base index bptr value
+      obtain ⟨actual, hs, hlive, ha, hv⟩ := hh
       change base ≠ p.base at hb
-      exact ⟨actual, by simpa [hb] using hs, ha, hv⟩
-    · rename_i base size alignment own
-      obtain ⟨actual, hs, hn, ha, ho⟩ := hh
+      exact ⟨actual, by simpa [hb] using hs,
+        by rw [Heap.live_storeRepr]; exact hlive, ha, hv⟩
+    · rename_i base size bptr own
+      obtain ⟨actual, hs, hn, hlive, ha, ho⟩ := hh
       change base ≠ p.base at hb
-      exact ⟨actual, by simpa [hb] using hs, hn, ha, ho⟩
+      exact ⟨actual, by simpa [hb] using hs, hn,
+        by rw [Heap.live_storeRepr]; exact hlive, ha, ho⟩
 
 end Aeneas.Std.SepLogic

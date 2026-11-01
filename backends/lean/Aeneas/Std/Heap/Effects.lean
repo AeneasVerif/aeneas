@@ -131,10 +131,10 @@ theorem Spec.checkedModify {modify : State → α → State → Prop} :
     · rename_i value
       exact DWP.ret_iff.mpr (hpost value s' ht)
 
-/-- Every encoding that decodes to the value must satisfy the continuation.
+/-- Every admissible encoding must satisfy the continuation.
 Completeness discharges enabling, rather than leaving it to callers. -/
 theorem Spec.choose (repr : Repr ty) (value : ty)
-    (Q : {data : Vector U8 repr.size // repr.decode data = some value} → State → Prop)
+    (Q : {data : Vector Byte repr.size // repr.encodes value data} → State → Prop)
     (s : State) :
     Spec (repr.choose value) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
   rw [Repr.choose, Spec.guardedModify]
@@ -146,17 +146,10 @@ theorem Spec.choose (repr : Repr ty) (value : ty)
     exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
 
 theorem Spec.chooseList (repr : Repr ty) (values : List ty)
-    (Q : {data : List (Vector U8 repr.size) //
-      data.map repr.decode = values.map some} → State → Prop) (s : State) :
+    (Q : {data : List (Vector Byte repr.size) //
+      repr.encodesList values data} → State → Prop) (s : State) :
     Spec (repr.chooseList values) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
-  have hex : ∃ data : List (Vector U8 repr.size), data.map repr.decode = values.map some := by
-    clear Q
-    induction values
-    · exact ⟨[], rfl⟩
-    · rename_i value values ih
-      obtain ⟨data, decoded⟩ := repr.complete value
-      obtain ⟨tail, ht⟩ := ih
-      exact ⟨data :: tail, by simp only [List.map_cons, decoded, ht]⟩
+  have hex := Repr.encodesList_complete repr values
   rw [Repr.chooseList, Spec.guardedModify]
   constructor
   · rintro ⟨_, h⟩ data decoded
@@ -165,11 +158,11 @@ theorem Spec.chooseList (repr : Repr ty) (values : List ty)
     obtain ⟨data, decoded⟩ := hex
     exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
 
-/-- Choice always terminates with bytes decoding to the requested value, and
+/-- Choice always terminates with admissible bytes for the requested value, and
 neither reads nor changes the heap. -/
 theorem choose.spec (repr : Repr ty) (value : ty) (s : State) :
     Spec (repr.choose value)
-      (fun data s' => repr.decode data.val = some value ∧ s' = s) s :=
+      (fun data s' => repr.encodes value data.val ∧ s' = s) s :=
   Spec.choose repr value _ s |>.mpr fun _ decoded => ⟨decoded, rfl⟩
 
 /-- A framed separation contract for the generated computation itself. -/
@@ -177,6 +170,31 @@ def Triple (P : Assertion) (c : Result α) (Q : α → Assertion) : Prop :=
   ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
     Spec c (fun x s' => ∃ h', h'.Disjoint F ∧
       Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h') s
+
+/-- State-specific effect contract, retaining arbitrary matching frames. -/
+def TripleAt (P : Assertion) (c : Result α) (Q : α → Assertion) (s : State) : Prop :=
+  ∀ h F, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
+    Spec c (fun x s' => ∃ h', h'.Disjoint F ∧
+      Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h') s
+
+theorem TripleAt.checkedModify {modify : State → α → State → Prop}
+    (ht : SepLogic.TripleAt P modify Q s) :
+    TripleAt P (Result.checkedModify modify) Q s := by
+  intro h F hp hd hm hi
+  exact Spec.checkedModify.mpr (ht h F hp hd hm hi)
+
+theorem frameAt (ht : TripleAt P c Q s) :
+    TripleAt (sep P R) c (fun x => sep (Q x) R) s := by
+  intro h F ⟨a, b, hab, he, hp, hr⟩ hf hm hi
+  subst h
+  obtain ⟨haF, hbF⟩ := Fragment.disjoint_union_left.mp hf
+  rw [Fragment.union_assoc] at hm
+  have ht' := ht a (b ∪ F) hp (Fragment.disjoint_union_right.mpr ⟨hab, haF⟩) hm hi
+  apply DWP.mono ht'
+  rintro x s' ⟨a', hd, hm', hi', hq⟩
+  obtain ⟨ha'b, ha'F⟩ := Fragment.disjoint_union_right.mp hd
+  exact ⟨a' ∪ b, Fragment.disjoint_union_left.mpr ⟨ha'F, hbF⟩,
+    by simpa [Fragment.union_assoc] using hm', hi', a', b, ha'b, rfl, hq, hr⟩
 
 theorem Triple.guardedModify {modify : State → α → State → Prop}
     (ht : SepLogic.Triple P modify Q) :
@@ -190,7 +208,7 @@ theorem Triple.checkedModify {modify : State → α → State → Prop}
   intro h F s hp hd hm hi
   exact Spec.checkedModify.mpr (ht h F s hp hd hm hi)
 
-/-- The chosen encoding carries its decode-back proof and preserves the heap. -/
+/-- The chosen encoding carries its admissibility proof and preserves the heap. -/
 theorem Triple.choose (P : Assertion) (repr : Repr ty) (value : ty) :
     Triple P (repr.choose value) (fun _ => P) := by
   intro h F s hp hd hm hi

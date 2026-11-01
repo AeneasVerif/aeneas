@@ -3,10 +3,8 @@ module
 public import Lean
 public import Aeneas.Std.Scalar.Types
 
-/-! Byte-level operations take a representation explicitly (as we expect
-Charon/Aeneas to pass that information from Rust). They do not track
-pointer validity or the authority to restore a borrow. Empty footprints carry
-no byte permissions; observing a zero-sized cell returns `none` (aka UB). -/
+/-! Symbolic bytes distinguish numerical observation from provenance-preserving storage.
+Descriptors specify admissible writes separately from readable representations. -/
 
 @[expose] public section
 
@@ -15,144 +13,225 @@ namespace Aeneas.Std
 universe u
 
 abbrev Alignment := { n : Nat // ∃ k : Nat, n = 2 ^ k }
+abbrev BasePtr := Usize
+abbrev AddressMap := Nat → Option BasePtr
 
-/-- A fixed-size byte representation of a type. -/
-structure Repr (ty : Type u) where
-  size : Nat
-  align : Alignment
-  decode : Vector U8 size -> Option ty
-  aligned : align.val ∣ size
-  complete : ∀ v : ty, ∃ bytes : Vector U8 size, decode bytes = v
+structure RawPtr (ty : Type u) : Type u where
+  base : Nat
+  byteOffset : Usize
+deriving BEq, DecidableEq
 
-inductive Cell (ty : Type u) where
-  | shared (depth : Nat) (value : Option ty)
+instance : Inhabited (RawPtr ty) := ⟨⟨0, ⟨0⟩⟩⟩
+
+abbrev MutRawPtr (ty : Type u) := RawPtr ty
+abbrev ConstRawPtr (ty : Type u) := RawPtr ty
+
+def RawPtr.cast (T' : Type) (p : RawPtr T) : RawPtr T' :=
+  ⟨p.base, p.byteOffset⟩
+
+inductive Byte where
+  | uninit
+  | data (value : U8)
+  | pointer (value : RawPtr Unit) (lane : Nat)
+deriving Inhabited, BEq, DecidableEq
+
+/- The prototype uses eight little-endian lanes for thin pointers. -/
+abbrev pointerWidth : Nat := 8
+
+def RawPtr.address (addresses : AddressMap) (p : RawPtr T) : Option Usize := do
+  let bptr ← addresses p.base
+  let address := bptr.val + p.byteOffset.val
+  if address < 2 ^ UScalarTy.numBits .Usize then
+    some ⟨BitVec.ofNat _ address⟩
+  else none
+
+def Byte.numeric (addresses : AddressMap) : Byte → Option U8
+  | .uninit => none
+  | .data value => some value
+  | .pointer p lane => do
+      if lane < pointerWidth then
+        let address ← p.address addresses
+        some ⟨BitVec.ofNat _ (address.val / 2 ^ (8 * lane))⟩
+      else none
+
+inductive Cell where
+  | shared (depth : Nat) (value : Byte)
   | borrowed
+deriving Inhabited, BEq, DecidableEq
 
-@[simp] def Cell.depth : Cell ty → Option Nat
+@[simp] def Cell.depth : Cell → Option Nat
   | .shared depth _ => some depth
   | .borrowed => none
 
-def Cell.writable (c : Cell ty) : Prop := c.depth = some 0
+def Cell.writable (cell : Cell) : Prop := cell.depth = some 0
 
-def Cell.read : Cell ty → Option ty
-  | .shared _ value => value
-  | _ => none
+def Cell.read : Cell → Option Byte
+  | .shared _ .uninit => none
+  | .shared _ value => some value
+  | .borrowed => none
 
-def Cell.write (cell : Cell ty) (value : ty) : Option (Cell ty) :=
-  match cell with
-  | .shared 0 _ => some (.shared 0 (some value))
-  | _ => none
+def Cell.write : Cell → Byte → Option Cell
+  | .shared 0 _, value => some (.shared 0 value)
+  | _, _ => none
 
-def Cell.borrow : Cell ty → Option (Cell ty)
+def Cell.borrow : Cell → Option Cell
   | .shared 0 _ => some .borrowed
   | _ => none
 
-def Cell.endBorrow (cell : Cell ty) (value : ty) : Option (Cell ty) :=
-  match cell with
-  | .borrowed => some (.shared 0 (some value))
-  | _ => none
+def Cell.endBorrow : Cell → Byte → Option Cell
+  | .borrowed, value => some (.shared 0 value)
+  | _, _ => none
 
-def Cell.share : Cell ty → Option (Cell ty)
+def Cell.share : Cell → Option Cell
   | .shared depth value => some (.shared (depth + 1) value)
   | .borrowed => none
 
-def Cell.endShare : Cell ty → Option (Cell ty)
+def Cell.endShare : Cell → Option Cell
   | .shared (depth + 1) value => some (.shared depth value)
   | _ => none
 
-def Cell.full (values : List ty) : List (Cell ty) :=
-  values.map (Cell.shared 0 ∘ some)
+def Cell.full (values : List Byte) : List Cell :=
+  values.map (Cell.shared 0)
+
+/-- Borrowed cells contribute no raw permission, but may carry implicit safe loans.
+Uninitialized bytes are exact payloads, not compatibility wildcards. -/
+def Cell.compatible : Cell → Cell → Bool
+  | .borrowed, _ | _, .borrowed => true
+  | .shared n x, .shared m y => n > 0 && m > 0 && decide (x = y)
+
+/-- `decode` may observe pointer lanes numerically; `encodes` must not invent their
+provenance. Both fields are calibrated to the represented Rust type. -/
+structure Repr (ty : Type u) where
+  size : Nat
+  align : Alignment
+  decode : AddressMap → Vector Byte size → Option ty
+  encodes : ty → Vector Byte size → Prop
+  pointers : ty → List (RawPtr Unit)
+  aligned : align.val ∣ size
+  complete : ∀ value, ∃ bytes, encodes value bytes
+  encode_decode : ∀ addresses value bytes,
+    encodes value bytes → decode addresses bytes = some value
+  encodes_support : ∀ value bytes (i : Fin size), encodes value bytes →
+    match bytes[i.val] with
+    | .pointer p _ => p ∈ pointers value
+    | _ => True
 
 namespace Repr
 
 variable {ty : Type u} {r : Nat}
 
-/- returns the cells representing the ith typed entry -/
-def select
-  (repr : Repr ty)
-  (bytes : Vector (Cell U8) r)
-  (i : Nat) (hi : (i + repr.size) ≤ r) : Vector (Cell U8) repr.size :=
-  (bytes.extract (i) ((i + repr.size))).cast
+def encodesList (repr : Repr ty) : List ty → List (Vector Byte repr.size) → Prop
+  | [], [] => True
+  | value :: values, bytes :: data => repr.encodes value bytes ∧ repr.encodesList values data
+  | _, _ => False
+
+def select (repr : Repr ty) (bytes : Vector Cell r)
+    (i : Nat) (hi : i + repr.size ≤ r) : Vector Cell repr.size :=
+  (bytes.extract i (i + repr.size)).cast
     (by rw [Nat.min_eq_left hi]; simp)
 
-/-- Overwrite the selected cells, preserving all surrounding cells. -/
-def update
-  (repr : Repr ty)
-  (bytes : Vector (Cell U8) r)
-  (i : Nat) (hi : (i + repr.size) ≤ r)
-  (replacement : Vector (Cell U8) repr.size) : Vector (Cell U8) r :=
-  ((bytes.extract 0 (i)) ++ replacement ++
-    bytes.extract ((i + repr.size))).cast (by
-      have hstart : i ≤ r := by grind [Nat.add_mul]
-      simp only [Nat.min_eq_left hstart, Nat.sub_zero, Nat.min_self]
-      grind [Nat.add_mul])
+def update (repr : Repr ty) (bytes : Vector Cell r)
+    (i : Nat) (hi : i + repr.size ≤ r)
+    (replacement : Vector Cell repr.size) : Vector Cell r :=
+  ((bytes.extract 0 i) ++ replacement ++ bytes.extract (i + repr.size)).cast (by
+    have hstart : i ≤ r := by grind
+    simp only [Nat.min_eq_left hstart, Nat.sub_zero, Nat.min_self]
+    grind)
 
-/-- Collect initialized, readable bytes, preserving their length. -/
-def readBytes (n : Nat) (bytes : Vector (Cell U8) n) : Option (Vector U8 n) :=
+def readBytes (n : Nat) (bytes : Vector Cell n) : Option (Vector Byte n) :=
   bytes.mapM Cell.read
 
-def writeBytes (n : Nat) (bytes : Vector (Cell U8) n) (data : Vector U8 n) :
-    Option (Vector (Cell U8) n) :=
+def writeBytes (n : Nat) (bytes : Vector Cell n) (data : Vector Byte n) :
+    Option (Vector Cell n) :=
   (bytes.zip data).mapM fun (cell, byte) => Cell.write cell byte
 
-def read (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) : Option ty :=
-  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
-    (readBytes repr.size (repr.select bytes i h.2)).bind repr.decode
+def read (repr : Repr ty) (addresses : AddressMap)
+    (bytes : Vector Cell r) (i : Nat) : Option ty :=
+  if h : 0 < repr.size ∧ i + repr.size ≤ r then
+    (readBytes repr.size (repr.select bytes i h.2)).bind (repr.decode addresses)
   else none
 
-/-- Expand encoded cells into bytes, preserving their permissions. -/
-def create (repr : Repr ty) {n : Nat}
-    (cells : Vector (Cell (Vector U8 repr.size)) n) :
-    Vector (Cell U8) (n * repr.size) :=
-  cells.flatMap fun
-    | .shared depth (some data) => data.map (Cell.shared depth ∘ some)
-    | .shared depth none => Vector.replicate repr.size (.shared depth none)
-    | .borrowed => Vector.replicate repr.size .borrowed
+def create (repr : Repr ty) (data : List (Vector Byte repr.size)) (depth : Nat) :
+    List Cell :=
+  data.flatMap fun bytes => bytes.toList.map (Cell.shared depth)
 
-/-- Write a value using the supplied byte representation. -/
-def write (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
-    (value : ty) (data : Vector U8 repr.size)
-    (_decoded : repr.decode data = some value) : Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
-    match writeBytes repr.size (repr.select bytes i h.2) data with
-    | some cells => some (repr.update bytes i h.2 cells)
-    | none => none
+def write (repr : Repr ty) (bytes : Vector Cell r) (i : Nat)
+    (_value : ty) (data : Vector Byte repr.size)
+    (_encoded : repr.encodes _value data) : Option (Vector Cell r) :=
+  if h : 0 < repr.size ∧ i + repr.size ≤ r then
+    (writeBytes repr.size (repr.select bytes i h.2) data).map (repr.update bytes i h.2)
   else none
 
-def borrow (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
-    Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
-    match (repr.select bytes i h.2).mapM Cell.borrow with
-    | some cells => some (repr.update bytes i h.2 cells)
-    | none => none
+def borrow (repr : Repr ty) (bytes : Vector Cell r) (i : Nat) :
+    Option (Vector Cell r) :=
+  if h : 0 < repr.size ∧ i + repr.size ≤ r then
+    ((repr.select bytes i h.2).mapM Cell.borrow).map (repr.update bytes i h.2)
   else none
 
-/-- The caller must possess the matching borrow authority. -/
-def endBorrow (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat)
-    (value : ty) (data : Vector U8 repr.size)
-    (_decoded : repr.decode data = some value) : Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
-    match ((repr.select bytes i h.2).zip data).mapM (fun (cell, byte) =>
-        Cell.endBorrow cell byte) with
-    | some cells => some (repr.update bytes i h.2 cells)
-    | none => none
+/-- Authorized only by the matching safe backward continuation. -/
+def endBorrow (repr : Repr ty) (bytes : Vector Cell r) (i : Nat)
+    (data : Vector Byte repr.size) : Option (Vector Cell r) :=
+  if h : 0 < repr.size ∧ i + repr.size ≤ r then
+    (((repr.select bytes i h.2).zip data).mapM fun (cell, byte) =>
+      Cell.endBorrow cell byte).map (repr.update bytes i h.2)
   else none
 
-def share (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
-    Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
-    match (repr.select bytes i h.2).mapM Cell.share with
-    | some cells => some (repr.update bytes i h.2 cells)
-    | none => none
+def share (repr : Repr ty) (bytes : Vector Cell r) (i : Nat) :
+    Option (Vector Cell r) :=
+  if h : 0 < repr.size ∧ i + repr.size ≤ r then
+    ((repr.select bytes i h.2).mapM Cell.share).map (repr.update bytes i h.2)
   else none
 
-def endShare (repr : Repr ty) (bytes : Vector (Cell U8) r) (i : Nat) :
-    Option (Vector (Cell U8) r) :=
-  if h : 0 < repr.size ∧ (i + repr.size) ≤ r then
-    match (repr.select bytes i h.2).mapM Cell.endShare with
-    | some cells => some (repr.update bytes i h.2 cells)
-    | none => none
+def endShare (repr : Repr ty) (bytes : Vector Cell r) (i : Nat) :
+    Option (Vector Cell r) :=
+  if h : 0 < repr.size ∧ i + repr.size ≤ r then
+    ((repr.select bytes i h.2).mapM Cell.endShare).map (repr.update bytes i h.2)
   else none
+
+/-- Scalar writes use data bytes even when scalar reads observed a pointer lane. -/
+def u8 : Repr U8 where
+  size := 1
+  align := ⟨1, ⟨0, rfl⟩⟩
+  decode := fun addresses bytes => bytes[0].numeric addresses
+  encodes := fun value bytes => bytes = #v[Byte.data value]
+  pointers := fun _ => []
+  aligned := by decide
+  complete := fun value => ⟨#v[Byte.data value], rfl⟩
+  encode_decode := by
+    intro addresses value bytes h
+    subst bytes
+    rfl
+  encodes_support := by
+    intro value bytes i h
+    subst bytes
+    simp
+
+def pointerEncoding (p : RawPtr T) : Vector Byte pointerWidth :=
+  Vector.ofFn fun i => .pointer (p.cast Unit) i.val
+
+def decodePointer (bytes : Vector Byte pointerWidth) : Option (RawPtr T) :=
+  match bytes[0] with
+  | .pointer p 0 =>
+      if bytes = pointerEncoding p then some (p.cast T) else none
+  | _ => none
+
+/-- Thin-pointer metadata is recovered from coherent lanes, never from integer bytes. -/
+def pointer (T : Type) : Repr (RawPtr T) where
+  size := pointerWidth
+  align := ⟨8, ⟨3, rfl⟩⟩
+  decode := fun _ bytes => decodePointer bytes
+  encodes := fun value bytes => bytes = pointerEncoding value
+  pointers := fun value => [value.cast Unit]
+  aligned := by decide
+  complete := fun value => ⟨pointerEncoding value, rfl⟩
+  encode_decode := by
+    intro addresses value bytes h
+    subst bytes
+    simp [decodePointer, pointerEncoding, RawPtr.cast]
+  encodes_support := by
+    intro value bytes i h
+    subst bytes
+    simp [pointerEncoding]
 
 end Repr
 end Aeneas.Std
