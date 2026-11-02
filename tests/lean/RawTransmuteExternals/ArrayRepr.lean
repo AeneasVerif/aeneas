@@ -2,6 +2,7 @@ module
 
 public import RawTransmute
 import all Aeneas.Std.Array.Array
+import all RawBoxProofs
 
 @[expose] public section
 
@@ -30,9 +31,23 @@ def fourVector (bytes : FourBytes) : Vector U8 4 :=
 def arrayRepr : Aeneas.Std.Repr FourBytes where
   size := 4
   align := ⟨1, 0, rfl⟩
-  decode bytes := some (fourBytes bytes)
+  decode bytes := (bytes.mapM Aeneas.Std.Byte.numeric).map fourBytes
+  encode value bytes := bytes = (fourVector value).map Aeneas.Std.Byte.data
   aligned := by decide
-  complete value := ⟨fourVector value, by simp⟩
+  encode_complete value := ⟨_, rfl⟩
+  encode_decode value bytes encoded := by
+    subst bytes
+    rw [raw_box.dataBytes_numeric]
+    simp
+  decode_mono bytes bytes' value decoded agree := by
+    cases hn : bytes.mapM Aeneas.Std.Byte.numeric
+    · simp [hn] at decoded
+    · rename_i values
+      have same := raw_box.numericBytes_eq bytes bytes' values hn agree
+      simpa only [same] using decoded
+  encode_valid value bytes i encoded := by
+    subst bytes
+    simp
 
 def wordEncoding (value : U32) : Vector U8 4 :=
   #v[⟨value.bv.extractLsb' 0 8⟩, ⟨value.bv.extractLsb' 8 8⟩,
@@ -70,22 +85,65 @@ theorem wordEncoding_decode (bytes : Vector U8 4) :
     exact congrArg UScalar.mk (extract_join _ _ _ _).2.2.2
 
 theorem word_decode_encoding (value : U32) :
-    raw_box.u32Repr.decode (wordEncoding value) = some value := by
-  cases value
-  rename_i bits
-  apply congrArg some
-  apply congrArg UScalar.mk
-  exact raw_box.u32Bytes_roundtrip bits
+    raw_box.u32Repr.decode ((wordEncoding value).map Aeneas.Std.Byte.data) = some value := by
+  exact raw_box.u32Repr.encode_decode value _ rfl
 
 theorem word_decode_bytes (bytes : Vector U8 4) :
-    raw_box.u32Repr.decode bytes = some (fromLittleBytes (fourBytes bytes)) := by
-  simp [raw_box.u32Repr, fromLittleBytes]
+    raw_box.u32Repr.decode (bytes.map Aeneas.Std.Byte.data) =
+      some (fromLittleBytes (fourBytes bytes)) := by
+  change ((bytes.map Aeneas.Std.Byte.data).mapM Aeneas.Std.Byte.numeric).bind
+    (fun data => some (⟨data[3].bv ++ data[2].bv ++ data[1].bv ++ data[0].bv⟩ : U32)) = _
+  rw [raw_box.dataBytes_numeric]
+  simp only [Option.bind_some, fromLittleBytes, fourVector_fourBytes]
 
 theorem bytes_of_word_decode (bytes : Vector U8 4) (value : U32)
-    (decoded : raw_box.u32Repr.decode bytes = some value) :
+    (decoded : raw_box.u32Repr.decode (bytes.map Aeneas.Std.Byte.data) = some value) :
     fourBytes bytes = toLittleBytes value := by
   have he : fromLittleBytes (fourBytes bytes) = value :=
     Option.some.inj ((word_decode_bytes bytes).symm.trans decoded)
   rw [← he, toLittleBytes, wordEncoding_decode]
+
+@[simp] theorem from_toLittleBytes (value : U32) :
+    fromLittleBytes (toLittleBytes value) = value :=
+  Option.some.inj ((word_decode_bytes (wordEncoding value)).symm.trans (word_decode_encoding value))
+
+theorem arrayRepr_noPointers (value : FourBytes) (q : RawPtr Unit) :
+    ¬ arrayRepr.Carries value q := by
+  rintro ⟨bytes, encoded, i, lane, byte⟩
+  change bytes = (fourVector value).map Aeneas.Std.Byte.data at encoded
+  subst bytes
+  have impossible := (Vector.getElem_map Aeneas.Std.Byte.data
+    (xs := fourVector value) i.isLt).symm.trans byte
+  cases impossible
+
+/-- Numerical decoding plus the library's exclusive-exposure guarantee recovers
+the fixture's canonical word encoding; integer reads alone do not imply this. -/
+theorem word_exposure_encoding (value : U32) (bytes : Vector Aeneas.Std.Byte 4)
+    (decoded : raw_box.u32Repr.decode bytes = some value)
+    (carried : ∀ i : Fin 4, ∀ q lane, bytes[i.val] = .pointer q lane →
+      raw_box.u32Repr.Carries value q) :
+    raw_box.u32Repr.encode value bytes := by
+  have numeric : ∃ values, bytes.mapM Aeneas.Std.Byte.numeric = some values := by
+    change (bytes.mapM Aeneas.Std.Byte.numeric).bind _ = some value at decoded
+    cases hn : bytes.mapM Aeneas.Std.Byte.numeric
+    · simp [hn] at decoded
+    · exact ⟨_, rfl⟩
+  let values := bytes.map (fun byte => match byte with
+    | .data value => value
+    | _ => 0#u8)
+  have representation : bytes = values.map Aeneas.Std.Byte.data := by
+    apply Vector.ext
+    intro i hi
+    obtain ⟨_, hv⟩ := vector_mapM_enabled numeric.choose_spec i hi
+    simp only [values, Vector.getElem_map]
+    cases hb : bytes[i]
+    · simp [hb, Aeneas.Std.Byte.numeric] at hv
+    · rfl
+    · rename_i q lane
+      exact (raw_box.u32Repr_noPointers value q (carried ⟨i, hi⟩ q lane hb)).elim
+  rw [representation] at decoded ⊢
+  have he := congrArg fourVector (bytes_of_word_decode values value decoded)
+  simp only [toLittleBytes, fourVector_fourBytes] at he
+  exact congrArg (Vector.map Aeneas.Std.Byte.data) he
 
 end raw_transmute_externals

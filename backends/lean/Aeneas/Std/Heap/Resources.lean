@@ -25,6 +25,17 @@ def alloc (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr) (count : Nat)
     (own : Bool) : Assertion :=
   fun h => p.address = bptr ∧ h = allocHeap repr bptr p.provenance count own
 
+theorem alloc_active {repr : Repr ty} {p : RawPtr ty} {bptr : BasePtr}
+    {count : Nat} {own : Bool} {h : Fragment} {s : Heap}
+    (hp : alloc repr p bptr count own h) (hm : Fragment.Matches s h) :
+    ∃ blk, s.allocations p.provenance = some blk ∧ blk.active = true := by
+  have member : h (.cleanup p.provenance (count * repr.size) bptr own) := by
+    rw [hp.2]
+    rfl
+  obtain ⟨blk, hl, _, live, _, _⟩ := hm _ member
+  simp only [Heap.live, Bool.and_eq_true] at live
+  exact ⟨blk, hl, live.1⟩
+
 /-- An admissible representation, including any permitted uninitialized padding,
 not merely equal numerical bytes. Decodability follows from the encoding law. -/
 def pointsTo (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr) (value : ty)
@@ -48,10 +59,23 @@ theorem pointsTo_readable {repr : Repr ty} {p : RawPtr ty} {bptr : BasePtr}
 def Resource.bptr : Resource → BasePtr
   | .cell _ _ bptr _ | .cleanup _ _ bptr _ => bptr
 
-/-- Local provenance evidence for the pointer payloads of a value. Matching
-resources require live views, but need not grant access at the pointer's address. -/
+/-- Provenance metadata can come from the target view or from a stored pointer
+lane. The latter also covers pointers to retired views. -/
+def HasProvenance (h : Fragment) (id : Nat) : Prop :=
+  (∃ r, h r ∧ r.base = id) ∨
+    ∃ base index bptr depth q lane,
+      h (.cell base index bptr (.shared depth (.pointer q lane))) ∧ q.provenance = id
+
+theorem HasProvenance.mono {a b : Fragment} {id : Nat}
+    (known : HasProvenance a id) (included : ∀ r, a r → b r) : HasProvenance b id := by
+  rcases known with ⟨r, hr, same⟩ | ⟨base, index, bptr, depth, q, lane, hr, same⟩
+  · exact .inl ⟨r, included r hr, same⟩
+  · exact .inr ⟨base, index, bptr, depth, q, lane, included _ hr, same⟩
+
+/-- Local provenance evidence for every pointer payload that an encoding may
+retain; numerical pointer observation alone supplies no such evidence. -/
 def SupportsValue (repr : Repr ty) (value : ty) (h : Fragment) : Prop :=
-  ∀ p, repr.Carries value p → ∃ r, h r ∧ r.base = p.provenance
+  ∀ p, repr.Carries value p → HasProvenance h p.provenance
 
 theorem supportsValue_noPointers (repr : Repr ty) (value : ty)
     (none : ∀ p, ¬ repr.Carries value p) (h : Fragment) : SupportsValue repr value h := by
@@ -65,17 +89,22 @@ theorem supportsValue_pointer_alloc (repr : Repr ty) (p : RawPtr T) (bptr : Base
   intro q hq
   have he : q = p.cast Unit := (Repr.pointer_carries p q).mp hq
   subst q
-  refine ⟨.cleanup p.provenance (count * repr.size) bptr own, ?_, rfl⟩
+  refine .inl ⟨.cleanup p.provenance (count * repr.size) bptr own, ?_, rfl⟩
   rw [ha.2]
   rfl
 
 theorem supportsValue_valid {s : Heap} {repr : Repr ty} {value : ty} {h : Fragment}
-    (support : SupportsValue repr value h) (hm : Fragment.Matches s h) :
+    (support : SupportsValue repr value h) (hm : Fragment.Matches s h) (hinv : s.Inv) :
     ∀ p, repr.Carries value p → (s.allocations p.provenance).isSome = true := by
   intro p hp
-  obtain ⟨r, hr, hb⟩ := support p hp
-  obtain ⟨blk, hl⟩ := (hm r hr).live
-  simp [← hb, hl]
+  rcases support p hp with ⟨r, hr, hb⟩ | ⟨base, index, bptr, depth, q, lane, hr, hb⟩
+  · obtain ⟨blk, hl⟩ := (hm r hr).live
+    simp [← hb, hl]
+  · obtain ⟨blk, hl, _, _, cell⟩ := hm _ hr
+    obtain ⟨bound, byte⟩ := List.getElem?_eq_some_iff.mp cell
+    have valid := hinv.validCell hl index bound
+    simp only [byte, Heap.validByte, Bool.and_eq_true, decide_eq_true_eq] at valid
+    simpa only [← hb] using valid.2
 
 theorem valid_encoding {s : Heap} {repr : Repr ty} {value : ty}
     {data : Vector Byte repr.size} (encoded : repr.encode value data)

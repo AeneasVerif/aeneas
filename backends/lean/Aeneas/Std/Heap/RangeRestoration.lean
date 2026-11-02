@@ -70,6 +70,65 @@ private theorem update_update (repr : Repr T) (bytes : Vector Cell r)
       Repr.update_outside _ _ _ _ _ i outside,
       Repr.update_outside _ _ _ _ _ i outside]
 
+private theorem update_select (repr : Repr T) (bytes : Vector Cell r)
+    (offset : Nat) (hb : offset + repr.size ≤ r) :
+    repr.update bytes offset hb (repr.select bytes offset hb) = bytes := by
+  apply Vector.toList_inj.mp
+  apply List.ext_getElem?
+  intro i
+  by_cases inside : offset ≤ i ∧ i < offset + repr.size
+  · have hj : i - offset < repr.size := by agrind
+    have he : i = offset + (i - offset) := by agrind
+    rw [he, Repr.update_inside _ _ _ _ _ _ hj]
+    simp [Repr.select, show offset + (i - offset) < r by agrind]
+  · exact Repr.update_outside repr bytes offset hb _ i (by agrind)
+
+private theorem endShare_after_share (repr : Repr T) (p : RawPtr T)
+    (s₀ s₁ : Heap) (blk : Block) (old : Vector Byte repr.size) (depth : Nat)
+    (hsize : 0 < repr.size) (hb : p.offsetFrom blk.bptr + repr.size ≤ blk.repr.length)
+    (hl : s₀.allocations p.provenance = some blk) (live : s₀.live blk = true)
+    (lower : blk.bptr.val ≤ p.address.val) (aligned : repr.align.val ∣ p.address.val)
+    (selected : repr.select blk.bytes (p.offsetFrom blk.bptr) hb = old.map (Cell.shared depth))
+    (hinv : s₀.Inv) (shared : Heap.share repr p s₀ = some s₁) :
+    Heap.endShare repr p s₁ = some s₀ := by
+  let suspended := repr.update blk.bytes (p.offsetFrom blk.bptr) hb
+    (old.map (Cell.shared (depth + 1)))
+  have change : repr.share blk.bytes (p.offsetFrom blk.bptr) = some suspended := by
+    simp [Repr.share, hsize, hb, selected, Vector.mapM_map, Function.comp_def,
+      Cell.share, vector_mapM_some, suspended]
+  have commit : Heap.commit (s₀.storeRepr p.provenance suspended.toList) = some s₁ := by
+    simpa [Heap.share, Heap.modify, hl, live, lower, aligned, change] using shared
+  obtain ⟨state, _⟩ := Heap.commit_success _ _ commit
+  subst s₁
+  have hb₁ : p.offsetFrom blk.bptr + repr.size ≤ suspended.toList.length := by simpa using hb
+  have bytes : ({ blk with repr := suspended.toList } : Block).bytes =
+      suspended.cast (by simp) := by
+    apply Vector.toArray_inj.mp
+    simp [Block.bytes, Vector.toList, Array.toArray_toList]
+  have selected₁ :
+      repr.select ({ blk with repr := suspended.toList } : Block).bytes
+        (p.offsetFrom blk.bptr) hb₁ = old.map (Cell.shared (depth + 1)) := by
+    apply Vector.toList_inj.mp
+    simpa only [Repr.select_toList, bytes, Vector.toList_cast] using
+      congrArg Vector.toList (Repr.select_update repr blk.bytes (p.offsetFrom blk.bptr) hb
+        (old.map (Cell.shared (depth + 1))))
+  have updated :
+      (repr.update ({ blk with repr := suspended.toList } : Block).bytes
+        (p.offsetFrom blk.bptr) hb₁ (old.map (Cell.shared depth))).toList = blk.repr := by
+    have identity : repr.update blk.bytes (p.offsetFrom blk.bptr) hb
+        (old.map (Cell.shared depth)) = blk.bytes := by
+      rw [← selected, update_select]
+    have same := (update_update repr blk.bytes (p.offsetFrom blk.bptr) hb
+      (old.map (Cell.shared (depth + 1))) (old.map (Cell.shared depth))).trans identity
+    have list : blk.bytes.toList = blk.repr := by simp [Block.bytes]
+    simpa only [bytes, Vector.toList_cast, suspended, Repr.update_toList, list] using
+      congrArg Vector.toList same
+  simp [Heap.endShare, Heap.modify, hl, live, lower, aligned,
+    Heap.live_storeRepr_updated, Repr.endShare, hsize, hb, selected₁,
+    Vector.mapM_map, Function.comp_def, Cell.endShare, vector_mapM_some, updated,
+    Heap.storeRepr_storeRepr, Heap.storeRepr_same s₀ p.provenance blk hl,
+    Heap.commit, hinv.2]
+
 private theorem endBorrow_after_borrow (repr : Repr T) (p : RawPtr T)
     (s₀ s₁ : Heap) (blk : Block) (old : Vector Byte repr.size)
     (value : T) (data : Vector Byte repr.size) (encoded : repr.encode value data)
@@ -163,6 +222,85 @@ private theorem endBorrowRange_update (repr : Repr T)
       (fun current i => repr.endBorrow current (offset + i * repr.size) data[i]!) hb
       (by simpa [old, Vector.flatMap_replicate] using selected) step hsize
 
+private theorem borrowRange_update (repr : Repr T)
+    (data : Vector (Vector Byte repr.size) count) (bytes : Vector Cell r)
+    (offset : Nat) (hb : offset + count * repr.size ≤ r)
+    (selected : (repr.region count).select bytes offset hb =
+      data.flatMap (fun encoding => encoding.map (Cell.shared 0)))
+    (hsize : 0 < repr.size) :
+    (List.range count).foldlM (fun current i => repr.borrow current (offset + i * repr.size)) bytes =
+      some ((repr.region count).update bytes offset hb
+        (Vector.replicate (count * repr.size) .borrowed)) := by
+  let old := data.map fun encoding => encoding.map (Cell.shared 0)
+  let new : Vector (Vector Cell repr.size) count :=
+    Vector.replicate count (Vector.replicate repr.size .borrowed)
+  have step : ∀ current i (hi : i < count),
+      repr.select current (offset + i * repr.size) (range_element_bound hi hb) = old[i] →
+      repr.borrow current (offset + i * repr.size) =
+        some (repr.update current (offset + i * repr.size) (range_element_bound hi hb) new[i]) := by
+    intro current i hi hs
+    simp [Repr.borrow, hsize, range_element_bound hi hb, hs, old, new,
+      Vector.mapM_map, Function.comp_def, Cell.borrow, vector_mapM_some]
+    apply congrArg (repr.update current _ _)
+    apply Vector.ext
+    intro j hj
+    simp
+  simpa [new, Vector.flatMap_replicate] using
+    repr.fold_region bytes offset count old new
+      (fun current i => repr.borrow current (offset + i * repr.size)) hb
+      (by simpa only [old, Vector.flatMap_map, Function.comp_def, id_eq] using selected) step hsize
+
+private theorem endBorrowRange_after_borrowRange (repr : Repr T) (p : RawPtr T)
+    (s₀ s₁ : Heap) (blk : Block) (old data : Vector (Vector Byte repr.size) count)
+    (hsize : 0 < repr.size) (hb : p.offsetFrom blk.bptr + count * repr.size ≤ blk.repr.length)
+    (hl : s₀.allocations p.provenance = some blk) (live : s₀.live blk = true)
+    (lower : blk.bptr.val ≤ p.address.val) (aligned : repr.align.val ∣ p.address.val)
+    (selected : (repr.region count).select blk.bytes (p.offsetFrom blk.bptr) hb =
+      old.flatMap (fun encoding => encoding.map (Cell.shared 0)))
+    (borrowed : Heap.borrowRange repr p count s₀ = some s₁) :
+    Heap.endBorrowRange repr p data.toList s₁ =
+      Heap.commit (s₀.storeRepr p.provenance
+        ((repr.region count).update blk.bytes (p.offsetFrom blk.bptr) hb
+          (data.flatMap (fun encoding => encoding.map (Cell.shared 0)))).toList) := by
+  let suspended := (repr.region count).update blk.bytes (p.offsetFrom blk.bptr) hb
+    (Vector.replicate (count * repr.size) .borrowed)
+  have commit : Heap.commit (s₀.storeRepr p.provenance suspended.toList) = some s₁ := by
+    simpa [Heap.borrowRange, Heap.modifyRange, Heap.modify, hl, live, lower, aligned,
+      hsize, hb, borrowRange_update repr old blk.bytes _ hb selected hsize, suspended] using borrowed
+  obtain ⟨state, _⟩ := Heap.commit_success _ _ commit
+  subst s₁
+  have hb₁ : p.offsetFrom blk.bptr + count * repr.size ≤ suspended.toList.length := by simpa using hb
+  have bytes : ({ blk with repr := suspended.toList } : Block).bytes =
+      suspended.cast (by simp) := by
+    apply Vector.toArray_inj.mp
+    simp [Block.bytes, Vector.toList, Array.toArray_toList]
+  have selected₁ :
+      (repr.region count).select ({ blk with repr := suspended.toList } : Block).bytes
+        (p.offsetFrom blk.bptr) hb₁ = Vector.replicate (count * repr.size) .borrowed := by
+    apply Vector.toList_inj.mp
+    simpa only [Repr.select, Vector.toList_cast, Vector.toList_extract, bytes, suspended] using
+      congrArg Vector.toList (Repr.select_update (repr.region count) blk.bytes
+        (p.offsetFrom blk.bptr) hb (Vector.replicate (count * repr.size) .borrowed))
+  have updated :
+      ((repr.region count).update ({ blk with repr := suspended.toList } : Block).bytes
+        (p.offsetFrom blk.bptr) hb₁
+        (data.flatMap (fun encoding => encoding.map (Cell.shared 0)))).toList =
+      ((repr.region count).update blk.bytes (p.offsetFrom blk.bptr) hb
+        (data.flatMap (fun encoding => encoding.map (Cell.shared 0)))).toList := by
+    rw [bytes, Repr.update_toList (repr.region count) (suspended.cast (by simp))
+      (p.offsetFrom blk.bptr) hb₁ (data.flatMap (fun encoding => encoding.map (Cell.shared 0)))]
+    rw [Vector.toList_cast (xs := suspended) (by simp)]
+    simpa only [suspended, Repr.region, Repr.update_toList,
+      Vector.toList_cast] using
+      congrArg Vector.toList
+        (update_update (repr.region count) blk.bytes (p.offsetFrom blk.bptr) hb
+          (Vector.replicate (count * repr.size) .borrowed)
+          (data.flatMap (fun encoding => encoding.map (Cell.shared 0))))
+  simp [Heap.endBorrowRange, Heap.modify, hl, live, lower, aligned,
+    Heap.live_storeRepr_updated, hsize, hb,
+    endBorrowRange_update repr data _ _ hb₁ selected₁ hsize, updated,
+    Heap.storeRepr_storeRepr]
+
 private theorem encodeList_length (repr : Repr T) (values : List T)
     (data : List (Vector Byte repr.size)) (encoded : repr.encodeList values data) :
     data.length = values.length := by
@@ -253,6 +391,44 @@ namespace Aeneas.Std.HeapWP
 
 open SepLogic
 
+/-- Sharing supplies a matching return at the resulting state. Nested scopes
+may use this contract when their own backward calls restore that state. -/
+theorem shareRange_single_return.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (initial : T) (depth : Nat) (hsize : 0 < repr.size)
+    (h F : Fragment) (s₀ : Heap) (hp : pointsTo repr p bptr initial depth h)
+    (hd : h.Disjoint F) (hm : Fragment.Matches s₀ (h ∪ F)) (hinv : s₀.Inv) :
+    Spec (RawPtr.shareRange repr p 1)
+      (fun values s₁ => values = [initial] ∧
+        (∃ h₁, h₁.Disjoint F ∧ Fragment.Matches s₁ (h₁ ∪ F) ∧ s₁.Inv ∧
+          pointsTo repr p bptr initial (depth + 1) h₁) ∧
+        Spec (RawPtr.endShareRange repr p [initial]) (fun _ s₂ => s₂ = s₀) s₁) s₀ := by
+  have forward := Spec.checkedModify.mp
+    (shareRange_single.spec repr p bptr initial depth hsize h F s₀ hp hd hm hinv)
+  have footprint := hp
+  obtain ⟨old, _, lower, aligned, he⟩ := footprint
+  have localMatch : Fragment.Matches s₀
+      (cellsHeap bptr p.provenance (p.offsetFrom bptr) (old.map (Cell.shared depth)).toList) := by
+    rw [he] at hm
+    exact ((Fragment.matches_union _ _ _).mp hm).1
+  obtain ⟨blk, hb, hl, live, base, selected⟩ := bytes_of_matches hsize localMatch
+  subst bptr
+  apply Spec.checkedModify.mpr
+  refine ⟨forward.1, ?_⟩
+  intro values s₁ run
+  obtain ⟨h₁, hd₁, hm₁, hi₁, hv, hp₁⟩ := forward.2 values s₁ run
+  have undo := endShare_after_share repr p s₀ s₁ blk old depth hsize hb hl live lower aligned
+    selected hinv (by simpa only [Heap.shareRange_single] using run.2)
+  refine ⟨hv, ⟨h₁, hd₁, hm₁, hi₁, hp₁⟩, ?_⟩
+  have returning := Spec.checkedModify.mp
+    (endShareRange_single.spec repr p blk.bptr initial depth s₁ hsize ⟨s₀, undo⟩
+      h₁ F hp₁ hd₁ hm₁ hi₁)
+  apply Spec.checkedModify.mpr
+  refine ⟨returning.1, ?_⟩
+  intro _ s₂ returned
+  have actual : Heap.endShare repr p s₁ = some s₂ := by
+    simpa only [List.length_singleton, Heap.endShareRange_single] using returned.2
+  exact Option.some.inj (actual.symm.trans undo)
+
 /-- The forward conversion supplies the matching backward computation, with
 return enabledness proved from the original exclusive footprint. The callback
 contract applies at the returned state: intervening heap effects require their
@@ -336,6 +512,92 @@ theorem withBorrow.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
   apply Spec.bind (returns (update initial) noPointers)
   rintro _ s₂ ⟨h₂, hd₂, hm₂, hi₂, hp₂⟩
   exact Spec.pure _ _ _ |>.mpr ⟨h₂, hd₂, hm₂, hi₂, rfl, hp₂⟩
+
+/-- The matching range return installs every replacement element. Its authority
+is scoped to the forward result, rather than inferred from borrowed cells alone. -/
+theorem borrowRange_return.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (initial updated : Vector T count)
+    (noPointers : ∀ i : Fin count, ∀ q, ¬ repr.Carries updated[i.val] q)
+    (hcount : 0 < count) (hsize : 0 < repr.size)
+    (h F : Fragment) (s₀ : Heap) (hp : pointsToRange repr p bptr initial 0 h)
+    (hd : h.Disjoint F) (hm : Fragment.Matches s₀ (h ∪ F)) (hinv : s₀.Inv) :
+    Spec (RawPtr.borrowRange repr p count)
+      (fun values s₁ => values = initial.toList ∧
+        Spec (RawPtr.endBorrowRange repr p updated.toList)
+          (fun _ s₂ => ∃ h₂, h₂.Disjoint F ∧ Fragment.Matches s₂ (h₂ ∪ F) ∧ s₂.Inv ∧
+            pointsToRange repr p bptr updated 0 h₂) s₁) s₀ := by
+  have forward := Spec.checkedModify.mp
+    (borrowRange.spec repr p bptr initial hcount hsize h F s₀ hp hd hm hinv)
+  obtain ⟨old, _, lower, aligned, he⟩ := hp
+  have localMatch : Fragment.Matches s₀
+      (cellsHeap bptr p.provenance (p.offsetFrom bptr)
+        (old.flatMap (fun encoding => encoding.map (Cell.shared 0))).toList) := by
+    rw [he] at hm
+    exact ((Fragment.matches_union _ _ _).mp hm).1
+  obtain ⟨blk, hb, hl, live, base, selected⟩ :=
+    bytes_of_matches (repr := repr.region count) (p := p.cast Unit)
+      (Nat.mul_pos hcount hsize) localMatch
+  subst bptr
+  have updateInv (data : Vector (Vector Byte repr.size) count)
+      (encoded : ∀ i : Fin count, repr.encode updated[i.val] data[i.val]) :
+      (s₀.storeRepr p.provenance
+        ((repr.region count).update blk.bytes (p.offsetFrom blk.bptr) hb
+          (data.flatMap (fun encoding => encoding.map (Cell.shared 0)))).toList).Inv := by
+    apply Heap.update_Inv hinv hl hb _ _ selected
+    · intro i hi
+      dsimp only [Repr.region] at hi ⊢
+      have outer : i / repr.size < count := by
+        exact Nat.div_lt_of_lt_mul (by simpa only [Nat.mul_comm] using hi)
+      have inner : i % repr.size < repr.size := Nat.mod_lt _ hsize
+      change (match (data.flatMap (fun encoding => encoding.map (Cell.shared 0)))[i]'hi with
+        | .borrowed => True
+        | .shared _ byte => s₀.validByte byte = true)
+      rw [Vector.getElem_flatMap hi, Vector.getElem_map]
+      exact valid_encoding (encoded ⟨i / repr.size, outer⟩)
+        (fun q carried => (noPointers ⟨i / repr.size, outer⟩ q carried).elim) _ inner
+    · intro i hi
+      dsimp only [Repr.region] at hi ⊢
+      change ((old.flatMap (fun encoding => encoding.map (Cell.shared 0)))[i]'hi).PermWeakens
+        ((data.flatMap (fun encoding => encoding.map (Cell.shared 0)))[i]'hi)
+      rw [Vector.getElem_flatMap hi, Vector.getElem_map]
+      rw [Vector.getElem_flatMap hi, Vector.getElem_map]
+      exact Cell.PermWeakens.writer _ _
+  apply Spec.checkedModify.mpr
+  refine ⟨forward.1, ?_⟩
+  intro values s₁ run
+  obtain ⟨h₁, hd₁, hm₁, hi₁, hv, hp₁⟩ := forward.2 values s₁ run
+  refine ⟨hv, ?_⟩
+  have inverse (data : Vector (Vector Byte repr.size) count) :=
+    endBorrowRange_after_borrowRange repr p s₀ s₁ blk old data hsize hb hl live lower aligned
+      selected run.2.2
+  have enabled (data : Vector (Vector Byte repr.size) count)
+      (encoded : ∀ i : Fin count, repr.encode updated[i.val] data[i.val]) :
+      ∃ s₂, Heap.endBorrowRange repr p data.toList s₁ = some s₂ := by
+    rw [inverse data]
+    simp only [Heap.commit, (updateInv data encoded).2, ↓reduceIte]
+    exact ⟨_, rfl⟩
+  apply Spec.checkedModify.mpr
+  constructor
+  · obtain ⟨data, encoded⟩ := repr.encodeList_complete updated.toList
+    have length : data.length = count := by
+      simpa using encodeList_length repr updated.toList data encoded
+    let vector : Vector (Vector Byte repr.size) count := ⟨data.toArray, by simp [length]⟩
+    have enc : ∀ i : Fin count, repr.encode updated[i.val] vector[i.val] := by
+      intro i
+      simpa [vector] using encodeList_get repr updated.toList data encoded i.val
+        (by simp) (by simp [length])
+    obtain ⟨s₂, actual⟩ := enabled vector enc
+    exact ⟨(), s₂, data, encoded, by simpa [vector] using actual⟩
+  · rintro _ s₂ ⟨data, encoded, actual⟩
+    have length : data.length = count := by
+      simpa using encodeList_length repr updated.toList data encoded
+    let vector : Vector (Vector Byte repr.size) count := ⟨data.toArray, by simp [length]⟩
+    have enc : ∀ i : Fin count, repr.encode updated[i.val] vector[i.val] := by
+      intro i
+      simpa [vector] using encodeList_get repr updated.toList data encoded i.val
+        (by simp) (by simp [length])
+    exact endBorrowRange_encoding.post repr p blk.bptr updated vector enc hcount hsize
+      h₁ F s₁ s₂ hp₁ hd₁ hm₁ hi₁ (by simpa [vector] using actual)
 
 /-- State-specific boundary for a matching return protocol. One compatible
 encoding enables the operation; the postcondition covers all permitted encodings.

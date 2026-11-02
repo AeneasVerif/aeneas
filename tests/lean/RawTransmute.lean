@@ -2,6 +2,7 @@ module
 
 public import RawBoxProofs
 public meta import RawBoxProofs
+import all RawBoxProofs
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Heap.Model
 
@@ -36,78 +37,100 @@ def byte_to_word (wordRepr : Aeneas.Std.Repr U32) (byteRepr : Aeneas.Std.Repr U8
   MutRawPtr.write byteRepr (RawPtr.cast U8 words) value
   RawPtr.read wordRepr words
 
-theorem write_read.spec (repr : Aeneas.Std.Repr T) (p : RawPtr T) (old value : T)
+theorem write_read.spec (repr : Aeneas.Std.Repr T) (p : RawPtr T) (bptr : BasePtr) (old value : T)
+    (noPointers : ∀ q, ¬ repr.Carries value q)
     (hsize : 0 < repr.size) :
-    HeapWP.Triple (pointsTo repr p old)
+    HeapWP.Triple (pointsTo repr p bptr old)
       (do MutRawPtr.write repr p value; RawPtr.read repr p)
-      (fun result h => result = value ∧ pointsTo repr p value 0 h) := by
-  apply HeapWP.Triple.bind (HeapWP.write.spec repr p old value hsize)
+      (fun result h => result = value ∧ pointsTo repr p bptr value 0 h) := by
+  apply HeapWP.Triple.bind (HeapWP.write.spec repr p bptr old value noPointers hsize)
   intro _
-  exact HeapWP.read.spec repr p value 0 hsize
+  exact HeapWP.read.spec repr p bptr value 0 hsize
 
 /-- Casting away and back preserves the pointer and same-type write/read correctness. -/
-theorem u32_round_trip.spec (repr : Aeneas.Std.Repr U32) (words : RawPtr U32) (old value : U32)
+theorem u32_round_trip.spec (repr : Aeneas.Std.Repr U32) (words : RawPtr U32) (bptr : BasePtr)
+    (old value : U32) (noPointers : ∀ q, ¬ repr.Carries value q)
     (hsize : 0 < repr.size) :
-    HeapWP.Triple (pointsTo repr words old) (u32_round_trip repr words value)
-      (fun result h => result = value ∧ pointsTo repr words value 0 h) :=
-  write_read.spec repr words old value hsize
+    HeapWP.Triple (pointsTo repr words bptr old) (u32_round_trip repr words value)
+      (fun result h => result = value ∧ pointsTo repr words bptr value 0 h) :=
+  write_read.spec repr words bptr old value noPointers hsize
 
 /-- The byte view has its own round-trip law, without an equation relating it to word values. -/
-theorem u8_round_trip.spec (repr : Aeneas.Std.Repr U8) (words : RawPtr U32) (old value : U8)
+theorem u8_round_trip.spec (repr : Aeneas.Std.Repr U8) (words : RawPtr U32) (bptr : BasePtr)
+    (old value : U8) (noPointers : ∀ q, ¬ repr.Carries value q)
     (hsize : 0 < repr.size) :
-    HeapWP.Triple (pointsTo repr (RawPtr.cast U8 words) old) (u8_round_trip repr words value)
-      (fun result h => result = value ∧ pointsTo repr (RawPtr.cast U8 words) value 0 h) :=
-  write_read.spec repr (RawPtr.cast U8 words) old value hsize
+    HeapWP.Triple (pointsTo repr (RawPtr.cast U8 words) bptr old) (u8_round_trip repr words value)
+      (fun result h => result = value ∧ pointsTo repr (RawPtr.cast U8 words) bptr value 0 h) :=
+  write_read.spec repr (RawPtr.cast U8 words) bptr old value noPointers hsize
 
-@[expose] def byteRepr : Aeneas.Std.Repr U8 where
-  size := 1
-  align := ⟨1, 0, rfl⟩
-  decode bytes := some bytes[0]
-  aligned := by decide
-  complete value := ⟨#v[value], rfl⟩
+@[expose] def byteRepr : Aeneas.Std.Repr U8 := Aeneas.Std.Repr.u8
 
 /-- A second admissible word descriptor, with the opposite byte order. -/
 @[expose] def bigEndianRepr : Aeneas.Std.Repr U32 where
   size := 4
   align := ⟨4, 2, rfl⟩
-  decode bytes := some ⟨bytes[0].bv ++ bytes[1].bv ++ bytes[2].bv ++ bytes[3].bv⟩
+  decode bytes := do
+    let bytes ← bytes.mapM Aeneas.Std.Byte.numeric
+    pure ⟨bytes[0].bv ++ bytes[1].bv ++ bytes[2].bv ++ bytes[3].bv⟩
+  encode value bytes := bytes =
+    (#v[⟨value.bv.extractLsb' 24 8⟩, ⟨value.bv.extractLsb' 16 8⟩,
+      ⟨value.bv.extractLsb' 8 8⟩, ⟨value.bv.extractLsb' 0 8⟩] : Vector U8 4).map Aeneas.Std.Byte.data
   aligned := by decide
-  complete value := by
-    rcases value with ⟨bits⟩
-    refine ⟨#v[⟨bits.extractLsb' 24 8⟩, ⟨bits.extractLsb' 16 8⟩,
-      ⟨bits.extractLsb' 8 8⟩, ⟨bits.extractLsb' 0 8⟩], ?_⟩
+  encode_complete value := ⟨_, rfl⟩
+  encode_decode value bytes encoded := by
+    subst bytes
+    rw [raw_box.dataBytes_numeric]
+    change some ⟨value.bv.extractLsb' 24 8 ++ value.bv.extractLsb' 16 8 ++
+      value.bv.extractLsb' 8 8 ++ value.bv.extractLsb' 0 8⟩ = some value
     apply congrArg some
+    cases value
+    rename_i bits
     apply congrArg UScalar.mk
     exact raw_box.u32Bytes_roundtrip bits
+  decode_mono bytes bytes' value decoded agree := by
+    cases hn : bytes.mapM Aeneas.Std.Byte.numeric
+    · simp [hn] at decoded
+    · rename_i values
+      have same := raw_box.numericBytes_eq bytes bytes' values hn agree
+      simpa only [same] using decoded
+  encode_valid value bytes i encoded := by
+    subst bytes
+    simp only [Vector.getElem_map]
 
 /- Concrete executions witness the lack of a descriptor-independent cross-type prediction.
 They use two-element allocations and access only the second word, at byte offset four.
 These are alternative descriptor models, not fresh endian choices within one execution. -/
-def wordByteRun (repr : Aeneas.Std.Repr U32) (data : Vector U8 repr.size)
-    (decoded : repr.decode data = some 0x01020304#u32) : Option U8 := do
-  let (base, s₀) ← Heap.alloc repr 2 Heap.empty
+def wordByteRun (repr : Aeneas.Std.Repr U32) (data : Vector Aeneas.Std.Byte repr.size)
+    (encoded : repr.encode 0x01020304#u32 data) : Option U8 := do
+  let (base, s₀) ← Heap.alloc repr 2 4#usize Heap.empty
   let p ← Heap.offset repr base 1 s₀
-  let s₁ ← Heap.write repr p 0x01020304#u32 data decoded s₀
+  let s₁ ← Heap.write repr p 0x01020304#u32 data encoded s₀
   Heap.read byteRepr (RawPtr.cast U8 p) s₁
 
 def byteWordRun (repr : Aeneas.Std.Repr U32) : Option U32 := do
   let (base, s₀) ← Heap.newBlock repr
-    [Vector.replicate repr.size 0#u8, Vector.replicate repr.size 0#u8] true Heap.empty
+    [Vector.replicate repr.size (.data 0#u8), Vector.replicate repr.size (.data 0#u8)]
+    true 4#usize none Heap.empty
   let p ← Heap.offset repr base 1 s₀
-  let s₁ ← Heap.write byteRepr (RawPtr.cast U8 p) 1#u8 #v[1#u8] rfl s₀
+  let s₁ ← Heap.write byteRepr (RawPtr.cast U8 p) 1#u8 #v[.data 1#u8] rfl s₀
   Heap.read repr p s₁
 
 theorem littleDecoded :
-    raw_box.u32Repr.decode #v[4#u8, 3#u8, 2#u8, 1#u8] = some 0x01020304#u32 := by
+    raw_box.u32Repr.encode 0x01020304#u32 #v[.data 4#u8, .data 3#u8, .data 2#u8, .data 1#u8] := by
+  change #v[.data 4#u8, .data 3#u8, .data 2#u8, .data 1#u8] =
+    (raw_box.u32Bytes 0x01020304#u32).map Aeneas.Std.Byte.data
+  unfold raw_box.u32Bytes
   native_decide
 
 theorem bigDecoded :
-    bigEndianRepr.decode #v[1#u8, 2#u8, 3#u8, 4#u8] = some 0x01020304#u32 := by
+    bigEndianRepr.encode 0x01020304#u32 #v[.data 1#u8, .data 2#u8, .data 3#u8, .data 4#u8] := by
+  unfold bigEndianRepr
+  dsimp
   native_decide
 
 theorem cross_word_byte_counterexample :
-    wordByteRun raw_box.u32Repr #v[4#u8, 3#u8, 2#u8, 1#u8] littleDecoded = some 4#u8 ∧
-    wordByteRun bigEndianRepr #v[1#u8, 2#u8, 3#u8, 4#u8] bigDecoded = some 1#u8 := by
+    wordByteRun raw_box.u32Repr #v[.data 4#u8, .data 3#u8, .data 2#u8, .data 1#u8] littleDecoded = some 4#u8 ∧
+    wordByteRun bigEndianRepr #v[.data 1#u8, .data 2#u8, .data 3#u8, .data 4#u8] bigDecoded = some 1#u8 := by
   native_decide
 
 theorem cross_byte_word_counterexample :
@@ -116,12 +139,12 @@ theorem cross_byte_word_counterexample :
   native_decide
 
 theorem no_uniform_word_byte_prediction :
-    ¬ ∃ prediction : U8, ∀ (repr : Aeneas.Std.Repr U32) (data : Vector U8 repr.size)
-      (decoded : repr.decode data = some 0x01020304#u32),
-      wordByteRun repr data decoded = some prediction := by
+    ¬ ∃ prediction : U8, ∀ (repr : Aeneas.Std.Repr U32) (data : Vector Aeneas.Std.Byte repr.size)
+      (encoded : repr.encode 0x01020304#u32 data),
+      wordByteRun repr data encoded = some prediction := by
   rintro ⟨prediction, h⟩
-  have little := h raw_box.u32Repr #v[4#u8, 3#u8, 2#u8, 1#u8] littleDecoded
-  have big := h bigEndianRepr #v[1#u8, 2#u8, 3#u8, 4#u8] bigDecoded
+  have little := h raw_box.u32Repr #v[.data 4#u8, .data 3#u8, .data 2#u8, .data 1#u8] littleDecoded
+  have big := h bigEndianRepr #v[.data 1#u8, .data 2#u8, .data 3#u8, .data 4#u8] bigDecoded
   rw [cross_word_byte_counterexample.1] at little
   rw [cross_word_byte_counterexample.2] at big
   have bad : (4#u8) = 1#u8 := (Option.some.inj little).trans (Option.some.inj big).symm

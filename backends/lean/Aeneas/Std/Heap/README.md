@@ -266,19 +266,23 @@ resources, without asking clients to prove the resulting heap's `check`.
 local supporting resources for pointer payload provenance. Every arbitrary
 matching frame and every permitted encoding successor is preserved.
 
-The current `SupportsValue` condition uses a live resource with the pointer's
-view index; the concrete address is already machine-representable. It need not
-give permission at the pointer's address; `supportsValue_pointer_alloc` obtains this
-evidence from cleanup resources. This sufficient condition does not yet cover
-writing a dangling pointer using only an existing pointer-slot resource, although
-the raw transition supports such a write. Clients of the pointer-free contracts
-need only the footprint and a positive representation size.
+`SupportsValue` accepts provenance metadata from either a resource for the
+referenced view or an existing stored pointer lane. The latter covers pointers
+to retired views: copying a dangling pointer need not access its former target.
+`write_local.spec` and `write_pointsTo_local.spec` use the complete local
+footprint, including the overwritten value, without depending on an arbitrary
+external frame. The linked-list examples derive this evidence from their own
+nodes and stored links. Pointer-free clients need only the footprint and a
+positive representation size.
 
 Low-level `writeAt.spec` retains the exact input-state/check interface.
 Restoration to writer permission still uses state-specific checked contracts:
 reintroducing a writer can conflict with another logically separated view.
-Backward-continuation return authority has not yet been encoded as a separation
-resource; borrowed-cell ownership alone is deliberately not treated as sufficient.
+Matching forward/backward contracts capture authority at the exact
+forward-produced state; borrowed-cell ownership alone is deliberately not
+treated as sufficient. Lexical `RootTriple` scopes retain whole-root return
+authority through byte operations and retirement, with their own frame rule.
+An empty root scope gives an ordinary framed `Triple` via `RootTriple.toTriple`.
 
 `Initialization.lean` now initializes arbitrary writable symbolic bytes, including
 uninitialized and previously invalid values. Pointer initialization has a local
@@ -292,9 +296,12 @@ would not justify a representation-crossing mutable loan.
 Returning the final share to depth zero is deliberately not inferred from a
 positive-depth footprint: conflicting readers may still exist in other views.
 `RangeRestoration.lean` preserves arbitrary frames and all encoding successors
-for an enabled range return. Its explicitly state-specific contract requires a
-compatible return witness; this is a low-level boundary, not the completed
-backward-resource authority contract. Empty transfers preserve the heap.
+for range returns. `borrowRange_return.spec` captures the original exclusive
+footprint and derives enabledness for every pointer-free replacement vector,
+without a client-supplied compatible-return witness. The corresponding shared
+return contract likewise captures the matching forward state. General
+standalone restoration remains a low-level state-specific boundary.
+Empty transfers preserve the heap.
 
 `PointerOps.lean` provides uniform replacement, unaligned access, and atomic
 snapshot-swap contracts. Swapping two exclusive footprints derives physical
@@ -304,9 +311,9 @@ the snapshots, so initialization and pointer lanes are preserved.
 
 `Allocation.lean` proves fresh-view creation and whole-view retirement with
 arbitrary matching frames. Retirement now derives invariant preservation without
-a client-side final check. `RootReturn` records exact root coverage and alias
-absence for the remaining state-specific owned-return contract; cleanup layout
-resources alone do not supply this authority.
+a client-side final check. `RootReturn` records exact root coverage and alias absence.
+Owned conversion produces it, and `RootTriple` carries it through the Box and
+owning-list lifecycles; cleanup layout resources alone do not supply it.
 `Borrowing.lean` proves exact selected-view borrow,
 share, decrement, and restoration contracts. Borrow and share now have uniform
 resource-only enabling proofs, including points-to wrappers; decrement and
@@ -318,6 +325,12 @@ scaled pointer movement, allocation/exposure, and ownership-return contracts
 for the Rust wrappers. Nonowning exposure produces `readable`, which promises
 decoding without falsely requiring the observed bytes to encode a scalar write.
 Baseline nonowning return is uniformly enabled by whole-view resources.
+For an exclusive exposure, `newBlock_exposure_carries` proves that external
+readable views cannot supply extra pointer lanes: they would conflict with the
+new writer. `allocExposure_encoded.spec` combines this fact with a static
+descriptor calibration law to obtain an admissible representation, rather than
+assuming every numerically readable value is writable. The array callback
+example uses this distinction to recover all four updated bytes as a safe word.
 Allocation explicitly requires compatible placement feasibility and covers every
 permitted successor. `RawPtr.borrowWithBack` now pairs a raw-to-safe borrow with
 its effectful backward computation. Its scoped contract derives restoration
@@ -377,13 +390,23 @@ overlap/check/preservation obligations, while backward-return authority remains
 an explicit limitation rather than an unconditional borrowed-cell rule.
 An independent read-only review of the scoped backward-call contracts and
 provenance-field rename found no significant issues.
+A subsequent independent read-only review of the restored Box, range, array,
+pointer-support and full linked-list proofs found no significant issues. It
+confirmed the remaining nested re-exposure protocol, pointer-free returned-value
+restriction, concrete node-layout calibration and extraction-coverage limits
+described here.
 
-For restored ordinary clients, the finer model adds descriptor calibration and
-explicit concrete-base arguments, but not overlap/check/preservation subproofs.
-Pointer-bearing writes additionally need provenance-support evidence.
-Nested safe/raw scopes and allocation lifecycle proofs still require library
-authority work; their current failures are not evidence of an unavoidable
-client proof burden. No before/after proof-time benchmark has been performed.
+For ordinary clients, the finer model adds descriptor calibration and, for
+interior views, concrete-base arguments, but not overlap/check/preservation
+subproofs. Pointer-bearing writes additionally need local provenance evidence.
+Linked-list helpers infer it from stored links; full-node assertions use the
+node's address as the view base. `NodeLayout` is an explicit static calibration
+of an arbitrary node descriptor, not a new layout axiom or a supplied concrete
+Rust ABI descriptor. The safe list's `ListState` hides its node addresses,
+length invariant and root return authority. Its API contracts specify complete
+payload sequences for construction, push, pop, front/back, clear and drop.
+All five raw insert/remove alias cases and the finite-chain proofs are retained.
+No before/after proof-time benchmark has been performed.
 
 From `backends/lean`:
 
@@ -403,21 +426,36 @@ corrected functions, directly alongside those functions, with exact standard-axi
 guards. From `tests/lean`, `lake build RawReadWriteRead` passes.
 Its arbitrary-descriptor theorem requires the descriptor-calibration fact that
 the scalar write cannot encode pointer payloads, in addition to positive size.
-The little-endian word and pair descriptors in `RawBoxProofs` have also been
-migrated and checked independently; that is not a successful build of its
-remaining lifecycle proofs.
+The entire existing example series now passes, from `tests/lean`:
 
-**Backward-resource restoration/cleanup authority and the rest of the extracted
-example series remain migration work.** Nonempty range restoration has an honest
-state-specific enabledness premise, not a resource-only backward contract.
-An unconditional restoration contract from borrowed cells alone would be false
-in the presence of arbitrary overlapping views.
-No target was removed to obtain the passing build.
-Bounded ID capacity is not placement feasibility,
-and cleanup ownership is not absence of other live views.
-The extracted RawBox/RawPointerOps/RawTransmute/RawValueCasts/DoublyLinked proof
-series still fails to build against these new contracts.
-The latest combined build fails first in `RawBoxProofs`, `RawBoxManual`, and
-`DoublyLinked.RawProperties`. The external `borrow_four` wrapper now uses the
-matching backward primitive, but its module depends on failing `RawBoxProofs`
-and therefore has not been validated end-to-end.
+```
+lake build RawBox RawBoxProofs RawBoxManual RawReadWriteRead RawTransmute \
+  RawValueCasts RawTransmuteExternals RawPointerOps DoublyLinked
+```
+
+This includes Box lifecycles, matching borrowed/shared callbacks, range fill
+and return, scalar casts, the complete array callback and safe owning lists.
+Applicable exact axiom guards admit only the standard Lean logical axioms.
+No targets, cases or functional postconditions were removed to obtain this build.
+Actual zero-sized raw reads remain deliberately disabled.
+
+**Remaining scope:** the newer heap-uninitialized, eight-u16/sixteen-u8,
+pointer-as-integer and nested boxed-slice Rust scenarios are native tests in
+`tests/src/raw_pointer_ops.rs`; their twelve-test suite passes. These four
+additions are under `cfg(test)`, so they are not extracted Lean client proofs.
+The heap-level `nestedSlices` regression covers shrinking views and restoration,
+but is not a replacement for a framed theorem for the Rust safe/raw callback
+chain. Matching callback contracts currently apply at the forward-produced
+state; threading their authority through nested re-exposures and child
+retirement still requires a general library protocol. Retired records remain in
+the state, so returning a child does not literally restore the parent's saved
+state. Neither unconditional borrowed-cell restoration nor another heap-check
+premise in the client solves that missing abstraction.
+
+No adapted fixture was overwritten by regeneration. An isolated extraction
+attempt with the restored pinned Charon and rebuilt compiler produced LLBC for
+the four newer scenarios, but Lean translation still failed: safe-place raw
+borrowing is unsupported, and const/mut pointer reads clash under `RawPtr.read`.
+The generated partial files are not proof coverage; see `tests/lean/EXTRACTION.md`.
+Bounded ID capacity is not placement feasibility, and cleanup ownership is not
+absence of other live views.

@@ -142,9 +142,10 @@ theorem writeAt.spec (repr : Repr ty) (p : RawPtr ty) (s : Heap) (blk : Block)
 /-- Exclusive cells authorize every admissible write. Pointer payload provenance
 come from local resources `R`; no whole-heap compatibility check is exposed.
 Every matching frame and every encoding successor is retained. -/
-theorem write_supported.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
+theorem write_local.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
     (old : Vector Byte repr.size) (value : ty) (R : Assertion)
-    (support : ∀ h, R h → SupportsValue repr value h) (hsize : 0 < repr.size) :
+    (support : ∀ h, sep (block repr p bptr (old.map (Cell.shared 0)).toList) R h →
+      SupportsValue repr value h) (hsize : 0 < repr.size) :
     Triple (sep (block repr p bptr (old.map (Cell.shared 0)).toList) R)
       (State.write repr p value)
       (fun _ => sep (pointsTo repr p bptr value) R) := by
@@ -154,7 +155,8 @@ theorem write_supported.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
   obtain ⟨hlo, ha, rfl⟩ := hp
   obtain ⟨blk, hb, hl, hlive, hbase, selected⟩ := bytes_of_matches hsize parts.1
   subst bptr
-  have payloads := supportsValue_valid (support b hr) parts.2
+  have payloads := supportsValue_valid
+    (support _ ⟨_, b, hab, rfl, ⟨hlo, ha, rfl⟩, hr⟩) matched.1 hinv
   obtain ⟨data, encoded⟩ := repr.encode_complete value
   have valid := Heap.update_Inv hinv hl hb
     (old.map (Cell.shared 0)) (data.map (Cell.shared 0)) selected
@@ -167,6 +169,28 @@ theorem write_supported.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
     ⟨data, encoded, valid.2⟩
   have framed := frameAt (R := R) ht
   exact framed _ F ⟨_, b, hab, rfl, ⟨hlo, ha, rfl⟩, hr⟩ hd hm hinv
+
+theorem write_supported.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
+    (old : Vector Byte repr.size) (value : ty) (R : Assertion)
+    (support : ∀ h, R h → SupportsValue repr value h) (hsize : 0 < repr.size) :
+    Triple (sep (block repr p bptr (old.map (Cell.shared 0)).toList) R)
+      (State.write repr p value)
+      (fun _ => sep (pointsTo repr p bptr value) R) := by
+  apply write_local.spec repr p bptr old value R ?_ hsize
+  rintro h ⟨a, b, _, rfl, _, hr⟩ q carried
+  exact (support b hr q carried).mono (fun _ member => .inr member)
+
+theorem write_pointsTo_local.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
+    (old value : ty) (R : Assertion)
+    (support : ∀ h, sep (pointsTo repr p bptr old) R h → SupportsValue repr value h)
+    (hsize : 0 < repr.size) :
+    Triple (sep (pointsTo repr p bptr old) R) (State.write repr p value)
+      (fun _ => sep (pointsTo repr p bptr value) R) := by
+  rintro h F s ⟨a, b, hab, rfl, ⟨bytes, encoded, hp⟩, hr⟩ hd hm hinv
+  apply write_local.spec repr p bptr bytes value R ?_ hsize _ F s
+    ⟨a, b, hab, rfl, hp, hr⟩ hd hm hinv
+  rintro fragment ⟨cells, rest, disjoint, rfl, block, hr⟩
+  exact support _ ⟨cells, rest, disjoint, rfl, ⟨bytes, encoded, block⟩, hr⟩
 
 /-- Ordinary pointer-free writes need only their exclusive footprint. -/
 theorem write.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
@@ -191,6 +215,13 @@ theorem write_pointsTo_supported.spec (repr : Repr ty) (p : RawPtr ty) (bptr : B
 theorem write_pointsTo.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
     (old value : ty) (noPointers : ∀ q, ¬ repr.Carries value q) (hsize : 0 < repr.size) :
     Triple (pointsTo repr p bptr old) (State.write repr p value)
+      (fun _ => pointsTo repr p bptr value) := by
+  rintro h F s ⟨bytes, _, hp⟩ hd hm hinv
+  exact write.spec repr p bptr bytes value noPointers hsize h F s hp hd hm hinv
+
+theorem write_readable.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
+    (old value : ty) (noPointers : ∀ q, ¬ repr.Carries value q) (hsize : 0 < repr.size) :
+    Triple (readable repr p bptr old) (State.write repr p value)
       (fun _ => pointsTo repr p bptr value) := by
   rintro h F s ⟨bytes, _, hp⟩ hd hm hinv
   exact write.spec repr p bptr bytes value noPointers hsize h F s hp hd hm hinv

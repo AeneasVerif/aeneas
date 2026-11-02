@@ -1,6 +1,8 @@
 module
 
 public import DoublyLinked.Raw
+import all DoublyLinked.Raw
+public import Aeneas.Std.Heap.EffectSpecs
 import all Aeneas.Std.Heap.Separation
 
 @[expose] public section
@@ -9,10 +11,57 @@ open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
 namespace doubly_linked
 
+variable {roots : List Nat}
+
 abbrev Ptr := MutRawPtr Node
 
-def nodeAt (repr : Aeneas.Std.Repr Node) (p prev next : Ptr) (value : U32) : Assertion :=
-  pointsTo repr p (.mk prev next value)
+/-- Calibration of the two stored pointer fields, independently of their
+physical offsets or the padding chosen by a concrete Rust layout. -/
+structure NodeLayout (repr : Aeneas.Std.Repr Node) : Prop where
+  carries : ∀ node q, repr.Carries node q →
+    q.provenance = node.prev.provenance ∨ q.provenance = node.next.provenance
+  links : ∀ node bytes, repr.encode node bytes →
+    (∃ i : Fin repr.size, ∃ lane, bytes[i.val] = .pointer (node.prev.cast Unit) lane) ∧
+    (∃ i : Fin repr.size, ∃ lane, bytes[i.val] = .pointer (node.next.cast Unit) lane)
+
+def nodeAt (repr : Aeneas.Std.Repr Node)
+    (p prev next : Ptr) (value : U32) : Assertion :=
+  pointsTo repr p p.address (.mk prev next value)
+
+def Knows (P : Assertion) (q : Ptr) : Prop :=
+  ∀ h, P h → HasProvenance h q.provenance
+
+theorem Knows.left {P R : Assertion} {q : Ptr} (known : Knows P q) : Knows (sep P R) q := by
+  rintro h ⟨a, b, _, rfl, hp, _⟩
+  exact (known a hp).mono (fun _ hr => .inl hr)
+
+theorem Knows.right {P R : Assertion} {q : Ptr} (known : Knows R q) : Knows (sep P R) q := by
+  rintro h ⟨a, b, _, rfl, _, hr⟩
+  exact (known b hr).mono (fun _ member => .inr member)
+
+theorem nodeAt_knows (repr : Aeneas.Std.Repr Node) (layout : NodeLayout repr)
+     (p prev next : Ptr) (value : U32) (hsize : 0 < repr.size) :
+    Knows (nodeAt repr p prev next value) p ∧
+      Knows (nodeAt repr p prev next value) prev ∧
+      Knows (nodeAt repr p prev next value) next := by
+  have known (h : Fragment) (hp : nodeAt repr p prev next value h) :
+      HasProvenance h p.provenance ∧ HasProvenance h prev.provenance ∧
+        HasProvenance h next.provenance := by
+    obtain ⟨data, encoded, _, _, cells⟩ := hp
+    have member (i : Fin repr.size) :
+        h (.cell p.provenance (p.offsetFrom p.address + i.val) p.address
+          (.shared 0 data[i.val])) := by
+      rw [cells]
+      exact ⟨i.val, by simp, by simp⟩
+    obtain ⟨⟨i, lane, previous⟩, ⟨j, otherLane, following⟩⟩ :=
+      layout.links (.mk prev next value) data encoded
+    refine ⟨.inl ⟨_, member ⟨0, hsize⟩, rfl⟩, ?_, ?_⟩
+    · exact .inr ⟨p.provenance, _, p.address, 0, prev.cast Unit, lane,
+        previous ▸ member i, rfl⟩
+    · exact .inr ⟨p.provenance, _, p.address, 0, next.cast Unit, otherLane,
+        following ▸ member j, rfl⟩
+  exact ⟨fun h hp => (known h hp).1, fun h hp => (known h hp).2.1,
+    fun h hp => (known h hp).2.2⟩
 
 @[simp] theorem Node.mk_eta (node : Node) : Node.mk node.prev node.next node.value = node := by
   cases node
@@ -22,180 +71,228 @@ def nodeAt (repr : Aeneas.Std.Repr Node) (p prev next : Ptr) (value : U32) : Ass
     Node.Insts.CoreCloneClone.clone node ⦃ (result : Node) => result = node ⦄ := by
   simp [Node.Insts.CoreCloneClone.clone]
 
-theorem frameLeft {P R : Assertion} {c : Result α} {Q : α → Assertion}
-    (ht : HeapWP.Triple P c Q) :
-    HeapWP.Triple (sep R P) c (fun x => sep R (Q x)) :=
-  HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
-    (fun _ h hp => (sep_comm _ _ h).mp hp) (HeapWP.frame ht)
-
 theorem framePure {P R : Assertion} {c : Result α} {A : α → Prop} {Q : α → Assertion}
-    (ht : HeapWP.Triple P c (fun x h => A x ∧ Q x h)) :
-    HeapWP.Triple (sep P R) c (fun x h => A x ∧ sep (Q x) R h) :=
-  HeapWP.Triple.conseq (fun _ hp => hp)
-    (fun _ h hp => (sep_and_left _ _ _ h).mp hp) (HeapWP.frame ht)
+    (ht : HeapWP.RootTriple roots P c (fun x h => A x ∧ Q x h)) :
+    HeapWP.RootTriple roots (sep P R) c (fun x h => A x ∧ sep (Q x) R h) :=
+  HeapWP.RootTriple.conseq (fun _ hp => hp)
+    (fun _ h hp => (sep_and_left _ _ _ h).mp hp) (HeapWP.RootTriple.frame ht)
 
 theorem frameLeftPure {P R : Assertion} {c : Result α} {A : α → Prop} {Q : α → Assertion}
-    (ht : HeapWP.Triple P c (fun x h => A x ∧ Q x h)) :
-    HeapWP.Triple (sep R P) c (fun x h => A x ∧ sep R (Q x) h) :=
-  HeapWP.Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (ht : HeapWP.RootTriple roots P c (fun x h => A x ∧ Q x h)) :
+    HeapWP.RootTriple roots (sep R P) c (fun x h => A x ∧ sep R (Q x) h) :=
+  HeapWP.RootTriple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ h hp => ⟨hp.1, (sep_comm _ _ h).mp hp.2⟩) (framePure ht)
 
-variable (repr : Aeneas.Std.Repr Node) (hsize : 0 < repr.size)
+theorem frameLeft {P R : Assertion} {c : Result α} {Q : α → Assertion}
+    (ht : HeapWP.RootTriple roots P c Q) :
+    HeapWP.RootTriple roots (sep R P) c (fun x => sep R (Q x)) :=
+  HeapWP.RootTriple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ h hp => (sep_comm _ _ h).mp hp) (HeapWP.RootTriple.frame ht)
+
+theorem sep_middle (P Q R : Assertion) (h : Fragment) :
+    sep P (sep Q R) h ↔ sep Q (sep P R) h := by
+  rw [← sep_assoc P Q R h, ← sep_assoc Q P R h]
+  exact ⟨sep_mono (fun h hp => (sep_comm P Q h).mp hp) (fun _ hp => hp),
+    sep_mono (fun h hp => (sep_comm Q P h).mp hp) (fun _ hp => hp)⟩
+
+theorem focusMiddle {P Q Q' R : Assertion} {c : Result α}
+    (ht : HeapWP.RootTriple roots (sep Q (sep P R)) c (fun _ => sep Q' (sep P R))) :
+    HeapWP.RootTriple roots (sep P (sep Q R)) c (fun _ => sep P (sep Q' R)) :=
+  HeapWP.RootTriple.conseq (fun h hp => (sep_middle _ _ _ h).mp hp)
+    (fun _ h hp => (sep_middle _ _ _ h).mp hp) ht
+
+theorem focusLast {P Q R R' : Assertion} {c : Result α}
+    (ht : HeapWP.RootTriple roots (sep R (sep P Q)) c (fun _ => sep R' (sep P Q))) :
+    HeapWP.RootTriple roots (sep P (sep Q R)) c (fun _ => sep P (sep Q R')) :=
+  HeapWP.RootTriple.conseq
+    (fun h hp => (sep_comm _ _ h).mp ((sep_assoc _ _ _ h).mpr hp))
+    (fun _ h hp => (sep_assoc _ _ _ h).mp ((sep_comm _ _ h).mp hp)) ht
+
+variable (repr : Aeneas.Std.Repr Node) (layout : NodeLayout repr)
+    (hsize : 0 < repr.size)
 include hsize
 
 theorem ext.read_node.spec (p : Ptr) (old : Node) :
-    HeapWP.Triple (pointsTo repr p old) (ext.read_node repr p)
-      (fun result h => result = old ∧ pointsTo repr p old 0 h) := by
-  exact HeapWP.read.spec repr p old 0 hsize
+    HeapWP.RootTriple roots (pointsTo repr p p.address old) (ext.read_node repr p)
+      (fun result h => result = old ∧ pointsTo repr p p.address old 0 h) :=
+  HeapWP.RootTriple.read repr p p.address old 0 hsize
 
-theorem ext.write_node.spec (p : Ptr) (old value : Node) :
-    HeapWP.Triple (pointsTo repr p old) (ext.write_node repr p value)
-      (fun _ => pointsTo repr p value) := by
-  exact HeapWP.write.spec repr p old value hsize
+include layout
 
-theorem init.spec (node : Ptr) (old : Node) (value : U32) :
-    HeapWP.Triple (pointsTo repr node old) (init repr node value)
-      (fun _ => nodeAt repr node node node value) := by
-  /- One whole-node write establishes both self-links and the supplied payload. -/
-  exact ext.write_node.spec repr hsize node old _
+theorem ext.write_node.spec (p : Ptr) (old value : Node) (R : Assertion)
+    (previous : Knows (sep (pointsTo repr p p.address old) R) value.prev)
+    (following : Knows (sep (pointsTo repr p p.address old) R) value.next) :
+    HeapWP.RootTriple roots (sep (pointsTo repr p p.address old) R) (ext.write_node repr p value)
+      (fun _ => sep (pointsTo repr p p.address value) R) := by
+  apply HeapWP.RootTriple.write_local repr p p.address old value R ?_ hsize
+  intro h hp q carried
+  rcases layout.carries value q carried with same | same
+  · exact same.symm ▸ previous h hp
+  · exact same.symm ▸ following h hp
 
-theorem set_next.spec (node next : Ptr) (old : Node) :
-    HeapWP.Triple (pointsTo repr node old) (set_next repr node next)
-      (fun _ => nodeAt repr node old.prev next old.value) := by
-  /- Read the current whole node, retain its predecessor and payload, then write. -/
+theorem init.spec (node : Ptr) (old : Node) (value : U32) (R : Assertion) :
+    HeapWP.RootTriple roots (sep (pointsTo repr node node.address old) R) (init repr node value)
+      (fun _ => sep (nodeAt repr node node node value) R) := by
+  have known := (nodeAt_knows repr layout node old.prev old.next old.value hsize).1.left
+    (R := R)
+  simpa only [nodeAt, Node.mk_eta, init] using
+    ext.write_node.spec (roots := roots) repr layout hsize node old (.mk node node value) R known known
+
+theorem set_next.spec (node next : Ptr) (old : Node) (R : Assertion)
+    (newLink : Knows (sep (pointsTo repr node node.address old) R) next) :
+    HeapWP.RootTriple roots (sep (pointsTo repr node node.address old) R) (set_next repr node next)
+      (fun _ => sep (nodeAt repr node old.prev next old.value) R) := by
   unfold set_next
-  apply HeapWP.Triple.bind (ext.read_node.spec repr hsize node old)
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize node old))
   intro observed
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst observed
-  exact ext.write_node.spec repr hsize node old _
+  apply ext.write_node.spec (roots := roots) repr layout hsize node old (.mk old.prev next old.value) R ?_ newLink
+  simpa only [nodeAt, Node.mk_eta, Node.prev._simpLemma_] using
+    (nodeAt_knows repr layout node old.prev old.next old.value hsize).2.1.left (R := R)
 
-theorem set_prev.spec (node prev : Ptr) (old : Node) :
-    HeapWP.Triple (pointsTo repr node old) (set_prev repr node prev)
-      (fun _ => nodeAt repr node prev old.next old.value) := by
-  /- Symmetric to set_next; crucially this reads after any previous link update. -/
+theorem set_prev.spec (node prev : Ptr) (old : Node) (R : Assertion)
+    (newLink : Knows (sep (pointsTo repr node node.address old) R) prev) :
+    HeapWP.RootTriple roots (sep (pointsTo repr node node.address old) R) (set_prev repr node prev)
+      (fun _ => sep (nodeAt repr node prev old.next old.value) R) := by
   unfold set_prev
-  apply HeapWP.Triple.bind (ext.read_node.spec repr hsize node old)
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize node old))
   intro observed
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst observed
-  exact ext.write_node.spec repr hsize node old _
+  apply ext.write_node.spec (roots := roots) repr layout hsize node old (.mk prev old.next old.value) R newLink ?_
+  simpa only [nodeAt, Node.mk_eta, Node.next._simpLemma_] using
+    (nodeAt_knows repr layout node old.prev old.next old.value hsize).2.2.left (R := R)
 
-theorem insert_after.distinct_spec (left node right previous following : Ptr)
-    (lv nv rv : U32) :
-    HeapWP.Triple
+theorem insert_after.distinct_spec (left node right previous following : Ptr) (lv nv rv : U32) :
+    HeapWP.RootTriple roots
       (sep (nodeAt repr left previous right lv)
         (sep (nodeAt repr node node node nv) (nodeAt repr right left following rv)))
       (insert_after repr left node)
       (fun _ => sep (nodeAt repr left previous node lv)
         (sep (nodeAt repr node left right nv) (nodeAt repr right node following rv))) := by
-  /- Read left and the detached node; write the inserted links. Frame the other
-  two nodes around each write, then update left.next and right.prev. -/
   unfold insert_after
-  apply HeapWP.Triple.bind (framePure (ext.read_node.spec repr hsize left (.mk previous right lv)))
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize left (.mk previous right lv)))
   intro before
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst before
-  apply HeapWP.Triple.bind
+  apply HeapWP.RootTriple.bind
     (frameLeftPure (framePure (ext.read_node.spec repr hsize node (.mk node node nv))))
   intro inserted
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst inserted
-  apply HeapWP.Triple.bind
-    (frameLeft (HeapWP.frame (ext.write_node.spec repr hsize node (.mk node node nv) _)))
+  apply HeapWP.RootTriple.bind (focusMiddle
+    (ext.write_node.spec (roots := roots) repr layout hsize node (.mk node node nv) (.mk left right nv) _
+      (nodeAt_knows repr layout left previous right lv hsize |>.1.left.right)
+      (nodeAt_knows repr layout right left following rv hsize |>.1.right.right)))
   intro _
-  apply HeapWP.Triple.bind (HeapWP.frame (set_next.spec repr hsize left node (.mk previous right lv)))
+  apply HeapWP.RootTriple.bind
+    (set_next.spec (roots := roots) repr layout hsize left node (.mk previous right lv) _
+      (nodeAt_knows repr layout node left right nv hsize |>.1.left.right))
   intro _
-  exact frameLeft (frameLeft (set_prev.spec repr hsize right node (.mk left following rv)))
+  exact focusLast (set_prev.spec (roots := roots) repr layout hsize right node (.mk left following rv) _
+    (nodeAt_knows repr layout node left right nv hsize |>.1.right.right))
 
 theorem insert_after.empty_spec (root node : Ptr) (sv nv : U32) :
-    HeapWP.Triple
+    HeapWP.RootTriple roots
       (sep (nodeAt repr root root root sv) (nodeAt repr node node node nv))
       (insert_after repr root node)
       (fun _ => sep (nodeAt repr root node node sv) (nodeAt repr node root root nv)) := by
-  /- The successor aliases root. set_prev must reread the updated root rather
-  than overwrite its new next pointer with the original snapshot. -/
   unfold insert_after
-  apply HeapWP.Triple.bind (framePure (ext.read_node.spec repr hsize root (.mk root root sv)))
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize root (.mk root root sv)))
   intro before
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst before
-  apply HeapWP.Triple.bind (frameLeftPure (ext.read_node.spec repr hsize node (.mk node node nv)))
+  apply HeapWP.RootTriple.bind (frameLeftPure (ext.read_node.spec repr hsize node (.mk node node nv)))
   intro inserted
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst inserted
-  apply HeapWP.Triple.bind
-    (frameLeft (ext.write_node.spec repr hsize node (.mk node node nv) _))
+  have write := ext.write_node.spec (roots := roots) repr layout hsize node (.mk node node nv) (.mk root root nv)
+    (nodeAt repr root root root sv)
+    (nodeAt_knows repr layout root root root sv hsize |>.1.right)
+    (nodeAt_knows repr layout root root root sv hsize |>.1.right)
+  apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq
+    (fun h hp => (sep_comm _ _ h).mp hp) (fun _ h hp => (sep_comm _ _ h).mp hp) write)
   intro _
-  apply HeapWP.Triple.bind (HeapWP.frame (set_next.spec repr hsize root node (.mk root root sv)))
+  apply HeapWP.RootTriple.bind
+    (set_next.spec (roots := roots) repr layout hsize root node (.mk root root sv) _
+      (nodeAt_knows repr layout node root root nv hsize |>.1.right))
   intro _
-  exact HeapWP.frame (set_prev.spec repr hsize root node (.mk root node sv))
+  exact set_prev.spec (roots := roots) repr layout hsize root node (.mk root node sv) _
+    (nodeAt_knows repr layout node root root nv hsize |>.1.right)
 
-theorem remove.distinct_spec (node previous following outerPrev outerNext : Ptr)
-    (nv pv fv : U32) :
-    HeapWP.Triple
+theorem remove.distinct_spec (node previous following outerPrev outerNext : Ptr) (nv pv fv : U32) :
+    HeapWP.RootTriple roots
       (sep (nodeAt repr node previous following nv)
         (sep (nodeAt repr previous outerPrev node pv) (nodeAt repr following node outerNext fv)))
       (remove repr node)
       (fun _ => sep (nodeAt repr node node node nv)
         (sep (nodeAt repr previous outerPrev following pv)
           (nodeAt repr following previous outerNext fv))) := by
-  /- Follow the stored links, reconnect the two neighbours using framed setters,
-  then initialize the removed node's self-links with its original payload. -/
   unfold remove
-  apply HeapWP.Triple.bind (framePure (ext.read_node.spec repr hsize node (.mk previous following nv)))
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize node (.mk previous following nv)))
   intro old
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst old
-  apply HeapWP.Triple.bind
-    (frameLeft (HeapWP.frame (set_next.spec repr hsize previous following (.mk outerPrev node pv))))
+  apply HeapWP.RootTriple.bind (focusMiddle
+    (set_next.spec (roots := roots) repr layout hsize previous following (.mk outerPrev node pv) _
+      (nodeAt_knows repr layout following node outerNext fv hsize |>.1.right.right)))
   intro _
-  apply HeapWP.Triple.bind
-    (frameLeft (frameLeft (set_prev.spec repr hsize following previous (.mk node outerNext fv))))
+  apply HeapWP.RootTriple.bind (focusLast
+    (set_prev.spec (roots := roots) repr layout hsize following previous (.mk node outerNext fv) _
+      (nodeAt_knows repr layout previous outerPrev following pv hsize |>.1.right.right)))
   intro _
-  exact HeapWP.frame (init.spec repr hsize node (.mk previous following nv) nv)
+  exact init.spec (roots := roots) repr layout hsize node (.mk previous following nv) nv _
 
 theorem remove.last_spec (node root : Ptr) (nv sv : U32) :
-    HeapWP.Triple
+    HeapWP.RootTriple roots
       (sep (nodeAt repr node root root nv) (nodeAt repr root node node sv))
       (remove repr node)
       (fun _ => sep (nodeAt repr node node node nv) (nodeAt repr root root root sv)) := by
-  /- Both neighbours are root: sequential setter specs preserve both updates.
-  The removed node stays allocated and readable with the same payload. -/
   unfold remove
-  apply HeapWP.Triple.bind (framePure (ext.read_node.spec repr hsize node (.mk root root nv)))
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize node (.mk root root nv)))
   intro old
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst old
-  apply HeapWP.Triple.bind (frameLeft (set_next.spec repr hsize root root (.mk node node sv)))
+  have next := set_next.spec (roots := roots) repr layout hsize root root (.mk node node sv)
+    (nodeAt repr node root root nv)
+    (nodeAt_knows repr layout root node node sv hsize |>.1.left)
+  apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq
+    (fun h hp => (sep_comm _ _ h).mp hp) (fun _ h hp => (sep_comm _ _ h).mp hp) next)
   intro _
-  apply HeapWP.Triple.bind (frameLeft (set_prev.spec repr hsize root root (.mk node root sv)))
+  have prev := set_prev.spec (roots := roots) repr layout hsize root root (.mk node root sv)
+    (nodeAt repr node root root nv)
+    (nodeAt_knows repr layout root node root sv hsize |>.1.left)
+  apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq
+    (fun h hp => (sep_comm _ _ h).mp hp) (fun _ h hp => (sep_comm _ _ h).mp hp) prev)
   intro _
-  exact HeapWP.frame (init.spec repr hsize node (.mk root root nv) nv)
+  exact init.spec (roots := roots) repr layout hsize node (.mk root root nv) nv _
 
 theorem remove.detached_spec (node : Ptr) (value : U32) :
-    HeapWP.Triple (nodeAt repr node node node value) (remove repr node)
+    HeapWP.RootTriple roots (nodeAt repr node node node value) (remove repr node)
       (fun _ => nodeAt repr node node node value) := by
-  /- All three pointers alias; each setter and init preserves the same node. -/
+  apply HeapWP.RootTriple.conseq (fun h hp => (sep_emp_right _ h).mpr hp)
+    (fun _ h hp => (sep_emp_right _ h).mp hp)
   unfold remove
-  apply HeapWP.Triple.bind (ext.read_node.spec repr hsize node (.mk node node value))
+  apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize node (.mk node node value)))
   intro old
-  apply HeapWP.Triple.pure_pre
-  intro he
+  apply HeapWP.RootTriple.pure_pre
+  intro equal
   subst old
-  apply HeapWP.Triple.bind (set_next.spec repr hsize node node (.mk node node value))
+  have known := nodeAt_knows repr layout node node node value hsize |>.1.left (R := emp)
+  apply HeapWP.RootTriple.bind (set_next.spec (roots := roots) repr layout hsize node node (.mk node node value) emp known)
   intro _
-  apply HeapWP.Triple.bind (set_prev.spec repr hsize node node (.mk node node value))
+  apply HeapWP.RootTriple.bind (set_prev.spec (roots := roots) repr layout hsize node node (.mk node node value) emp known)
   intro _
-  exact init.spec repr hsize node (.mk node node value) value
+  exact init.spec (roots := roots) repr layout hsize node (.mk node node value) value emp
 
 /-- info: 'doubly_linked.insert_after.distinct_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in

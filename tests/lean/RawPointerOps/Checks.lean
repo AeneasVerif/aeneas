@@ -18,11 +18,14 @@ namespace raw_pointer_ops
 
 def unalignedChecks : Option Bool := do
   let (p, s) ← Heap.newBlock raw_transmute.byteRepr
-    [#v[0xaa#u8], #v[0x12#u8], #v[0x34#u8], #v[0x56#u8], #v[0x78#u8], #v[0xbb#u8]] true Heap.empty
-  let word : RawPtr U32 := ⟨p.provenance, 1#usize⟩
+    [#v[.data 0xaa#u8], #v[.data 0x12#u8], #v[.data 0x34#u8],
+      #v[.data 0x56#u8], #v[.data 0x78#u8], #v[.data 0xbb#u8]] true 4#usize none Heap.empty
+  let word : RawPtr U32 := ⟨p.provenance, 5#usize⟩
   let before ← Heap.read raw_box.u32Repr.unaligned word s
-  let data := #v[0x21#u8, 0x43#u8, 0x65#u8, 0x87#u8]
-  let s' ← Heap.write raw_box.u32Repr.unaligned word 0x87654321#u32 data (by native_decide) s
+  let data : Vector Aeneas.Std.Byte 4 :=
+    #v[.data 0x21#u8, .data 0x43#u8, .data 0x65#u8, .data 0x87#u8]
+  let s' ← Heap.write raw_box.u32Repr.unaligned word 0x87654321#u32 data
+    (by change data = (raw_box.u32Bytes 0x87654321#u32).map Aeneas.Std.Byte.data; native_decide) s
   let bytes ← Heap.readRange raw_transmute.byteRepr p 6 s'
   pure (before == 0x78563412#u32 && (Heap.read raw_box.u32Repr word s).isNone &&
     bytes == [0xaa#u8, 0x21#u8, 0x43#u8, 0x65#u8, 0x87#u8, 0xbb#u8])
@@ -30,25 +33,27 @@ def unalignedChecks : Option Bool := do
 example : unalignedChecks = some true := by native_decide
 
 def rangeCycleChecks : Option Bool := do
-  let (p, s) ← Heap.newBlock raw_transmute.byteRepr [#v[1#u8], #v[2#u8], #v[3#u8]] true Heap.empty
-  let third : RawPtr U8 := ⟨p.provenance, 2#usize⟩
+  let (p, s) ← Heap.newBlock raw_transmute.byteRepr
+    [#v[.data 1#u8], #v[.data 2#u8], #v[.data 3#u8]] true 1#usize none Heap.empty
+  let third : RawPtr U8 := ⟨p.provenance, 3#usize⟩
   let borrowed ← Heap.borrowRange raw_transmute.byteRepr p 2 s
   let frame ← Heap.read raw_transmute.byteRepr third borrowed
-  let restored ← Heap.endBorrowRange raw_transmute.byteRepr p [#v[7#u8], #v[8#u8]] borrowed
+  let restored ← Heap.endBorrowRange raw_transmute.byteRepr p [#v[.data 7#u8], #v[.data 8#u8]] borrowed
   let shared ← Heap.shareRange raw_transmute.byteRepr p 2 restored
   let values ← Heap.readRange raw_transmute.byteRepr p 3 shared
   let ended ← Heap.endShareRange raw_transmute.byteRepr p 2 shared
   let final ← Heap.readRange raw_transmute.byteRepr p 3 ended
   pure (frame == 3#u8 && values == [7#u8, 8#u8, 3#u8] && final == values &&
     (Heap.readRange raw_transmute.byteRepr p 2 borrowed).isNone &&
-    (Heap.write raw_transmute.byteRepr p 9#u8 #v[9#u8] rfl borrowed).isNone &&
-    (Heap.write raw_transmute.byteRepr p 9#u8 #v[9#u8] rfl shared).isNone)
+    (Heap.write raw_transmute.byteRepr p 9#u8 #v[.data 9#u8] rfl borrowed).isNone &&
+    (Heap.write raw_transmute.byteRepr p 9#u8 #v[.data 9#u8] rfl shared).isNone)
 
 example : rangeCycleChecks = some true := by native_decide
 
 def atomicRangeRejection : Option Bool := do
-  let (p, s) ← Heap.newBlock raw_transmute.byteRepr [#v[1#u8], #v[2#u8]] true Heap.empty
-  let second : RawPtr U8 := ⟨p.provenance, 1#usize⟩
+  let (p, s) ← Heap.newBlock raw_transmute.byteRepr
+    [#v[.data 1#u8], #v[.data 2#u8]] true 1#usize none Heap.empty
+  let second : RawPtr U8 := ⟨p.provenance, 2#usize⟩
   let shared ← Heap.share raw_transmute.byteRepr second s
   let values ← Heap.readRange raw_transmute.byteRepr p 2 shared
   pure ((Heap.borrowRange raw_transmute.byteRepr p 2 shared).isNone &&
@@ -59,17 +64,18 @@ def atomicRangeRejection : Option Bool := do
 example : atomicRangeRejection = some true := by native_decide
 
 def initializationChecks : Option Bool := do
-  let (p, s) ← Heap.alloc raw_box.u32Repr 1 Heap.empty
-  let data := #v[1#u8, 0#u8, 0#u8, 0#u8]
-  let initialized ← Heap.write raw_box.u32Repr p 1#u32 data (by native_decide) s
+  let (p, s) ← Heap.alloc raw_box.u32Repr 1 4#usize Heap.empty
+  let data : Vector Aeneas.Std.Byte 4 := #v[.data 1#u8, .data 0#u8, .data 0#u8, .data 0#u8]
+  let initialized ← Heap.write raw_box.u32Repr p 1#u32 data
+    (by change data = (raw_box.u32Bytes 1#u32).map Aeneas.Std.Byte.data; native_decide) s
   pure ((Heap.read raw_box.u32Repr p s).isNone &&
     (Heap.read raw_box.u32Repr p initialized == some 1#u32))
 
 example : initializationChecks = some true := by native_decide
 
 def movementChecks : Option Bool := do
-  let (p, s) ← Heap.alloc raw_box.u32Repr 3 Heap.empty
-  let (other, s') ← Heap.alloc raw_box.u32Repr 1 s
+  let (p, s) ← Heap.alloc raw_box.u32Repr 3 4#usize Heap.empty
+  let (other, s') ← Heap.alloc raw_box.u32Repr 1 16#usize s
   let finish ← Heap.byteOffset p 12 s'
   let back ← Heap.byteOffset finish (-12) s'
   let positive ← Heap.offsetFrom raw_box.u32Repr finish p s'
@@ -78,8 +84,8 @@ def movementChecks : Option Bool := do
   let unaligned ← Heap.byteOffset p 1 s'
   let zst := raw_box.u32Repr.region 0
   pure (positive.val == 3 && negative.val == -3 && same.val == 0 &&
-    finish.byteOffset == 12#usize && back.byteOffset == p.byteOffset &&
-    unaligned.byteOffset == 1#usize &&
+    finish.address == 16#usize && back.address == p.address &&
+    unaligned.address == 5#usize &&
     (Heap.offsetFrom raw_box.u32Repr unaligned p s').isNone &&
     (Heap.offsetFrom raw_box.u32Repr p other s').isNone &&
     (Heap.offsetFrom zst (RawPtr.cast Unit p) (RawPtr.cast Unit p) s').isNone &&
@@ -88,25 +94,29 @@ def movementChecks : Option Bool := do
 
 example : movementChecks = some true := by native_decide
 
-example : Heap.readRange raw_box.u32Repr (⟨⟨0⟩, ⟨0⟩⟩ : RawPtr U32) 0 Heap.empty = none := by
+example : Heap.readRange raw_box.u32Repr (⟨0, ⟨0⟩⟩ : RawPtr U32) 0 Heap.empty = none := by
   decide
 
 /-- Unsupported partial overlap is explicit failure, not a guessed swap result. -/
 example (s : Heap) :
     ¬ HeapWP.Spec (RawPtr.swap raw_box.u32Repr
-      (⟨⟨0⟩, 0#usize⟩ : RawPtr U32) ⟨⟨0⟩, 1#usize⟩) (fun _ _ => True) s := by
-  simpa [RawPtr.swap, raw_box.u32Repr] using (HeapWP.Spec.fail (α := Unit) (s := s)
-    (Q := fun _ _ => True) .undef)
+      (⟨0, 0#usize⟩ : RawPtr U32) ⟨0, 1#usize⟩) (fun _ _ => True) s := by
+  intro spec
+  obtain ⟨_, s', run⟩ := (HeapWP.Spec.checkedModify.mp spec).1
+  cases hl : s.allocations 0
+  · simp [Heap.swapBytes, hl] at run
+  · simp [Heap.swapBytes, hl, raw_box.u32Repr] at run
 
 /-- The extracted empty-range caller preserves the entire heap. -/
 theorem fill_words_empty.spec (p : MutRawPtr U32) (s : Heap) (blk : Block) (value : U32)
+    (hinv : s.Inv)
     (hl : s.allocations p.provenance = some blk)
-    (ha : raw_box.u32Repr.align.val ∣ blk.alignment.val)
-    (hp : raw_box.u32Repr.align.val ∣ p.byteOffset.val)
-    (hb : p.byteOffset.val ≤ blk.repr.length) :
+    (live : s.live blk = true) (lower : blk.bptr.val ≤ p.address.val)
+    (hp : raw_box.u32Repr.align.val ∣ p.address.val)
+    (hb : p.address.val ≤ blk.bptr.val + blk.repr.length) :
     HeapWP.Spec (fill_words p 0#usize value) (fun _ s' => s' = s) s := by
   simp only [fill_words, ext.fill_words]
-  have hr := HeapWP.emptyRanges.spec raw_box.u32Repr p s blk hl ha hp hb
+  have hr := HeapWP.emptyRanges.spec raw_box.u32Repr p s blk hinv hl live lower hp hb
   apply HeapWP.Spec.bind hr.1
   rintro values current ⟨_, he⟩
   subst current

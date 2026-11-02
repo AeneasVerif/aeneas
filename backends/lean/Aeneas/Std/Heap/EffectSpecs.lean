@@ -44,6 +44,12 @@ theorem write.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (old value : 
       (fun _ => pointsTo repr p bptr value) :=
   Triple.checkedModify (SepLogic.write_pointsTo.spec repr p bptr old value noPointers hsize)
 
+theorem write_readable.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (old value : T) (noPointers : ∀ q, ¬ repr.Carries value q) (hsize : 0 < repr.size) :
+    Triple (readable repr p bptr old) (MutRawPtr.write repr p value)
+      (fun _ => pointsTo repr p bptr value) :=
+  Triple.checkedModify (SepLogic.write_readable.spec repr p bptr old value noPointers hsize)
+
 theorem write_supported.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (old value : T) (R : Assertion)
     (support : ∀ h, R h → SupportsValue repr value h) (hsize : 0 < repr.size) :
@@ -51,6 +57,15 @@ theorem write_supported.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
       (fun _ => sep (pointsTo repr p bptr value) R) :=
   Triple.checkedModify
     (SepLogic.write_pointsTo_supported.spec repr p bptr old value R support hsize)
+
+theorem write_local.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (old value : T) (R : Assertion)
+    (support : ∀ h, sep (pointsTo repr p bptr old) R h → SupportsValue repr value h)
+    (hsize : 0 < repr.size) :
+    Triple (sep (pointsTo repr p bptr old) R) (MutRawPtr.write repr p value)
+      (fun _ => sep (pointsTo repr p bptr value) R) :=
+  Triple.checkedModify
+    (SepLogic.write_pointsTo_local.spec repr p bptr old value R support hsize)
 
 theorem readRange_single.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (value : T) (depth : Nat) (hsize : 0 < repr.size) :
@@ -363,6 +378,25 @@ theorem intoRaw_return.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment
   exact ⟨owned_newBlock_root hi allocated,
     ordinary.2 p s' ⟨data, bptr, root, encoded, allocated⟩⟩
 
+/-- Allocating another owner preserves the return authority of existing live views. -/
+theorem intoRaw_preserving.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
+    (hi : s.Inv) (hm : Fragment.Matches s F)
+    (feasible : ∃ p s', State.newBlock repr [value] true s p s') :
+    Spec (alloc.boxed.Box.into_raw repr value)
+      (fun p s' =>
+        (∀ base actual, s.allocations base = some actual → actual.active = true →
+          RootReturn s base → RootReturn s' base) ∧
+        RootReturn s' p.provenance ∧ s'.next = s.next + 1 ∧
+        ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
+          sep (alloc repr p p.address 1 true) (pointsTo repr p p.address value) h) s := by
+  have ordinary := Spec.checkedModify.mp (intoRaw_return.spec repr value s F hi hm feasible)
+  apply Spec.checkedModify.mpr
+  refine ⟨ordinary.1, ?_⟩
+  intro p s' run
+  obtain ⟨data, bptr, root, encoded, allocated⟩ := run
+  exact ⟨fun _ _ old active authority => authority.newOwned hi old active allocated,
+    ordinary.2 p s' ⟨data, bptr, root, encoded, allocated⟩⟩
+
 theorem allocExposure.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
     (hi : s.Inv) (hm : Fragment.Matches s F)
     (feasible : ∃ p s', State.newBlock repr [value] false s p s') :
@@ -371,6 +405,32 @@ theorem allocExposure.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 false) (readable repr p p.address value) h) s :=
   newBlock.spec repr value false s F hi hm feasible
+
+/-- A static descriptor calibration recovers an admissible representation from
+exclusive exposure. The alias exclusion argument stays inside the library. -/
+theorem allocExposure_encoded.spec (repr : Repr T) (value : T)
+    (calibrated : ∀ bytes, repr.decode bytes = some value →
+      (∀ i : Fin repr.size, ∀ q lane, bytes[i.val] = .pointer q lane → repr.Carries value q) →
+      repr.encode value bytes)
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
+    (feasible : ∃ p s', State.newBlock repr [value] false s p s') :
+    Spec (RawPtr.allocExposure repr [value])
+      (fun p s' => s'.next = s.next + 1 ∧
+        ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
+          sep (alloc repr p p.address 1 false) (pointsTo repr p p.address value) h) s := by
+  apply Spec.checkedModify.mpr
+  refine ⟨feasible, ?_⟩
+  rintro p s' ⟨data, bptr, root, exposed, created⟩
+  cases data
+  · contradiction
+  · rename_i bytes tail
+    cases tail
+    · have encoded := calibrated bytes exposed.1.1
+        (Heap.newBlock_exposure_carries repr value bytes bptr root hi exposed.1 created)
+      obtain ⟨next, h, hd, hm', hi', a, b, hab, hh, ha, hb⟩ :=
+        newBlock_single.resources repr bytes false bptr root hi hm created
+      exact ⟨next, h, hd, hm', hi', a, b, hab, hh, ha, bytes, encoded, hb⟩
+    · simp [State.exposesList] at exposed
 
 /-- Return to implicit safe memory, not physical deallocation. Only the owned
 case needs additional root authority; nonowning baseline retirement is uniform. -/
@@ -420,6 +480,29 @@ theorem end_from_mut.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
   intro h F s hp hd hm hinv
   exact read_free.spec repr p bptr value false s hsize (by simp) h F hp hd hm hinv
 
+theorem read_view.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (value : T) (own : Bool) (hsize : 0 < repr.size) :
+    Triple (sep (alloc repr p bptr 1 own) (readable repr p bptr value))
+      (RawPtr.read repr p) (fun x h => x = value ∧
+        sep (alloc repr p bptr 1 own) (readable repr p bptr value) h) := by
+  apply Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) ?_
+    (frame (R := alloc repr p bptr 1 own) (read_exposed.spec repr p bptr value 0 hsize))
+  intro x h hp
+  obtain ⟨he, hp⟩ := (sep_and_left _ _ _ h).mp hp
+  exact ⟨he, (sep_comm _ _ h).mp hp⟩
+
+theorem write_view.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (old value : T) (own : Bool) (noPointers : ∀ q, ¬ repr.Carries value q)
+    (hsize : 0 < repr.size) :
+    Triple (sep (alloc repr p bptr 1 own) (readable repr p bptr old))
+      (MutRawPtr.write repr p value)
+      (fun _ => sep (alloc repr p bptr 1 own) (readable repr p bptr value)) := by
+  apply Triple.conseq (fun h hp => (sep_comm _ _ h).mp hp) ?_
+    (frame (R := alloc repr p bptr 1 own)
+      (write_readable.spec repr p bptr old value noPointers hsize))
+  intro _ h hp
+  exact (sep_comm _ _ h).mp (sep_mono (fun _ => pointsTo_readable) (fun _ hp => hp) hp)
+
 /-- A lexical ownership scope retains return authority alongside ordinary
 separation resources. Byte operations preserve it; allocating new aliases is
 not admitted by a blanket frame rule for this additional authority. -/
@@ -433,6 +516,12 @@ def RootTriple (roots : List Nat) (P : Assertion) (c : Result α)
 namespace RootTriple
 
 variable {roots : List Nat}
+
+theorem toTriple (ht : RootTriple [] P c Q) : Triple P c Q := by
+  intro h F s hp hd hm hi
+  apply Spec.mono (ht h F s hp hd hm hi (by simp))
+  rintro x s' ⟨_, h', hd', hm', hi', hq⟩
+  exact ⟨h', hd', hm', hi', hq⟩
 
 theorem pure (P : Assertion) (x : α) :
     RootTriple roots P (pure x) (fun y h => y = x ∧ P h) := by
@@ -501,6 +590,38 @@ theorem write (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (old value : T)
   rintro s _ s' ⟨data, encoded, run⟩ root authority
   exact authority.modify run
 
+theorem write_local (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (old value : T)
+    (R : Assertion) (support : ∀ h, sep (pointsTo repr p bptr old) R h →
+      SupportsValue repr value h) (hsize : 0 < repr.size) :
+    RootTriple roots (sep (pointsTo repr p bptr old) R) (MutRawPtr.write repr p value)
+      (fun _ => sep (pointsTo repr p bptr value) R) := by
+  apply checkedModify
+    (SepLogic.write_pointsTo_local.spec repr p bptr old value R support hsize)
+  rintro s _ s' ⟨data, encoded, run⟩ root authority
+  exact authority.modify run
+
+theorem read_owned (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (value : T) (own : Bool) (hsize : 0 < repr.size) :
+    RootTriple roots (sep (alloc repr p bptr 1 own) (pointsTo repr p bptr value))
+      (RawPtr.read repr p) (fun x h => x = value ∧
+        sep (alloc repr p bptr 1 own) (pointsTo repr p bptr value) h) := by
+  apply conseq (fun h hp => (sep_comm _ _ h).mp hp) ?_
+    (frame (R := alloc repr p bptr 1 own) (read repr p bptr value 0 hsize))
+  intro x h hp
+  obtain ⟨he, hp⟩ := (sep_and_left _ _ _ h).mp hp
+  exact ⟨he, (sep_comm _ _ h).mp hp⟩
+
+theorem write_owned (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (old value : T) (own : Bool) (noPointers : ∀ q, ¬ repr.Carries value q)
+    (hsize : 0 < repr.size) :
+    RootTriple roots (sep (alloc repr p bptr 1 own) (pointsTo repr p bptr old))
+      (MutRawPtr.write repr p value)
+      (fun _ => sep (alloc repr p bptr 1 own) (pointsTo repr p bptr value)) := by
+  exact conseq (fun h hp => (sep_comm _ _ h).mp hp)
+    (fun _ h hp => (sep_comm _ _ h).mp hp)
+    (frame (R := alloc repr p bptr 1 own)
+      (write repr p bptr old value noPointers hsize))
+
 theorem add (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (count : Usize) (length : Nat) (own : Bool)
     (hstart : bptr.val ≤ p.address.val ∧ p.address.val ≤ bptr.val + length * repr.size)
@@ -518,6 +639,33 @@ theorem add (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
   refine ⟨ordinary.1, ?_⟩
   rintro q s' run
   exact ⟨run.2 ▸ hr, ordinary.2 q s' run⟩
+
+theorem add_alloc (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (count : Usize) (length : Nat) (own : Bool) (within : count.val ≤ length) :
+    RootTriple roots (alloc repr p bptr length own) (RawPtr.add repr p count)
+      (fun q h => q.provenance = p.provenance ∧
+        q.address.val = p.address.val + count.val * repr.size ∧
+        alloc repr p bptr length own h) := by
+  intro h F s hp hd hm hi hr
+  have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
+  have member : h (.cleanup p.provenance (length * repr.size) bptr own) := by
+    rw [hp.2]
+    rfl
+  obtain ⟨blk, hl, hlen, _, hb, _⟩ := localMatch _ member
+  have valid := hi.validBlock hl
+  simp only [Heap.validBlock, Heap.bounded, Bool.and_eq_true,
+    decide_eq_true_eq] at valid
+  have bound : p.address.val + count.val * repr.size ≤ bptr.val + length * repr.size := by
+    rw [hp.1]
+    exact Nat.add_le_add_left (Nat.mul_le_mul_right repr.size within) _
+  have fit : p.address.val + count.val * repr.size < 2 ^ UScalarTy.numBits .Usize := by
+    apply lt_of_le_of_lt bound
+    simpa [hb, hlen] using valid.1.1.2
+  have same : (⟨p.provenance, bptr⟩ : RawPtr T) = p := by
+    exact congrArg (RawPtr.mk p.provenance) hp.1.symm
+  simpa only [same] using
+    add repr p bptr count length own (by rw [hp.1]; exact ⟨le_rfl, Nat.le_add_right _ _⟩)
+      bound fit h F s (by simpa only [same] using hp) hd hm hi hr
 
 theorem fromRaw (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (value : T) (hsize : 0 < repr.size) (mem : p.provenance ∈ roots) :

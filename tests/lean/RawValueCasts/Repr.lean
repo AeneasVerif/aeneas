@@ -11,8 +11,7 @@ open Aeneas.Std
 namespace raw_value_casts
 
 /- A by-value model for these opaque wrappers, not a compiler rule for arbitrary
-Rust transmute. Repr describes initialized bytes only; it does not account for
-Rust padding, lifetimes, or the ownership obligations of pointer-bearing values. -/
+Rust transmute or its lifetime and ownership obligations. -/
 def reinterpret (source : Aeneas.Std.Repr S) (target : Aeneas.Std.Repr T) (sizeEq : source.size = target.size)
     (value : S) : Result T := do
   let data ← source.choose value
@@ -27,7 +26,7 @@ theorem reinterpret.spec (source : Aeneas.Std.Repr S) (target : Aeneas.Std.Repr 
   unfold reinterpret
   apply HeapWP.Spec.bind (HeapWP.choose.spec source value s)
   rintro ⟨data, decoded⟩ s' ⟨_, rfl⟩
-  rw [compatible data decoded]
+  rw [compatible data (source.encode_decode value data decoded)]
   exact HeapWP.Spec.pure _ _ _ |>.mpr ⟨rfl, rfl⟩
 
 def boolByte (value : Bool) : U8 :=
@@ -39,12 +38,28 @@ def decodeBool (byte : U8) : Option Bool :=
 def boolRepr : Aeneas.Std.Repr Bool where
   size := 1
   align := ⟨1, 0, rfl⟩
-  decode data := decodeBool data[0]
+  decode data := (Aeneas.Std.Repr.u8.decode data).bind decodeBool
+  encode value data := Aeneas.Std.Repr.u8.encode (boolByte value) data
   aligned := by decide
-  complete value := by
+  encode_complete value := Aeneas.Std.Repr.u8.encode_complete (boolByte value)
+  encode_decode value data encoded := by
+    rw [Aeneas.Std.Repr.u8.encode_decode _ _ encoded]
     cases value
-    · exact ⟨#v[0#u8], rfl⟩
-    · exact ⟨#v[1#u8], rfl⟩
+    · rfl
+    · rfl
+  decode_mono data data' value decoded agree := by
+    cases hd : Aeneas.Std.Repr.u8.decode data
+    · simp [hd] at decoded
+    · rename_i byte
+      rw [Aeneas.Std.Repr.u8.decode_mono _ _ byte hd agree]
+      simpa only [hd, Option.bind_some] using decoded
+  encode_valid value data i encoded :=
+    Aeneas.Std.Repr.u8.encode_valid (boolByte value) data i encoded
+
+@[simp] theorem boolRepr_noPointers (value : Bool) (p : RawPtr Unit) :
+    ¬ boolRepr.Carries value p := by
+  intro carried
+  exact Aeneas.Std.Repr.u8_noPointers (boolByte value) p carried
 
 def asSigned (value : U32) : I32 := ⟨value.bv⟩
 
@@ -54,12 +69,20 @@ def signedRepr : Aeneas.Std.Repr I32 where
   size := raw_box.u32Repr.size
   align := raw_box.u32Repr.align
   decode data := (raw_box.u32Repr.decode data).map asSigned
+  encode value data := raw_box.u32Repr.encode (asUnsigned value) data
   aligned := raw_box.u32Repr.aligned
-  complete value := by
-    obtain ⟨data, hd⟩ := raw_box.u32Repr.encode_complete (asUnsigned value)
-    refine ⟨data, ?_⟩
-    rw [hd]
+  encode_complete value := raw_box.u32Repr.encode_complete (asUnsigned value)
+  encode_decode value data encoded := by
+    rw [raw_box.u32Repr.encode_decode _ _ encoded]
     rfl
+  decode_mono data data' value decoded agree := by
+    cases hd : raw_box.u32Repr.decode data
+    · simp [hd] at decoded
+    · rename_i word
+      rw [raw_box.u32Repr.decode_mono _ _ word hd agree]
+      simpa only [hd, Option.map_some] using decoded
+  encode_valid value data i encoded :=
+    raw_box.u32Repr.encode_valid (asUnsigned value) data i encoded
 
 theorem decodeBool_some (byte : U8) (value : Bool) :
     decodeBool byte = some value ↔ byte = boolByte value := by
@@ -74,8 +97,8 @@ theorem decodeBool_some (byte : U8) (value : Bool) :
 
 /-- Forward bool-to-byte compatibility does not imply mutable write-back closure. -/
 theorem bool_writeback_rejected :
-    raw_transmute.byteRepr.decode #v[2#u8] = some 2#u8 ∧
-      boolRepr.decode #v[2#u8] = none := by
+    raw_transmute.byteRepr.decode #v[.data 2#u8] = some 2#u8 ∧
+      boolRepr.decode #v[.data 2#u8] = none := by
   decide
 
 /-- info: 'raw_value_casts.reinterpret.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/

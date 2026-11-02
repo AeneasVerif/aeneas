@@ -3,6 +3,7 @@ module
 public import RawValueCasts.Funs
 import all Aeneas.Std.Heap.Effects
 import all Aeneas.Std.Primitives
+import all RawTransmute
 
 public section
 
@@ -15,17 +16,22 @@ theorem ext.bool_to_byte.spec (value : Bool) (s : Heap) :
       (fun result s' => result = boolByte value ∧ s' = s) s := by
   apply reinterpret.spec
   intro data decoded
-  change some data[0] = some (boolByte value)
-  exact congrArg some ((decodeBool_some data[0] value).mp decoded)
+  change (Aeneas.Std.Repr.u8.decode data).bind decodeBool = some value at decoded
+  change Aeneas.Std.Repr.u8.decode data = some (boolByte value)
+  cases hd : Aeneas.Std.Repr.u8.decode data
+  · simp [hd] at decoded
+  · rename_i byte
+    rw [hd] at decoded
+    exact congrArg some ((decodeBool_some byte value).mp decoded)
 
 theorem ext.byte_to_bool.spec (value : U8) (valid : value.val ≤ 1) (s : Heap) :
     HeapWP.Spec (ext.byte_to_bool value)
       (fun result s' => result = (value == 1#u8) ∧ s' = s) s := by
   apply reinterpret.spec
   intro data decoded
-  have hd : data[0] = value := Option.some.inj decoded
-  change decodeBool data[0] = some (value == 1#u8)
-  rw [hd]
+  change Aeneas.Std.Repr.u8.decode data = some value at decoded
+  change (Aeneas.Std.Repr.u8.decode data).bind decodeBool = some (value == 1#u8)
+  rw [decoded]
   have hv : value = 0#u8 ∨ value = 1#u8 := by scalar_tac
   rcases hv with rfl | rfl
   · rfl

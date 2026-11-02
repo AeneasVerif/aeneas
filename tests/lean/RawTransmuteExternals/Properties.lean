@@ -10,7 +10,7 @@ open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
 namespace raw_transmute_externals
 
-/-- Thin mutable-pointer transmute is pure and preserves the byte offset and base. -/
+/-- Thin mutable-pointer transmute is pure and preserves address and provenance. -/
 @[step]
 theorem ext.transmute_mut.spec {T : Type} (U : Type) (p : MutRawPtr T) :
     ext.transmute_mut U p ⦃ (result : MutRawPtr U) => result = RawPtr.cast U p ⦄ := by
@@ -46,20 +46,22 @@ theorem u8_round_trip_eq (words : MutRawPtr U32) (value : U8) :
     raw_transmute.u8_round_trip]
 
 /-- The unedited extracted word caller writes and reads back the replacement. -/
-theorem u32_round_trip.spec (words : MutRawPtr U32) (old value : U32) :
-    HeapWP.Triple (pointsTo raw_box.u32Repr words old) (u32_round_trip words value)
-      (fun result h => result = value ∧ pointsTo raw_box.u32Repr words value 0 h) := by
+theorem u32_round_trip.spec (words : MutRawPtr U32) (bptr : BasePtr) (old value : U32) :
+    HeapWP.Triple (pointsTo raw_box.u32Repr words bptr old) (u32_round_trip words value)
+      (fun result h => result = value ∧ pointsTo raw_box.u32Repr words bptr value 0 h) := by
   rw [u32_round_trip_eq]
-  exact raw_transmute.u32_round_trip.spec raw_box.u32Repr words old value (by decide)
+  exact raw_transmute.u32_round_trip.spec raw_box.u32Repr words bptr old value
+    (raw_box.u32Repr_noPointers value) (by decide)
 
 /-- The unedited extracted byte caller has the same-type round-trip law. -/
-theorem u8_round_trip.spec (words : MutRawPtr U32) (old value : U8) :
-    HeapWP.Triple (pointsTo raw_transmute.byteRepr (RawPtr.cast U8 words) old)
+theorem u8_round_trip.spec (words : MutRawPtr U32) (bptr : BasePtr) (old value : U8) :
+    HeapWP.Triple (pointsTo raw_transmute.byteRepr (RawPtr.cast U8 words) bptr old)
       (u8_round_trip words value)
       (fun result h => result = value ∧
-        pointsTo raw_transmute.byteRepr (RawPtr.cast U8 words) value 0 h) := by
+        pointsTo raw_transmute.byteRepr (RawPtr.cast U8 words) bptr value 0 h) := by
   rw [u8_round_trip_eq]
-  exact raw_transmute.u8_round_trip.spec raw_transmute.byteRepr words old value (by decide)
+  exact raw_transmute.u8_round_trip.spec raw_transmute.byteRepr words bptr old value
+    (Aeneas.Std.Repr.u8_noPointers value) (by decide)
 
 /- These bridges identify the extracted cross-type callers with the previous
 manual models. They do not assert a decoder-independent numeric postcondition. -/

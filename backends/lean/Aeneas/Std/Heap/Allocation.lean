@@ -38,6 +38,46 @@ theorem live_create {s : Heap} {blk fresh : Block} {s' : Heap} {id : Nat}
   · have hne : blk.root ≠ s.next := by have := hinv.base_lt hr; grind
     simpa [live, update, hne, hr] using hlive
 
+/-- An exclusive exposure cannot retain pointer lanes justified by a different
+readable view: that contribution would conflict with its new writer. -/
+theorem newBlock_exposure_carries (repr : Repr ty) (value : ty)
+    (bytes : Vector Byte repr.size) (bptr : BasePtr) (root : Option Nat)
+    {s s' : Heap} {p : RawPtr ty} (hinv : s.Inv)
+    (exposed : State.exposes repr s bptr.val value bytes)
+    (created : Heap.newBlock repr [bytes] false bptr root s = some (p, s')) :
+    ∀ i : Fin repr.size, ∀ q lane, bytes[i.val] = .pointer q lane → repr.Carries value q := by
+  unfold Heap.newBlock at created
+  simp only [Bool.not_false, Bool.true_or, Bool.and_true] at created
+  split at created
+  · obtain ⟨⟨id, result⟩, hcreate, _⟩ := Option.map_eq_some_iff.mp created
+    have success := createRepr.success hcreate
+    have hi := createRepr_Inv _ _ _ _ hinv hcreate
+    have fresh :
+        result.allocations s.next =
+          some ⟨bptr, root.getD s.next, repr.create [bytes] 0, false, true, true⟩ := by
+      simp [success.2, update]
+    intro i q lane byte
+    have source := exposed.2 i
+    rw [byte] at source
+    rcases source with carried | ⟨other, blk, index, depth, hl, live, address, cell⟩
+    · exact carried
+    · have hlt := hinv.base_lt hl
+      have different : other ≠ s.next := Nat.ne_of_lt hlt
+      have old : result.allocations other = some blk := by
+        simpa [success.2, update, different] using hl
+      have compatible := (compatible_iff _ _).mp
+        (hi.compatible fresh old (Ne.symm different))
+      have active : blk.active = true := by
+        simp only [Heap.live, Bool.and_eq_true] at live
+        exact live.1
+      have pairs := compatible.resolve_left (by simp) |>.resolve_left (by simp [active])
+      have indexBound := List.getElem?_eq_some_iff.mp cell
+      have sizeBound : i.val < (repr.create [bytes] 0).length := by
+        simp [Repr.create]
+      have conflict := pairs i.val sizeBound index indexBound.1 address.symm
+      simp [Repr.create, byte, indexBound.2, Cell.compatible] at conflict
+  · contradiction
+
 theorem retire_support (s : Heap) (id : Nat) (hinv : s.Inv) (hid : id < s.next) :
     ∀ j, (s.retire id).next ≤ j → (s.retire id).allocations j = none := by
   intro j hj
@@ -382,7 +422,7 @@ theorem RootReturn.modify {s s' : Heap} {base : Nat} {repr : Repr ty}
     · cases hc : change blk.bytes (p.offsetFrom blk.bptr)
       · simp [hc] at run
       · rename_i bytes
-        simp only [hc, Bind.bind, Option.bind] at run
+        simp only [hc] at run
         have he := (Heap.commit_success _ _ run).1
         subst s'
         exact authority.storeRepr hl bytes.toList (by simp)

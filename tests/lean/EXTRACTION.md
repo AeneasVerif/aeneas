@@ -3,14 +3,67 @@
 This log covers the raw-memory fixtures described below, not the other fixtures
 in this directory.
 
-**Current concrete-address migration status:** the corrected read/write/read
-proofs now live in `RawReadWriteRead.lean`; `lake build RawReadWriteRead` passes
-with exact standard-axiom guards and no client heap-check or overlap arguments.
-Its arbitrary-descriptor statements require pointer-free scalar encodings.
-`RawBoxProofs` descriptors have been migrated, but its lifecycle proofs and
-`RawBoxManual` still fail to build. The dated proof/build results below describe
-the earlier prototype, not successful validation of the migrated lifecycle
-series. No new extraction was run for this migration.
+**Current concrete-address migration status:** the backend default build and
+the complete existing raw-memory example series pass:
+
+```text
+cd backends/lean && lake build
+cd tests/lean && lake build RawBox RawBoxProofs RawBoxManual RawReadWriteRead RawTransmute RawValueCasts RawTransmuteExternals RawPointerOps DoublyLinked
+```
+
+Box lifecycles, range returns, the four-byte array callback, all five raw
+linked-list alias cases and the safe owning-list API are restored. Public
+contracts retain arbitrary matching frames, enabledness and every permitted
+successor, without client heap-check/overlap proofs. Owned lifecycles retain
+lexical root authority; `ListState` encapsulates it for the safe list API.
+Pointer writes use local provenance evidence, including already-stored pointers
+to retired views. Generic node proofs take an explicit `NodeLayout` calibration.
+Applicable exact axiom guards allow only standard Lean logical axioms.
+
+These are checks of the marked, manually adapted translations, not of a repaired
+compiler pipeline. No adapted fixture was overwritten by regeneration. The newer
+heap-uninitialized, eight-u16/sixteen-u8, pointer-as-integer and nested boxed-slice
+scenarios in `raw_pointer_ops.rs` pass natively but remain under `cfg(test)` and
+are not extracted/proved callers. The last still lacks a library return-authority
+protocol composable across nested heap re-exposures; exact-state matching
+callback specs and the executable `nestedSlices` regression do not establish
+that framed client theorem. Dated results below are historical.
+
+## Isolated extraction diagnostic for the four newer scenarios
+
+The pinned Charon (`de8736f7c995ac54dc490345cef9ea5143c06c62`) and its OCaml
+library were restored in session storage, and the current compiler and test
+runner were rebuilt. The ordinary Make target initially failed because its
+expected `charon/` installation was absent. Tool recovery did not change the
+pin, compiler source, adapted fixtures or global authentication.
+
+An isolated extraction of the four `#[test]` entry points first encountered
+test-harness function-pointer translation errors. A temporary copy with only
+the `#[test]` attributes removed separated harness issues from the actual
+function bodies. With `CHARON_EXE` set to the restored executable and `OUT`
+to a temporary output directory, the body diagnostic was:
+
+```bash
+sed '/^[[:space:]]*#\[test\]/d' tests/src/raw_pointer_ops.rs > "$OUT/raw_pointer_scenarios.rs"
+"$CHARON_EXE" rustc --preset aeneas --sysroot default --opaque 'crate::ext' \
+  --start-from 'crate::tests::first_write_initializes_heap_allocation' \
+  --start-from 'crate::tests::eight_words_and_sixteen_bytes_share_storage' \
+  --start-from 'crate::tests::pointer_loaded_from_memory_as_an_integer' \
+  --start-from 'crate::tests::boxed_array_nested_safe_and_raw_subslices' \
+  --rustc-arg=--cfg=test --dest-file "$OUT/raw_pointer_scenarios.llbc" \
+  -- --edition=2021 --crate-type=lib "$OUT/raw_pointer_scenarios.rs"
+src/_build/default/main.exe -backend lean -dest "$OUT/lean" \
+  -split-files -all-computable "$OUT/raw_pointer_scenarios.llbc"
+```
+
+Result: Charon succeeded; Lean translation failed. The compiler rejects the
+raw borrow produced by `&mut target as *mut u32` (`Unsupported operation:
+&raw mut (*_3)`) and detects a name clash between const and mutable `read`
+under `RawPtr.read`. It also reports missing `Step` model fields
+`forward_overflowing` and `backward_overflowing`. Partial generated files and
+external templates are not validated translations, and none was imported by
+the passing proof targets. This diagnostic is not an unedited-source extraction
+claim, because the temporary copy excludes test registration attributes.
 
 ## 2026-10-29 — Box lifecycle and stored-pointer lifecycle
 

@@ -192,6 +192,18 @@ theorem sep_comm (P Q : Assertion) (h : Fragment) : sep P Q h ↔ sep Q P h := b
   · rintro ⟨a, b, hd, he, hp, hq⟩
     exact ⟨b, a, hd.symm, he.trans (Fragment.union_comm _ _), hq, hp⟩
 
+theorem sep_assoc (P Q R : Assertion) (h : Fragment) :
+    sep (sep P Q) R h ↔ sep P (sep Q R) h := by
+  constructor
+  · rintro ⟨ab, c, hd, rfl, ⟨a, b, hab, rfl, hp, hq⟩, hr⟩
+    obtain ⟨hac, hbc⟩ := Fragment.disjoint_union_left.mp hd
+    exact ⟨a, b ∪ c, Fragment.disjoint_union_right.mpr ⟨hab, hac⟩,
+      Fragment.union_assoc _ _ _, hp, b, c, hbc, rfl, hq, hr⟩
+  · rintro ⟨a, bc, hd, rfl, hp, ⟨b, c, hbc, rfl, hq, hr⟩⟩
+    obtain ⟨hab, hac⟩ := Fragment.disjoint_union_right.mp hd
+    exact ⟨a ∪ b, c, Fragment.disjoint_union_left.mpr ⟨hac, hbc⟩,
+      (Fragment.union_assoc _ _ _).symm, ⟨a, b, hab, rfl, hp, hq⟩, hr⟩
+
 theorem sep_mono {P P' Q Q' : Assertion}
     (hp : ∀ h, P h → P' h) (hq : ∀ h, Q h → Q' h) {h : Fragment} :
     sep P Q h → sep P' Q' h := by
