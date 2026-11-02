@@ -1096,154 +1096,74 @@ let simplify_let_tuple span (ctx : ctx) (monadic : bool) (pat : tpat)
     function calls) *)
 let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
-  (* We first need a transformation on *left-values*, which filters the useless
-     variables and tells us whether the value contains any variable which has
-     not been replaced by [_] (in which case we need to keep the assignment,
-     etc.).
-
-     This is implemented as a map-reduce.
-
-     Returns: ( filtered_left_value, *all_dummies* )
-
-     [all_dummies]:
-     If the returned boolean is true, it means that all the variables appearing
-     in the filtered left-value are *dummies* (meaning that if this left-value
-     appears at the left of a let-binding, this binding might potentially be
-     removed).
-  *)
-  let lv_visitor =
-    object
-      inherit [_] mapreduce_tpat
-      method zero _ = true
-      method plus b0 b1 _ = b0 () && b1 ()
-
-      method! visit_POpen env v mp =
-        if FVarId.Set.mem v.id env then (POpen (v, mp), fun _ -> false)
-        else (PIgnored, fun _ -> true)
-
-      method! visit_PBound _ _ _ = [%internal_error] span
-    end
-  in
-  let filter_tpat (used_vars : FVarId.Set.t) (lv : tpat) : tpat * bool =
-    let lv, all_dummies = lv_visitor#visit_tpat used_vars lv in
-    (lv, all_dummies ())
-  in
-
-  (* We then implement the transformation on *expressions* through a mapreduce.
+  (* We implement the transformation on *expressions* through a mapreduce.
      Note that the transformation is bottom-up.
      The map filters the useless assignments, the reduce computes the set of
      used variables. *)
   let expr_visitor =
     object (self)
-      inherit [_] mapreduce_expr as super
+      inherit [_] mapreduce_lv_expr
       method zero : FVarId.Set.t = FVarId.Set.empty
       method plus s0 s1 = FVarId.Set.union s0 s1
 
       (** Whenever we visit a variable, we need to register the used variable *)
       method! visit_FVar _ vid = (FVar vid, FVarId.Set.singleton vid)
 
-      method! visit_expr env e =
-        match e with
-        | BVar _ -> [%internal_error] span
-        | FVar _ | CVar _ | Const _ | App _ | Qualif _
-        | Meta (_, _)
-        | StructUpdate _ | Lambda _
-        | EError (_, _) -> super#visit_expr env e
-        | Switch (scrut, switch) -> (
-            match switch with
-            | If (_, _) -> super#visit_expr env e
-            | Match branches ->
-                (* Simplify the branches *)
-                let simplify_branch (br : match_branch) =
-                  (* Compute the set of values used inside the branch *)
-                  let branch, used = self#visit_texpr env br.branch in
-                  (* Simplify the pattern *)
-                  let pat, _ = filter_tpat used br.pat in
-                  ({ pat; branch }, used)
-                in
-                let branches, usedl =
-                  List.split (List.map simplify_branch branches)
-                in
-                let used0 = List.fold_left FVarId.Set.union self#zero usedl in
-                (* Simplify the scrutinee *)
-                let scrut, used1 = self#visit_texpr () scrut in
-                let used = FVarId.Set.union used0 used1 in
-                (Switch (scrut, Match branches), used))
-        | Let (monadic, lv, re, e) ->
-            (* Compute the set of values used in the next expression *)
-            let e, used = self#visit_texpr env e in
-            (* Filter the left values *)
-            let lv, all_dummies = filter_tpat used lv in
-            (* Small utility - called if we can't filter the let-binding *)
-            let dont_filter () =
-              let re, used_re = self#visit_texpr env re in
-              let used = FVarId.Set.union used used_re in
-              (* Simplify the left pattern if it only contains ignored variables *)
-              let lv =
-                if all_dummies then
-                  let ty = lv.ty in
-                  let pat = PIgnored in
-                  { pat; ty }
-                else lv
-              in
-              (* If there are ignored patterns, attempt to simplify
-                 the binding and the right expression. *)
-              let lv, re, updated = simplify_let_tuple span ctx monadic lv re in
+      method! visit_BVar _ _ = [%internal_error] span
 
-              (* We may need to revisited the bound expression if we modified it:
-                 some values may now be unused
+      method! visit_lv_tpat _ used pat =
+        let pat, _ = filter_tpat_by_fvars span used pat in
+        (pat, self#zero)
 
-                 TODO: try to avoid that, this is bad for complexity.
-              *)
-              let re = if updated then fst (self#visit_texpr env re) else re in
-
-              (* Put everything together *)
-              (Let (monadic, lv, re, e), used)
-            in
-            (* Potentially filter the let-binding *)
+      method! visit_Let env monadic lv re e =
+        (* Compute the set of values used in the next expression *)
+        let e, used = self#visit_texpr env e in
+        (* Filter the left values *)
+        let lv, all_dummies = filter_tpat_by_fvars span used lv in
+        (* Small utility - called if we can't filter the let-binding *)
+        let dont_filter () =
+          let re, used_re = self#visit_texpr env re in
+          let used = FVarId.Set.union used used_re in
+          (* Simplify the left pattern if it only contains ignored variables *)
+          let lv =
             if all_dummies then
-              if not monadic then
-                (* Not a monadic let-binding: simple case *)
-                (e.e, used)
-              else if texpr_cannot_fail re then
-                (* Monadic let-binding that always succeeds: safe to remove *)
-                (e.e, used)
-              else if texpr_failure_subsumed_by_cont re e then
-                (* Monadic let-binding whose outputs are unused ([all_dummies])
-                   and whose failure is subsumed by the expression which
-                   immediately follows it: safe to remove *)
-                (e.e, used)
-              else
-                (* Monadic let-binding and the bound expression may fail: can't filter *)
-                dont_filter ()
-            else (* There are used variables: don't filter *)
-              dont_filter ()
-        | Loop loop ->
-            let {
-              loop_id = _;
-              span = _;
-              output_tys = _;
-              num_output_values = _;
-              inputs;
-              num_input_conts = _;
-              loop_body;
-              to_rec = _;
-            } =
-              loop
-            in
-            let loop_body, used =
-              let { inputs; loop_body } = loop_body in
-              let loop_body, used = self#visit_texpr () loop_body in
-              (({ inputs; loop_body } : loop_body), used)
-            in
-            let used, inputs =
-              List.fold_left_map
-                (fun used input ->
-                  let input, used' = self#visit_texpr () input in
-                  (self#plus used used', input))
-                used inputs
-            in
-            (Loop { loop with inputs; loop_body }, used)
+              let ty = lv.ty in
+              let pat = PIgnored in
+              { pat; ty }
+            else lv
+          in
+          (* If there are ignored patterns, attempt to simplify
+             the binding and the right expression. *)
+          let lv, re, updated = simplify_let_tuple span ctx monadic lv re in
+
+          (* We may need to revisited the bound expression if we modified it:
+             some values may now be unused
+
+             TODO: try to avoid that, this is bad for complexity.
+          *)
+          let re = if updated then fst (self#visit_texpr env re) else re in
+
+          (* Put everything together *)
+          (Let (monadic, lv, re, e), used)
+        in
+        (* Potentially filter the let-binding *)
+        if all_dummies then
+          if not monadic then
+            (* Not a monadic let-binding: simple case *)
+            (e.e, used)
+          else if texpr_cannot_fail re then
+            (* Monadic let-binding that always succeeds: safe to remove *)
+            (e.e, used)
+          else if texpr_failure_subsumed_by_cont re e then
+            (* Monadic let-binding whose outputs are unused ([all_dummies])
+               and whose failure is subsumed by the expression which
+               immediately follows it: safe to remove *)
+            (e.e, used)
+          else
+            (* Monadic let-binding and the bound expression may fail: can't filter *)
+            dont_filter ()
+        else (* There are used variables: don't filter *)
+          dont_filter ()
     end
     (* We filter only inside of transparent (i.e., non-opaque) definitions *)
   in
@@ -1259,7 +1179,9 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
          For now we deactivate the filtering. *)
       let inputs =
         if false then
-          List.map (fun lv -> fst (filter_tpat used_vars lv)) body.inputs
+          List.map
+            (fun lv -> fst (filter_tpat_by_fvars span used_vars lv))
+            body.inputs
         else body.inputs
       in
       (* Return *)
@@ -2174,11 +2096,10 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
-      inherit [_] map_expr as super
+      inherit [_] map_lv_expr as super
 
-      (** Replace in patterns *)
-      method! visit_POpen _ v mp =
-        if v.ty = mk_unit_ty then PIgnored else POpen (v, mp)
+      method! visit_lv_tpat _ pat =
+        filter_tpat_vars span (fun v -> v.ty <> mk_unit_ty) pat
 
       method! visit_PBound _ _ _ = [%internal_error] span
 
@@ -2189,14 +2110,7 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
     end
   in
   (* Update the body *)
-  map_open_all_fun_decl_body ctx.fresh_fvar_id
-    (fun body ->
-      let body_exp = obj#visit_texpr () body.body in
-      (* Update the input parameters *)
-      let inputs = List.map (obj#visit_tpat ()) body.inputs in
-      (* Return *)
-      { body = body_exp; inputs })
-    def
+  map_open_all_fun_decl_body_expr ctx.fresh_fvar_id (obj#visit_texpr ()) def
 
 (** Eliminate the box functions like [Box::new] (which is translated to the
     identity) and [Box::free] (which is translated to [()]).
