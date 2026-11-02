@@ -1094,7 +1094,8 @@ let simplify_let_tuple span (ctx : ctx) (monadic : bool) (pat : tpat)
 
 (** Filter the useless assignments (removes the useless variables, filters the
     function calls) *)
-let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
+let filter_useless ?(visit_all_binders : bool = false) (ctx : ctx)
+    (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   (* We implement the transformation on *expressions* through a mapreduce.
      Note that the transformation is bottom-up.
@@ -1102,7 +1103,7 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
      used variables. *)
   let expr_visitor =
     object (self)
-      inherit [_] mapreduce_lv_expr
+      inherit [_] mapreduce_lv_expr visit_all_binders
       method zero : FVarId.Set.t = FVarId.Set.empty
       method plus s0 s1 = FVarId.Set.union s0 s1
 
@@ -2090,13 +2091,14 @@ let simplify_aggregates_unchanged_fields =
 
 (** Convert the unit variables to [()] if they are used as right-values or [_]
     if they are used as left values in patterns. *)
-let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
+let unit_vars_to_unit ?(visit_all_binders : bool = false) (ctx : ctx)
+    (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
 
   (* The map visitor *)
   let obj =
     object
-      inherit [_] map_lv_expr as super
+      inherit [_] map_lv_expr visit_all_binders as super
 
       method! visit_lv_tpat _ pat =
         filter_tpat_vars span (fun v -> v.ty <> mk_unit_ty) pat
@@ -2110,7 +2112,7 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
     end
   in
   (* Update the body *)
-  map_open_all_fun_decl_body_expr ctx.fresh_fvar_id (obj#visit_texpr ()) def
+  map_open_all_fun_decl_body ctx.fresh_fvar_id (obj#visit_fun_body ()) def
 
 (** Eliminate the box functions like [Box::new] (which is translated to the
     identity) and [Box::free] (which is translated to [()]).

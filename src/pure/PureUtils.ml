@@ -193,8 +193,10 @@ class ['self] scoped_map_expr =
 
 (** A map visitor for expressions which distinguishes left-value patterns (bound
     in [Let] and [Match] branches, visited via [visit_lv_tpat]) from parameter
-    binders (in [Lambda] and [loop_body], visited via [visit_tpat]). *)
-class ['self] map_lv_expr =
+    binders (in [Lambda] and [fun_body.inputs], visited via [visit_tpat]). If
+    [visit_all_binders] is true, parameter binders are also visited via
+    [visit_lv_tpat]. *)
+class ['self] map_lv_expr (visit_all_binders : bool) =
   object (self : 'self)
     inherit [_] map_expr
     method visit_lv_tpat : 'env -> tpat -> tpat = self#visit_tpat
@@ -210,15 +212,33 @@ class ['self] map_lv_expr =
       let pat = self#visit_lv_tpat env pat in
       let branch = self#visit_texpr env branch in
       { pat; branch }
+
+    method! visit_Lambda env pat body =
+      let pat =
+        if visit_all_binders then self#visit_lv_tpat env pat
+        else self#visit_tpat env pat
+      in
+      let body = self#visit_texpr env body in
+      Lambda (pat, body)
+
+    method visit_fun_body (env : 'env) (body : fun_body) : fun_body =
+      let { inputs; body = b } = body in
+      let inputs =
+        if visit_all_binders then List.map (self#visit_lv_tpat env) inputs
+        else List.map (self#visit_tpat env) inputs
+      in
+      let body = self#visit_texpr env b in
+      { inputs; body }
   end
 
 (** A mapreduce visitor for expressions which distinguishes left-value patterns
     (bound in [Let] and [Match] branches, visited via [visit_lv_tpat]) from
-    parameter binders (in [Lambda] and [loop_body], visited via [visit_tpat]),
-    and visits the continuation ([next] in [Let], [branch] in [match_branch])
-    before visiting the left-value pattern with the continuation's accumulated
-    result. *)
-class virtual ['self] mapreduce_lv_expr =
+    parameter binders (in [Lambda] and [fun_body.inputs], visited via
+    [visit_tpat]), and visits the continuation ([next] in [Let], [branch] in
+    [match_branch], [body] in [Lambda]) before visiting the left-value pattern
+    with the continuation's accumulated result. If [visit_all_binders] is true,
+    parameter binders are also visited via [visit_lv_tpat]. *)
+class virtual ['self] mapreduce_lv_expr (visit_all_binders : bool) =
   object (self : 'self)
     inherit [_] mapreduce_expr
 
@@ -236,6 +256,29 @@ class virtual ['self] mapreduce_lv_expr =
       let branch, y1 = self#visit_texpr env branch in
       let pat, y0 = self#visit_lv_tpat env y1 pat in
       ({ pat; branch }, self#plus y0 y1)
+
+    method! visit_Lambda env pat body =
+      let body, y1 = self#visit_texpr env body in
+      let pat, y0 =
+        if visit_all_binders then self#visit_lv_tpat env y1 pat
+        else self#visit_tpat env pat
+      in
+      (Lambda (pat, body), self#plus y0 y1)
+
+    method visit_fun_body (env : 'env) (body : fun_body) : fun_body * 'a =
+      let { inputs; body = b } = body in
+      let body, y1 = self#visit_texpr env b in
+      let y0, inputs =
+        List.fold_left_map
+          (fun acc pat ->
+            let pat, y =
+              if visit_all_binders then self#visit_lv_tpat env y1 pat
+              else self#visit_tpat env pat
+            in
+            (self#plus acc y, pat))
+          self#zero inputs
+      in
+      ({ inputs; body }, self#plus y0 y1)
   end
 
 let mk_fresh_fvar (fresh_fvar_id : unit -> fvar_id) ?(basename = None) (ty : ty)
