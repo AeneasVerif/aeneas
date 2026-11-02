@@ -69,7 +69,7 @@ def make (x : Std.U8) : Result make.closure := do
 /-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call]:
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
 def make.closure.Insts.CoreOpsFunctionFnTupleU8.call
-  (c : make.closure) (_ : Unit) : Result Std.U8 := do
+  (c : make.closure) (tupled_args : Unit) : Result Std.U8 := do
   ok c
 
 /-- [issue_1207_closure_signature_regions::iter_of::{closure}]
@@ -150,7 +150,7 @@ def nested (x : Std.U8) : Result (Holder nested.closure) := do
 /-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call]:
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
 def nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
-  (c : nested.closure) (_ : Unit) : Result Std.U8 := do
+  (c : nested.closure) (tupled_args : Unit) : Result Std.U8 := do
   ok c
 
 end issue_1207_closure_signature_regions

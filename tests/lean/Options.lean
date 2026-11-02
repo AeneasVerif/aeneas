@@ -252,7 +252,7 @@ def test_bool_then_true.closure := Unit
 /-- [options::test_bool_then_true::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_true::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 67:22-67:29 -/
 def test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
-  (c : test_bool_then_true.closure) (_ : Unit) : Result Std.U32 := do
+  (c : test_bool_then_true.closure) (tupled_args : Unit) : Result Std.U32 := do
   ok 1#u32
 
 /-- Trait implementation: [options::test_bool_then_true::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_true::{closure}}]
@@ -285,7 +285,9 @@ def test_bool_then_false.closure := Unit
 /-- [options::test_bool_then_false::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_false::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 73:23-73:45 -/
 def test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
-  (c : test_bool_then_false.closure) (_ : Unit) : Result Std.U32 := do
+  (c : test_bool_then_false.closure) (tupled_args : Unit) :
+  Result Std.U32
+  := do
   fail panic
 
 /-- Trait implementation: [options::test_bool_then_false::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_false::{closure}}]

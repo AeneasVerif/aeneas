@@ -191,6 +191,54 @@ class ['self] scoped_map_expr =
       { inputs; loop_body }
   end
 
+(** A map visitor for expressions which distinguishes left-value patterns (bound
+    in [Let] and [Match] branches, visited via [visit_lv_tpat]) from parameter
+    binders (in [Lambda] and [loop_body], visited via [visit_tpat]). *)
+class ['self] map_lv_expr =
+  object (self : 'self)
+    inherit [_] map_expr
+
+    method visit_lv_tpat : 'env -> tpat -> tpat = self#visit_tpat
+
+    method! visit_Let env monadic pat bound next =
+      let pat = self#visit_lv_tpat env pat in
+      let bound = self#visit_texpr env bound in
+      let next = self#visit_texpr env next in
+      Let (monadic, pat, bound, next)
+
+    method! visit_match_branch env br =
+      let { pat; branch } = br in
+      let pat = self#visit_lv_tpat env pat in
+      let branch = self#visit_texpr env branch in
+      { pat; branch }
+  end
+
+(** A mapreduce visitor for expressions which distinguishes left-value patterns
+    (bound in [Let] and [Match] branches, visited via [visit_lv_tpat]) from
+    parameter binders (in [Lambda] and [loop_body], visited via [visit_tpat]),
+    and visits the continuation ([next] in [Let], [branch] in [match_branch])
+    before visiting the left-value pattern with the continuation's accumulated
+    result. *)
+class virtual ['self] mapreduce_lv_expr =
+  object (self : 'self)
+    inherit [_] mapreduce_expr
+
+    method visit_lv_tpat : 'env -> 'a -> tpat -> tpat * 'a =
+      fun env _ pat -> self#visit_tpat env pat
+
+    method! visit_Let env monadic pat bound next =
+      let next, y3 = self#visit_texpr env next in
+      let pat, y1 = self#visit_lv_tpat env y3 pat in
+      let bound, y2 = self#visit_texpr env bound in
+      (Let (monadic, pat, bound, next), self#plus y1 (self#plus y2 y3))
+
+    method! visit_match_branch env br =
+      let { pat; branch } = br in
+      let branch, y1 = self#visit_texpr env branch in
+      let pat, y0 = self#visit_lv_tpat env y1 pat in
+      ({ pat; branch }, self#plus y0 y1)
+  end
+
 let mk_fresh_fvar (fresh_fvar_id : unit -> fvar_id) ?(basename = None) (ty : ty)
     : fvar =
   let id = fresh_fvar_id () in
@@ -502,6 +550,36 @@ let tpat_replace_ignored_vars_with_free_vars (fresh_fvar_id : unit -> fvar_id)
     end
   in
   visitor#visit_tpat () p
+
+(** Filter the open variables in a pattern according to [keep], replacing
+    filtered-out variables with [PIgnored]. Returns
+    [(filtered_pat, all_dummies)], where [all_dummies] is [true] iff all open
+    variables in the pattern were replaced by [PIgnored]. *)
+let filter_tpat (span : Meta.span) (keep : fvar -> bool) (lv : tpat) :
+    tpat * bool =
+  let lv_visitor =
+    object
+      inherit [_] mapreduce_tpat
+      method zero _ = true
+      method plus b0 b1 _ = b0 () && b1 ()
+
+      method! visit_POpen () v mp =
+        if keep v then (POpen (v, mp), fun _ -> false)
+        else (PIgnored, fun _ -> true)
+
+      method! visit_PBound _ _ _ = [%internal_error] span
+    end
+  in
+  let lv, all_dummies = lv_visitor#visit_tpat () lv in
+  (lv, all_dummies ())
+
+let filter_tpat_vars (span : Meta.span) (keep : fvar -> bool) (lv : tpat) :
+    tpat =
+  fst (filter_tpat span keep lv)
+
+let filter_tpat_by_fvars (span : Meta.span) (used_vars : FVarId.Set.t)
+    (lv : tpat) : tpat * bool =
+  filter_tpat span (fun v -> FVarId.Set.mem v.id used_vars) lv
 
 let is_pat_tuple (p : tpat) : bool = Option.is_some (as_opt_pat_tuple p)
 
