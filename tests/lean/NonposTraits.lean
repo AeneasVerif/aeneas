@@ -39,6 +39,7 @@ def U32.Insts.Nonpos_traitsBla.add
   := do
   let i ← BlaInst.to_num other
   self + i
+nonpos_continuity U32.Insts.Nonpos_traitsBla.add
 
 /-- [nonpos_traits::{impl nonpos_traits::Bla for u32}::to_num]:
     Source: 'tests/src/nonpos-traits.rs', lines 11:4-13:5
@@ -82,6 +83,7 @@ def Sized2.bigger.default
   let i ← Sized2Inst.area self
   let i1 ← Sized2Inst1.area other
   ok (i > i1)
+nonpos_continuity Sized2.bigger.default
 
 /-- [nonpos_traits::Sized2::double]:
     Source: 'tests/src/nonpos-traits.rs', lines 35:4-37:5
@@ -93,6 +95,7 @@ def Sized2.double.default
   := do
   let i ← Sized2Inst.area self
   i + i
+nonpos_continuity Sized2.double.default
 
 /-- [nonpos_traits::{impl nonpos_traits::Sized2 for u32}::area]:
     Source: 'tests/src/nonpos-traits.rs', lines 41:4-43:5
@@ -152,6 +155,7 @@ def U32.Insts.Nonpos_traitsLeft.via_right
   Result Std.U32
   := do
   ok self
+nonpos_continuity U32.Insts.Nonpos_traitsLeft.via_right
 
 /-- [nonpos_traits::{impl nonpos_traits::Left for u32}::val]:
     Source: 'tests/src/nonpos-traits.rs', lines 66:4-68:5
@@ -176,6 +180,7 @@ def U32.Insts.Nonpos_traitsRight.via_left
   Result Std.U32
   := do
   LeftInst.val l
+nonpos_continuity U32.Insts.Nonpos_traitsRight.via_left
 
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::Right for u32}]
     Source: 'tests/src/nonpos-traits.rs', lines 77:0-81:1 -/
@@ -252,6 +257,7 @@ def MyIterator.zip_count.default_loop.body
     | none => ok (done (n, self1))
     | some _ => let n1 ← n + 1#u32
                 ok (cont (self1, o3, n1))
+nonpos_continuity MyIterator.zip_count.default_loop.body
 
 /-- [nonpos_traits::MyIterator::zip_count]: loop 0:
     Source: 'tests/src/nonpos-traits.rs', lines 104:8-106:9
@@ -268,6 +274,7 @@ def MyIterator.zip_count.default_loop
     (fun (self1, o1, n1) => MyIterator.zip_count.default_loop.body
       MyIteratorInst MyIntoIteratorInst self1 o1 n1)
     (self, o, n)
+nonpos_continuity MyIterator.zip_count.default_loop
 
 /-- [nonpos_traits::MyIterator::zip_count]:
     Source: 'tests/src/nonpos-traits.rs', lines 101:4-108:5
@@ -283,6 +290,7 @@ def MyIterator.zip_count.default
   let o ← MyIntoIteratorInst.into_iter other
   MyIterator.zip_count.default_loop MyIteratorInst MyIntoIteratorInst self o
     0#u32
+nonpos_continuity MyIterator.zip_count.default
 
 /-- [nonpos_traits::MyIterator::rev_first]:
     Source: 'tests/src/nonpos-traits.rs', lines 111:4-116:5
@@ -294,6 +302,7 @@ def MyIterator.rev_first.default
   Result (Option Clause0_Item)
   := do
   ok none
+nonpos_continuity MyIterator.rev_first.default
 
 /-- [nonpos_traits::MyIterator::collect]:
     Source: 'tests/src/nonpos-traits.rs', lines 117:4-122:5
@@ -306,6 +315,7 @@ def MyIterator.collect.default
   Result B
   := do
   MyFromIteratorInst.from_iter MyIteratorInst self
+nonpos_continuity MyIterator.collect.default
 
 /-- [nonpos_traits::Count]
     Source: 'tests/src/nonpos-traits.rs', lines 133:0-135:1
@@ -389,6 +399,7 @@ def U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop.body
   | none => ok (done acc)
   | some x => let acc1 ← acc + x
               ok (cont (iter1, acc1))
+nonpos_continuity U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop.body
 
 /-- [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}::from_iter]: loop 0:
     Source: 'tests/src/nonpos-traits.rs', lines 166:8-168:9
@@ -404,6 +415,7 @@ def U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop
       U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop.body
       MyIteratorTU32Inst iter1 acc1)
     (iter, acc)
+nonpos_continuity U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop
 
 /-- [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}::from_iter]:
     Source: 'tests/src/nonpos-traits.rs', lines 164:4-170:5
@@ -415,6 +427,7 @@ def U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter
   := do
   U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter_loop MyIteratorTU32Inst
     iter 0#u32
+nonpos_continuity U32.Insts.Nonpos_traitsMyFromIteratorU32.from_iter
 
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyFromIterator<u32> for u32}]
     Source: 'tests/src/nonpos-traits.rs', lines 163:0-171:1 -/
@@ -442,6 +455,7 @@ def Peek.Insts.Nonpos_traitsMyIterator.next
   := do
   let (o, t) ← MyIteratorInst.next self.inner
   ok (o, { self with inner := t })
+nonpos_continuity Peek.Insts.Nonpos_traitsMyIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_traits::{impl nonpos_traits::MyIterator<Clause0_Item> for nonpos_traits::Peek<I, Clause0_Item>}]

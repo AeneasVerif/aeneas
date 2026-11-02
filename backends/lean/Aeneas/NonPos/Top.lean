@@ -11,7 +11,9 @@ This file is the whole trusted surface of the library.  It contains, and only co
 1. the *statements* that pin down the imported constants (`Dom`, `Cont`, `Shape`, `Fix`, ...);
 2. the `nonpos_structure` command, a thin wrapper around `Fix`;
 3. the statements of the continuity theorems, one per form of term;
-4. the `nonpos_cont` tactic, a thin wrapper around those theorems.
+4. the `nonpos_cont` tactic, a thin wrapper around those theorems;
+5. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
+   so that it does not have to prove them again at each use.
 
 Proofs live in `NonPos/Proofs.lean` and the definitions of the constants in `NonPos/Model/`;
 neither needs to be read.  Every theorem below is proved by a one-line reference to `Proofs`.
@@ -563,7 +565,54 @@ elab_rules : tactic
   | `(tactic| nonpos_cont) => do nonposContLoop (← getContTheorems) 300
   | `(tactic| nonpos_cont $n:num) => do nonposContLoop (← getContTheorems) n.getNat
 
-/-! ## 7. Axioms
+/-! ## 7. Continuity lemmas for functions
+
+For performance, `nonpos_continuity` proves continuity lemmas for a function.
+
+`nonpos_continuity f` proves, once, for each argument `x` of `f` whose type is one of the structures
+(a `Fix`):
+```
+∀ (the arguments of f before x), Cont (f (the arguments before x))
+```
+that is, "`f` is continuous in `x`", and tags it `@[nonpos_continuous]`.
+-/
+
+/-- The statements `∀ (args before x), Cont (f args before)` for the arguments `x` of `f` whose
+type is a structure, with their names `f.cont_j` (`j` the index of `x`). -/
+meta def continuityStatements (f : Name) : MetaM (Array (Name × Expr)) := do
+  let info ← getConstInfo f
+  let lvls := info.levelParams.map fun _ => Level.zero
+  forallTelescope (info.type.instantiateLevelParams info.levelParams lvls) fun xs _ => do
+    let mut out := #[]
+    for j in [0:xs.size] do
+      unless (← whnfR (← inferType xs[j]!)).isAppOf ``Fix do continue
+      let before := xs.extract 0 j
+      let stmt ← mkForallFVars before (← mkAppM ``Cont #[mkAppN (Lean.mkConst f lvls) before])
+      out := out.push (f ++ Name.mkSimple s!"cont_{j}", stmt)
+    return out
+
+/-- Prove a statement with `nonpos_cont` and add it as a theorem. -/
+meta def proveContinuity (lemmaName : Name) (stmt : Expr) : TermElabM Unit := do
+  let mvar ← mkFreshExprMVar stmt
+  let goals ← Lean.Elab.Tactic.run mvar.mvarId! (nonposContLoop (← getContTheorems) 5000)
+  unless goals.isEmpty do throwError "goals remain"
+  addDecl (Declaration.thmDecl ⟨⟨lemmaName, [], stmt⟩, ← instantiateMVars mvar, [lemmaName]⟩)
+
+elab "nonpos_continuity " id:ident : command => do
+  let f ← liftCoreM <| realizeGlobalConstNoOverload id
+  let stmts ← try liftTermElabM <| continuityStatements f catch e => do
+    logWarning m!"nonpos_continuity: could not state the continuity theorems of {f} \
+      ({e.toMessageData}); nonpos_cont will unfold {f} instead"
+    pure #[]
+  for (lemmaName, stmt) in stmts do
+    try
+      liftTermElabM <| proveContinuity lemmaName stmt
+      elabCommand (← `(attribute [nonpos_continuous] $(mkIdent lemmaName)))
+    catch e =>
+      logWarning m!"nonpos_continuity: could not prove {lemmaName} ({e.toMessageData}); \
+        nonpos_cont will unfold {f} instead"
+
+/-! ## 8. Axioms
 
 Everything above, with its proofs and model, uses only the standard axioms (no `sorry`, no
 axiom of the library's own).  The build fails if this changes. -/

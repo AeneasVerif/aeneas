@@ -3134,6 +3134,28 @@ let nonpos_cont_fuel = 5000
     too small for a trait with four methods. 4096 is enough for [Iterator]. *)
 let nonpos_synth_instance_max_size = 4096
 
+(** Print [nonpos_continuity f] (Lean only) after a function [f] which takes a
+    dictionary of a trait extracted as a [nonpos_structure]: this command
+    proves, once, the continuity of [f] in its dictionary arguments, which
+    [nonpos_cont] otherwise proves again each time it meets [f] (see the Lean
+    file [Aeneas/NonPos/Continuity.lean]). Opaque functions are skipped: they
+    have no body to prove their continuity from. *)
+let extract_nonpos_continuity (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : fun_decl) : unit =
+  if
+    Option.is_some def.body
+    && List.exists
+         (fun (clause : trait_param) ->
+           trait_decl_is_nonpos ctx clause.trait_id)
+         def.signature.generics.trait_clauses
+  then (
+    (* Only Lean has [nonpos_structure]s (see [trait_decl_is_nonpos]) *)
+    [%sanity_check] def.item_meta.span (backend () = Lean);
+    F.pp_print_string fmt
+      ("nonpos_continuity "
+      ^ ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx);
+    F.pp_print_break fmt 0 0)
+
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =

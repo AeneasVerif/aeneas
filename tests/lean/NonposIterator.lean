@@ -182,6 +182,7 @@ def IntoIterator.Blanket.into_iter
   Result I
   := do
   ok self
+nonpos_continuity IntoIterator.Blanket.into_iter
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::IntoIterator<Clause0_Item, I> for I}]
     Source: 'tests/src/nonpos-iterator.rs', lines 201:0-207:1 -/
@@ -203,6 +204,7 @@ def Iterator.collect.default
   Result B
   := do
   FromIteratorInst.from_iter (IntoIterator.Blanket IteratorInst) self
+nonpos_continuity Iterator.collect.default
 
 /-- [nonpos_iterator::Iterator::size_hint]:
     Source: 'tests/src/nonpos-iterator.rs', lines 39:4-41:5
@@ -228,6 +230,7 @@ def Iterator.count.default_loop.body
   | none => ok (done n)
   | some _ => let n1 ← n + 1#usize
               ok (cont (s1, n1))
+nonpos_continuity Iterator.count.default_loop.body
 
 /-- [nonpos_iterator::Iterator::count]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 48:8-50:9
@@ -241,6 +244,7 @@ def Iterator.count.default_loop
   loop
     (fun (s1, n1) => Iterator.count.default_loop.body IteratorInst s1 n1)
     (s, n)
+nonpos_continuity Iterator.count.default_loop
 
 /-- [nonpos_iterator::Iterator::count]:
     Source: 'tests/src/nonpos-iterator.rs', lines 42:4-52:5
@@ -252,6 +256,7 @@ def Iterator.count.default
   Result Std.Usize
   := do
   Iterator.count.default_loop IteratorInst self 0#usize
+nonpos_continuity Iterator.count.default
 
 /-- [nonpos_iterator::Iterator::last]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 59:8-61:9
@@ -266,6 +271,7 @@ def Iterator.last.default_loop.body
   match o with
   | none => ok (done l)
   | some _ => ok (cont (s1, o))
+nonpos_continuity Iterator.last.default_loop.body
 
 /-- [nonpos_iterator::Iterator::last]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 59:8-61:9
@@ -279,6 +285,7 @@ def Iterator.last.default_loop
   loop
     (fun (s1, l1) => Iterator.last.default_loop.body IteratorInst s1 l1)
     (s, l)
+nonpos_continuity Iterator.last.default_loop
 
 /-- [nonpos_iterator::Iterator::last]:
     Source: 'tests/src/nonpos-iterator.rs', lines 53:4-63:5
@@ -290,6 +297,7 @@ def Iterator.last.default
   Result (Option Clause0_Item)
   := do
   Iterator.last.default_loop IteratorInst self none
+nonpos_continuity Iterator.last.default
 
 /-- [nonpos_iterator::Iterator::nth]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 66:8-74:5
@@ -309,6 +317,7 @@ def Iterator.nth.default_loop.body
                 ok (cont (self1, i1))
   else let (o, self1) ← IteratorInst.next self
        ok (done (o, self1))
+nonpos_continuity Iterator.nth.default_loop.body
 
 /-- [nonpos_iterator::Iterator::nth]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 66:8-74:5
@@ -322,6 +331,7 @@ def Iterator.nth.default_loop
   loop
     (fun (self1, i1) => Iterator.nth.default_loop.body IteratorInst n self1 i1)
     (self, i)
+nonpos_continuity Iterator.nth.default_loop
 
 /-- [nonpos_iterator::Iterator::nth]:
     Source: 'tests/src/nonpos-iterator.rs', lines 64:4-74:5
@@ -333,6 +343,7 @@ def Iterator.nth.default
   Result ((Option Clause0_Item) × Self)
   := do
   Iterator.nth.default_loop IteratorInst self n 0#usize
+nonpos_continuity Iterator.nth.default
 
 /-- [nonpos_iterator::Iterator::fold]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 81:8-83:9
@@ -351,6 +362,7 @@ def Iterator.fold.default_loop.body
   | some x =>
     let (acc1, f1) ← coreopsfunctionFnMutFPairBInst.call_mut f (acc, x)
     ok (cont (s1, f1, acc1))
+nonpos_continuity Iterator.fold.default_loop.body
 
 /-- [nonpos_iterator::Iterator::fold]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 81:8-83:9
@@ -367,6 +379,7 @@ def Iterator.fold.default_loop
     (fun (s1, f1, acc1) => Iterator.fold.default_loop.body IteratorInst
       coreopsfunctionFnMutFPairBInst s1 f1 acc1)
     (s, f, acc)
+nonpos_continuity Iterator.fold.default_loop
 
 /-- [nonpos_iterator::Iterator::fold]:
     Source: 'tests/src/nonpos-iterator.rs', lines 75:4-85:5
@@ -381,6 +394,7 @@ def Iterator.fold.default
   := do
   Iterator.fold.default_loop IteratorInst coreopsfunctionFnMutFPairBInst self f
     init
+nonpos_continuity Iterator.fold.default
 
 /-- [nonpos_iterator::Iterator::for_each]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 91:8-93:9
@@ -399,6 +413,7 @@ def Iterator.for_each.default_loop.body
     let (_, f1) ←
       coreopsfunctionFnMutFTupleClause0_ItemTupleInst.call_mut f x
     ok (cont (s1, f1))
+nonpos_continuity Iterator.for_each.default_loop.body
 
 /-- [nonpos_iterator::Iterator::for_each]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 91:8-93:9
@@ -414,6 +429,7 @@ def Iterator.for_each.default_loop
     (fun (s1, f1) => Iterator.for_each.default_loop.body IteratorInst
       coreopsfunctionFnMutFTupleClause0_ItemTupleInst s1 f1)
     (s, f)
+nonpos_continuity Iterator.for_each.default_loop
 
 /-- [nonpos_iterator::Iterator::for_each]:
     Source: 'tests/src/nonpos-iterator.rs', lines 86:4-94:5
@@ -427,6 +443,7 @@ def Iterator.for_each.default
   := do
   Iterator.for_each.default_loop IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemTupleInst self f
+nonpos_continuity Iterator.for_each.default
 
 /-- [nonpos_iterator::Iterator::all]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 96:8-102:5
@@ -446,6 +463,7 @@ def Iterator.all.default_loop.body
     if b
     then ok (cont (self1, f1))
     else ok (done (false, self1))
+nonpos_continuity Iterator.all.default_loop.body
 
 /-- [nonpos_iterator::Iterator::all]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 96:8-102:5
@@ -461,6 +479,7 @@ def Iterator.all.default_loop
     (fun (self1, f1) => Iterator.all.default_loop.body IteratorInst
       coreopsfunctionFnMutFTupleClause0_ItemBoolInst self1 f1)
     (self, f)
+nonpos_continuity Iterator.all.default_loop
 
 /-- [nonpos_iterator::Iterator::all]:
     Source: 'tests/src/nonpos-iterator.rs', lines 95:4-102:5
@@ -474,6 +493,7 @@ def Iterator.all.default
   := do
   Iterator.all.default_loop IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemBoolInst self f
+nonpos_continuity Iterator.all.default
 
 /-- [nonpos_iterator::Iterator::sum]:
     Source: 'tests/src/nonpos-iterator.rs', lines 103:4-108:5
@@ -485,6 +505,7 @@ def Iterator.sum.default
   Result S
   := do
   SumInst.sum IteratorInst self
+nonpos_continuity Iterator.sum.default
 
 /-- [nonpos_iterator::Iterator::rev]:
     Source: 'tests/src/nonpos-iterator.rs', lines 109:4-114:5
@@ -497,6 +518,7 @@ def Iterator.rev.default
   Result (Rev Self)
   := do
   ok { iter := self }
+nonpos_continuity Iterator.rev.default
 
 /-- [nonpos_iterator::Iterator::step_by]:
     Source: 'tests/src/nonpos-iterator.rs', lines 115:4-120:5
@@ -538,6 +560,7 @@ def Iterator.peekable.default
   Result (Peekable Self Clause0_Item)
   := do
   ok { iter := self, peeked := none }
+nonpos_continuity Iterator.peekable.default
 
 /-- [nonpos_iterator::Iterator::map]:
     Source: 'tests/src/nonpos-iterator.rs', lines 145:4-150:5
@@ -575,6 +598,7 @@ def Iterator.zip.default
   := do
   let t ← IntoIteratorInst.into_iter other
   ok { a := self, b := t }
+nonpos_continuity Iterator.zip.default
 
 /-- [nonpos_iterator::Iterator::chain]:
     Source: 'tests/src/nonpos-iterator.rs', lines 169:4-177:5
@@ -588,6 +612,7 @@ def Iterator.chain.default
   := do
   let t ← IntoIteratorInst.into_iter other
   ok { a := (some self), b := (some t) }
+nonpos_continuity Iterator.chain.default
 
 /-- [nonpos_iterator::Iterator::max]: loop body 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 185:8-190:9
@@ -610,6 +635,7 @@ def Iterator.max.default_loop.body
       if b
       then ok (cont (s1, o))
       else ok (cont (s1, m))
+nonpos_continuity Iterator.max.default_loop.body
 
 /-- [nonpos_iterator::Iterator::max]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 185:8-190:9
@@ -625,6 +651,7 @@ def Iterator.max.default_loop
     (fun (s1, m1) => Iterator.max.default_loop.body IteratorInst corecmpOrdInst
       s1 m1)
     (s, m)
+nonpos_continuity Iterator.max.default_loop
 
 /-- [nonpos_iterator::Iterator::max]:
     Source: 'tests/src/nonpos-iterator.rs', lines 178:4-192:5
@@ -636,6 +663,7 @@ def Iterator.max.default
   Result (Option Clause0_Item)
   := do
   Iterator.max.default_loop IteratorInst corecmpOrdInst self none
+nonpos_continuity Iterator.max.default
 
 /-- [nonpos_iterator::Iterator::flatten]:
     Source: 'tests/src/nonpos-iterator.rs', lines 193:4-199:5
@@ -648,6 +676,7 @@ def Iterator.flatten.default
   Result (Flatten Self)
   := do
   ok { iter := self }
+nonpos_continuity Iterator.flatten.default
 
 /-- [nonpos_iterator::Count]
     Source: 'tests/src/nonpos-iterator.rs', lines 208:0-210:1
@@ -752,6 +781,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
   | none => ok (done acc)
   | some x => let acc1 ← acc + x
               ok (cont (it1, acc1))
+nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 231:8-233:9
@@ -768,6 +798,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
       U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
       IntoIteratorTU32Clause0_IntoIterInst it1 acc1)
     (it, acc)
+nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]:
     Source: 'tests/src/nonpos-iterator.rs', lines 228:4-235:5
@@ -781,6 +812,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
   let it ← IntoIteratorTU32Clause0_IntoIterInst.into_iter iter
   U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
     IntoIteratorTU32Clause0_IntoIterInst it 0#u32
+nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}]
     Source: 'tests/src/nonpos-iterator.rs', lines 227:0-236:1 -/
@@ -812,6 +844,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
   | none => ok (done a)
   | some x => let a1 ← a + x
               ok (cont (it1, a1))
+nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 244:8-246:9
@@ -825,6 +858,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum_loop
     (fun (it1, a1) => U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
       IteratorIU32Inst it1 a1)
     (it, a)
+nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]:
     Source: 'tests/src/nonpos-iterator.rs', lines 241:4-248:5
@@ -835,6 +869,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum
   Result Std.U32
   := do
   U32.Insts.Nonpos_iteratorSumU32.sum_loop IteratorIU32Inst iter 0#u32
+nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}]
     Source: 'tests/src/nonpos-iterator.rs', lines 240:0-249:1 -/
@@ -854,6 +889,7 @@ def Rev.Insts.Nonpos_iteratorIterator.next
   := do
   let (o, t) ← DoubleEndedIteratorInst.next_back self.iter
   ok (o, { iter := t })
+nonpos_continuity Rev.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}]
@@ -928,6 +964,7 @@ def StepBy.Insts.Nonpos_iteratorIterator.next
   := do
   let (o, t) ← IteratorInst.next self.iter
   ok (o, { self with iter := t })
+nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}]
@@ -1004,6 +1041,7 @@ def Take.Insts.Nonpos_iteratorIterator.next
     let i ← self.n - 1#usize
     let (o, t) ← IteratorInst.next self.iter
     ok (o, { iter := t, n := i })
+nonpos_continuity Take.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}]
@@ -1080,6 +1118,7 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
   | some a =>
     let i ← self.count + 1#usize
     ok (some (self.count, a), { iter := t, count := i })
+nonpos_continuity Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}]
@@ -1171,6 +1210,7 @@ def Peekable.Insts.Nonpos_iteratorIterator.next
     let (v, t) ← IteratorInst.next self.iter
     ok (v, { iter := t, peeked := o1 })
   | some v => ok (v, { self with peeked := o1 })
+nonpos_continuity Peekable.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}]
@@ -1249,6 +1289,7 @@ def Map.Insts.Nonpos_iteratorIterator.next
     let (t1, t2) ←
       coreopsfunctionFnMutFTupleClause0_ItemBInst.call_mut self.f x
     ok (some t1, { iter := t, f := t2 })
+nonpos_continuity Map.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}]
@@ -1337,6 +1378,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next_loop.body
     if b
     then ok (done (o, t, t1))
     else ok (cont { iter := t, predicate := t1 })
+nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop 0:
     Source: 'tests/src/nonpos-iterator.rs', lines 333:8-339:5
@@ -1352,6 +1394,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next_loop
     (fun self1 => Filter.Insts.Nonpos_iteratorIterator.next_loop.body
       IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst self1)
     self
+nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]:
     Source: 'tests/src/nonpos-iterator.rs', lines 332:4-339:5
@@ -1366,6 +1409,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next
     Filter.Insts.Nonpos_iteratorIterator.next_loop IteratorInst
       coreopsfunctionFnMutPTupleShared0Clause0_ItemBoolInst self
   ok (o, { iter := t, predicate := t1 })
+nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}]
@@ -1453,6 +1497,7 @@ def Zip.Insts.Nonpos_iteratorIteratorPair.next
     match o1 with
     | none => ok (none, { a := t, b := t1 })
     | some y => ok (some (x, y), { a := t, b := t1 })
+nonpos_continuity Zip.Insts.Nonpos_iteratorIteratorPair.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}]
@@ -1546,6 +1591,7 @@ def Chain.Insts.Nonpos_iteratorIterator.next
         let (o1, b1) ← IteratorInst1.next b
         ok (o1, { a := none, b := (some b1) })
     | some _ => ok (o, { self with a := (some a1) })
+nonpos_continuity Chain.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}]

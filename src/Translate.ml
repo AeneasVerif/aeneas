@@ -891,7 +891,11 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
 
     Extract.start_fun_decl_group ctx fmt is_rec decls;
     List.iter (fun f -> f ()) extract_defs;
-    Extract.end_fun_decl_group fmt is_rec decls)
+    Extract.end_fun_decl_group fmt is_rec decls;
+    (* The continuity lemmas of the functions taking dictionaries of
+       [nonpos_structure]s, after the whole group *)
+    if config.extract_transparent then
+      List.iter (Extract.extract_nonpos_continuity ctx fmt) decls)
 
 (** Extract the decreases-clause template bodies for a list of function
     declarations (typically a function together with the loops it contains).
