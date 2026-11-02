@@ -19,7 +19,7 @@ namespace raw_pointer_ops
 def unalignedChecks : Option Bool := do
   let (p, s) ← Heap.newBlock raw_transmute.byteRepr
     [#v[0xaa#u8], #v[0x12#u8], #v[0x34#u8], #v[0x56#u8], #v[0x78#u8], #v[0xbb#u8]] true Heap.empty
-  let word : RawPtr U32 := ⟨p.base, 1#usize⟩
+  let word : RawPtr U32 := ⟨p.provenance, 1#usize⟩
   let before ← Heap.read raw_box.u32Repr.unaligned word s
   let data := #v[0x21#u8, 0x43#u8, 0x65#u8, 0x87#u8]
   let s' ← Heap.write raw_box.u32Repr.unaligned word 0x87654321#u32 data (by native_decide) s
@@ -31,7 +31,7 @@ example : unalignedChecks = some true := by native_decide
 
 def rangeCycleChecks : Option Bool := do
   let (p, s) ← Heap.newBlock raw_transmute.byteRepr [#v[1#u8], #v[2#u8], #v[3#u8]] true Heap.empty
-  let third : RawPtr U8 := ⟨p.base, 2#usize⟩
+  let third : RawPtr U8 := ⟨p.provenance, 2#usize⟩
   let borrowed ← Heap.borrowRange raw_transmute.byteRepr p 2 s
   let frame ← Heap.read raw_transmute.byteRepr third borrowed
   let restored ← Heap.endBorrowRange raw_transmute.byteRepr p [#v[7#u8], #v[8#u8]] borrowed
@@ -48,7 +48,7 @@ example : rangeCycleChecks = some true := by native_decide
 
 def atomicRangeRejection : Option Bool := do
   let (p, s) ← Heap.newBlock raw_transmute.byteRepr [#v[1#u8], #v[2#u8]] true Heap.empty
-  let second : RawPtr U8 := ⟨p.base, 1#usize⟩
+  let second : RawPtr U8 := ⟨p.provenance, 1#usize⟩
   let shared ← Heap.share raw_transmute.byteRepr second s
   let values ← Heap.readRange raw_transmute.byteRepr p 2 shared
   pure ((Heap.borrowRange raw_transmute.byteRepr p 2 shared).isNone &&
@@ -100,7 +100,7 @@ example (s : Heap) :
 
 /-- The extracted empty-range caller preserves the entire heap. -/
 theorem fill_words_empty.spec (p : MutRawPtr U32) (s : Heap) (blk : Block) (value : U32)
-    (hl : s.allocations p.base = some blk)
+    (hl : s.allocations p.provenance = some blk)
     (ha : raw_box.u32Repr.align.val ∣ blk.alignment.val)
     (hp : raw_box.u32Repr.align.val ∣ p.byteOffset.val)
     (hb : p.byteOffset.val ≤ blk.repr.length) :

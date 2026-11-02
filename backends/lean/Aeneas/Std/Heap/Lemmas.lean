@@ -139,30 +139,12 @@ theorem select_update_disjoint (reprT : Repr T) (reprU : Repr U) (bytes : Vector
       _ = none := List.getElem?_eq_none (by simp only [List.length_take]; grind)
       _ = _ := (List.getElem?_eq_none (by simp only [List.length_take]; grind)).symm
 
-/-- Uninitialized symbolic bytes are not silently turned into readable values. -/
-theorem readBytes_shared (data : Vector Byte n) (depth : Nat)
-    (initialized : ∀ i : Fin n, data[i.val] ≠ .uninit) :
+/-- Permission checking preserves symbolic initialization; the decoder validates
+value-bearing bytes and may ignore uninitialized padding. -/
+theorem readBytes_shared (data : Vector Byte n) (depth : Nat) :
     readBytes n (data.map (Cell.shared depth)) = some data := by
-  have hm := vector_mapM_toList (f := Cell.read) (data.map (Cell.shared depth))
-  simp only [Vector.toList_map, List.mapM_map, Function.comp_def] at hm
-  have hl : data.toList.mapM (fun byte => Cell.read (.shared depth byte)) =
-      some data.toList := by
-    apply list_mapM_identity
-    intro byte hb
-    obtain ⟨i, hi, he⟩ := List.getElem_of_mem hb
-    have hn := initialized ⟨i, by simpa using hi⟩
-    have hne : byte ≠ Byte.uninit := by simpa [← he] using hn
-    cases byte
-    · exact (hne rfl).elim
-    · rfl
-    · rfl
-  rw [hl] at hm
-  unfold readBytes
-  cases h : (data.map (Cell.shared depth)).mapM Cell.read
-  · simp [h] at hm
-  · rename_i result
-    simp only [h, Option.map_some, Option.some.injEq] at hm
-    exact congrArg some (Vector.toList_inj.mp hm)
+  simpa [readBytes, Vector.mapM_map, Function.comp_def, Cell.read] using
+    vector_mapM_some data id
 
 theorem writeBytes_shared (old data : Vector Byte n) :
     writeBytes n (old.map (Cell.shared 0)) data = some (data.map (Cell.shared 0)) := by
@@ -178,7 +160,156 @@ theorem writeBytes_shared (old data : Vector Byte n) :
 
 end Repr
 
+def Cell.PermWeakens (old new : Cell) : Prop :=
+  ∀ other, old.compatible other = true → new.compatible other = true
+
+theorem Cell.compatible_symm (a b : Cell) : a.compatible b = b.compatible a := by
+  cases a
+  · cases b
+    · simp [Cell.compatible, Bool.and_comm, eq_comm]
+    · rfl
+  · cases b <;> rfl
+
+theorem Cell.PermWeakens.refl (c : Cell) : c.PermWeakens c := fun _ h => h
+
+theorem Cell.PermWeakens.writer (old new : Byte) :
+    (Cell.shared 0 old).PermWeakens (.shared 0 new) := by
+  intro other h
+  cases other
+  · simp [Cell.compatible] at h
+  · rfl
+
+theorem Cell.PermWeakens.borrow (old : Cell) : old.PermWeakens .borrowed :=
+  fun _ _ => rfl
+
+theorem Cell.PermWeakens.share (depth : Nat) (byte : Byte) :
+    (Cell.shared depth byte).PermWeakens (.shared (depth + 1) byte) := by
+  intro other h
+  cases other
+  · simp only [Cell.compatible, Bool.and_eq_true, decide_eq_true_eq] at h ⊢
+    exact ⟨⟨by simp, h.1.2⟩, h.2⟩
+  · rfl
+
 namespace Heap
+
+theorem readRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    readRange repr p 1 s = (read repr p s).map (fun value => [value]) := by
+  cases hl : s.allocations p.provenance
+  · simp [readRange, read, hl]
+  · rename_i blk
+    by_cases hv : s.live blk = true ∧ blk.bptr.val ≤ p.address.val ∧
+        repr.align.val ∣ p.address.val
+    · obtain ⟨hlive, hlo, ha⟩ := hv
+      by_cases hs : 0 < repr.size
+      · by_cases hb : p.offsetFrom blk.bptr + repr.size ≤ blk.repr.length
+        · have habs : p.address.val + repr.size ≤ blk.bptr.val + blk.repr.length := by
+            unfold RawPtr.offsetFrom at hb
+            agrind
+          simp [readRange, read, hl, hlive, hlo, ha, hs, hb, habs,
+            List.range_succ, Repr.read, Option.bind_assoc]
+          apply congrArg (fun f =>
+            (Repr.readBytes repr.size (repr.select blk.bytes (p.offsetFrom blk.bptr) hb)).bind f)
+          funext data
+          change ((repr.decode data).bind (fun value => some [value])) =
+            (repr.decode data).map (fun value => [value])
+          cases repr.decode data
+          · rfl
+          · rfl
+        · have habs : ¬ p.address.val + repr.size ≤ blk.bptr.val + blk.repr.length := by
+            unfold RawPtr.offsetFrom at hb
+            agrind
+          simp [readRange, read, hl, hlive, hlo, ha, hs, hb, habs, Repr.read]
+      · simp [readRange, read, hl, ha, hs, Repr.read]
+    · have hguard : ¬ ((s.live blk = true ∧ blk.bptr.val ≤ p.address.val) ∧
+          repr.align.val ∣ p.address.val) :=
+        fun h => hv ⟨h.1.1, h.1.2, h.2⟩
+      simp [readRange, read, hl, Bool.and_eq_true, hguard]
+
+theorem borrowRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    borrowRange repr p 1 s = borrow repr p s := by
+  unfold borrowRange modifyRange borrow
+  apply congrArg (fun (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)) =>
+    modify repr p change s)
+  funext r bytes i
+  by_cases hs : 0 < repr.size
+  · by_cases hb : i + repr.size ≤ r
+    · simp [hs, hb, List.range_succ]
+    · simp [hs, hb, Repr.borrow]
+  · simp [hs, Repr.borrow]
+
+theorem shareRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    shareRange repr p 1 s = share repr p s := by
+  unfold shareRange modifyRange share
+  apply congrArg (fun (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)) =>
+    modify repr p change s)
+  funext r bytes i
+  by_cases hs : 0 < repr.size
+  · by_cases hb : i + repr.size ≤ r
+    · simp [hs, hb, List.range_succ]
+    · simp [hs, hb, Repr.share]
+  · simp [hs, Repr.share]
+
+theorem endShareRange_single (repr : Repr ty) (p : RawPtr ty) (s : Heap) :
+    endShareRange repr p 1 s = endShare repr p s := by
+  unfold endShareRange modifyRange endShare
+  apply congrArg (fun (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)) =>
+    modify repr p change s)
+  funext r bytes i
+  by_cases hs : 0 < repr.size
+  · by_cases hb : i + repr.size ≤ r
+    · simp [hs, hb, List.range_succ]
+    · simp [hs, hb, Repr.endShare]
+  · simp [hs, Repr.endShare]
+
+theorem endBorrowRange_single (repr : Repr ty) (p : RawPtr ty)
+    (data : Vector Byte repr.size) (s : Heap) :
+    endBorrowRange repr p [data] s = endBorrow repr p data s := by
+  unfold endBorrowRange endBorrow
+  apply congrArg (fun (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)) =>
+    modify repr p change s)
+  funext r bytes i
+  by_cases hs : 0 < repr.size
+  · by_cases hb : i + repr.size ≤ r
+    · simp [hs, hb]
+    · simp [hs, hb, Repr.endBorrow]
+  · simp [hs, Repr.endBorrow]
+
+theorem compatible_iff (a b : Block) :
+    compatible a b = true ↔
+      a.active = false ∨ b.active = false ∨
+        ∀ (i : Nat) (hi : i < a.repr.length) (j : Nat) (hj : j < b.repr.length),
+          a.bptr.val + i = b.bptr.val + j →
+            Cell.compatible a.repr[i] b.repr[j] = true := by
+  have all_zip (xs : List Cell) (f : Cell × Nat → Bool) :
+      xs.zipIdx.all f = true ↔ ∀ (i : Nat) (hi : i < xs.length), f (xs[i], i) = true := by
+    rw [List.all_eq_true]
+    constructor
+    · intro h i hi
+      apply h
+      exact List.mem_of_getElem? (i := i)
+        (by simp [List.getElem?_zipIdx, List.getElem?_eq_getElem hi])
+    · intro h x hx
+      obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
+      simpa using h i (by simpa using hi)
+  simp only [compatible, Bool.or_eq_true, Bool.not_eq_true', all_zip,
+    bne_iff_ne]
+  simp only [or_assoc]
+  grind
+
+theorem compatible_symm (a b : Block) : compatible a b = compatible b a := by
+  apply Bool.eq_iff_iff.mpr
+  rw [compatible_iff, compatible_iff]
+  constructor
+  · rintro (ha | hb | hc)
+    · exact .inr (.inl ha)
+    · exact .inl hb
+    · exact .inr (.inr (fun j hj i hi he =>
+        Cell.compatible_symm _ _ ▸ hc i hi j hj he.symm))
+  · rintro (hb | ha | hc)
+    · exact .inr (.inl hb)
+    · exact .inl ha
+    · exact .inr (.inr (fun i hi j hj he =>
+        Cell.compatible_symm _ _ ▸ hc j hj i hi he.symm))
 
 theorem inv_empty : empty.Inv := ⟨fun _ _ => rfl, rfl⟩
 
@@ -208,6 +339,213 @@ theorem Inv.compatible {s : Heap} (h : s.Inv) {i j : Nat} {a b : Block}
   have entry := List.all_eq_true.mp row.2 j (List.mem_range.mpr hj)
   simp only [different, ↓reduceIte, hb, Bool.and_eq_true] at entry
   exact entry.2
+
+theorem Inv.validBlock {s : Heap} (h : s.Inv) {id : Nat} {blk : Block}
+    (hl : s.allocations id = some blk) : validBlock s blk = true := by
+  have row := List.all_eq_true.mp h.2 id (List.mem_range.mpr (h.base_lt hl))
+  simp only [hl, Bool.and_eq_true] at row
+  exact row.1
+
+theorem Inv.validCell {s : Heap} (h : s.Inv) {id : Nat} {blk : Block}
+    (hl : s.allocations id = some blk) (i : Nat) (hi : i < blk.repr.length) :
+    match blk.repr[i] with
+    | .borrowed => True
+    | .shared _ byte => validByte s byte = true := by
+  have hv := h.validBlock hl
+  simp only [Heap.validBlock, Bool.and_eq_true] at hv
+  have hc := List.all_eq_true.mp hv.2 _ (List.getElem_mem hi)
+  cases he : blk.repr[i]
+  · simpa only [he] using hc
+  · trivial
+
+theorem Inv.validSelected {s : Heap} (h : s.Inv) {id : Nat} {blk : Block}
+    {repr : Repr ty} {offset : Nat} {data : Vector Cell repr.size}
+    (hl : s.allocations id = some blk) (hb : offset + repr.size ≤ blk.repr.length)
+    (selected : repr.select blk.bytes offset hb = data)
+    (i : Nat) (hi : i < repr.size) :
+    match data[i] with
+    | .borrowed => True
+    | .shared _ byte => validByte s byte = true := by
+  have he := Repr.select_getElem? repr blk.bytes offset hb i hi
+  rw [selected, Vector.getElem?_eq_getElem hi] at he
+  have hidx : offset + i < blk.repr.length := by grind
+  have he' : data[i] = blk.repr[offset + i] := by
+    simpa [Block.bytes, List.getElem?_eq_getElem hidx] using he
+  rw [he']
+  exact h.validCell hl _ hidx
+
+theorem validByte_storeRepr (s : Heap) (id : Nat) (bytes : List Cell) (byte : Byte) :
+    validByte (s.storeRepr id bytes) byte = validByte s byte := by
+  cases byte
+  · rfl
+  · rfl
+  · rename_i p lane
+    by_cases he : p.provenance = id
+    · simp only [validByte, allocations_storeRepr, he, ↓reduceIte]
+      cases s.allocations id <;> rfl
+    · simp [validByte, he]
+
+theorem validBlock_storeRepr (s : Heap) (id : Nat) (bytes : List Cell)
+    (blk : Block) (length : ∀ old, s.allocations id = some old → bytes.length = old.repr.length) :
+    validBlock (s.storeRepr id bytes) blk = validBlock s blk := by
+  by_cases he : blk.root = id
+  · simp only [validBlock, allocations_storeRepr, he, ↓reduceIte, validByte_storeRepr]
+    cases hl : s.allocations id
+    · rfl
+    · rename_i old
+      simp [length old hl]
+  · simp only [validBlock, allocations_storeRepr, he, ↓reduceIte, validByte_storeRepr]
+
+/-- Local replacement law: layout stays fixed, bytes are well formed, and no
+new conflicting observer is introduced. This is internal invariant machinery,
+not a client precondition. In particular, arbitrary restoration does not qualify. -/
+theorem storeRepr_Inv {s : Heap} {id : Nat} {blk : Block} (hinv : s.Inv)
+    (hl : s.allocations id = some blk) (bytes : List Cell)
+    (length : bytes.length = blk.repr.length)
+    (valid : ∀ cell ∈ bytes, match cell with
+      | .borrowed => True
+      | .shared _ byte => validByte s byte = true)
+    (weaker : ∀ (i : Nat) (hi : i < blk.repr.length),
+      (blk.repr[i]).PermWeakens (bytes[i]'(by grind))) :
+    (s.storeRepr id bytes).Inv := by
+  have length' : ∀ old, s.allocations id = some old → bytes.length = old.repr.length := by
+    intro old ho
+    have he := Option.some.inj (ho.symm.trans hl)
+    simpa [he] using length
+  have vb : validBlock s { blk with repr := bytes } = true := by
+    have original := hinv.validBlock hl
+    simp only [validBlock, Bool.and_eq_true] at original ⊢
+    refine ⟨⟨?_, ?_⟩, ?_⟩
+    · simpa [bounded, length] using original.1.1
+    · simpa [length] using original.1.2
+    · apply List.all_eq_true.mpr
+      intro cell hc
+      cases cell
+      · exact valid _ hc
+      · rfl
+  have compat : ∀ other, compatible blk other = true →
+      compatible { blk with repr := bytes } other = true := by
+    intro other hc
+    rw [compatible_iff] at hc ⊢
+    rcases hc with ha | hb | hc
+    · exact .inl ha
+    · exact .inr (.inl hb)
+    · refine .inr (.inr ?_)
+      intro i hi j hj he
+      have hi' : i < blk.repr.length := by simpa [length] using hi
+      exact weaker i hi' other.repr[j] (hc i hi' j hj he)
+  refine ⟨storeRepr_support s id bytes hinv (hinv.base_lt hl), ?_⟩
+  apply List.all_eq_true.mpr
+  intro i hi
+  have row := List.all_eq_true.mp hinv.2 i hi
+  cases ha : s.allocations i
+  · simp [ha] at row
+  · rename_i a
+    simp only [ha, Bool.and_eq_true] at row
+    have vi : validBlock (s.storeRepr id bytes)
+        (if i = id then { a with repr := bytes } else a) = true := by
+      rw [validBlock_storeRepr _ _ _ _ length']
+      split
+      · rename_i he
+        have he' : a = blk := Option.some.inj ((he ▸ ha).symm.trans hl)
+        simpa [he'] using vb
+      · exact row.1
+    by_cases he : i = id
+    ·
+      have he' : a = blk := Option.some.inj ((he ▸ ha).symm.trans hl)
+      subst i
+      subst a
+      simp only [allocations_storeRepr, ↓reduceIte, hl, Option.map_some, Bool.and_eq_true]
+      refine ⟨by simpa using vi, ?_⟩
+      apply List.all_eq_true.mpr
+      intro j hj
+      by_cases hjid : id = j
+      · simp [hjid]
+      · have entry := List.all_eq_true.mp row.2 j hj
+        cases hb : s.allocations j
+        · simp [hjid, hb] at entry
+        · rename_i b
+          simp only [hjid, ↓reduceIte, hb, Bool.and_eq_true] at entry
+          have hji : j ≠ id := Ne.symm hjid
+          simpa [hjid, hji, hb, length, overlaps] using
+            And.intro entry.1 (compat b entry.2)
+    ·
+      simp only [allocations_storeRepr, he, ↓reduceIte, ha, Bool.and_eq_true]
+      refine ⟨by simpa [he] using vi, ?_⟩
+      apply List.all_eq_true.mpr
+      intro j hj
+      by_cases hij : i = j
+      · simp [hij]
+      · have entry := List.all_eq_true.mp row.2 j hj
+        cases hb : s.allocations j
+        · simp [hij, hb] at entry
+        · rename_i b
+          simp only [hij, ↓reduceIte, hb, Bool.and_eq_true] at entry
+          by_cases hjid : j = id
+          · have he' : b = blk := Option.some.inj ((hjid ▸ hb).symm.trans hl)
+            subst j
+            subst b
+            have hc := compat a (by rw [compatible_symm]; exact entry.2)
+            rw [compatible_symm] at hc
+            simpa [hij, hl, length, overlaps] using And.intro entry.1 hc
+          · simpa [hij, hjid, hb] using entry
+
+theorem update_Inv {s : Heap} {repr : Repr ty} {p : RawPtr ty} {blk : Block}
+    (hinv : s.Inv) (hl : s.allocations p.provenance = some blk)
+    (hb : (p.offsetFrom blk.bptr) + repr.size ≤ blk.repr.length)
+    (old new : Vector Cell repr.size)
+    (selected : repr.select blk.bytes (p.offsetFrom blk.bptr) hb = old)
+    (valid : ∀ (i : Nat) (hi : i < repr.size), match new[i] with
+      | .borrowed => True
+      | .shared _ byte => validByte s byte = true)
+    (weaker : ∀ (i : Nat) (hi : i < repr.size), old[i].PermWeakens new[i]) :
+    (s.storeRepr p.provenance (repr.update blk.bytes (p.offsetFrom blk.bptr) hb new).toList).Inv := by
+  let bytes := repr.update blk.bytes (p.offsetFrom blk.bptr) hb new
+  have at_index (i : Nat) (hi : i < blk.repr.length) :
+      (bytes[i] = blk.repr[i] ∧
+        (blk.repr[i]).PermWeakens bytes[i]) ∨
+      ∃ (j : Nat) (hj : j < repr.size),
+        bytes[i] = new[j] ∧
+          blk.repr[i] = old[j] := by
+    by_cases inside : (p.offsetFrom blk.bptr) ≤ i ∧ i < (p.offsetFrom blk.bptr) + repr.size
+    · let j := i - (p.offsetFrom blk.bptr)
+      have hj : j < repr.size := by dsimp [j]; grind
+      have he : (p.offsetFrom blk.bptr) + j = i := by dsimp [j]; grind
+      have hs := Repr.select_getElem? repr blk.bytes (p.offsetFrom blk.bptr) hb j hj
+      rw [selected, he, Vector.getElem?_eq_getElem hj] at hs
+      have hn := Repr.update_inside repr blk.bytes (p.offsetFrom blk.bptr) hb new j hj
+      rw [he, List.getElem?_eq_getElem (by simp only [Vector.length_toList]; exact hi)] at hn
+      exact .inr ⟨j, hj, Option.some.inj hn,
+        by simpa [Block.bytes, List.getElem?_eq_getElem hi] using hs.symm⟩
+    · have he := Repr.update_outside repr blk.bytes (p.offsetFrom blk.bptr) hb new i (by grind)
+      have hbc : blk.bytes.toList = blk.repr := by simp [Block.bytes]
+      change bytes.toList[i]? = blk.bytes.toList[i]? at he
+      rw [hbc, List.getElem?_eq_getElem hi,
+        List.getElem?_eq_getElem (by simpa only [Vector.length_toList] using hi)] at he
+      have he' : bytes[i] = blk.repr[i] := by
+        simpa only [Vector.getElem_toList] using Option.some.inj he
+      exact .inl ⟨he', he' ▸ Cell.PermWeakens.refl _⟩
+  apply storeRepr_Inv hinv hl bytes.toList (by simp only [Vector.length_toList])
+  · intro cell hc
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hc
+    simp only [Vector.getElem_toList]
+    have hi' : i < blk.repr.length := by simpa only [Vector.length_toList] using hi
+    rcases at_index i hi' with ⟨he, _⟩ | ⟨j, hj, he, _⟩
+    · rw [he]
+      have hv := hinv.validBlock hl
+      simp only [validBlock, Bool.and_eq_true] at hv
+      have hv := List.all_eq_true.mp hv.2 _ (List.getElem_mem hi')
+      cases hec : blk.repr[i]
+      · simpa only [hec] using hv
+      · trivial
+    · rw [he]
+      exact valid j hj
+  · intro i hi
+    simp only [Vector.getElem_toList]
+    rcases at_index i hi with ⟨_, hw⟩ | ⟨j, hj, he, ho⟩
+    · exact hw
+    · rw [he, ho]
+      exact weaker j hj
 
 /-- Even a fully borrowed active alias blocks root cleanup. Permission
 compatibility does not collapse that alias into "no outstanding loan". -/
@@ -241,14 +579,14 @@ theorem live_storeRepr (s : Heap) (id : Nat) (bytes : List Cell) (block : Block)
   exact live_storeRepr s id bytes block
 
 theorem modify.spec (repr : Repr ty) (p : RawPtr ty)
-    (change : ∀ {r}, Vector Cell r → Option (Vector Cell r))
+    (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r))
     (s : Heap) (block : Block) (bytes : Vector Cell block.repr.length)
-    (hl : s.allocations p.base = some block) (hlive : s.live block = true)
-    (ha : repr.align.val ∣ block.bptr.val + p.byteOffset.val)
-    (hc : change block.bytes = some bytes)
-    (valid : (s.storeRepr p.base bytes.toList).check = true) :
-    Heap.modify repr p change s = some (s.storeRepr p.base bytes.toList) := by
-  simp [modify, hl, hlive, ha, hc, commit, valid]
+    (hl : s.allocations p.provenance = some block) (hlive : s.live block = true)
+    (hlo : block.bptr.val ≤ p.address.val) (ha : repr.align.val ∣ p.address.val)
+    (hc : change block.bytes (p.offsetFrom block.bptr) = some bytes)
+    (valid : (s.storeRepr p.provenance bytes.toList).check = true) :
+    Heap.modify repr p change s = some (s.storeRepr p.provenance bytes.toList) := by
+  simp [modify, hl, hlive, hlo, ha, hc, commit, valid]
 
 end Heap
 end Aeneas.Std

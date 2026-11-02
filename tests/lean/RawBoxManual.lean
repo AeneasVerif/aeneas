@@ -11,44 +11,6 @@ public section
 open Aeneas.Std
 open Aeneas.Std.SepLogic
 
-namespace raw_read_write_read
-
-/-- The manually corrected translation observes both the old and new values. -/
-theorem read_write_read.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32) (initial : U32)
-    (hsize : 0 < repr.size) :
-    HeapWP.Triple (pointsTo repr p initial) (read_write_read repr p)
-      (fun result h => result = (initial, 1#u32) ∧ pointsTo repr p 1#u32 0 h) := by
-  unfold read_write_read
-  apply HeapWP.Triple.bind (HeapWP.read.spec repr p initial 0 hsize)
-  intro before
-  apply HeapWP.Triple.pure_pre
-  intro hbefore
-  subst before
-  apply HeapWP.Triple.bind (HeapWP.write.spec repr p initial 1#u32 hsize)
-  intro _
-  apply HeapWP.Triple.bind (HeapWP.read.spec repr p 1#u32 0 hsize)
-  intro after
-  apply HeapWP.Triple.pure_pre
-  intro hafter
-  subst after
-  exact HeapWP.Triple.pure (pointsTo repr p 1#u32) (initial, 1#u32)
-
-/-- Discarding the first read does not permit reusing it after a write. -/
-theorem discarded_read.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32) (initial : U32)
-    (hsize : 0 < repr.size) :
-    HeapWP.Triple (pointsTo repr p initial) (discarded_read repr p)
-      (fun result h => result = 1#u32 ∧ pointsTo repr p 1#u32 0 h) := by
-  unfold discarded_read
-  apply HeapWP.Triple.bind (HeapWP.read.spec repr p initial 0 hsize)
-  intro _
-  apply HeapWP.Triple.pure_pre
-  intro _
-  apply HeapWP.Triple.bind (HeapWP.write.spec repr p initial 1#u32 hsize)
-  intro _
-  exact HeapWP.read.spec repr p 1#u32 0 hsize
-
-end raw_read_write_read
-
 namespace raw_box
 
 theorem alias_write_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)

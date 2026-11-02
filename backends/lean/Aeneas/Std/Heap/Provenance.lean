@@ -9,29 +9,27 @@ public section
 
 namespace Aeneas.Std
 
-theorem Repr.encodesList_complete (repr : Repr T) (values : List T) :
-    ∃ data, repr.encodesList values data := by
+theorem Repr.encodeList_complete (repr : Repr T) (values : List T) :
+    ∃ data, repr.encodeList values data := by
   induction values with
   | nil => exact ⟨[], trivial⟩
   | cons value values ih =>
-    obtain ⟨bytes, hb⟩ := repr.complete value
+    obtain ⟨bytes, hb⟩ := repr.encode_complete value
     obtain ⟨data, hd⟩ := ih
     exact ⟨bytes :: data, hb, hd⟩
 
-theorem Repr.pointer_roundTrip (addresses : AddressMap) (p : RawPtr T) :
-    (Repr.pointer T).decode addresses (Repr.pointerEncoding p) = some p :=
-  (Repr.pointer T).encode_decode addresses p _ rfl
+theorem Repr.pointer_roundTrip (p : RawPtr T) :
+    (Repr.pointer T).decode (Repr.pointerEncoding p) = some p :=
+  (Repr.pointer T).encode_decode p _ rfl
 
 theorem Repr.u8_write_data (value : U8) (bytes : Vector Byte 1)
-    (h : Repr.u8.encodes value bytes) : bytes = #v[Byte.data value] := h
+    (h : Repr.u8.encode value bytes) : bytes = #v[Byte.data value] := h
 
 theorem Repr.encoding_no_forgery (repr : Repr T) (value : T)
     (bytes : Vector Byte repr.size) (i : Fin repr.size) (p : RawPtr Unit) (lane : Nat)
-    (encoded : repr.encodes value bytes) (empty : repr.pointers value = [])
+    (encoded : repr.encode value bytes) (empty : ∀ p, ¬ repr.Carries value p)
     (pointer : bytes[i.val] = .pointer p lane) : False := by
-  have hs := repr.encodes_support value bytes i encoded
-  rw [pointer, empty] at hs
-  simp at hs
+  exact empty p ⟨bytes, encoded, i, lane, pointer⟩
 
 theorem Repr.data_not_pointer (data : Vector U8 pointerWidth) :
     Repr.decodePointer (T := T) (data.map Byte.data) = none := by
@@ -40,8 +38,8 @@ theorem Repr.data_not_pointer (data : Vector U8 pointerWidth) :
 theorem Cell.writer_excludes_shared (byte other : Byte) (depth : Nat) :
     Cell.compatible (.shared 0 byte) (.shared depth other) = false := rfl
 
-theorem Cell.shared_uninit_unreadable (depth : Nat) :
-    Cell.read (.shared depth .uninit) = none := rfl
+theorem Cell.shared_uninit_read (depth : Nat) :
+    Cell.read (.shared depth .uninit) = some .uninit := rfl
 
 theorem Cell.shared_uninit_not_writable (depth : Nat) (byte : Byte) :
     Cell.write (.shared (depth + 1) .uninit) byte = none := rfl
@@ -86,26 +84,6 @@ theorem storeRepr_support (s : Heap) (id : Nat) (bytes : List Cell)
   have hji : j ≠ id := by grind
   simp [storeRepr, update, hji, h.1 j hj]
 
-theorem addresses_storeRepr (s : Heap) (id : Nat) (bytes : List Cell) :
-    (s.storeRepr id bytes).addresses = s.addresses := by
-  funext j
-  by_cases hj : j = id
-  · subst j
-    cases h : s.allocations id
-    · simp [addresses, storeRepr, update, h]
-    · simp [addresses, storeRepr, update, h]
-  · simp [addresses, storeRepr, update, hj]
-
-theorem addresses_retire (s : Heap) (id : Nat) :
-    (s.retire id).addresses = s.addresses := by
-  funext j
-  by_cases hj : j = id
-  · subst j
-    cases h : s.allocations id
-    · simp [addresses, retire, update, h]
-    · simp [addresses, retire, update, h]
-  · simp [addresses, retire, update, hj]
-
 theorem createRepr_fresh (s : Heap) (block : Block) (id : Nat) (s₁ : Heap)
     (h : createRepr s block = some (id, s₁)) :
     id = s.next ∧ s₁.next = s.next + 1 ∧ s₁.check = true := by
@@ -140,28 +118,30 @@ theorem createRepr_Inv (s : Heap) (block : Block) (id : Nat) (s₁ : Heap)
   · contradiction
 
 theorem modify_Inv (repr : Repr T) (p : RawPtr T) (s s₁ : Heap)
-    (change : ∀ {r}, Vector Cell r → Option (Vector Cell r))
+    (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r))
     (hinv : s.Inv) (h : modify repr p change s = some s₁) : s₁.Inv := by
   unfold modify at h
-  cases hb : s.allocations p.base
+  cases hb : s.allocations p.provenance
   · simp [hb] at h
   · rename_i block
     rw [hb] at h
-    change (if s.live block && repr.align.val ∣ block.bptr.val + p.byteOffset.val then
-      (change block.bytes).bind fun bytes => commit (s.storeRepr p.base bytes.toList)
+    change (if s.live block && block.bptr.val ≤ p.address.val &&
+        repr.align.val ∣ p.address.val then
+      (change block.bytes (p.offsetFrom block.bptr)).bind fun bytes =>
+        commit (s.storeRepr p.provenance bytes.toList)
       else none) = some s₁ at h
     split at h
     ·
-      cases hc : change block.bytes
+      cases hc : change block.bytes (p.offsetFrom block.bptr)
       · simp [hc] at h
       · simp only [hc, Option.bind_some] at h
-        have hid : p.base < s.next := by
-          by_cases hn : p.base < s.next
+        have hid : p.provenance < s.next := by
+          by_cases hn : p.provenance < s.next
           · exact hn
-          · have he := hinv.1 p.base (Nat.le_of_not_gt hn)
+          · have he := hinv.1 p.provenance (Nat.le_of_not_gt hn)
             rw [hb] at he
             contradiction
-        exact commit_Inv _ _ (storeRepr_support s p.base _ hinv hid) h
+        exact commit_Inv _ _ (storeRepr_support s p.provenance _ hinv hid) h
     · contradiction
 
 end Heap

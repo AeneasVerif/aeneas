@@ -15,15 +15,43 @@ theorem u32Bytes_roundtrip (bits : BitVec 32) :
       bits.extractLsb' 8 8 ++ bits.extractLsb' 0 8 = bits := by
   bv_decide
 
+def u32Bytes (value : U32) : Vector U8 4 :=
+  #v[⟨value.bv.extractLsb' 0 8⟩, ⟨value.bv.extractLsb' 8 8⟩,
+    ⟨value.bv.extractLsb' 16 8⟩, ⟨value.bv.extractLsb' 24 8⟩]
+
+private theorem dataBytes_numeric (values : Vector U8 n) :
+    (values.map Aeneas.Std.Byte.data).mapM Aeneas.Std.Byte.numeric = some values := by
+  rw [Vector.mapM_map]
+  change values.mapM (fun x => pure (id x)) = some values
+  rw [Vector.mapM_pure]
+  simp
+
+private theorem numericBytes_eq {n : Nat} (bytes bytes' : Vector Aeneas.Std.Byte n)
+    (values : Vector U8 n) (decoded : bytes.mapM Aeneas.Std.Byte.numeric = some values)
+    (agree : ∀ i : Fin n, bytes[i.val] ≠ .uninit → bytes'[i.val] = bytes[i.val]) :
+    bytes' = bytes := by
+  apply Vector.ext
+  intro i hi
+  apply agree ⟨i, hi⟩
+  obtain ⟨value, hv⟩ := vector_mapM_enabled decoded i hi
+  intro he
+  simp [he, Aeneas.Std.Byte.numeric] at hv
+
 /-- Little-endian, four-byte `u32` descriptor; no global representation lookup. -/
 @[expose] def u32Repr : Aeneas.Std.Repr U32 where
   size := 4
   align := ⟨4, 2, rfl⟩
-  decode bytes := some ⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩
+  decode bytes := do
+    let bytes ← bytes.mapM Aeneas.Std.Byte.numeric
+    pure ⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩
+  encode value bytes := bytes = (u32Bytes value).map Aeneas.Std.Byte.data
   aligned := by decide
-  complete value := by
-    refine ⟨#v[⟨value.bv.extractLsb' 0 8⟩, ⟨value.bv.extractLsb' 8 8⟩,
-      ⟨value.bv.extractLsb' 16 8⟩, ⟨value.bv.extractLsb' 24 8⟩], ?_⟩
+  encode_complete value := ⟨(u32Bytes value).map Aeneas.Std.Byte.data, rfl⟩
+  encode_decode value bytes encoded := by
+    subst bytes
+    rw [dataBytes_numeric]
+    change some ⟨value.bv.extractLsb' 24 8 ++ value.bv.extractLsb' 16 8 ++
+      value.bv.extractLsb' 8 8 ++ value.bv.extractLsb' 0 8⟩ = some value
     apply congrArg some
     cases value
     rename_i bits
@@ -31,27 +59,72 @@ theorem u32Bytes_roundtrip (bits : BitVec 32) :
     change bits.extractLsb' 24 8 ++ bits.extractLsb' 16 8 ++
       bits.extractLsb' 8 8 ++ bits.extractLsb' 0 8 = bits
     exact u32Bytes_roundtrip bits
+  decode_mono bytes bytes' value decoded agree := by
+    cases hn : bytes.mapM Aeneas.Std.Byte.numeric
+    · simp [hn] at decoded
+    · rename_i values
+      have same := numericBytes_eq bytes bytes' values hn agree
+      simpa only [same] using decoded
+  encode_valid value bytes i encoded := by
+    subst bytes
+    simp
+
+@[simp] theorem u32Repr_noPointers (value : U32) (p : RawPtr Unit) :
+    ¬ u32Repr.Carries value p := by
+  rintro ⟨bytes, encoded, i, lane, hp⟩
+  change bytes = (u32Bytes value).map Aeneas.Std.Byte.data at encoded
+  subst bytes
+  have impossible := (Vector.getElem_map Aeneas.Std.Byte.data
+    (xs := u32Bytes value) i.isLt).symm.trans hp
+  cases impossible
 
 /-- Two consecutive little-endian `u32`s, with four-byte alignment. -/
 def pairRepr : Aeneas.Std.Repr (U32 × U32) where
   size := 8
   align := ⟨4, 2, rfl⟩
-  decode bytes := some
-    (⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩,
-     ⟨bytes[7].bv ++ bytes[6].bv ++ bytes[5].bv ++ bytes[4].bv⟩)
+  decode bytes := do
+    let bytes ← bytes.mapM Aeneas.Std.Byte.numeric
+    pure (⟨bytes[3].bv ++ bytes[2].bv ++ bytes[1].bv ++ bytes[0].bv⟩,
+      ⟨bytes[7].bv ++ bytes[6].bv ++ bytes[5].bv ++ bytes[4].bv⟩)
+  encode value bytes :=
+    bytes = (u32Bytes value.1 ++ u32Bytes value.2).map Aeneas.Std.Byte.data
   aligned := by decide
-  complete value := by
+  encode_complete value :=
+    ⟨(u32Bytes value.1 ++ u32Bytes value.2).map Aeneas.Std.Byte.data, rfl⟩
+  encode_decode value bytes encoded := by
+    subst bytes
+    rw [dataBytes_numeric]
     rcases value with ⟨⟨first⟩, ⟨second⟩⟩
-    refine ⟨#v[⟨first.extractLsb' 0 8⟩, ⟨first.extractLsb' 8 8⟩,
-      ⟨first.extractLsb' 16 8⟩, ⟨first.extractLsb' 24 8⟩,
-      ⟨second.extractLsb' 0 8⟩, ⟨second.extractLsb' 8 8⟩,
-      ⟨second.extractLsb' 16 8⟩, ⟨second.extractLsb' 24 8⟩], ?_⟩
+    change some ((⟨first.extractLsb' 24 8 ++ first.extractLsb' 16 8 ++
+      first.extractLsb' 8 8 ++ first.extractLsb' 0 8⟩,
+      ⟨second.extractLsb' 24 8 ++ second.extractLsb' 16 8 ++
+      second.extractLsb' 8 8 ++ second.extractLsb' 0 8⟩) : U32 × U32) =
+        some (⟨first⟩, ⟨second⟩)
     apply congrArg some
     apply Prod.ext
     · apply congrArg UScalar.mk
       exact u32Bytes_roundtrip first
     · apply congrArg UScalar.mk
       exact u32Bytes_roundtrip second
+  decode_mono bytes bytes' value decoded agree := by
+    cases hn : bytes.mapM Aeneas.Std.Byte.numeric
+    · simp [hn] at decoded
+    · rename_i values
+      have same := numericBytes_eq bytes bytes' values hn agree
+      simpa only [same] using decoded
+  encode_valid value bytes i encoded := by
+    subst bytes
+    simp
+
+@[simp] theorem pairRepr_noPointers (value : U32 × U32) (p : RawPtr Unit) :
+    ¬ pairRepr.Carries value p := by
+  rintro ⟨bytes, encoded, i, lane, hp⟩
+  change bytes =
+    (u32Bytes value.1 ++ u32Bytes value.2).map Aeneas.Std.Byte.data at encoded
+  subst bytes
+  have impossible := (Vector.getElem_map Aeneas.Std.Byte.data
+    (xs := u32Bytes value.1 ++ u32Bytes value.2) i.isLt).symm.trans hp
+  cases impossible
 
 theorem round_trip_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
     (initial replacement : U32) (hsize : 0 < repr.size) :
@@ -222,7 +295,7 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
           let _ ← alloc.boxed.Box.from_raw repr p
           pure result)
       (fun result h => result = value ∧ emp h) := by
-  have hp : (⟨p.base, ⟨0⟩⟩ : RawPtr U32) = p := by
+  have hp : (⟨p.provenance, ⟨0⟩⟩ : RawPtr U32) = p := by
     rcases p with ⟨base, index⟩
     have he : (⟨0⟩ : Usize) = index := UScalar.eq_of_val_eq hzero.symm
     exact congrArg (RawPtr.mk base) he
@@ -234,7 +307,7 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
   have hfit1 : p.byteOffset.val + (1#usize).val * repr.size < 2 ^ UScalarTy.numBits .Usize := by
     simpa [hzero] using hfit
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
-    (fun start h hs => (sep_and_left (start.base = p.base)
+    (fun start h hs => (sep_and_left (start.provenance = p.provenance)
       (fun h => start.byteOffset.val = p.byteOffset.val + (0#usize).val * repr.size ∧ alloc repr p 1 true h)
       (pointsTo repr p value) h).mp hs |>.imp_right
         (fun hs => (sep_and_left (start.byteOffset.val = p.byteOffset.val + (0#usize).val * repr.size)
@@ -258,7 +331,7 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
   subst start
   apply HeapWP.Triple.bind (HeapWP.Triple.conseq (fun _ h => h)
     (fun q h hs => sep_mono
-      (fun a (hp : q.base = p.base ∧ q.byteOffset.val = p.byteOffset.val + (1#usize).val * repr.size ∧
+      (fun a (hp : q.provenance = p.provenance ∧ q.byteOffset.val = p.byteOffset.val + (1#usize).val * repr.size ∧
         alloc repr p 1 true a) => hp.2.2) (fun _ hp => hp) hs)
     (HeapWP.frame (R := pointsTo repr p value)
       (by simpa only [hp] using

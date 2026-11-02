@@ -215,6 +215,10 @@ theorem sep_emp_left (P : Assertion) (h : Fragment) :
   · intro hp
     exact ⟨∅, h, Fragment.disjoint_empty_left h, by simp, rfl, hp⟩
 
+theorem sep_emp_right (P : Assertion) (h : Fragment) :
+    sep P emp h ↔ P h :=
+  (sep_comm P emp h).trans (sep_emp_left P h)
+
 abbrev Cmd (α : Type w) := Heap → α → Heap → Prop
 
 def Cmd.pure (x : α) : Cmd α := fun s y s' => y = x ∧ s' = s

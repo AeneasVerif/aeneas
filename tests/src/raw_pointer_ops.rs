@@ -118,6 +118,86 @@ mod tests {
     }
 
     #[test]
+    fn first_write_initializes_heap_allocation() {
+        let layout = std::alloc::Layout::new::<u32>();
+        unsafe {
+            let allocation = std::alloc::alloc(layout);
+            assert!(!allocation.is_null());
+            let word = allocation.cast::<u32>();
+            assert_eq!(initialize_word(word, 0x1234_5678), 0x1234_5678);
+            std::alloc::dealloc(allocation, layout);
+        }
+    }
+
+    #[test]
+    fn eight_words_and_sixteen_bytes_share_storage() {
+        let mut words = [
+            0x0102u16, 0x0304, 0x0506, 0x0708, 0x090a, 0x0b0c, 0x0d0e, 0x0f10,
+        ];
+        let expected = words.map(u16::to_ne_bytes).concat();
+        {
+            let bytes =
+                unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr().cast::<u8>(), 16) };
+            assert_eq!(bytes, expected);
+            bytes[0..2].copy_from_slice(&0x4321u16.to_ne_bytes());
+            bytes[14..16].copy_from_slice(&0x8765u16.to_ne_bytes());
+        }
+        assert_eq!(
+            words,
+            [0x4321, 0x0304, 0x0506, 0x0708, 0x090a, 0x0b0c, 0x0d0e, 0x8765]
+        );
+    }
+
+    #[test]
+    fn pointer_loaded_from_memory_as_an_integer() {
+        let mut target = 37u32;
+        let pointer = &mut target as *mut u32;
+        let slot = pointer;
+        let address = unsafe { (&slot as *const *mut u32).cast::<usize>().read() };
+        assert_eq!(address, pointer.addr());
+        assert_eq!(unsafe { slot.read() }, 37);
+    }
+
+    fn fill_safely(bytes: &mut [u8], value: u8) {
+        bytes.fill(value);
+    }
+
+    unsafe fn fill_raw(bytes: *mut u8, length: usize, value: u8) {
+        for i in 0..length {
+            bytes.add(i).write(value);
+        }
+    }
+
+    fn update_safely_with_raw_subslice(middle: &mut [u8]) {
+        fill_safely(middle, 2);
+        {
+            let smaller = &mut middle[3..7];
+            unsafe {
+                fill_raw(smaller.as_mut_ptr(), smaller.len(), 3);
+            }
+            assert_eq!(smaller, &[3; 4]);
+        }
+        assert_eq!(middle, &[2, 2, 2, 3, 3, 3, 3, 2, 2, 2, 2, 2]);
+        fill_safely(&mut middle[10..], 4);
+    }
+
+    #[test]
+    fn boxed_array_nested_safe_and_raw_subslices() {
+        let outer = Box::into_raw(Box::new([1u8; 16]));
+        unsafe {
+            {
+                let middle = std::slice::from_raw_parts_mut(outer.cast::<u8>().add(2), 12);
+                update_safely_with_raw_subslice(middle);
+            }
+            // Only the original allocation pointer is converted back to a Box.
+            let mut restored = Box::from_raw(outer);
+            assert_eq!(*restored, [1, 1, 2, 2, 2, 3, 3, 3, 3, 2, 2, 2, 4, 4, 1, 1]);
+            restored[15] = 5;
+            assert_eq!(restored[15], 5);
+        }
+    }
+
+    #[test]
     fn write_does_not_read_an_invalid_old_bool() {
         let mut storage = 2u8;
         unsafe {

@@ -20,12 +20,11 @@ abbrev Inv (s : State) : Prop := Heap.Inv s
 the value must already be justified by a readable explicit byte at this address. -/
 def exposes (repr : Repr ty) (s : State) (address : Nat) (value : ty)
     (bytes : Vector Byte repr.size) : Prop :=
-  repr.decode s.addresses bytes = some value ∧
+  repr.decode bytes = some value ∧
     ∀ i : Fin repr.size,
-      bytes[i.val] ≠ .uninit ∧
       (match bytes[i.val] with
       | .pointer p lane =>
-          p ∈ repr.pointers value ∨
+          repr.Carries value p ∨
             ∃ id blk index depth,
               s.allocations id = some blk ∧ s.live blk = true ∧
               blk.bptr.val + index = address + i.val ∧
@@ -43,7 +42,7 @@ def exposesList (repr : Repr ty) (s : State) (address : Nat) :
 def newBlock (repr : Repr ty) (values : List ty) (own : Bool)
     (s₀ : State) (p : RawPtr ty) (s₁ : State) : Prop :=
   ∃ data : List (Vector Byte repr.size), ∃ bptr root,
-    (if own then repr.encodesList values data else exposesList repr s₀ bptr.val values data) ∧
+    (if own then repr.encodeList values data else exposesList repr s₀ bptr.val values data) ∧
     Heap.newBlock repr data own bptr root s₀ = some (p, s₁)
 
 def alloc (repr : Repr ty) (values : List ty) := newBlock repr values true
@@ -67,20 +66,20 @@ def readRange (repr : Repr ty) (p : RawPtr ty) (count : Nat)
 
 def write (repr : Repr ty) (p : RawPtr ty) (value : ty)
     (s₀ : State) (_ : Unit) (s₁ : State) : Prop :=
-  ∃ data : Vector Byte repr.size, ∃ encoded : repr.encodes value data,
+  ∃ data : Vector Byte repr.size, ∃ encoded : repr.encode value data,
     Heap.write repr p value data encoded s₀ = some s₁
 
 /-- Until backward continuations track untouched representation, mutable safe
 loans are restricted to representations admissible for their returned values.
 Numerical reads across pointer lanes remain supported, but such loans fail. -/
 def mutableValues (repr : Repr ty) (p : RawPtr ty) (values : List ty) (s : State) : Prop :=
-    ∃ blk, s.allocations p.base = some blk ∧
+    ∃ blk, s.allocations p.provenance = some blk ∧
       ∀ (i : Nat) (hi : i < values.length),
         ∃ bytes : Vector Byte repr.size,
-        ∃ hb : p.byteOffset.val + i * repr.size + repr.size ≤ blk.repr.length,
+        ∃ hb : p.offsetFrom blk.bptr + i * repr.size + repr.size ≤ blk.repr.length,
           Repr.readBytes repr.size
-            (repr.select blk.bytes (p.byteOffset.val + i * repr.size) hb) =
-              some bytes ∧ repr.encodes values[i] bytes
+            (repr.select blk.bytes (p.offsetFrom blk.bptr + i * repr.size) hb) =
+              some bytes ∧ repr.encode values[i] bytes
 
 def borrowRange (repr : Repr ty) (p : RawPtr ty) (count : Nat)
     (s₀ : State) (values : List ty) (s₁ : State) : Prop :=
@@ -90,7 +89,7 @@ def borrowRange (repr : Repr ty) (p : RawPtr ty) (count : Nat)
 def endBorrowRange (repr : Repr ty) (p : RawPtr ty) (values : List ty)
     (s₀ : State) (_ : Unit) (s₁ : State) : Prop :=
   ∃ data : List (Vector Byte repr.size),
-    repr.encodesList values data ∧ Heap.endBorrowRange repr p data s₀ = some s₁
+    repr.encodeList values data ∧ Heap.endBorrowRange repr p data s₀ = some s₁
 
 def shareRange (repr : Repr ty) (p : RawPtr ty) (count : Nat)
     (s₀ : State) (values : List ty) (s₁ : State) : Prop :=

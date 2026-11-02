@@ -22,12 +22,12 @@ theorem Cell.write.writable {cell : Cell} {value : Byte} {result : Cell}
 
 namespace Repr
 
-theorem read.denied_by_byte (repr : Repr ty) (addresses : AddressMap)
+theorem read.denied_by_byte (repr : Repr ty)
     (bytes : Vector Cell r) (i b : Nat)
     (hlo : i ≤ b) (hhi : b < (i + repr.size))
     (byte : Cell) (hp : bytes.toList[b]? = some byte) (hn : byte.read = none) :
-    repr.read addresses bytes i = none := by
-  cases he : repr.read addresses bytes i
+    repr.read bytes i = none := by
+  cases he : repr.read bytes i
   · rfl
   · rename_i value
     unfold read at he
@@ -47,7 +47,7 @@ theorem read.denied_by_byte (repr : Repr ty) (addresses : AddressMap)
 theorem write.denied_by_byte (repr : Repr ty) (bytes : Vector Cell r) (i b : Nat)
     (hlo : i ≤ b) (hhi : b < (i + repr.size))
     (byte : Cell) (hp : bytes.toList[b]? = some byte) (hn : ¬ byte.writable)
-    (value : ty) (data : Vector Byte repr.size) (decoded : repr.encodes value data) :
+    (value : ty) (data : Vector Byte repr.size) (decoded : repr.encode value data) :
     repr.write bytes i value data decoded = none := by
   cases he : repr.write bytes i value data decoded
   · rfl
@@ -70,26 +70,26 @@ end Repr
 namespace Heap
 
 theorem read.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
-    (hs : s.allocations p.base = some block) (b : Nat)
-    (hlo : p.byteOffset.val ≤ b) (hhi : b < (p.byteOffset.val + repr.size))
+    (hs : s.allocations p.provenance = some block) (b : Nat)
+    (hlo : (p.offsetFrom block.bptr) ≤ b) (hhi : b < ((p.offsetFrom block.bptr) + repr.size))
     (byte : Cell) (hp : block.repr[b]? = some byte) (hn : byte.read = none) :
     read repr p s = none := by
-  have hr := Repr.read.denied_by_byte repr s.addresses block.bytes p.byteOffset.val b hlo hhi byte
+  have hr := Repr.read.denied_by_byte repr block.bytes (p.offsetFrom block.bptr) b hlo hhi byte
     (by simpa [Block.bytes] using hp) hn
   simp [read, hs, hr]
 
 theorem write.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
-    (hs : s.allocations p.base = some block) (b : Nat)
-    (hlo : p.byteOffset.val ≤ b) (hhi : b < (p.byteOffset.val + repr.size))
+    (hs : s.allocations p.provenance = some block) (b : Nat)
+    (hlo : (p.offsetFrom block.bptr) ≤ b) (hhi : b < ((p.offsetFrom block.bptr) + repr.size))
     (byte : Cell) (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable)
-    (value : ty) (data : Vector Byte repr.size) (decoded : repr.encodes value data) :
+    (value : ty) (data : Vector Byte repr.size) (decoded : repr.encode value data) :
     write repr p value data decoded s = none := by
-  have hw := Repr.write.denied_by_byte repr block.bytes p.byteOffset.val b hlo hhi byte
+  have hw := Repr.write.denied_by_byte repr block.bytes (p.offsetFrom block.bptr) b hlo hhi byte
     (by simpa [Block.bytes] using hp) hn value data decoded
   simp [write, modify, hs, hw]
 
 theorem freeBlock.denied_by_byte {s : Heap} {repr : Repr ty} {p : RawPtr ty} {block : Block}
-    (hs : s.allocations p.base = some block) (b : Nat) (byte : Cell)
+    (hs : s.allocations p.provenance = some block) (b : Nat) (byte : Cell)
     (hp : block.repr[b]? = some byte) (hn : ¬ byte.writable) (count : Nat) (own : Bool) :
     freeBlock repr p count own s = none := by
   have hbad : block.repr.all (fun c => c.depth == some 0) ≠ true := by

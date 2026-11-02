@@ -56,7 +56,7 @@ def signedRepr : Aeneas.Std.Repr I32 where
   decode data := (raw_box.u32Repr.decode data).map asSigned
   aligned := raw_box.u32Repr.aligned
   complete value := by
-    obtain ⟨data, hd⟩ := raw_box.u32Repr.complete (asUnsigned value)
+    obtain ⟨data, hd⟩ := raw_box.u32Repr.encode_complete (asUnsigned value)
     refine ⟨data, ?_⟩
     rw [hd]
     rfl

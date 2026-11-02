@@ -156,6 +156,18 @@ def RawPtr.borrow (repr : Repr T) (q : RawPtr T) : Result T := do
 def RawPtr.endBorrow (repr : Repr T) (q : RawPtr T) (value : T) : Result Unit :=
   q.endBorrowRange repr [value]
 
+/-- Raw-to-safe conversion with its matching effectful backward computation. -/
+def RawPtr.borrowWithBack (repr : Repr T) (q : RawPtr T) :
+    Result (T × (T → Result Unit)) :=
+  Aeneas.Std.bind (q.borrow repr) fun value =>
+    .ok (value, fun updated => q.endBorrow repr updated)
+
+/-- A pure safe update followed by the matching return to raw memory. -/
+def RawPtr.withBorrow (repr : Repr T) (q : RawPtr T) (update : T → T) : Result T :=
+  Aeneas.Std.bind (q.borrowWithBack repr) fun (value, back) => do
+    back (update value)
+    pure value
+
 def RawPtr.shareRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List T) :=
   Result.checkedModify (State.shareRange repr q count)
 

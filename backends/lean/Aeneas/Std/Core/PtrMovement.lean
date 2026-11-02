@@ -13,13 +13,13 @@ namespace Aeneas.Std
 def Repr.byteStride : Repr Unit where
   size := 1
   align := ⟨1, 0, rfl⟩
-  decode := fun _ _ => some ()
-  encodes := fun _ bytes => bytes = #v[Byte.data ⟨0⟩]
-  pointers := fun _ => []
+  decode := fun _ => some ()
+  encode := fun _ bytes => bytes = #v[Byte.data ⟨0⟩]
   aligned := Nat.one_dvd _
-  complete := fun _ => ⟨#v[Byte.data ⟨0⟩], rfl⟩
+  encode_complete := fun _ => ⟨#v[Byte.data ⟨0⟩], rfl⟩
   encode_decode := by intros; rfl
-  encodes_support := by
+  decode_mono := by intros; assumption
+  encode_valid := by
     intro value bytes i h
     subst bytes
     simp
@@ -31,8 +31,8 @@ def Heap.byteOffset (p : RawPtr T) (count : Int) (s : Heap) : Option (RawPtr T) 
 Both byte distance and element distance must fit `isize`; ZSTs are rejected. -/
 def Heap.offsetFrom (repr : Repr T) (p origin : RawPtr T) (s : Heap) : Option Isize := do
   let elements ← Heap.distance repr p origin s
-  let a ← s.address p
-  let b ← s.address origin
+  let a := p.address
+  let b := origin.address
   let bytes := (a.val : Int) - b.val
   if IScalar.cMin .Isize ≤ bytes && bytes ≤ IScalar.cMax .Isize then
     if h : IScalar.cMin .Isize ≤ elements ∧ elements ≤ IScalar.cMax .Isize then

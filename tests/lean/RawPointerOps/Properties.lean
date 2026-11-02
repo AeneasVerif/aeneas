@@ -73,33 +73,33 @@ theorem byte_advance.spec (p : MutRawPtr U32) (count : Usize) (length : Nat) (ow
     (hstart : p.byteOffset.val ≤ length * 4) (hhi : p.byteOffset.val + count.val ≤ length * 4)
     (hfit : p.byteOffset.val + count.val < 2 ^ UScalarTy.numBits .Usize)
     (hcount : (count.val : Int) ≤ IScalar.cMax .Isize) :
-    HeapWP.Triple (alloc raw_box.u32Repr ⟨p.base, ⟨0⟩⟩ length own) (byte_advance p count)
-      (fun result h => result.base = p.base ∧ result.byteOffset.val = p.byteOffset.val + count.val ∧
-        alloc raw_box.u32Repr ⟨p.base, ⟨0⟩⟩ length own h) :=
+    HeapWP.Triple (alloc raw_box.u32Repr ⟨p.provenance, ⟨0⟩⟩ length own) (byte_advance p count)
+      (fun result h => result.provenance = p.provenance ∧ result.byteOffset.val = p.byteOffset.val + count.val ∧
+        alloc raw_box.u32Repr ⟨p.provenance, ⟨0⟩⟩ length own h) :=
   HeapWP.byte_add.spec raw_box.u32Repr p count length own hstart hhi hfit hcount
 
 theorem byte_shift.spec (p : MutRawPtr U32) (count : Isize) (length : Nat) (own : Bool)
     (hstart : p.byteOffset.val ≤ length * 4) (hlo : 0 ≤ (p.byteOffset.val : Int) + count.val)
     (hhi : (p.byteOffset.val : Int) + count.val ≤ length * 4)
     (hfit : (p.byteOffset.val : Int) + count.val < (2 ^ UScalarTy.numBits .Usize : Nat)) :
-    HeapWP.Triple (alloc raw_box.u32Repr ⟨p.base, ⟨0⟩⟩ length own) (byte_shift p count)
-      (fun result h => result.base = p.base ∧
+    HeapWP.Triple (alloc raw_box.u32Repr ⟨p.provenance, ⟨0⟩⟩ length own) (byte_shift p count)
+      (fun result h => result.provenance = p.provenance ∧
         (result.byteOffset.val : Int) = (p.byteOffset.val : Int) + count.val ∧
-        alloc raw_box.u32Repr ⟨p.base, ⟨0⟩⟩ length own h) :=
+        alloc raw_box.u32Repr ⟨p.provenance, ⟨0⟩⟩ length own h) :=
   HeapWP.byte_offset.spec raw_box.u32Repr p count length own hstart hlo hhi hfit
 
 theorem word_distance.spec (p origin : MutRawPtr U32) (length : Nat) (own : Bool)
-    (hbase : p.base = origin.base) (hp : p.byteOffset.val ≤ length * 4)
+    (hbase : p.provenance = origin.provenance) (hp : p.byteOffset.val ≤ length * 4)
     (ho : origin.byteOffset.val ≤ length * 4)
     (hdiv : ((p.byteOffset.val : Int) - origin.byteOffset.val) % 4 = 0)
     (hbytes : IScalar.cMin .Isize ≤ (p.byteOffset.val : Int) - origin.byteOffset.val ∧
       (p.byteOffset.val : Int) - origin.byteOffset.val ≤ IScalar.cMax .Isize)
     (hcount : IScalar.cMin .Isize ≤ ((p.byteOffset.val : Int) - origin.byteOffset.val) / 4 ∧
       ((p.byteOffset.val : Int) - origin.byteOffset.val) / 4 ≤ IScalar.cMax .Isize) :
-    HeapWP.Triple (alloc raw_box.u32Repr ⟨p.base, ⟨0⟩⟩ length own) (word_distance p origin)
+    HeapWP.Triple (alloc raw_box.u32Repr ⟨p.provenance, ⟨0⟩⟩ length own) (word_distance p origin)
       (fun result h => result.val = ((p.byteOffset.val : Int) - origin.byteOffset.val) / 4 ∧
         result.val * 4 = (p.byteOffset.val : Int) - origin.byteOffset.val ∧
-        alloc raw_box.u32Repr ⟨p.base, ⟨0⟩⟩ length own h) :=
+        alloc raw_box.u32Repr ⟨p.provenance, ⟨0⟩⟩ length own h) :=
   HeapWP.offset_from.spec raw_box.u32Repr p origin length own (by decide) hbase hp ho hdiv hbytes hcount
 
 theorem fill_words.spec (p : MutRawPtr U32) (count : Usize) (value : U32)

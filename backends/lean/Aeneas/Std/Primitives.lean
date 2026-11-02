@@ -489,14 +489,14 @@ def Result.checkedModify {α : Type} (modify : State → α → State → Prop) 
     Result.ofOption answer.down .undef
 
 /-- Choose an admissible encoding of `value`, without changing the state.
-`repr.complete` guarantees that the set of permitted results is nonempty. -/
+`repr.encode_complete` guarantees that the set of permitted results is nonempty. -/
 def Repr.choose (repr : Repr ty) (value : ty) :
-    Result {data : Vector Byte repr.size // repr.encodes value data} :=
+    Result {data : Vector Byte repr.size // repr.encode value data} :=
   Result.guardedModify fun s _ s' => s' = s
 
 /-- Choose valid encodings for every value, using the same descriptor. -/
 def Repr.chooseList (repr : Repr ty) (values : List ty) :
-    Result {data : List (Vector Byte repr.size) // repr.encodesList values data} :=
+    Result {data : List (Vector Byte repr.size) // repr.encodeList values data} :=
   Result.guardedModify fun s _ s' => s' = s
 
 def Result.require (p : Prop) : Result Unit :=

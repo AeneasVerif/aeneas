@@ -134,7 +134,7 @@ theorem Spec.checkedModify {modify : State → α → State → Prop} :
 /-- Every admissible encoding must satisfy the continuation.
 Completeness discharges enabling, rather than leaving it to callers. -/
 theorem Spec.choose (repr : Repr ty) (value : ty)
-    (Q : {data : Vector Byte repr.size // repr.encodes value data} → State → Prop)
+    (Q : {data : Vector Byte repr.size // repr.encode value data} → State → Prop)
     (s : State) :
     Spec (repr.choose value) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
   rw [Repr.choose, Spec.guardedModify]
@@ -142,14 +142,14 @@ theorem Spec.choose (repr : Repr ty) (value : ty)
   · rintro ⟨_, h⟩ data decoded
     exact h ⟨data, decoded⟩ s rfl
   · intro h
-    obtain ⟨data, decoded⟩ := repr.complete value
+    obtain ⟨data, decoded⟩ := repr.encode_complete value
     exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
 
 theorem Spec.chooseList (repr : Repr ty) (values : List ty)
     (Q : {data : List (Vector Byte repr.size) //
-      repr.encodesList values data} → State → Prop) (s : State) :
+      repr.encodeList values data} → State → Prop) (s : State) :
     Spec (repr.chooseList values) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
-  have hex := Repr.encodesList_complete repr values
+  have hex := Repr.encodeList_complete repr values
   rw [Repr.chooseList, Spec.guardedModify]
   constructor
   · rintro ⟨_, h⟩ data decoded
@@ -162,7 +162,7 @@ theorem Spec.chooseList (repr : Repr ty) (values : List ty)
 neither reads nor changes the heap. -/
 theorem choose.spec (repr : Repr ty) (value : ty) (s : State) :
     Spec (repr.choose value)
-      (fun data s' => repr.encodes value data.val ∧ s' = s) s :=
+      (fun data s' => repr.encode value data.val ∧ s' = s) s :=
   Spec.choose repr value _ s |>.mpr fun _ decoded => ⟨decoded, rfl⟩
 
 /-- A framed separation contract for the generated computation itself. -/

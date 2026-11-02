@@ -236,7 +236,7 @@ theorem ext.borrow_four.spec (p : MutRawPtr U32) (word : U32) :
       (fun (bytes, back) h => bytes = toLittleBytes word ∧ borrowedWord p h ∧
         ∀ updated, HeapWP.Triple (borrowedWord p) (back updated)
           (fun _ => pointsTo raw_box.u32Repr p (fromLittleBytes updated))) := by
-  unfold ext.borrow_four
+  unfold ext.borrow_four RawPtr.borrowWithBack
   apply HeapWP.Triple.bind (borrow_array.spec p word)
   intro bytes
   apply HeapWP.Triple.pure_pre

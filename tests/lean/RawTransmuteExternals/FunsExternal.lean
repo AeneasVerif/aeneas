@@ -42,7 +42,6 @@ def write_four (p : MutRawPtr FourBytes) (value : FourBytes) : Result Unit :=
 /- Manually adapted backward signature: restoration is an effect, not `Unit`. -/
 def borrow_four (p : MutRawPtr FourBytes) :
     Result (FourBytes × (FourBytes → Result Unit)) :=
-  Aeneas.Std.bind (RawPtr.borrow arrayRepr p) fun bytes =>
-    .ok (bytes, fun updated => RawPtr.endBorrow arrayRepr p updated)
+  RawPtr.borrowWithBack arrayRepr p
 
 end raw_transmute_externals.ext

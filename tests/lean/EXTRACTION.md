@@ -3,6 +3,15 @@
 This log covers the raw-memory fixtures described below, not the other fixtures
 in this directory.
 
+**Current concrete-address migration status:** the corrected read/write/read
+proofs now live in `RawReadWriteRead.lean`; `lake build RawReadWriteRead` passes
+with exact standard-axiom guards and no client heap-check or overlap arguments.
+Its arbitrary-descriptor statements require pointer-free scalar encodings.
+`RawBoxProofs` descriptors have been migrated, but its lifecycle proofs and
+`RawBoxManual` still fail to build. The dated proof/build results below describe
+the earlier prototype, not successful validation of the migrated lifecycle
+series. No new extraction was run for this migration.
+
 ## 2026-10-29 — Box lifecycle and stored-pointer lifecycle
 
 ```text
@@ -249,10 +258,10 @@ Post-extraction edits: `Types.lean` could not elaborate as generated because
 Lean rejects the occurrence of recursive `Node` under the phantom parameter of
 `RawPtr Node`. Replace its constructor with
 `Node.stored : MutRawPtr Unit → MutRawPtr Unit → U32 → Node`, define the original
-`Node.mk` as a smart constructor copying both pointer fields' base/byteOffset,
+`Node.mk` as a smart constructor copying both pointer fields' base/address,
 and restore the `Node` phantom tag in `Node.prev` and `Node.next`. The existing
 projection equations still hold by `rfl`; `Node.mk_eta` proves the converse.
-No pointer identifier or offset is discarded.
+No pointer identifier or concrete address is discarded.
 
 `Funs.lean` was manually adapted only to add an explicit `Repr Node` argument
 to `init`, `set_next`, `set_prev`, `insert_after`, `remove`, and `remove_after`,

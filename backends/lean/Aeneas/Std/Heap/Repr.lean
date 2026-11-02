@@ -14,11 +14,9 @@ universe u
 
 abbrev Alignment := { n : Nat // ∃ k : Nat, n = 2 ^ k }
 abbrev BasePtr := Usize
-abbrev AddressMap := Nat → Option BasePtr
-
 structure RawPtr (ty : Type u) : Type u where
-  base : Nat
-  byteOffset : Usize
+  provenance : Nat
+  address : Usize
 deriving BEq, DecidableEq
 
 instance : Inhabited (RawPtr ty) := ⟨⟨0, ⟨0⟩⟩⟩
@@ -27,7 +25,10 @@ abbrev MutRawPtr (ty : Type u) := RawPtr ty
 abbrev ConstRawPtr (ty : Type u) := RawPtr ty
 
 def RawPtr.cast (T' : Type) (p : RawPtr T) : RawPtr T' :=
-  ⟨p.base, p.byteOffset⟩
+  ⟨p.provenance, p.address⟩
+
+def RawPtr.offsetFrom (p : RawPtr T) (bptr : BasePtr) : Nat :=
+  p.address.val - bptr.val
 
 inductive Byte where
   | uninit
@@ -38,20 +39,12 @@ deriving Inhabited, BEq, DecidableEq
 /- The prototype uses eight little-endian lanes for thin pointers. -/
 abbrev pointerWidth : Nat := 8
 
-def RawPtr.address (addresses : AddressMap) (p : RawPtr T) : Option Usize := do
-  let bptr ← addresses p.base
-  let address := bptr.val + p.byteOffset.val
-  if address < 2 ^ UScalarTy.numBits .Usize then
-    some ⟨BitVec.ofNat _ address⟩
-  else none
-
-def Byte.numeric (addresses : AddressMap) : Byte → Option U8
+def Byte.numeric : Byte → Option U8
   | .uninit => none
   | .data value => some value
   | .pointer p lane => do
       if lane < pointerWidth then
-        let address ← p.address addresses
-        some ⟨BitVec.ofNat _ (address.val / 2 ^ (8 * lane))⟩
+        some ⟨BitVec.ofNat _ (p.address.val / 2 ^ (8 * lane))⟩
       else none
 
 inductive Cell where
@@ -66,7 +59,6 @@ deriving Inhabited, BEq, DecidableEq
 def Cell.writable (cell : Cell) : Prop := cell.depth = some 0
 
 def Cell.read : Cell → Option Byte
-  | .shared _ .uninit => none
   | .shared _ value => some value
   | .borrowed => none
 
@@ -99,30 +91,57 @@ def Cell.compatible : Cell → Cell → Bool
   | .borrowed, _ | _, .borrowed => true
   | .shared n x, .shared m y => n > 0 && m > 0 && decide (x = y)
 
-/-- `decode` may observe pointer lanes numerically; `encodes` must not invent their
-provenance. Both fields are calibrated to the represented Rust type. -/
+/-- `decode` decides which bytes must be initialized, and may ignore padding or
+observe pointer lanes numerically. `encode` must not invent provenance.
+Both fields are calibrated to the represented Rust type. -/
 structure Repr (ty : Type u) where
   size : Nat
   align : Alignment
-  decode : AddressMap → Vector Byte size → Option ty
-  encodes : ty → Vector Byte size → Prop
-  pointers : ty → List (RawPtr Unit)
+  decode : Vector Byte size → Option ty
+  encode : ty → Vector Byte size → Prop
   aligned : align.val ∣ size
-  complete : ∀ value, ∃ bytes, encodes value bytes
-  encode_decode : ∀ addresses value bytes,
-    encodes value bytes → decode addresses bytes = some value
-  encodes_support : ∀ value bytes (i : Fin size), encodes value bytes →
+  /- Every value can be encoded in size bytes. -/
+  encode_complete : ∀ value, ∃ bytes, encode value bytes
+  /- Every encoding of a value decodes correctly -/
+  encode_decode : ∀ value bytes,
+    encode value bytes → decode bytes = some value
+  /- Decoding does not depend on uninitialized bytes. -/
+  decode_mono : ∀ bytes bytes' value, decode bytes = some value →
+    (∀ i : Fin size, bytes[i.val] ≠ .uninit → bytes'[i.val] = bytes[i.val]) →
+    decode bytes' = some value
+  /- Generic encodings must contain valid lanes, including in ignored padding.
+     The explicit pointer descriptor alone cannot constrain aggregate descriptors. -/
+  encode_valid : ∀ value bytes (i : Fin size), encode value bytes →
     match bytes[i.val] with
-    | .pointer p _ => p ∈ pointers value
+    | .pointer _ lane => lane < pointerWidth
     | _ => True
 
 namespace Repr
 
 variable {ty : Type u} {r : Nat}
 
-def encodesList (repr : Repr ty) : List ty → List (Vector Byte repr.size) → Prop
+/-- Pointer payloads are derived from admissible representations, not stored
+as a second description of the value. This does not grant pointee access. -/
+def Carries (repr : Repr ty) (value : ty) (p : RawPtr Unit) : Prop :=
+  ∃ bytes : Vector Byte repr.size, repr.encode value bytes ∧
+    ∃ i : Fin repr.size, ∃ lane, bytes[i.val] = .pointer p lane
+
+theorem decode_set_uninit (repr : Repr ty) (bytes : Vector Byte repr.size)
+    (value : ty) (i : Fin repr.size) (replacement : Byte)
+    (decoded : repr.decode bytes = some value) (uninit : bytes[i.val] = .uninit) :
+    repr.decode (bytes.set i.val replacement i.isLt) = some value := by
+  apply repr.decode_mono bytes _ value decoded
+  intro j initialized
+  have different : i.val ≠ j.val := by
+    intro he
+    have same : i = j := Fin.ext he
+    subst j
+    exact initialized uninit
+  exact Vector.getElem_set_ne i.isLt j.isLt different
+
+def encodeList (repr : Repr ty) : List ty → List (Vector Byte repr.size) → Prop
   | [], [] => True
-  | value :: values, bytes :: data => repr.encodes value bytes ∧ repr.encodesList values data
+  | value :: values, bytes :: data => repr.encode value bytes ∧ repr.encodeList values data
   | _, _ => False
 
 def select (repr : Repr ty) (bytes : Vector Cell r)
@@ -145,10 +164,9 @@ def writeBytes (n : Nat) (bytes : Vector Cell n) (data : Vector Byte n) :
     Option (Vector Cell n) :=
   (bytes.zip data).mapM fun (cell, byte) => Cell.write cell byte
 
-def read (repr : Repr ty) (addresses : AddressMap)
-    (bytes : Vector Cell r) (i : Nat) : Option ty :=
+def read (repr : Repr ty) (bytes : Vector Cell r) (i : Nat) : Option ty :=
   if h : 0 < repr.size ∧ i + repr.size ≤ r then
-    (readBytes repr.size (repr.select bytes i h.2)).bind (repr.decode addresses)
+    (readBytes repr.size (repr.select bytes i h.2)).bind repr.decode
   else none
 
 def create (repr : Repr ty) (data : List (Vector Byte repr.size)) (depth : Nat) :
@@ -157,7 +175,7 @@ def create (repr : Repr ty) (data : List (Vector Byte repr.size)) (depth : Nat) 
 
 def write (repr : Repr ty) (bytes : Vector Cell r) (i : Nat)
     (_value : ty) (data : Vector Byte repr.size)
-    (_encoded : repr.encodes _value data) : Option (Vector Cell r) :=
+    (_encoded : repr.encode _value data) : Option (Vector Cell r) :=
   if h : 0 < repr.size ∧ i + repr.size ≤ r then
     (writeBytes repr.size (repr.select bytes i h.2) data).map (repr.update bytes i h.2)
   else none
@@ -192,16 +210,23 @@ def endShare (repr : Repr ty) (bytes : Vector Cell r) (i : Nat) :
 def u8 : Repr U8 where
   size := 1
   align := ⟨1, ⟨0, rfl⟩⟩
-  decode := fun addresses bytes => bytes[0].numeric addresses
-  encodes := fun value bytes => bytes = #v[Byte.data value]
-  pointers := fun _ => []
+  decode := fun bytes => bytes[0].numeric
+  encode := fun value bytes => bytes = #v[Byte.data value]
   aligned := by decide
-  complete := fun value => ⟨#v[Byte.data value], rfl⟩
+  encode_complete := fun value => ⟨#v[Byte.data value], rfl⟩
   encode_decode := by
-    intro addresses value bytes h
+    intro value bytes h
     subst bytes
     rfl
-  encodes_support := by
+  decode_mono := by
+    intro bytes bytes' value decoded agree
+    have initialized : bytes[0] ≠ .uninit := by
+      intro he
+      simp [he, Byte.numeric] at decoded
+    change bytes'[0].numeric = some value
+    rw [agree ⟨0, by decide⟩ initialized]
+    exact decoded
+  encode_valid := by
     intro value bytes i h
     subst bytes
     simp
@@ -219,19 +244,77 @@ def decodePointer (bytes : Vector Byte pointerWidth) : Option (RawPtr T) :=
 def pointer (T : Type) : Repr (RawPtr T) where
   size := pointerWidth
   align := ⟨8, ⟨3, rfl⟩⟩
-  decode := fun _ bytes => decodePointer bytes
-  encodes := fun value bytes => bytes = pointerEncoding value
-  pointers := fun value => [value.cast Unit]
+  decode := decodePointer
+  encode := fun value bytes => bytes = pointerEncoding value
   aligned := by decide
-  complete := fun value => ⟨pointerEncoding value, rfl⟩
+  encode_complete := fun value => ⟨pointerEncoding value, rfl⟩
   encode_decode := by
-    intro addresses value bytes h
+    intro value bytes h
     subst bytes
     simp [decodePointer, pointerEncoding, RawPtr.cast]
-  encodes_support := by
+  decode_mono := by
+    intro bytes bytes' value decoded agree
+    have original := decoded
+    unfold decodePointer at decoded
+    split at decoded
+    · split at decoded
+      · rename_i he
+        have same : bytes' = bytes := by
+          apply Vector.ext
+          intro i hi
+          apply agree ⟨i, hi⟩
+          simp [he, pointerEncoding]
+        simpa only [same] using original
+      · contradiction
+    · contradiction
+  encode_valid := by
     intro value bytes i h
     subst bytes
-    simp [pointerEncoding]
+    simp [pointerEncoding, i.isLt]
+
+/-- Pointer decoding succeeds exactly on its complete provenance-carrying
+encoding: every lane is checked, including the leading lane zero. -/
+theorem pointer_decode_iff (bytes : Vector Byte pointerWidth) (value : RawPtr T) :
+    (pointer T).decode bytes = some value ↔ (pointer T).encode value bytes := by
+  constructor
+  · intro decoded
+    change bytes = pointerEncoding value
+    change decodePointer bytes = some value at decoded
+    unfold decodePointer at decoded
+    split at decoded
+    · split at decoded
+      · rename_i encoded
+        have he := Option.some.inj decoded
+        subst value
+        simpa only [pointerEncoding, RawPtr.cast] using encoded
+      · contradiction
+    · contradiction
+  · exact (pointer T).encode_decode value bytes
+
+@[simp] theorem u8_noPointers (value : U8) (p : RawPtr Unit) :
+    ¬ u8.Carries value p := by
+  rintro ⟨bytes, encoded, i, lane, hp⟩
+  change bytes = #v[Byte.data value] at encoded
+  subst bytes
+  have hi : i.val < 1 := i.isLt
+  have hz : i.val = 0 := by grind
+  simp only [hz] at hp
+  change Byte.data value = Byte.pointer p lane at hp
+  cases hp
+
+@[simp] theorem pointer_carries (value : RawPtr T) (p : RawPtr Unit) :
+    (pointer T).Carries value p ↔ p = value.cast Unit := by
+  constructor
+  · rintro ⟨bytes, encoded, i, lane, hp⟩
+    change bytes = pointerEncoding value at encoded
+    subst bytes
+    have laneEq := Vector.getElem_ofFn
+      (f := fun j : Fin pointerWidth => Byte.pointer (value.cast Unit) j.val)
+      (show i.val < pointerWidth from i.isLt)
+    exact (Byte.pointer.inj (laneEq.symm.trans hp)).1.symm
+  · intro he
+    subst p
+    exact ⟨pointerEncoding value, rfl, (⟨0, by decide⟩ : Fin pointerWidth), 0, rfl⟩
 
 end Repr
 end Aeneas.Std

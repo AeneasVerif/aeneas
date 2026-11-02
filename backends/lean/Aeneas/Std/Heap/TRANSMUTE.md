@@ -82,7 +82,7 @@ bytes at the target, failing with `.undef` if decoding fails.
 heap from precisely this universal hypothesis.
 [Repr.choose](../Primitives.lean) has a demonic, heap-preserving contract:
 the proof must cover **every** encoding that decodes to the source value.
-It does not select the witness from `Repr.complete` as a canonical encoder.
+It does not select the witness from `Repr.encode_complete` as a canonical encoder.
 
 This is a `HeapWP.Spec` theorem because the implementation uses an encoding-choice
 effect, even though its heap is unchanged. The more permissive relational
@@ -167,15 +167,17 @@ We discussed a complementary route using `Cell` initialization information to
 show that initialized source data suffices for initialized target data, with
 padding affecting only padding.
 
-**Current boundary:** `Repr.decode` takes initialized `Vector U8` values.
-The heap has uninitialized byte cells, but `Repr.read` requires initialized
-bytes over the whole selected footprint. A padding-aware initialization theorem
-is not implemented; `MaybeUninit` is not modeled.
+**Current boundary:** `Repr.decode` takes `Vector Byte`, including symbolic
+uninitialized bytes. `Repr.read` requires read permission over the whole
+selected footprint; the decoder determines which bytes must be initialized.
+The `decode_mono` law ensures that successful decoding cannot depend on the
+contents of an uninitialized position. `MaybeUninit` as a Rust wrapper is not
+modeled, although writable uninitialized storage is supported.
 
-[HeapTests.lean](../HeapTests.lean) contains an `alignedByteRepr` whose second
-byte is ignored, and proves that choosing an encoding cannot promise that byte
-is zero. This demonstrates demonic representation ambiguity for initialized
-bytes, not a proof about Rust's uninitialized padding.
+[HeapTests.lean](../HeapTests.lean) contains a `padded` descriptor whose second
+byte is ignored. Regressions accept uninitialized padding, reject uninitialized
+value-bearing bytes, and reject borrowed padding. Fresh allocation and padding
+use the same `Byte.uninit`; there is no separate padding state or mask.
 
 ### Initialized bytes need not be a valid target value
 
@@ -223,12 +225,13 @@ By-value transmute requires equal sizes, not equal source/target alignments:
 the compiler places each value appropriately. A borrowed view instead needs
 target alignment at the actual location, enough live storage, and suitable
 permissions. Neither a decoder equality nor a same-address assertion proves
-those facts. Unaligned read/write operations are not modeled here.
+those facts. Unaligned read/write wrappers use the same representation with
+alignment one.
 
-The heap records guaranteed base alignment, not physical addresses, and may
-conservatively reject a byte-aligned allocation that happens to be physically
-word-aligned. `HeapTests.alignmentFailure` and `misalignedAccess` exercise the
-checks. Zero-sized representations can exist and thin pointer casts remain
+The heap records concrete addresses and checks the address used for each
+access. It does not infer a padding layout from size and alignment.
+`HeapTests.misalignedAccess` exercises the alignment checks.
+Zero-sized representations can exist and thin pointer casts remain
 meaningful, but the current typed heap observation/borrow operations reject
 zero-sized footprints; no blanket zero-sized borrowed-view theorem is claimed.
 
@@ -270,11 +273,11 @@ Owning conversions additionally need ownership transfer and correct
 destruction/deallocation, including for nested owning fields. They are excluded
 from our generic plain-value rule. Borrowing the original word as bytes avoids
 changing its eventual deallocation type.
-[Heap.freeBlock](Model.lean) checks exact byte coverage, ownership kind,
-permissions, and alignment divisibility separately from decoding; separation
-resources track cleanup authority. **The executable alignment check is weaker
-than Rust's exact deallocation-layout requirement:** it accepts
-`repr.align.val` dividing the block's guaranteed alignment, not just equality.
+[Heap.freeBlock](Model.lean) checks byte coverage, ownership kind,
+permissions, and concrete address alignment separately from decoding; owned
+return additionally requires root-specific authority. **The executable
+alignment check does not establish Rust's exact deallocation-layout requirement:**
+address alignment does not identify the original allocator layout.
 Do not cite it as a proof that the invalid Box conversion above fails in the
 model. Owning transmute is excluded, and exact allocator-layout preservation
 would need a separate contract/model refinement. Checked model failures are
@@ -365,7 +368,8 @@ Its traits restrict pointers, interior mutability, and ownership-bearing types.
 Zerocopy separately tracks layout (`KnownLayout`), shared-reference
 immutability (`Immutable`), and alignment one (`Unaligned`).
 `AnyBitPattern` permits target padding and does not imply `NoUninit`:
-our initialized-byte-only model does not subsume every library padding case.
+our symbolic-byte model can express ignored uninitialized padding, but this
+alone does not establish the libraries' complete unsafe trait contracts.
 
 ### Static and dynamic acceptance
 

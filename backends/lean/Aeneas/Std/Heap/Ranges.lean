@@ -19,10 +19,15 @@ def Repr.region (repr : Repr T) (count : Nat) : Repr Unit where
   size := count * repr.size
   align := repr.align
   decode := fun _ => some ()
+  encode := fun _ bytes => ∀ i : Fin (count * repr.size),
+    match bytes[i.val] with
+    | .pointer _ lane => lane < pointerWidth
+    | _ => True
   aligned := repr.aligned_stride count
-  complete := fun value => by
-    cases value
-    exact ⟨Vector.replicate _ ⟨0⟩, rfl⟩
+  encode_complete := fun _ => ⟨Vector.replicate _ .uninit, by simp⟩
+  encode_decode := fun _ _ _ => rfl
+  decode_mono := fun _ _ _ decoded _ => decoded
+  encode_valid := fun _ _ i encoded => encoded i
 
 theorem range_element_bound {i count start size r : Nat}
     (h : i < count) (hb : start + count * size ≤ r) :
@@ -53,32 +58,36 @@ theorem mapM_range'_some {f : Nat → Option T} (values : List T) (start : Nat)
 namespace SepLogic
 
 /-- Splitting and recombining adjacent footprints preserves their exact resources. -/
-theorem block_append (repr : Repr T) (p q : RawPtr T) (a b : List (Cell U8))
-    (hbase : q.base = p.base) (hoff : q.byteOffset.val = p.byteOffset.val + a.length)
+theorem block_append (repr : Repr T) (p q : RawPtr T) (bptr : BasePtr) (a b : List Cell)
+    (hbase : q.provenance = p.provenance) (hoff : q.address.val = p.address.val + a.length)
     (hlen : repr.align.val ∣ a.length) (h : Fragment) :
-    block repr p (a ++ b) h ↔ sep (block repr p a) (block repr q b) h := by
+    block repr p bptr (a ++ b) h ↔ sep (block repr p bptr a) (block repr q bptr b) h := by
+  have offset (hlo : bptr.val ≤ p.address.val) :
+      q.offsetFrom bptr = p.offsetFrom bptr + a.length := by
+    simp only [RawPtr.offsetFrom]
+    grind
   constructor
-  · rintro ⟨hp, rfl⟩
-    refine ⟨cellsHeap repr.align p.base p.byteOffset.val a,
-      cellsHeap repr.align q.base q.byteOffset.val b, ?_, ?_, ⟨hp, rfl⟩, ?_⟩
-    · simpa [hbase, hoff] using disjoint_cellsHeap_append repr.align p.base p.byteOffset.val a b
-    · simpa [hbase, hoff] using cellsHeap_append repr.align p.base p.byteOffset.val a b
-    · exact ⟨hoff ▸ Nat.dvd_add hp hlen, rfl⟩
-  · rintro ⟨_, _, _, rfl, ⟨hp, rfl⟩, ⟨_, rfl⟩⟩
-    exact ⟨hp, by simp only [hbase, hoff, cellsHeap_append]⟩
+  · rintro ⟨hlo, hp, rfl⟩
+    refine ⟨cellsHeap bptr p.provenance (p.offsetFrom bptr) a,
+      cellsHeap bptr q.provenance (q.offsetFrom bptr) b, ?_, ?_, ⟨hlo, hp, rfl⟩, ?_⟩
+    · simpa [hbase, offset hlo] using disjoint_cellsHeap_append bptr p.provenance (p.offsetFrom bptr) a b
+    · simpa [hbase, offset hlo] using cellsHeap_append bptr p.provenance (p.offsetFrom bptr) a b
+    · exact ⟨by grind, hoff ▸ Nat.dvd_add hp hlen, rfl⟩
+  · rintro ⟨_, _, _, rfl, ⟨hlo, hp, rfl⟩, ⟨_, _, rfl⟩⟩
+    exact ⟨hlo, hp, by simp only [hbase, offset hlo, cellsHeap_append]⟩
 
 /-- A range owns one encoding for each exact value and the whole byte footprint. -/
-def pointsToRange (repr : Repr T) (p : RawPtr T) (values : Vector T count)
+def pointsToRange (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (values : Vector T count)
     (depth : Nat := 0) : Assertion :=
-  fun h => ∃ data : Vector (Vector U8 repr.size) count,
-    (∀ i : Fin count, repr.decode data[i.val] = some values[i.val]) ∧
-    block repr p (data.flatMap (fun bytes => bytes.map (Cell.shared depth ∘ some))).toList h
+  fun h => ∃ data : Vector (Vector Byte repr.size) count,
+    (∀ i : Fin count, repr.encode values[i.val] data[i.val]) ∧
+    block repr p bptr (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList h
 
 end SepLogic
 
 /-- Recover any element's cells from the selected contiguous region. -/
-theorem Repr.select_region (repr : Repr T) (bytes : Vector (Cell U8) r)
-    (start count : Nat) (data : Vector (Vector (Cell U8) repr.size) count)
+theorem Repr.select_region (repr : Repr T) (bytes : Vector Cell r)
+    (start count : Nat) (data : Vector (Vector Cell repr.size) count)
     (hb : start + count * repr.size ≤ r)
     (hs : (repr.region count).select bytes start hb = data.flatMap id)
     (i : Nat) (hi : i < count) :
@@ -104,8 +113,8 @@ theorem Repr.select_region (repr : Repr T) (bytes : Vector (Cell U8) r)
     simpa [Repr.select_toList, hj, Nat.add_assoc] using he.symm
   · simp [Repr.select_toList, hj]
 
-theorem Repr.select_region_ext (repr : Repr T) (bytes : Vector (Cell U8) r)
-    (start count : Nat) (data : Vector (Vector (Cell U8) repr.size) count)
+theorem Repr.select_region_ext (repr : Repr T) (bytes : Vector Cell r)
+    (start count : Nat) (data : Vector (Vector Cell repr.size) count)
     (hb : start + count * repr.size ≤ r) (hsize : 0 < repr.size)
     (hs : ∀ i (hi : i < count),
       repr.select bytes (start + i * repr.size) (range_element_bound hi hb) = data[i]) :
@@ -129,7 +138,7 @@ theorem Repr.select_region_ext (repr : Repr T) (bytes : Vector (Cell U8) r)
       rfl
     calc
       _ = ((bytes.toList.drop start).take (count * repr.size))[j]? :=
-        congrArg (fun xs : List (Cell U8) => xs[j]?)
+        congrArg (fun xs : List Cell => xs[j]?)
           ((repr.region count).select_toList bytes start hb)
       _ = bytes.toList[start + j]? := by
         rw [List.getElem?_take_of_lt hj, List.getElem?_drop]
@@ -137,8 +146,8 @@ theorem Repr.select_region_ext (repr : Repr T) (bytes : Vector (Cell U8) r)
       _ = _ := hflat.symm.trans (Vector.getElem?_toList (xs := data.flatMap id)).symm
   · simp [Repr.select_toList, Repr.region, hj]
 
-theorem Repr.eq_update_of_select (repr : Repr T) (bytes result : Vector (Cell U8) r)
-    (start : Nat) (hb : start + repr.size ≤ r) (data : Vector (Cell U8) repr.size)
+theorem Repr.eq_update_of_select (repr : Repr T) (bytes result : Vector Cell r)
+    (start : Nat) (hb : start + repr.size ≤ r) (data : Vector Cell repr.size)
     (hs : repr.select result start hb = data)
     (hout : ∀ j, j < start ∨ start + repr.size ≤ j →
       result.toList[j]? = bytes.toList[j]?) :
@@ -166,9 +175,9 @@ theorem range_elements_disjoint (repr : Repr T) (start i j : Nat) (hne : i ≠ j
     exact Or.inr (by grind)
 
 /-- Local element transformations compose into one atomic region update. -/
-theorem Repr.fold_region (repr : Repr T) (bytes : Vector (Cell U8) r)
-    (start count : Nat) (old new : Vector (Vector (Cell U8) repr.size) count)
-    (change : Vector (Cell U8) r → Nat → Option (Vector (Cell U8) r))
+theorem Repr.fold_region (repr : Repr T) (bytes : Vector Cell r)
+    (start count : Nat) (old new : Vector (Vector Cell repr.size) count)
+    (change : Vector Cell r → Nat → Option (Vector Cell r))
     (hb : start + count * repr.size ≤ r)
     (hs : (repr.region count).select bytes start hb = old.flatMap id)
     (hc : ∀ current i (hi : i < count),
@@ -220,119 +229,145 @@ theorem Repr.fold_region (repr : Repr T) (bytes : Vector (Cell U8) r)
 
 namespace SepLogic
 
-theorem modifyRange.spec (repr : Repr T) (p : RawPtr T)
-    (old new : Vector (Vector (Cell U8) repr.size) count)
-    (change : ∀ {r}, Vector (Cell U8) r → Nat → Option (Vector (Cell U8) r))
+theorem modifyRange.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (old new : Vector (Vector Cell repr.size) count)
+    (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r))
     (hcount : 0 < count) (hsize : 0 < repr.size)
-    (hc : ∀ {r} (bytes : Vector (Cell U8) r) i (hi : i < count)
-      (hb : p.byteOffset.val + count * repr.size ≤ r),
-      repr.select bytes (p.byteOffset.val + i * repr.size) (range_element_bound hi hb) = old[i] →
-      change bytes i = some (repr.update bytes (p.byteOffset.val + i * repr.size)
-        (range_element_bound hi hb) new[i])) :
-    Triple (block repr p (old.flatMap id).toList)
+    (hc : ∀ {r} (bytes : Vector Cell r) offset i (hi : i < count)
+      (hb : offset + count * repr.size ≤ r),
+      repr.select bytes (offset + i * repr.size) (range_element_bound hi hb) = old[i] →
+      change bytes (offset + i * repr.size) = some (repr.update bytes (offset + i * repr.size)
+        (range_element_bound hi hb) new[i]))
+    (valid : ∀ s i (hi : i < count * repr.size),
+      (match (old.flatMap id)[i] with
+        | .borrowed => True | .shared _ byte => Heap.validByte s byte = true) →
+      (match (new.flatMap id)[i] with
+        | .borrowed => True | .shared _ byte => Heap.validByte s byte = true))
+    (weaker : ∀ i (hi : i < count * repr.size),
+      (old.flatMap id)[i].PermWeakens (new.flatMap id)[i]) :
+    Triple (block repr p bptr (old.flatMap id).toList)
       (fun s (_ : Unit) s' => Heap.modifyRange repr p count change s = some s')
-      (fun _ => block repr p (new.flatMap id).toList) := by
-  have ht := modify.spec (repr.region count) (⟨p.base, p.byteOffset⟩ : RawPtr Unit)
+      (fun _ => block repr p bptr (new.flatMap id).toList) := by
+  have ht := modify_weaken.spec (repr.region count) (p.cast Unit) bptr
     (old.flatMap id) (new.flatMap id)
-    (fun bytes =>
-      if (count = 0 ∨ 0 < repr.size) ∧ p.byteOffset.val + count * repr.size ≤ bytes.size then
-        (List.range count).foldlM change bytes
+    (fun bytes offset =>
+      if (count = 0 ∨ 0 < repr.size) && offset + count * repr.size ≤ bytes.size then
+        (List.range count).foldlM (fun current i => change current (offset + i * repr.size)) bytes
       else none)
     (Nat.mul_pos hcount hsize) (by
-      intro r bytes hb hs
-      change p.byteOffset.val + count * repr.size ≤ r at hb
-      simp only [hsize, or_true, true_and, Vector.size, hb, ↓reduceIte]
-      exact repr.fold_region bytes p.byteOffset.val count old new change hb hs
-        (fun current i hi hs => hc current i hi hb hs) hsize)
+      intro r bytes offset hb hs
+      change offset + count * repr.size ≤ r at hb
+      simp only [hsize, or_true, decide_true, Bool.true_and, Vector.size, hb, ↓reduceIte]
+      exact repr.fold_region bytes offset count old new
+        (fun current i => change current (offset + i * repr.size)) hb hs
+        (fun current i hi hs => hc current offset i hi hb hs) hsize) valid weaker
   exact ht
 
-theorem borrowRange_cells.spec (repr : Repr T) (p : RawPtr T)
-    (data : Vector (Vector U8 repr.size) count) (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (block repr p (data.flatMap (fun bytes => bytes.map (Cell.shared 0 ∘ some))).toList)
+theorem borrowRange_cells.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (data : Vector (Vector Byte repr.size) count) (hcount : 0 < count) (hsize : 0 < repr.size) :
+    Triple (block repr p bptr (data.flatMap (fun bytes => bytes.map (Cell.shared 0))).toList)
       (fun s (_ : Unit) s' => Heap.borrowRange repr p count s = some s')
-      (fun _ => block repr p (List.replicate (count * repr.size) .borrowed)) := by
-  let old := data.map fun bytes => bytes.map (Cell.shared 0 ∘ some)
-  let new : Vector (Vector (Cell U8) repr.size) count :=
+      (fun _ => block repr p bptr (List.replicate (count * repr.size) .borrowed)) := by
+  let old := data.map fun bytes => bytes.map (Cell.shared 0)
+  let new : Vector (Vector Cell repr.size) count :=
     Vector.replicate count (Vector.replicate repr.size .borrowed)
-  have ht := modifyRange.spec repr p old new
-    (fun bytes i => repr.borrow bytes (p.byteOffset.val + i * repr.size)) hcount hsize (by
-      intro r bytes i hi hb hs
+  have ht := modifyRange.spec repr p bptr old new
+    (fun bytes offset => repr.borrow bytes offset) hcount hsize (by
+      intro r bytes offset i hi hb hs
       simp only [Repr.borrow, hsize, range_element_bound hi hb, and_self, ↓reduceDIte, hs]
       simp [old, new, Function.comp_def, Cell.borrow, vector_mapM_some]
       apply congrArg (repr.update bytes _ _)
       apply Vector.ext
       intro j hj
       simp)
+    (by intro s i hi _; simp [new, Vector.flatMap_replicate])
+    (by intro i hi; simpa [new, Vector.flatMap_replicate] using
+          Cell.PermWeakens.borrow ((old.flatMap id)[i]))
   simpa [old, new, Vector.flatMap_map, Vector.flatMap_replicate, Heap.borrowRange] using ht
 
-theorem shareRange_cells.spec (repr : Repr T) (p : RawPtr T)
-    (data : Vector (Vector U8 repr.size) count) (depth : Nat)
+theorem shareRange_cells.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (data : Vector (Vector Byte repr.size) count) (depth : Nat)
     (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (block repr p (data.flatMap (fun bytes => bytes.map (Cell.shared depth ∘ some))).toList)
+    Triple (block repr p bptr (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList)
       (fun s (_ : Unit) s' => Heap.shareRange repr p count s = some s')
-      (fun _ => block repr p
-        (data.flatMap (fun bytes => bytes.map (Cell.shared (depth + 1) ∘ some))).toList) := by
-  have ht := modifyRange.spec repr p
-    (data.map fun bytes => bytes.map (Cell.shared depth ∘ some))
-    (data.map fun bytes => bytes.map (Cell.shared (depth + 1) ∘ some))
-    (fun bytes i => repr.share bytes (p.byteOffset.val + i * repr.size)) hcount hsize (by
-      intro r bytes i hi hb hs
+      (fun _ => block repr p bptr
+        (data.flatMap (fun bytes => bytes.map (Cell.shared (depth + 1)))).toList) := by
+  have ht := modifyRange.spec repr p bptr
+    (data.map fun bytes => bytes.map (Cell.shared depth))
+    (data.map fun bytes => bytes.map (Cell.shared (depth + 1)))
+    (fun bytes offset => repr.share bytes offset) hcount hsize (by
+      intro r bytes offset i hi hb hs
       simp [Repr.share, hsize, range_element_bound hi hb, hs, Function.comp_def,
         Cell.share, vector_mapM_some])
+    (by intro s i hi hv; simpa [Vector.getElem_flatMap, Vector.getElem_map] using hv)
+    (by intro i hi; simp only [Vector.getElem_flatMap, Vector.getElem_map, id_eq]
+        exact Cell.PermWeakens.share _ _)
   simpa [Vector.flatMap_map, Heap.shareRange] using ht
 
-theorem endShareRange_cells.spec (repr : Repr T) (p : RawPtr T)
-    (data : Vector (Vector U8 repr.size) count) (depth : Nat)
+/-- Decrements that retain positive sharing permission cannot introduce a writer.
+Returning the last shared permission instead requires continuation authority. -/
+theorem endShareRange_cells.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (data : Vector (Vector Byte repr.size) count) (depth : Nat) (positive : 0 < depth)
     (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (block repr p
-      (data.flatMap (fun bytes => bytes.map (Cell.shared (depth + 1) ∘ some))).toList)
+    Triple (block repr p bptr
+      (data.flatMap (fun bytes => bytes.map (Cell.shared (depth + 1)))).toList)
       (fun s (_ : Unit) s' => Heap.endShareRange repr p count s = some s')
-      (fun _ => block repr p
-        (data.flatMap (fun bytes => bytes.map (Cell.shared depth ∘ some))).toList) := by
-  have ht := modifyRange.spec repr p
-    (data.map fun bytes => bytes.map (Cell.shared (depth + 1) ∘ some))
-    (data.map fun bytes => bytes.map (Cell.shared depth ∘ some))
-    (fun bytes i => repr.endShare bytes (p.byteOffset.val + i * repr.size)) hcount hsize (by
-      intro r bytes i hi hb hs
+      (fun _ => block repr p bptr
+        (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList) := by
+  have ht := modifyRange.spec repr p bptr
+    (data.map fun bytes => bytes.map (Cell.shared (depth + 1)))
+    (data.map fun bytes => bytes.map (Cell.shared depth))
+    (fun bytes offset => repr.endShare bytes offset) hcount hsize (by
+      intro r bytes offset i hi hb hs
       simp [Repr.endShare, hsize, range_element_bound hi hb, hs, Function.comp_def,
         Cell.endShare, vector_mapM_some])
+    (by intro s i hi hv; simpa [Vector.getElem_flatMap, Vector.getElem_map] using hv)
+    (by
+      intro i hi
+      simp only [Vector.getElem_flatMap, Vector.getElem_map, id_eq]
+      intro other compatible
+      cases other
+      · simpa [Cell.compatible, positive] using compatible
+      · rfl)
   simpa [Vector.flatMap_map, Heap.endShareRange] using ht
 
-theorem read_of_pointsToRange {s : Heap} {repr : Repr T} {p : RawPtr T}
+theorem read_of_pointsToRange {s : Heap} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
     {values : Vector T count} {depth : Nat} {h : Fragment}
     (hcount : 0 < count) (hsize : 0 < repr.size)
-    (hp : pointsToRange repr p values depth h) (hm : Fragment.Matches s h) :
+    (hp : pointsToRange repr p bptr values depth h) (hm : Fragment.Matches s h) :
     Heap.readRange repr p count s = some values.toList := by
-  obtain ⟨data, decoded, hpa, rfl⟩ := hp
+  obtain ⟨data, encoded, hlo, hpa, rfl⟩ := hp
   let grouped := repr.region count
-  let q : RawPtr Unit := ⟨p.base, p.byteOffset⟩
+  let q : RawPtr Unit := p.cast Unit
   have hpositive : 0 < grouped.size := Nat.mul_pos hcount hsize
-  obtain ⟨blk, hb, hl, ha, hs⟩ := bytes_of_matches (repr := grouped) (p := q)
-    (data := data.flatMap (fun bytes => bytes.map (Cell.shared depth ∘ some))) hpositive hm
-  change p.byteOffset.val + count * repr.size ≤ blk.repr.length at hb
-  change s.allocations p.base = some blk at hl
-  change repr.align.val ∣ blk.alignment.val at ha
+  obtain ⟨blk, hb, hl, hlive, ha, hs⟩ := bytes_of_matches (repr := grouped) (p := q)
+    (data := data.flatMap (fun bytes => bytes.map (Cell.shared depth))) hpositive hm
+  change p.offsetFrom bptr + count * repr.size ≤ blk.repr.length at hb
+  change s.allocations p.provenance = some blk at hl
   have hr (i : Nat) (hi : i < count) :
-      repr.read blk.bytes (p.byteOffset.val + i * repr.size) = some values[i] := by
-    have hsel := repr.select_region blk.bytes p.byteOffset.val count
-      (data.map fun bytes => bytes.map (Cell.shared depth ∘ some)) hb
-      (by simpa [Vector.flatMap_map] using hs) i hi
+      repr.read blk.bytes (p.offsetFrom bptr + i * repr.size) = some values[i] := by
+    have hsel := repr.select_region blk.bytes (p.offsetFrom bptr) count
+      (data.map fun bytes => bytes.map (Cell.shared depth)) hb
+      (by simpa [Vector.flatMap_map, grouped, q, RawPtr.cast, RawPtr.offsetFrom] using hs) i hi
     simp only [Vector.getElem_map] at hsel
     simp [Repr.read, hsize, range_element_bound hi hb, hsel,
-      Repr.readBytes_shared, decoded ⟨i, hi⟩]
+      Repr.readBytes_shared, repr.encode_decode _ _ (encoded ⟨i, hi⟩)]
   have hmap : (List.range count).mapM
-      (fun i => repr.read blk.bytes (p.byteOffset.val + i * repr.size)) =
+      (fun i => repr.read blk.bytes (p.offsetFrom bptr + i * repr.size)) =
         some values.toList := by
     simpa [List.range_eq_range'] using mapM_range'_some values.toList 0
       (fun i hi => by simpa using hr i (by simpa using hi))
-  simpa [Heap.readRange, hl, hpa, hsize, hb, ha, grouped, q, Repr.region] using hmap
+  have bound : p.address.val + count * repr.size ≤ bptr.val + blk.repr.length := by
+    simp only [RawPtr.offsetFrom] at hb
+    grind
+  simpa [Heap.readRange, hl, hlive, hpa, hsize, bound, ha, hlo] using hmap
 
-theorem readRange_transfer.spec (repr : Repr T) (p : RawPtr T)
+theorem readRange_transfer.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (values : Vector T count) (depth : Nat) (change : Heap → Option Heap) (Q : Assertion)
     (hcount : 0 < count) (hsize : 0 < repr.size)
-    (ht : Triple (pointsToRange repr p values depth)
+    (ht : Triple (pointsToRange repr p bptr values depth)
       (fun s (_ : Unit) s' => change s = some s') (fun _ => Q)) :
-    Triple (pointsToRange repr p values depth)
+    Triple (pointsToRange repr p bptr values depth)
       (fun s result s' => Heap.readRange repr p count s = some result ∧ change s = some s')
       (fun result h => result = values.toList ∧ Q h) := by
   intro h F s hp hd hm hi
@@ -349,10 +384,10 @@ namespace HeapWP
 
 open SepLogic
 
-theorem readRange.spec (repr : Repr T) (p : RawPtr T) (values : Vector T count)
+theorem readRange.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (values : Vector T count)
     (depth : Nat) (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (SepLogic.pointsToRange repr p values depth) (RawPtr.readRange repr p count)
-      (fun result h => result = values.toList ∧ SepLogic.pointsToRange repr p values depth h) := by
+    Triple (SepLogic.pointsToRange repr p bptr values depth) (RawPtr.readRange repr p count)
+      (fun result h => result = values.toList ∧ SepLogic.pointsToRange repr p bptr values depth h) := by
   apply Triple.checkedModify
   intro h F s hp hd hm hi
   have hr := SepLogic.read_of_pointsToRange hcount hsize hp
@@ -361,36 +396,59 @@ theorem readRange.spec (repr : Repr T) (p : RawPtr T) (values : Vector T count)
   rintro result s' ⟨hv, rfl⟩
   exact ⟨h, hd, hm, hi, Option.some.inj (hv.symm.trans hr), hp⟩
 
-theorem borrowRange.spec (repr : Repr T) (p : RawPtr T) (values : Vector T count)
+theorem borrowRange.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (values : Vector T count)
     (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (pointsToRange repr p values) (RawPtr.borrowRange repr p count)
+    Triple (pointsToRange repr p bptr values) (RawPtr.borrowRange repr p count)
       (fun result h => result = values.toList ∧
-        block repr p (List.replicate (count * repr.size) .borrowed) h) := by
+        block repr p bptr (List.replicate (count * repr.size) .borrowed) h) := by
   apply Triple.checkedModify
-  apply SepLogic.readRange_transfer.spec repr p values 0 _ _ hcount hsize
-  rintro h F s ⟨data, _, hp⟩ hd hm hi
-  exact SepLogic.borrowRange_cells.spec repr p data hcount hsize h F s hp hd hm hi
+  intro h F s hp hd hm hinv
+  have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
+  have hr := SepLogic.read_of_pointsToRange hcount hsize hp localMatch
+  obtain ⟨data, encoded, hlo, ha, rfl⟩ := hp
+  obtain ⟨blk, hb, hl, _, hbase, selected⟩ :=
+    bytes_of_matches (repr := repr.region count) (p := p.cast Unit)
+      (data := data.flatMap (fun bytes => bytes.map (Cell.shared 0)))
+      (Nat.mul_pos hcount hsize) localMatch
+  have mutable : State.mutableValues repr p values.toList s := by
+    refine ⟨blk, hl, ?_⟩
+    intro i hi
+    have hic : i < count := by simpa using hi
+    have hb' : p.offsetFrom blk.bptr + count * repr.size ≤ blk.repr.length := by
+      simpa [hbase, RawPtr.cast, RawPtr.offsetFrom, Repr.region] using hb
+    have hs := repr.select_region blk.bytes (p.offsetFrom blk.bptr) count
+      (data.map fun bytes => bytes.map (Cell.shared 0)) hb'
+      (by simpa [hbase, RawPtr.cast, RawPtr.offsetFrom, Vector.flatMap_map] using selected) i hic
+    refine ⟨data[i], range_element_bound hic hb', ?_, ?_⟩
+    · simpa only [Vector.getElem_map, hs] using Repr.readBytes_shared data[i] 0
+    · simpa using encoded ⟨i, hic⟩
+  obtain ⟨⟨_, s', hb'⟩, post⟩ :=
+    SepLogic.borrowRange_cells.spec repr p bptr data hcount hsize _ F s ⟨hlo, ha, rfl⟩ hd hm hinv
+  refine ⟨⟨values.toList, s', hr, mutable, hb'⟩, ?_⟩
+  rintro result s' ⟨hv, _, he⟩
+  obtain ⟨h', hd', hm', hi', hq⟩ := post () s' he
+  exact ⟨h', hd', hm', hi', Option.some.inj (hv.symm.trans hr), hq⟩
 
-theorem shareRange.spec (repr : Repr T) (p : RawPtr T) (values : Vector T count)
+theorem shareRange.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (values : Vector T count)
     (depth : Nat) (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (pointsToRange repr p values depth) (RawPtr.shareRange repr p count)
-      (fun result h => result = values.toList ∧ pointsToRange repr p values (depth + 1) h) := by
+    Triple (pointsToRange repr p bptr values depth) (RawPtr.shareRange repr p count)
+      (fun result h => result = values.toList ∧ pointsToRange repr p bptr values (depth + 1) h) := by
   apply Triple.checkedModify
-  apply SepLogic.readRange_transfer.spec repr p values depth _ _ hcount hsize
+  apply SepLogic.readRange_transfer.spec repr p bptr values depth _ _ hcount hsize
   rintro h F s ⟨data, decoded, hp⟩ hd hm hi
   exact SepLogic.Triple.conseq (fun _ h => h) (fun _ _ h => ⟨data, decoded, h⟩)
-    (SepLogic.shareRange_cells.spec repr p data depth hcount hsize) h F s hp hd hm hi
+    (SepLogic.shareRange_cells.spec repr p bptr data depth hcount hsize) h F s hp hd hm hi
 
-theorem endShareRange.spec (repr : Repr T) (p : RawPtr T) (values : Vector T count)
-    (depth : Nat) (hcount : 0 < count) (hsize : 0 < repr.size) :
-    Triple (pointsToRange repr p values (depth + 1)) (RawPtr.endShareRange repr p values.toList)
-      (fun _ => pointsToRange repr p values depth) := by
+theorem endShareRange.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (values : Vector T count)
+    (depth : Nat) (positive : 0 < depth) (hcount : 0 < count) (hsize : 0 < repr.size) :
+    Triple (pointsToRange repr p bptr values (depth + 1)) (RawPtr.endShareRange repr p values.toList)
+      (fun _ => pointsToRange repr p bptr values depth) := by
   apply Triple.checkedModify
   intro h F s hp hd hm hi
   have hr := SepLogic.read_of_pointsToRange hcount hsize hp
     ((Fragment.matches_union _ _ _).mp hm).1
   obtain ⟨data, decoded, hp⟩ := hp
-  obtain ⟨⟨_, s₁, hc⟩, hpost⟩ := SepLogic.endShareRange_cells.spec repr p data depth hcount hsize
+  obtain ⟨⟨_, s₁, hc⟩, hpost⟩ := SepLogic.endShareRange_cells.spec repr p bptr data depth positive hcount hsize
     h F s hp hd hm hi
   refine ⟨⟨(), s₁, ?_, ?_⟩, ?_⟩
   · simpa using hr
@@ -401,13 +459,14 @@ theorem endShareRange.spec (repr : Repr T) (p : RawPtr T) (values : Vector T cou
 
 /-- An empty range cannot prove liveness from its empty byte footprint. -/
 theorem readRange_empty.spec (repr : Repr T) (p : RawPtr T) (s : Heap) (blk : Block)
-    (hl : s.allocations p.base = some blk)
-    (ha : repr.align.val ∣ blk.alignment.val) (hp : repr.align.val ∣ p.byteOffset.val)
-    (hb : p.byteOffset.val ≤ blk.repr.length) :
+    (hl : s.allocations p.provenance = some blk)
+    (hlive : s.live blk = true)
+    (hlo : blk.bptr.val ≤ p.address.val) (hp : repr.align.val ∣ p.address.val)
+    (hb : p.address.val ≤ blk.bptr.val + blk.repr.length) :
     Spec (RawPtr.readRange repr p 0) (fun result s' => result = [] ∧ s' = s) s := by
   apply Spec.checkedModify.mpr
   have hr : Heap.readRange repr p 0 s = some [] := by
-    simp [Heap.readRange, hl, ha, hp, hb]
+    simp [Heap.readRange, hl, hlive, hlo, hp, hb]
   refine ⟨⟨[], s, hr, rfl⟩, ?_⟩
   rintro result s' ⟨hv, rfl⟩
   exact ⟨Option.some.inj (hv.symm.trans hr), rfl⟩
