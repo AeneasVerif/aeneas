@@ -272,10 +272,25 @@ let scalar_shr (#ty0 #ty1 : scalar_ty)
 
 let scalar_not #ty (x : scalar ty) : scalar ty = admit()
 
-(** Cast an integer from a [src_ty] to a [tgt_ty] *)
-// TODO: check the semantics of casts in Rust
+/// Wrap an integer into the range of [ty], i.e., reduce it modulo [2^bits] into
+/// [scalar_min ty .. scalar_max ty] (two's complement for signed types)
+let scalar_wrap (ty : scalar_ty) (x : int) : int =
+  let m = scalar_max ty - scalar_min ty + 1 in
+  assert_norm (forall (t : scalar_ty). scalar_max t - scalar_min t + 1 > 0);
+  (x - scalar_min ty) % m + scalar_min ty
+
+(** Cast an integer from a [src_ty] to a [tgt_ty]. As in Rust, integer [as] casts
+    never fail: they truncate or sign-extend, i.e., wrap the value into the target
+    range. *)
 let scalar_cast (src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) =
-  mk_scalar tgt_ty x
+  mk_scalar tgt_ty (scalar_wrap tgt_ty x)
+
+(* Checking consistency with Rust *)
+let _ = assert_norm (scalar_cast I32 U8 300 == Ok 44)
+let _ = assert_norm (scalar_cast I32 U32 (-1) == Ok 4294967295)
+let _ = assert_norm (scalar_cast U8 I8 200 == Ok (-56))
+let _ = assert_norm (scalar_cast I16 I8 (-129) == Ok 127)
+let _ = assert_norm (scalar_cast I8 I64 (-5) == Ok (-5))
 
 // This can't fail, but for now we make all casts faillible (easier for the translation)
 let scalar_cast_bool (tgt_ty : scalar_ty) (x : bool) : result (scalar tgt_ty) =

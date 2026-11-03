@@ -266,10 +266,16 @@ Axiom scalar_shl : forall {ty0 ty1}, scalar ty0 -> scalar ty1 -> result (scalar 
 Axiom scalar_shr : forall {ty0 ty1}, scalar ty0 -> scalar ty1 -> result (scalar ty0). (* TODO *)
 Axiom scalar_not : forall {ty}, scalar ty -> scalar ty. (* TODO *)
 
-(** Cast an integer from a [src_ty] to a [tgt_ty] *)
-(* TODO: check the semantics of casts in Rust *)
+(** Wrap an integer into the range of [ty], i.e., reduce it modulo [2^bits] into
+    [scalar_min ty .. scalar_max ty] (two's complement for signed types). *)
+Definition scalar_wrap (ty : scalar_ty) (x : Z) : Z :=
+  (x - scalar_min ty) mod (scalar_max ty - scalar_min ty + 1) + scalar_min ty.
+
+(** Cast an integer from a [src_ty] to a [tgt_ty]. As in Rust, integer [as] casts
+    never fail: they truncate or sign-extend, i.e., wrap the value into the target
+    range. *)
 Definition scalar_cast (src_ty tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) :=
-  mk_scalar tgt_ty (to_Z x).
+  mk_scalar tgt_ty (scalar_wrap tgt_ty (to_Z x)).
 
 (* This can't fail, but for now we make all casts faillible (easier for the translation) *)
 Definition scalar_cast_bool (tgt_ty : scalar_ty) (x : bool) : result (scalar tgt_ty) :=
@@ -493,6 +499,15 @@ Notation "x s<= y" := (scalar_leb x y)  (at level 80) : Primitives_scope.
 Notation "x s< y" := (scalar_ltb x y)  (at level 80) : Primitives_scope.
 Notation "x s>= y" := (scalar_geb x y)  (at level 80) : Primitives_scope.
 Notation "x s> y" := (scalar_gtb x y)  (at level 80) : Primitives_scope.
+
+(** Checking consistency with Rust: integer casts *)
+Local Definition cast_to_Z {ty} (r : result (scalar ty)) : option Z :=
+  match r with Ok x => Some (to_Z x) | _ => None end.
+Goal cast_to_Z (scalar_cast I32 U8 300%i32) = Some 44%Z. reflexivity. Qed.
+Goal cast_to_Z (scalar_cast I32 U32 (-1)%i32) = Some 4294967295%Z. reflexivity. Qed.
+Goal cast_to_Z (scalar_cast U8 I8 200%u8) = Some (-56)%Z. reflexivity. Qed.
+Goal cast_to_Z (scalar_cast I16 I8 (-129)%i16) = Some 127%Z. reflexivity. Qed.
+Goal cast_to_Z (scalar_cast I8 I64 (-5)%i8) = Some (-5)%Z. reflexivity. Qed.
 
 (** Constants *)
 Definition core_num_U8_MIN    := u8_min %u32.
