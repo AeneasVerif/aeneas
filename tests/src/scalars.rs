@@ -227,3 +227,38 @@ pub fn test_question_mark_err() {
     let r = use_question_mark(10, 0);
     assert!(!r.is_ok());
 }
+
+// ============================================================================
+// From<bool>
+// ============================================================================
+
+pub trait FromBool: From<bool> {}
+
+pub fn supertrait_from_bool<T: FromBool>(b: bool) -> T {
+    T::from(b)
+}
+
+macro_rules! test_from_bool {
+    ($ty:ty, $test:ident) => {
+        impl FromBool for $ty {}
+
+        #[verify::test]
+        pub fn $test() {
+            assert!(supertrait_from_bool::<$ty>(false) == 0);
+            assert!(supertrait_from_bool::<$ty>(true) == 1);
+        }
+    };
+}
+
+test_from_bool!(usize, test_from_bool_usize);
+test_from_bool!(u8, test_from_bool_u8);
+test_from_bool!(u16, test_from_bool_u16);
+test_from_bool!(u32, test_from_bool_u32);
+test_from_bool!(u64, test_from_bool_u64);
+test_from_bool!(u128, test_from_bool_u128);
+test_from_bool!(isize, test_from_bool_isize);
+test_from_bool!(i8, test_from_bool_i8);
+test_from_bool!(i16, test_from_bool_i16);
+test_from_bool!(i32, test_from_bool_i32);
+test_from_bool!(i64, test_from_bool_i64);
+test_from_bool!(i128, test_from_bool_i128);
