@@ -37,7 +37,7 @@ def effectWP : EffectWP RustEffect where
   State := Unit
   wp effect _ _ :=
     match effect with
-    | .fail _ => False
+    | _ => False
 
 instance : EffectWP.Monotonic effectWP where
   wp_monotonic _ := False.elim
@@ -50,7 +50,7 @@ instance : EffectWP.Conjunctive effectWP where
 
 instance : EffectWP.ExcludedMiracle effectWP where
   wp_excludedMiracle := by
-    rintro ⟨⟩ _ h
+    intro _ _ h
     exact h
 
 def spec (m : Result α) (p : Post α) : Prop :=
@@ -695,7 +695,11 @@ instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.e
       | .div => Q.2.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
-      cases x <;> simp
+      cases x
+      · simp
+      · rename_i i _
+        cases i <;> simp
+      · simp
   }
 set_option match.ignoreUnusedAlts false
 
@@ -709,23 +713,25 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
     · cbv
     · simp
       rename_i i k
-      cases i; cbv
+      cases i <;> cbv
     · cbv
 
 
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- unreachable: `RustEffect` currently only has the `fail` effect.
+                  fun _ => ⌜False⌝, -- unreacheable
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
     intro hspec
     simp only [WP.wp, PredTrans.apply] at hspec
     split at hspec <;> simp_all
     rename_i x eff heq a
-    cases eff
-    have : heq = PEmpty.elim := by funext; contradiction
-    simp [*] at *
-    try trivial
+    cases eff with
+    | guardedModify => simp_all
+    | fail =>
+      have : heq = PEmpty.elim := by funext; contradiction
+      simp [*] at *
+      try trivial
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
