@@ -917,6 +917,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
                       let abs1 = ctx_lookup_abs ctx.ctx aid1 in
                       if
                         abs_owns_static abs0 = abs_owns_static abs1
+                        && abs0.alive_hint = abs1.alive_hint
                         && (abs_owns_static abs0
                            || MarkedBorrowId.Set.equal
                                 (AbsId.Map.find aid0
