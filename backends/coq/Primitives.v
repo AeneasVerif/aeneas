@@ -489,6 +489,13 @@ Notation "x %u32"   := ((mk_scalar U32   x)%return) (at level 9).
 Notation "x %u64"   := ((mk_scalar U64   x)%return) (at level 9).
 Notation "x %u128"  := ((mk_scalar U128  x)%return) (at level 9).
 
+(** Checking consistency with Rust: division and remainder *)
+Local Definition res_to_Z {ty} (r : result (scalar ty)) : option Z :=
+  match r with Ok x => Some (to_Z x) | _ => None end.
+Goal res_to_Z (i32_div 7%i32 0%i32) = None. reflexivity. Qed.
+Goal res_to_Z (i32_rem 7%i32 0%i32) = None. reflexivity. Qed.
+Goal res_to_Z (i32_rem 7%i32 3%i32) = Some 1%Z. reflexivity. Qed.
+
 Notation "x s= y" := (scalar_eqb x y)  (at level 80) : Primitives_scope.
 Notation "x s<> y" := (scalar_neqb x y) (at level 80) : Primitives_scope.
 Notation "x s<= y" := (scalar_leb x y)  (at level 80) : Primitives_scope.
