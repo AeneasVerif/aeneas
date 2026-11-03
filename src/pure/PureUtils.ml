@@ -1417,7 +1417,7 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
   match id with
   | TTuple -> true
   | TAdtId id ->
-      let info = TypeDeclId.Map.find id ctx in
+      let info = TypeDeclId.TreeMap.find id ctx in
       info.is_tuple_struct
   | TBuiltin _ -> false
 

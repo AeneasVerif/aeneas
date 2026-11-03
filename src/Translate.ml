@@ -140,7 +140,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
   let calls = FunCallId.Map.empty in
   let recursive_type_decls =
-    TypeDeclId.Set.of_list
+    TypeDeclId.TreeSet.of_list
       (List.filter_map
          (fun (tid, g) ->
            match g with
@@ -669,7 +669,7 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
     [extract_extra_info] is [true], we extract this extra information (after the
     declaration, if both booleans are [true]). *)
 let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
-    (type_decl_group : Pure.TypeDeclId.Set.t) (kind : ExtractBase.decl_kind)
+    (type_decl_group : Pure.TypeDeclId.TreeSet.t) (kind : ExtractBase.decl_kind)
     (def : Pure.type_decl) (extract_decl : bool) (extract_extra_info : bool) :
     unit =
   (* Update the kind, if the type is opaque *)
@@ -706,7 +706,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (ids : Pure.TypeDeclId.id list) : unit =
   assert (ids <> []);
   let export_type = export_type fmt config ctx in
-  let ids_set = Pure.TypeDeclId.Set.of_list ids in
+  let ids_set = Pure.TypeDeclId.TreeSet.of_list ids in
   let export_type_decl kind id = export_type ids_set kind id true false in
   let export_type_extra_info kind id = export_type ids_set kind id false true in
 
@@ -1549,11 +1549,11 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trans_funs;
       trans_globals;
       functions_with_decreases_clause = rec_functions;
-      types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
-      funs_filter_type_args_map = Pure.FunDeclId.Map.empty;
-      funs_filter_trait_clauses_map = Pure.FunDeclId.Map.empty;
-      trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
-      trait_impls_filter_trait_clauses_map = Pure.TraitImplId.Map.empty;
+      types_filter_type_args_map = Pure.TypeDeclId.TreeMap.empty;
+      funs_filter_type_args_map = Pure.FunDeclId.TreeMap.empty;
+      funs_filter_trait_clauses_map = Pure.FunDeclId.TreeMap.empty;
+      trait_impls_filter_type_args_map = Pure.TraitImplId.TreeMap.empty;
+      trait_impls_filter_trait_clauses_map = Pure.TraitImplId.TreeMap.empty;
       extracted_opaque;
     }
   in

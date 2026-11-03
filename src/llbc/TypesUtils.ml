@@ -130,7 +130,7 @@ let lookup_adt_info (infos : TypesAnalysis.type_infos) (tref : type_decl_ref) :
   | None ->
       Some
         ([%unwrap_opt_span] None
-           (TypeDeclId.Map.find_opt tref.id infos)
+           (TypeDeclId.TreeMap.find_opt tref.id infos)
            "Missing type information")
 
 (** Check whether the definition of an ADT contains static borrows.
@@ -399,7 +399,7 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
           match tref.builtin with
           | Some (TTuple | TBox | TStr) -> ()
           | None ->
-              let info = TypeDeclId.Map.find tref.id infos in
+              let info = TypeDeclId.TreeMap.find tref.id infos in
               if info.borrows_info.contains_static_mut && pred RStatic then
                 raise Found;
               RegionId.iteri
@@ -453,7 +453,7 @@ let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
           | Some (TTuple | TBox | TStr) -> ()
           | None ->
               (* Check which region parameters are mutable *)
-              let info = TypeDeclId.Map.find tref.id infos in
+              let info = TypeDeclId.TreeMap.find tref.id infos in
               if info.borrows_info.contains_static_mut then add_region RStatic;
               RegionId.iteri
                 (fun adt_rid r ->
@@ -619,7 +619,7 @@ let trait_type_constraint_no_regions (x : trait_type_constraint) : bool =
     is a non-recursive structure with unnamed fields. *)
 let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
     (id : TypeDeclId.id) : bool =
-  let info = TypeDeclId.Map.find id ctx in
+  let info = TypeDeclId.TreeMap.find id ctx in
   info.is_tuple_struct
 
 (** A trait instance id refers to a local clause if it only uses the variants:

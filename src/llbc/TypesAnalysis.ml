@@ -65,7 +65,7 @@ type ty_info = type_borrows_info [@@deriving show]
 type partial_type_info = type_param_info list option g_type_info
 [@@deriving show]
 
-type type_infos = type_decl_info TypeDeclId.Map.t [@@deriving show]
+type type_infos = type_decl_info TypeDeclId.TreeMap.t [@@deriving show]
 
 let expl_info_init = { under_borrow = false; under_mut_borrow = false }
 
@@ -385,7 +385,8 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TAdt { id = adt_id; generics; builtin = None } ->
         (* Lookup the information for this type definition *)
         let adt_info =
-          [%silent_unwrap_opt_span] span (TypeDeclId.Map.find_opt adt_id infos)
+          [%silent_unwrap_opt_span] span
+            (TypeDeclId.TreeMap.find_opt adt_id infos)
         in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
@@ -544,7 +545,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Opaque | TDeclError _ -> [%craise] def.item_meta.span "unreachable"
     in
     (* Explore the types and accumulate information *)
-    let type_decl_info = TypeDeclId.Map.find def.def_id infos in
+    let type_decl_info = TypeDeclId.TreeMap.find def.def_id infos in
     let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in
     (* TODO: substitute the types *)
     let type_decl_info =
@@ -556,7 +557,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
     in
     let type_decl_info = partial_type_info_to_type_decl_info type_decl_info in
     (* Update the information for the type definition we explored *)
-    let infos = TypeDeclId.Map.add def.def_id type_decl_info infos in
+    let infos = TypeDeclId.TreeMap.add def.def_id type_decl_info infos in
     (* Return *)
     infos
 
@@ -582,7 +583,7 @@ let analyze_type_declaration_group (span : Meta.span option) (crate : crate)
   let infos =
     List.fold_left
       (fun infos (def : type_decl) ->
-        TypeDeclId.Map.add def.def_id
+        TypeDeclId.TreeMap.add def.def_id
           (initialize_type_decl_info ~is_rec span crate def)
           infos)
       infos decl_defs
