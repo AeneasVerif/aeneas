@@ -6,6 +6,7 @@
 Bitwise.v 
 BlanketImpl.v 
 Constants.v 
+Issue1523IntConstants.v 
 Issue194RecursiveStructProjector.v 
 Issue270LoopList.v 
 NoNestedBorrows.v 

@@ -521,6 +521,12 @@ Definition core_num_I64_MAX   := i64_max %i64.
 Definition core_num_I128_MAX  := i128_max %i128.
 Axiom core_num_Isize_MAX : isize. (** TODO *)
 
+(* Checking consistency with Rust *)
+Goal to_Z core_num_U8_MAX = 255. reflexivity. Qed.
+Goal to_Z core_num_U128_MAX = 340282366920938463463374607431768211455. reflexivity. Qed.
+Goal to_Z core_num_I8_MIN = -128. reflexivity. Qed.
+Goal to_Z core_num_I16_MAX = 32767. reflexivity. Qed.
+
 (*** core *)
 
 (** Trait declaration: [core::clone::Clone] *)
