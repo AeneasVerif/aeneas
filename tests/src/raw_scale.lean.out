@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_scale.llbc
+[[91mError[39m] Raw ptr casts are only supported between pointers to literal types; found: cast<*const raw_scale::Row13>
+Source: 'tests/src/raw_scale.rs', lines 99:0-102:1
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 604
+

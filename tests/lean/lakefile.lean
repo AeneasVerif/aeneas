@@ -35,6 +35,7 @@ package «tests» {}
 @[default_target] lean_lib Deref
 @[default_target] lean_lib Derive
 @[default_target] lean_lib Discriminant
+@[default_target] lean_lib DoublyLinked
 @[default_target] lean_lib Drop
 @[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
@@ -105,12 +106,14 @@ package «tests» {}
 @[default_target] lean_lib RawBox
 @[default_target] lean_lib RawBoxManual
 @[default_target] lean_lib RawBoxProofs
+@[default_target] lean_lib RawMatrixView
+@[default_target] lean_lib RawMemoryViews
 @[default_target] lean_lib RawPointerOps
-@[default_target] lean_lib DoublyLinked
+@[default_target] lean_lib RawReadWriteRead
+@[default_target] lean_lib RawScale
 @[default_target] lean_lib RawTransmute
 @[default_target] lean_lib RawTransmuteExternals
 @[default_target] lean_lib RawValueCasts
-@[default_target] lean_lib RawReadWriteRead
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Scalars

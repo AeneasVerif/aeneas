@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_matrix_view.llbc
+[[91mError[39m] Unsupported operation: &raw mut (*matrix)
+Source: 'tests/src/raw_matrix_view.rs', lines 66:26-66:32
+Compiler source: interp/InterpExpressions.ml, line 1499
+

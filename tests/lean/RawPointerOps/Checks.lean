@@ -9,6 +9,7 @@ import all Aeneas.Std.Core.PtrMovement
 import all Aeneas.Std.Heap.Ranges
 import all Aeneas.Std.Heap
 import all Aeneas.Std.Heap.Model
+import all Aeneas.Std.Scalar.WrappingOps.Mul
 
 public section
 
@@ -72,6 +73,61 @@ def initializationChecks : Option Bool := do
     (Heap.read raw_box.u32Repr p initialized == some 1#u32))
 
 example : initializationChecks = some true := by native_decide
+
+/- Executable model counterparts of raw_scale.rs, not extracted Rust or universal
+   correctness proofs. The explicit u32 descriptor fixes the target representation. -/
+private def scaleModel (k : U32) (src dst : RawPtr U32) (count : Nat)
+    (s : Heap) : Option Heap := do
+  match count with
+  | 0 => pure s
+  | count + 1 =>
+    let value ← Heap.read raw_box.u32Repr src s
+    let value := k.wrapping_mul value
+    let s ← Heap.write raw_box.u32Repr dst value
+      ((raw_box.u32Bytes value).map Aeneas.Std.Byte.data) rfl s
+    let src ← Heap.byteOffset src 4 s
+    let dst ← Heap.byteOffset dst 4 s
+    scaleModel k src dst count s
+
+def scalingChecks : Option Bool := do
+  let initial : List U32 := [91#u32, 2#u32, 3#u32, 92#u32, 0#u32, 0#u32, 93#u32]
+  let (p, s) ← Heap.newBlock raw_box.u32Repr
+    (initial.map fun x => (raw_box.u32Bytes x).map Aeneas.Std.Byte.data)
+    true 4#usize none Heap.empty
+  let src ← Heap.byteOffset p 4 s
+  let dst ← Heap.byteOffset p 16 s
+  let shared ← Heap.shareRange raw_box.u32Repr src 2 s
+  let disjoint ← scaleModel 7#u32 src dst 2 shared
+  let disjointValues ← Heap.readRange raw_box.u32Repr p 7 disjoint
+  let unshared ← Heap.endShareRange raw_box.u32Repr src 2 disjoint
+  let inPlace ← scaleModel 3#u32 dst dst 2 unshared
+  let values ← Heap.readRange raw_box.u32Repr dst 2 inPlace
+  let borrowed ← Heap.borrowRange raw_box.u32Repr dst 2 inPlace
+  let restored ← Heap.endBorrowRange raw_box.u32Repr dst
+    (values.map fun x => (raw_box.u32Bytes (2#u32.wrapping_mul x)).map Aeneas.Std.Byte.data)
+    borrowed
+  let observed ← Heap.read raw_box.u32Repr dst restored
+  let final ← Heap.readRange raw_box.u32Repr p 7 restored
+  pure (disjointValues == [91#u32, 2#u32, 3#u32, 92#u32, 14#u32, 21#u32, 93#u32] &&
+    values == [42#u32, 63#u32] && observed == 84#u32 &&
+    final == [91#u32, 2#u32, 3#u32, 92#u32, 84#u32, 126#u32, 93#u32] &&
+    (Heap.read raw_box.u32Repr dst borrowed).isNone &&
+    (scaleModel 2#u32 src src 2 shared).isNone)
+
+example : scalingChecks = some true := by native_decide
+
+def scalingWrapChecks : Option Bool := do
+  let initial : List U32 := [0xffffffff#u32, 1#u32, 0x80000000#u32]
+  let (p, s) ← Heap.newBlock raw_box.u32Repr
+    (initial.map fun x => (raw_box.u32Bytes x).map Aeneas.Std.Byte.data)
+    true 4#usize none Heap.empty
+  let updated ← scaleModel 2#u32 p p 3 s
+  let values ← Heap.readRange raw_box.u32Repr p 3 updated
+  let empty ← scaleModel 0#u32 ⟨999, 0#usize⟩ ⟨999, 0#usize⟩ 0 updated
+  let unchanged ← Heap.readRange raw_box.u32Repr p 3 empty
+  pure (values == [0xfffffffe#u32, 2#u32, 0#u32] && unchanged == values)
+
+example : scalingWrapChecks = some true := by native_decide
 
 def movementChecks : Option Bool := do
   let (p, s) ← Heap.alloc raw_box.u32Repr 3 4#usize Heap.empty
