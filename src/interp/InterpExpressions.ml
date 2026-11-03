@@ -554,9 +554,10 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
             | Some info -> Option.is_some info.alive_hint
             | None -> false
           in
-          [%cassert] span (not has_keep_alive)
-            "Cannot take a function pointer to a function marked \
-             #[verify::keep_alive]";
+          if has_keep_alive then
+            Errors.craise_silent __FILE__ __LINE__ span
+              "Cannot take a function pointer to a function marked \
+               #[verify::keep_alive]";
           let sv = mk_fresh_symbolic_tvalue span ctx cv.ty in
           let cf e =
             SymbolicAst.IntroSymbolic
