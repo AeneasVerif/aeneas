@@ -168,22 +168,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             super#visit_Assert env a
 
           method! visit_rvalue env rv =
-            match rv with
+            (match rv with
             | Use (Constant { kind = CTraitConst _; _ }, _) ->
                 (* We consider that trait constants can fail, similarly to
                    trait methods. *)
                 self#may_fail true
-            | Use (Constant { kind = CFnDef ptr; _ }, _) -> (
-                match ptr.kind with
-                | Fun fid -> (
-                    match FunDeclId.Map.find_opt fid funs_map with
-                    | Some fdecl
-                      when Option.is_some (parse_keep_alive fdecl.item_meta) ->
-                        [%save_error] env
-                          "Cannot take a function pointer to a function marked \
-                           #[verify::keep_alive]"
-                    | _ -> ())
-                | TraitMethod _ -> ())
             | Use _
             | RvRef ({ kind = PlaceLocal _ | PlaceProjection _; _ }, _, _)
             | Discriminant _ | Aggregate _ | NullaryOp _ | RawPtr _ | Repeat _
@@ -208,7 +197,24 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                     | None -> ()))
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
-                can_fail := binop_can_fail bop || !can_fail
+                can_fail := binop_can_fail bop || !can_fail);
+            super#visit_rvalue env rv
+
+          method! visit_constant_expr env cv =
+            (match cv.kind with
+            | CFnDef ptr -> (
+                match ptr.kind with
+                | Fun fid -> (
+                    match FunDeclId.Map.find_opt fid funs_map with
+                    | Some fdecl
+                      when Option.is_some (parse_keep_alive fdecl.item_meta) ->
+                        [%save_error] env
+                          "Cannot take a function pointer to a function marked \
+                           #[verify::keep_alive]"
+                    | _ -> ())
+                | TraitMethod _ -> ())
+            | _ -> ());
+            super#visit_constant_expr env cv
 
           method! visit_Call env call dest on_unwind =
             (match call.func with
