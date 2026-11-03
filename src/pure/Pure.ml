@@ -22,15 +22,15 @@ module TraitMethodId = T.TraitMethodId
     (they monotonically increase across functions) while in {!module:Pure} we
     want the indices to start at 0 for every function. *)
 module LoopId =
-IdGen ()
+OrdIdGen ()
 
 (** We give an identifier to every phase of the synthesis (forward, backward for
     group of regions 0, etc.) *)
 module SynthPhaseId =
-IdGen ()
+OrdIdGen ()
 
-module BVarId = IdGen ()
-module FVarId = IdGen ()
+module BVarId = OrdIdGen ()
+module FVarId = OrdIdGen ()
 module ConstGenericVarId = T.ConstGenericVarId
 
 type llbc_name = T.name [@@deriving show, ord]

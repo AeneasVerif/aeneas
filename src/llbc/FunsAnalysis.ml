@@ -89,7 +89,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
    * recursive calls, etc. We use the previously computed information in case
    * of function calls.
    *)
-  let analyze_fun_decls (fun_ids : FunDeclId.Set.t) (d : fun_decl list) :
+  let analyze_fun_decls (fun_ids : FunDeclId.TreeSet.t) (d : fun_decl list) :
       fun_info =
     let can_fail = ref false in
     let stateful = ref false in
@@ -125,7 +125,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
           (* Custom function called by hand, this isn't visit_fun_decl_id! *)
           method visit_fid span id =
-            if FunDeclId.Set.mem id fun_ids then (
+            if FunDeclId.TreeSet.mem id fun_ids then (
               can_diverge := true;
               is_rec := true)
             else
@@ -264,7 +264,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
         funs
     in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
-    let fun_ids = FunDeclId.Set.of_list fun_ids in
+    let fun_ids = FunDeclId.TreeSet.of_list fun_ids in
     let info = analyze_fun_decls fun_ids funs in
     List.iter (fun (f : fun_decl) -> register_fun_decl_info f.def_id info) funs
   in
