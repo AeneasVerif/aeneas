@@ -3269,10 +3269,17 @@ let merge_let_app_then_decompose_tuple_visitor (ctx : ctx) (def : fun_decl) =
     method! visit_Let env monadic0 pat0 bound0 next0 =
       let bound0 = self#visit_texpr env bound0 in
       (* Try to absorb any immediately following pure let-bindings that
-         decompose open sub-fields of [pat0] into tuples *)
+         decompose open sub-fields of [pat0] into tuples.
+         Do not do this for loops: loop let-bindings must keep a flat pattern
+         matching [loop.output_tys] for the loop micro-passes. *)
       let open_vars = tpat_get_fvars pat0 in
+      let is_loop =
+        match bound0.e with
+        | Loop _ -> true
+        | _ -> false
+      in
       let pat0, next0, env =
-        if FVarId.Set.is_empty open_vars then (pat0, next0, env)
+        if FVarId.Set.is_empty open_vars || is_loop then (pat0, next0, env)
         else absorb_decompositions open_vars env pat0 next0
       in
       let next0 = self#visit_texpr env next0 in
