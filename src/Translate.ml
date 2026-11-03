@@ -1077,23 +1077,43 @@ let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
   in
   Option.is_some builtin_info
 
-(** Export a trait declaration. *)
-let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
-    (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
-    (extract_extra_info : bool) : unit =
-  let trait_decl =
-    [%silent_unwrap_opt_span] None
-      (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
+(** Export a group of trait declarations. *)
+let export_trait_decl_group (fmt : Format.formatter) (_config : gen_config)
+    (ctx : gen_ctx) (group : trait_decl_id g_declaration_group) : unit =
+  let ids, is_rec =
+    match group with
+    | NonRecGroup id -> ([ id ], false)
+    | RecGroup ids -> (ids, true)
   in
-  (* Check if the trait declaration is builtin, in which case we ignore it *)
-  if not (trait_decl_is_builtin ctx trait_decl_id) then (
-    let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
-    if extract_decl then (
-      Extract.extract_trait_decl ctx fmt trait_decl;
-      EmitJson.record_trait_decl_if_enabled ctx trait_decl);
-    if extract_extra_info then
-      Extract.extract_trait_decl_extra_info ctx fmt trait_decl)
-  else ()
+  (* Retrieve the declarations, ignoring the builtin ones. Some declarations
+     might be missing because of previous errors. *)
+  let decls =
+    List.filter_map
+      (fun id ->
+        match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+        | Some decl when not (trait_decl_is_builtin ctx id) -> Some decl
+        | _ -> None)
+      ids
+  in
+  (* The backends other than Lean don't support recursive traits *)
+  if is_rec && Config.backend () <> Lean && decls <> [] then
+    [%warn_opt_span] None
+      ("Recursive traits are not supported for this backend; the following \
+        traits are extracted but their model will not type-check:\n"
+      ^ String.concat "\n"
+          (List.map
+             (fun (d : Pure.trait_decl) ->
+               name_to_string ctx.trans_ctx d.item_meta.name)
+             decls));
+  Extract.start_trait_decl_group fmt is_rec decls;
+  List.iter
+    (fun (decl : Pure.trait_decl) ->
+      let ctx = { ctx with trait_decl_id = Some decl.def_id } in
+      Extract.extract_trait_decl ctx fmt decl;
+      EmitJson.record_trait_decl_if_enabled ctx decl;
+      Extract.extract_trait_decl_extra_info ctx fmt decl)
+    decls;
+  Extract.end_trait_decl_group fmt is_rec decls
 
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
@@ -1121,12 +1141,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_functions_group = export_functions_group fmt config ctx in
   let export_global = export_global fmt config ctx in
   let export_types_group = export_types_group fmt config ctx in
-  let export_trait_decl_group id =
-    export_trait_decl fmt config ctx id true false
-  in
-  let export_trait_decl_group_extra_info id =
-    export_trait_decl fmt config ctx id false true
-  in
+  let export_trait_decl_group = export_trait_decl_group fmt config ctx in
   let export_trait_impl ~is_rec = export_trait_impl fmt config ctx ~is_rec in
 
   let export_decl_group (dg : declaration_group) : unit =
@@ -1173,50 +1188,9 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           export_global id
     | GlobalGroup (RecGroup _ids) ->
         [%craise_opt_span] None "Mutually recursive globals are not supported"
-    | TraitDeclGroup (RecGroup ids) ->
-        (* Only print the warning if we actually extract the group *)
-        let extract =
-          config.extract_trait_decls && config.extract_transparent
-        in
-        if extract then
-          (* Lookup the trait decls to print a nice error message *)
-          let to_string (id : trait_decl_id) : string =
-            match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-            | None ->
-                "unknown trait (lookup failed, probably because of a previous \
-                 error"
-            | Some d ->
-                "'"
-                ^ name_to_string ctx.trans_ctx d.item_meta.name
-                ^ "', source: "
-                ^ Errors.raw_span_to_string d.item_meta.span
-          in
-          let decls = List.map to_string ids in
-          if not (List.for_all (trait_decl_is_builtin ctx) ids) then (
-            if List.length decls = 1 then
-              [%warn_opt_span] None
-                ("Recursive trait declarations are not supported; the \
-                  following recursive trait is going to be extracted but its \
-                  model will not type-check:\n" ^ String.concat "\n" decls)
-            else
-              [%warn_opt_span] None
-                ("Mutually recursive trait declarations are not supported; the \
-                  following group of mutually recursive traits is going to be \
-                  extracted but their model will not type-check:\n"
-               ^ String.concat "\n" decls);
-            (* We still extract something so that the user can look at it and
-             eventually fix it *)
-            (* TODO: update to extract groups *)
-            List.iter
-              (fun id ->
-                export_trait_decl_group id;
-                export_trait_decl_group_extra_info id)
-              ids)
-    | TraitDeclGroup (NonRecGroup id) ->
-        (* TODO: update to extract groups *)
-        if config.extract_trait_decls && config.extract_transparent then (
-          export_trait_decl_group id;
-          export_trait_decl_group_extra_info id)
+    | TraitDeclGroup group ->
+        if config.extract_trait_decls && config.extract_transparent then
+          export_trait_decl_group group
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl ~is_rec:false id
@@ -1407,6 +1381,15 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
          /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI \
          option -/\n";
       Printf.fprintf out "set_option maxRecDepth %d\n" !Config.max_recdepth;
+      (* Larger instance search, for the traits extracted as [nonpos_structure]s
+         (see {!Extract.nonpos_synth_instance_max_size}) *)
+      if
+        TraitDeclId.Map.exists
+          (fun id _ -> Extract.trait_decl_is_nonpos ctx id)
+          ctx.trans_trait_decls
+      then
+        Printf.fprintf out "\nset_option synthInstance.maxSize %d\n"
+          Extract.nonpos_synth_instance_max_size;
       (* Declare the definitions as being noncomputable if needs be *)
       if fi.noncomputable then
         Printf.fprintf out
@@ -1535,6 +1518,17 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            (fun (d : Pure.trait_impl) -> (d.def_id, d))
            trans_trait_impls)
     in
+    (* The traits of the groups of at least two mutually recursive traits *)
+    let rec_group_trait_decls =
+      List.fold_left
+        (fun acc (group : declaration_group) ->
+          match group with
+          | TraitDeclGroup (RecGroup ids) when List.length ids > 1 ->
+              TraitDeclId.Set.union acc (TraitDeclId.Set.of_list ids)
+          | _ -> acc)
+        TraitDeclId.Set.empty
+        (Option.value crate.declarations ~default:[])
+    in
     {
       ExtractBase.crate;
       trans_ctx;
@@ -1545,6 +1539,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trait_decl_id = None (* None by default *);
       trans_trait_decls;
       trans_trait_impls;
+      rec_group_trait_decls;
       trans_types;
       trans_funs;
       trans_globals;

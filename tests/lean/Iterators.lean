@@ -18,6 +18,8 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+set_option synthInstance.maxSize 4096
+
 namespace iterators
 
 /-- [iterators::iter_range]: loop body 0:
