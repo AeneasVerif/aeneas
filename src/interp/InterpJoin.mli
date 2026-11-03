@@ -347,6 +347,8 @@ val loop_join_break_ctxs :
     destructured. *)
 val destructure_shared_loans : Meta.span -> AbsId.Set.t -> Cps.cm_fun
 
+val destructure_new_abs : Meta.span -> AbsId.Set.t -> eval_ctx -> eval_ctx
+
 val loop_match_break_ctx_with_target :
   config ->
   Meta.span ->
