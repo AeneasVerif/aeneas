@@ -255,7 +255,9 @@ Definition scalar_div {ty} (x y: scalar ty) : result (scalar ty) :=
   if to_Z y =? 0 then Fail_ Failure else
   mk_scalar ty (to_Z x / to_Z y).
 
-Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty (Z.rem (to_Z x) (to_Z y)).
+Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) :=
+  if to_Z y =? 0 then Fail_ Failure else
+  mk_scalar ty (Z.rem (to_Z x) (to_Z y)).
   
 Definition scalar_neg {ty} (x: scalar ty) : result (scalar ty) := mk_scalar ty (-(to_Z x)).
 
