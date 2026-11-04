@@ -725,8 +725,9 @@ and compute_raw_fun_effect_info (span : Meta.span option)
           (lookup_pure_fn_ptr_info fun_infos fun_id)
       in
       {
-        (* Note that backward functions can't fail *)
-        is_effectful = info.can_fail && gid = None;
+        is_effectful =
+          (info.can_fail && gid = None)
+          || (Option.is_some gid && Option.is_some info.alive_hint);
         can_diverge = info.can_diverge;
         is_rec = info.is_rec && gid = None;
       }

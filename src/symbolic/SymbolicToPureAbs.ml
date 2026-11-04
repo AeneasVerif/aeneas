@@ -239,7 +239,12 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
 let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
   let inputs, outputs = abs_to_input_output_tys ctx abs in
   if inputs = [] && outputs = [] then None
-  else Some (mk_arrows inputs (mk_simpl_tuple_ty outputs))
+  else
+    let output = mk_simpl_tuple_ty outputs in
+    let output =
+      if Option.is_some abs.alive_hint then mk_result_ty output else output
+    in
+    Some (mk_arrows inputs output)
 
 let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
     (abs_regions : T.region_set) (abs_level : abs_level)
@@ -668,7 +673,9 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
             mk_result_ok_texpr span next
           else next
         in
-        let e = [%add_loc] mk_closed_checked_let ctx false pat bound next in
+        let e =
+          [%add_loc] mk_closed_checked_let ctx bound_is_effectful pat bound next
+        in
         let is_effectful = bound_is_effectful || next_is_effectful in
         (ctx, is_effectful, Some e)
     | V.EJoinMarkers _ | V.EBVar _ ->
@@ -1076,7 +1083,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     einput_to_texpr ctx ectx abs.regions.owned bound_inputs fvar_to_texpr
       abs_level input
   in
-  [%sanity_check] span (not is_effectful);
+  [%sanity_check] span ((not is_effectful) || Option.is_some abs.alive_hint);
   let ctx, bound_outputs, pat =
     eoutput_to_pat ctx fvar_to_texpr abs.regions.owned abs_level output
   in
@@ -1098,6 +1105,11 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
   else
     (* Put everything together *)
     let output_e = mk_simpl_tuple_texpr span outputs in
+    let output_e =
+      if is_effectful || Option.is_some abs.alive_hint then
+        mk_result_ok_texpr span output_e
+      else output_e
+    in
     let e =
       mk_closed_checked_let __FILE__ __LINE__ ctx is_effectful pat input_e
         output_e
@@ -1276,7 +1288,7 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     einput_to_texpr ctx ectx abs.regions.owned empty_bound_borrows_loans
       fvar_to_texpr abs_level input
   in
-  [%sanity_check] span (not is_effectful);
+  [%sanity_check] span ((not is_effectful) || Option.is_some abs.alive_hint);
   let ctx, pat =
     tevalue_to_given_back abs.regions.owned abs_level None output ctx
   in
