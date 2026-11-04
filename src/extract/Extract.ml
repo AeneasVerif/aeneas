@@ -38,7 +38,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             {
               ctx with
               funs_filter_type_args_map =
-                FunDeclId.Map.add def.f.def_id keep
+                FunDeclId.TreeMap.add def.f.def_id keep
                   ctx.funs_filter_type_args_map;
             }
         | _ -> ctx
@@ -49,7 +49,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             {
               ctx with
               funs_filter_trait_clauses_map =
-                FunDeclId.Map.add def.f.def_id keep
+                FunDeclId.TreeMap.add def.f.def_id keep
                   ctx.funs_filter_trait_clauses_map;
             }
         | _ -> ctx
@@ -264,7 +264,7 @@ let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       (fun (d : global_decl) -> d.explicit_info)
       (GlobalDeclId.Map.find_opt id ctx.trans_globals)
   in
-  extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit generics;
+  extract_generic_args span ctx fmt TypeDeclId.TreeSet.empty ~explicit generics;
   if use_brackets then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -279,7 +279,7 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
       (List.combine filter ls)
   in
   let clauses =
-    match FunDeclId.Map.find_opt id ctx.funs_filter_trait_clauses_map with
+    match FunDeclId.TreeMap.find_opt id ctx.funs_filter_trait_clauses_map with
     | None -> Result.Ok clauses
     | Some filter ->
         if List.length filter <> List.length types then (
@@ -302,7 +302,7 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
         else Result.Ok (filter_f filter clauses)
   in
   let types =
-    match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
+    match FunDeclId.TreeMap.find_opt id ctx.funs_filter_type_args_map with
     | None -> Result.Ok (types, explicit)
     | Some filter ->
         if List.length filter <> List.length types then (
@@ -376,7 +376,7 @@ let rec extract_tpat (span : Meta.span) (ctx : extraction_ctx)
     F.pp_print_space fmt ();
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
-    extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false v.ty;
+    extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false v.ty;
     F.pp_print_string fmt ")");
   ctx
 
@@ -773,7 +773,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       | ScalarValProj ty, _ ->
           extract_scalar_val_projector span ctx fmt ~inside ty args
       | TraitConst (trait_ref, const_id), _ ->
-          extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
+          extract_trait_ref span ctx fmt TypeDeclId.TreeSet.empty ~inside:true
             trait_ref;
           let name =
             ctx_get_trait_const span trait_ref.trait_decl_ref.trait_decl_id
@@ -790,7 +790,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "_";
           F.pp_print_space fmt ();
-          extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
+          extract_trait_ref span ctx fmt TypeDeclId.TreeSet.empty ~inside:true
             trait_ref;
           (* Print the arguments *)
           List.iter
@@ -857,7 +857,7 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
     in
     F.pp_print_string fmt cs;
     F.pp_print_space fmt ();
-    extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true args_ty)
+    extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:true args_ty)
   else (
     (* Print the array constructor.
 
@@ -980,7 +980,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
 
           [%sanity_check] trait_decl.item_meta.span (lp_id = None);
           extract_trait_ref trait_decl.item_meta.span ctx fmt
-            TypeDeclId.Set.empty ~inside:true trait_ref;
+            TypeDeclId.TreeSet.empty ~inside:true trait_ref;
           let fun_name =
             ctx_get_trait_method span trait_ref.trait_decl_ref.trait_decl_id
               method_name ctx
@@ -1074,10 +1074,10 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       in
       (match types_explicit_traits with
       | Ok (types, explicit, trait_refs) ->
-          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
+          extract_generic_args span ctx fmt TypeDeclId.TreeSet.empty ~explicit
             { generics with types; trait_refs }
       | Error err ->
-          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
+          extract_generic_args span ctx fmt TypeDeclId.TreeSet.empty ~explicit
             generics;
           [%save_error] span err;
           F.pp_print_string fmt
@@ -1608,7 +1608,7 @@ and extract_meta (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":";
       F.pp_print_space fmt ();
-      extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false e.ty;
+      extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false e.ty;
       F.pp_print_string fmt ")"
   | _ -> extract_texpr span ctx fmt ~inside ~inside_do e
 
@@ -1779,8 +1779,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   F.pp_open_hovbox fmt 0;
   let explicit = def.signature.explicit_info in
   (let space = Some space in
-   extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     Item def.signature.generics (Some explicit) type_params cg_params
+   extract_generic_params def.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
+     ~space Item def.signature.generics (Some explicit) type_params cg_params
      trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
@@ -1805,7 +1805,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
             F.pp_print_space fmt ();
-            extract_ty def.item_meta.span ctx fmt TypeDeclId.Set.empty
+            extract_ty def.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
               ~inside:false lv.ty;
             F.pp_print_string fmt ")";
             (* Close the box for the input parameters *)
@@ -1826,7 +1826,7 @@ let extract_fun_input_parameters_types (span : span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inputs : ty list) : unit =
   let extract_param (ty : ty) : unit =
     let inside = false in
-    extract_ty span ctx fmt TypeDeclId.Set.empty ~inside ty;
+    extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside ty;
     F.pp_print_space fmt ();
     extract_arrow fmt ();
     F.pp_print_space fmt ()
@@ -2200,7 +2200,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       if backend () = FStar then (
         F.pp_print_string fmt "Tot";
         F.pp_print_space fmt ()));
-    extract_ty def.item_meta.span ctx fmt TypeDeclId.Set.empty
+    extract_ty def.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
       ~inside:has_decreases_clause def.signature.output;
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
@@ -2427,7 +2427,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Generate the type *)
   extract_fun_input_parameters_types def.item_meta.span ctx fmt
     def.signature.inputs;
-  extract_ty def.item_meta.span ctx fmt TypeDeclId.Set.empty ~inside:false
+  extract_ty def.item_meta.span ctx fmt TypeDeclId.TreeSet.empty ~inside:false
     def.signature.output;
   (* Close the box for the type *)
   F.pp_print_string fmt "”";
@@ -2520,8 +2520,9 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
 
   (* Extract the generic parameters *)
   let space = ref true in
-  extract_generic_params span ctx fmt TypeDeclId.Set.empty ~space:(Some space)
-    Item generics (Some explicit) type_params cg_params trait_clauses;
+  extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty
+    ~space:(Some space) Item generics (Some explicit) type_params cg_params
+    trait_clauses;
   if not !space then F.pp_print_space fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
@@ -2533,7 +2534,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   (* Open "TYPE" box (depth=3) *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print "TYPE" *)
-  extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty;
+  extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false ty;
   (* Close "TYPE" box (depth=3) *)
   F.pp_close_box fmt ();
 
@@ -2599,7 +2600,7 @@ let extract_global_decl_hol4_opaque (span : Meta.span) (ctx : extraction_ctx)
   F.pp_close_box fmt ();
   (* Print the type *)
   F.pp_open_hovbox fmt 0;
-  extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty;
+  extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false ty;
   (* Close the definition *)
   F.pp_print_string fmt ")";
   F.pp_close_box fmt ();
@@ -2953,7 +2954,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
               {
                 ctx with
                 trait_impls_filter_type_args_map =
-                  TraitImplId.Map.add trait_impl.def_id filter
+                  TraitImplId.TreeMap.add trait_impl.def_id filter
                     ctx.trait_impls_filter_type_args_map;
               }
         in
@@ -2964,7 +2965,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
               {
                 ctx with
                 trait_impls_filter_trait_clauses_map =
-                  TraitImplId.Map.add trait_impl.def_id filter
+                  TraitImplId.TreeMap.add trait_impl.def_id filter
                     ctx.trait_impls_filter_trait_clauses_map;
               }
         in
@@ -3061,7 +3062,7 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     let use_forall = generics_not_empty && backend_uses_forall in
     let use_arrows = generics_not_empty && not backend_uses_forall in
     let use_forall_use_sep = false in
-    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall
+    extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty ~use_forall
       ~use_forall_use_sep ~use_arrows Method method_generics
       (Some method_explicit_info) type_params cg_params trait_clauses;
     if use_forall then F.pp_print_string fmt ",";
@@ -3070,7 +3071,7 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     F.pp_print_space fmt ();
     let ({ inputs; output; _ } : fun_sig) = signature in
     extract_fun_input_parameters_types span ctx fmt inputs;
-    extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false output
+    extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false output
   in
   extract_trait_decl_item ctx fmt fun_name ty
 
@@ -3204,8 +3205,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
       decl.llbc_generics generics ctx
   in
-  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
-    generics (Some decl.explicit_info) type_params cg_params trait_clauses;
+  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
+    Item generics (Some decl.explicit_info) type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
   if is_empty && backend () = FStar then (
@@ -3246,7 +3247,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
           let inside = false in
           F.pp_print_space fmt ();
           let ty = mk_result_ty ty in
-          extract_ty decl.item_meta.span ctx fmt TypeDeclId.Set.empty ~inside ty
+          extract_ty decl.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
+            ~inside ty
         in
         extract_trait_decl_item ctx fmt item_name ty)
       decl.consts;
@@ -3276,7 +3278,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         let ty () =
           F.pp_print_space fmt ();
           extract_trait_clause_type decl.item_meta.span ctx fmt
-            TypeDeclId.Set.empty clause
+            TypeDeclId.TreeSet.empty clause
         in
         extract_trait_decl_item ctx fmt item_name ty)
       decl.parent_clauses;
@@ -3405,7 +3407,7 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
         method_llbc_generics method_generics ctx
     in
     let use_fun = method_generics <> empty_generic_params in
-    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_fun Method
+    extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty ~use_fun Method
       method_generics (Some method_explicit_info) method_tys method_cgs
       method_tcs;
     if use_fun then (
@@ -3416,7 +3418,7 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
     F.pp_print_space fmt ();
     let fun_name = ctx_get_local_function span method_decl_id None ctx in
     F.pp_print_string fmt fun_name;
-    extract_generic_args span ctx fmt TypeDeclId.Set.empty
+    extract_generic_args span ctx fmt TypeDeclId.TreeSet.empty
       ~explicit:(Some trans.f.signature.explicit_info)
       fn.binder_value.fun_generics
   in
@@ -3539,14 +3541,14 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
       impl.generics ctx
   in
-  extract_generic_params span ctx fmt TypeDeclId.Set.empty Item impl.generics
-    (Some impl.explicit_info) type_params cg_params trait_clauses;
+  extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty Item
+    impl.generics (Some impl.explicit_info) type_params cg_params trait_clauses;
 
   (* Print the type *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  extract_trait_decl_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
+  extract_trait_decl_ref span ctx fmt TypeDeclId.TreeSet.empty ~inside:false
     impl.impl_trait;
 
   let is_empty = trait_impl_is_empty impl in
@@ -3590,7 +3592,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           | Some d -> Some d.explicit_info
         in
         let print_params () =
-          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
+          extract_generic_args span ctx fmt TypeDeclId.TreeSet.empty ~explicit
             gref.global_generics
         in
         let global_decl =
@@ -3633,7 +3635,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         let item_name = ctx_get_trait_type span trait_decl_id type_id ctx in
         let ty () =
           F.pp_print_space fmt ();
-          extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty
+          extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false ty
         in
         extract_trait_impl_item ctx fmt item_name ty)
       impl.types;
@@ -3646,7 +3648,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
+          extract_trait_ref span ctx fmt TypeDeclId.TreeSet.empty ~inside:false
             trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
