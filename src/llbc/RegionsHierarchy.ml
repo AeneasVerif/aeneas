@@ -52,10 +52,11 @@ let sig_uses_static (span : Meta.span option)
   List.exists ty_uses_static
     (sg.item_binder_value.output :: sg.item_binder_value.inputs)
   || List.exists
-       (fun (c : region_outlives region_binder) ->
-         let long, short = c.binder_value in
-         long = RStatic || short = RStatic)
-       sg.item_binder_params.regions_outlive
+       (fun (c : outlives_pred region_binder) ->
+         match c.binder_value with
+         | RLub _, _ -> false
+         | long, short -> long = RStatic || short = RStatic)
+       sg.item_binder_params.outlives
 
 (** Check whether the static region may interact with other regions in a
     signature (in the input and output types), in which case the order in which
@@ -197,6 +198,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     [%sanity_check_opt_span] span (long <> RErased);
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
+    | RLub _, _ | _, RLub _ -> [%craise_opt_span] span "Unexpected Lub region"
     | RVar (Bound _), _ | _, RVar (Bound _) -> ()
     | _, _ ->
         let m = !g in
@@ -212,10 +214,6 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     visit c.binder_value
   in
 
-  let add_edge_from_region_constraint ((long, short) : region_outlives) =
-    add_edge ~long ~short
-  in
-
   let add_edges ~(long : region) ~(shorts : region list) =
     (* TODO: shouldn't have to use List.iter *)
     List.iter (fun short -> add_edge ~long ~short) shorts
@@ -224,8 +222,14 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   (* Explore the clauses - we only explore the "region outlives" clause,
      not the "type outlives" clauses *)
   List.iter
-    (add_edges_from_region_binder add_edge_from_region_constraint)
-    sg.item_binder_params.regions_outlive;
+    (fun (c : outlives_pred region_binder) ->
+      match c.binder_value with
+      | RLub _, _ -> ()
+      | _ ->
+          add_edges_from_region_binder
+            (fun (long, short) -> add_edge ~long ~short)
+            c)
+    sg.item_binder_params.outlives;
 
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
@@ -251,18 +255,14 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
             let predicates = Subst.predicates_substitute subst decl.generics in
             (* Note that because we also explore the generics below, we may
                explore several times the same type - this is ok *)
-            let add_edges_from_regions_outlive (long, short) =
-              add_edges ~long ~shorts:(short :: outer)
+            let add_edges_from_outlives (long, short) =
+              match long with
+              | RLub ty -> explore_ty (short :: outer) ty
+              | _ -> add_edges ~long ~shorts:(short :: outer)
             in
             List.iter
-              (add_edges_from_region_binder add_edges_from_regions_outlive)
-              predicates.regions_outlive;
-            let add_edges_from_types_outlive (ty, short) =
-              explore_ty (short :: outer) ty
-            in
-            List.iter
-              (add_edges_from_region_binder add_edges_from_types_outlive)
-              predicates.types_outlive
+              (add_edges_from_region_binder add_edges_from_outlives)
+              predicates.outlives
         | Some (TTuple | TBox | TStr) -> (* No clauses for those *) ());
         (* Explore the generics *)
         explore_generics outer generics

@@ -55,6 +55,7 @@ let region_in_set ?(allow_erased = false) (r : region) (rset : region_set) :
   | RBody _ ->
       [%craise_opt_span] None
         "region_in_set shouldn't be called on body regions"
+  | RLub _ -> [%craise_opt_span] None "Unexpected Lub region"
   | RVar (Bound _) ->
       [%craise_opt_span] None
         "region_in_set shouldn't be called on bound regions"
@@ -92,6 +93,7 @@ let ty_regions (ty : ty) : RegionId.Set.t =
   let add_region (r : region) =
     match r with
     | RStatic -> ()
+    | RLub _ -> [%craise_opt_span] None "Unexpected Lub region"
     | RErased | RBody _ ->
         raise
           (Failure "ty_regions shouldn't be called on erased or body regions")
@@ -128,7 +130,7 @@ let lookup_adt_info (infos : TypesAnalysis.type_infos) (tref : type_decl_ref) :
   | None ->
       Some
         ([%unwrap_opt_span] None
-           (TypeDeclId.Map.find_opt tref.id infos)
+           (TypeDeclId.TreeMap.find_opt tref.id infos)
            "Missing type information")
 
 (** Check whether the definition of an ADT contains static borrows.
@@ -397,7 +399,7 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
           match tref.builtin with
           | Some (TTuple | TBox | TStr) -> ()
           | None ->
-              let info = TypeDeclId.Map.find tref.id infos in
+              let info = TypeDeclId.TreeMap.find tref.id infos in
               if info.borrows_info.contains_static_mut && pred RStatic then
                 raise Found;
               RegionId.iteri
@@ -451,7 +453,7 @@ let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
           | Some (TTuple | TBox | TStr) -> ()
           | None ->
               (* Check which region parameters are mutable *)
-              let info = TypeDeclId.Map.find tref.id infos in
+              let info = TypeDeclId.TreeMap.find tref.id infos in
               if info.borrows_info.contains_static_mut then add_region RStatic;
               RegionId.iteri
                 (fun adt_rid r ->
@@ -477,13 +479,14 @@ let ty_has_mut_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
 
 (** Small helper *)
 let raise_if_not_rty_visitor =
-  object
+  object (self)
     inherit [_] iter_ty as super
 
     method! visit_region _ r =
       match r with
       | RVar (Bound _) | RErased -> raise Found
       | RStatic | RVar (Free _) -> ()
+      | RLub ty -> self#visit_ty () ty
       | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
 
     method! visit_TDynTrait env tr =
@@ -502,13 +505,14 @@ let ty_is_rty (ty : ty) : bool =
 
 (** Small helper *)
 let raise_if_not_erased_ty_visitor =
-  object
+  object (self)
     inherit [_] iter_ty
 
     method! visit_region _ r =
       match r with
       | RStatic | RVar _ -> raise Found
       | RErased -> ()
+      | RLub ty -> self#visit_ty () ty
       | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
   end
 
@@ -524,11 +528,7 @@ let ty_erase_body_regions ty =
   let visitor =
     object
       inherit [_] map_ty
-
-      method! visit_region _ r =
-        match r with
-        | RStatic | RVar _ | RErased -> r
-        | RBody _ -> RErased
+      method! visit_RBody _ _ = RErased
     end
   in
   visitor#visit_ty () ty
@@ -537,7 +537,12 @@ let ty_erase_regions ty =
   let visitor =
     object
       inherit [_] map_ty
-      method! visit_region _ _ = RErased
+
+      (* Preserve [RLub] wrappers in outlives predicates, erasing the regions
+         of their types as well. *)
+      method! visit_RStatic _ = RErased
+      method! visit_RVar _ _ = RErased
+      method! visit_RBody _ _ = RErased
     end
   in
   visitor#visit_ty () ty
@@ -614,7 +619,7 @@ let trait_type_constraint_no_regions (x : trait_type_constraint) : bool =
     is a non-recursive structure with unnamed fields. *)
 let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
     (id : TypeDeclId.id) : bool =
-  let info = TypeDeclId.Map.find id ctx in
+  let info = TypeDeclId.TreeMap.find id ctx in
   info.is_tuple_struct
 
 (** A trait instance id refers to a local clause if it only uses the variants:
