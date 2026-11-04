@@ -1094,6 +1094,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     ([ (ctx, Unit) ], cf)
   else
     let join_aux config =
+      let recoverable = config.keep_alive_hints || !Config.recover_joins in
       (* We need to join the contexts *)
       [%ldebug
         "About to join contexts after an [if then else]." ^ "\n- initial ctx:\n"
@@ -1114,7 +1115,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
          it requires supporting some unsupported case) it is possible to recover
          from it, in which case we simply duplicate the code after the switch *)
       let _, joined_ctx =
-        InterpJoin.join_ctxs_list config span ~recoverable:!Config.recover_joins
+        InterpJoin.join_ctxs_list config span ~recoverable
           ~with_abs_conts:true Join ctx_to_join
       in
       [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
@@ -1171,7 +1172,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         let (_, ctx, output_values, output_abs), cf =
           InterpJoin.match_ctx_with_target config span WithCont fixed_aids
             fixed_dids output_abs_ids output_svalue_ids
-            ~recoverable:!Config.recover_joins joined_ctx ctx
+            ~recoverable joined_ctx ctx
         in
 
         let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
@@ -1216,9 +1217,10 @@ and eval_switch_with_join (config : config) (span : Meta.span)
       (* Output the joined context *)
       ([ (joined_ctx, Unit) ], cf)
     in
+    (* TODO: check if there even are abstractions that have the alive_hint before we do this *)
     if config.keep_alive_hints then
-      try Errors.with_silent_errors (fun () -> join_aux config)
-      with Errors.CFailure _ | Errors.RFailure ->
+      try join_aux config
+      with Errors.RFailure ->
         join_aux { config with keep_alive_hints = false }
     else join_aux config
 

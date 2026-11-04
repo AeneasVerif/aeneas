@@ -135,7 +135,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        a fixed point (otherwise we will fail). In case the fail hard option is on,
        we directly call [match_ctxs]: this way exceptions will not be caught and
        the user will see a full call stack, which eases deboguing. *)
-    if i = 1 && !Config.fail_hard then
+    if i = 1 && !Config.fail_hard && not config.keep_alive_hints then
       let _ =
         match_ctxs span ~check_equiv:true ~recoverable:false !fixed_ids
           lookup_shared_value lookup_shared_value ctx1 ctx2
@@ -155,7 +155,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         "Joined contexts:\n"
         ^ String.concat "\n\n"
             (List.map eval_ctx_to_string (List.rev !joined_ctxs))];
-      [%craise] span
+      [%craise_recover] config.keep_alive_hints span
         ("Could not compute a loop fixed point in " ^ string_of_int i0
        ^ " iterations"))
     else

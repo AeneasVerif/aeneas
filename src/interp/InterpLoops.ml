@@ -93,8 +93,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Preemptively end borrows/move values by matching the current
      context with the target context *)
   let ctx, cf_prepare =
-    prepare_match_ctx_with_target config span (Loop loop_id) ~recoverable:false
-      fp_ctx ctx
+    prepare_match_ctx_with_target config span (Loop loop_id)
+      ~recoverable:config.keep_alive_hints fp_ctx ctx
   in
 
   (* Actually match *)
@@ -115,7 +115,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
       (match_ctx_with_target config span WithCont fixed_aids fixed_dids
-         fp_input_abs fp_input_svalues ~recoverable:false fp_ctx ctx)
+         fp_input_abs fp_input_svalues ~recoverable:config.keep_alive_hints
+         fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
@@ -326,7 +327,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
           match_ctx_with_target config span WithCont fixed_aids fixed_dids
-            fp_input_abs fp_input_svalues fp_ctx ~recoverable:false ctx
+            fp_input_abs fp_input_svalues fp_ctx
+            ~recoverable:config.keep_alive_hints ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in
         let input_abs = reorder_input_abs input_abs fp_input_abs in
@@ -557,8 +559,9 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
         in
         ([ (ctx, res) ], cf)
       in
+      (* TODO: check if there even are abstractions that have the alive_hint before we do this *)
       if config.keep_alive_hints then
-        try Errors.with_silent_errors (fun () -> eval_loop_sym config)
-        with Errors.CFailure _ | Errors.RFailure ->
+        try eval_loop_sym config
+        with Errors.RFailure ->
           eval_loop_sym { config with keep_alive_hints = false }
       else eval_loop_sym config

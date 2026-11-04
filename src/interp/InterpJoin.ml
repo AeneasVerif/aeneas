@@ -1082,7 +1082,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
   let ctxl', joined_ctx =
     join_ctxs_list config span (Loop loop_id) ~preprocess_first_ctx:false
-      ~recoverable:false ~with_abs_conts:false (ctx0 :: ctxl)
+      ~recoverable:config.keep_alive_hints ~with_abs_conts:false (ctx0 :: ctxl)
   in
   [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
@@ -1147,8 +1147,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
        *)
       let rec join_one_aux (ctx : eval_ctx) =
         match
-          join_ctxs span fresh_abs_kind ~recoverable:false ~with_abs_conts
-            !joined_ctx ctx
+          join_ctxs span fresh_abs_kind
+            ~recoverable:config.keep_alive_hints ~with_abs_conts !joined_ctx ctx
         with
         | Ok { joined_ctx = nctx; _ } ->
             joined_ctx := nctx;
@@ -1182,8 +1182,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Collapse to eliminate the markers *)
         joined_ctx :=
-          collapse_ctx config span fresh_abs_kind ~recoverable:false
-            ~with_abs_conts !joined_ctx;
+          collapse_ctx config span fresh_abs_kind
+            ~recoverable:config.keep_alive_hints ~with_abs_conts !joined_ctx;
         [%ltrace
           "join_one: after join-collapse:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -1430,7 +1430,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         tgt_ctx
     with
     | Ok x -> x
-    | Error _ -> [%craise] span "Could not join the contexts"
+    | Error _ -> [%craise_recover] recoverable span "Could not join the contexts"
   in
   let joined_ctx = join_info.joined_ctx in
   [%ltrace
@@ -1594,7 +1594,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         joined_ctx
     with
     | Some ctx -> ctx
-    | None -> [%craise] span "Could not match the contexts"
+    | None -> [%craise_recover] recoverable span "Could not match the contexts"
   in
   [%ltrace
     "The match was successful:" ^ "\n\n- src_ctx: "
@@ -1640,7 +1640,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
              with
              | Some v -> v
              | None ->
-                 [%craise] span
+                 [%craise_recover] recoverable span
                    ("Could not find symbolic value @"
                    ^ SymbolicValueId.to_string sid
                    ^ " in src_to_joined_map")
@@ -1703,4 +1703,4 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     ^ eval_ctx_to_string tgt_ctx];
 
   match_ctx_with_target config span WithCont fixed_aids fixed_dids fp_input_abs
-    fp_input_svalues ~recoverable:false src_ctx tgt_ctx
+    fp_input_svalues ~recoverable:config.keep_alive_hints src_ctx tgt_ctx
