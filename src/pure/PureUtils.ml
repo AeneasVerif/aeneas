@@ -1417,7 +1417,7 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
   match id with
   | TTuple -> true
   | TAdtId id ->
-      let info = TypeDeclId.Map.find id ctx in
+      let info = TypeDeclId.TreeMap.find id ctx in
       info.is_tuple_struct
   | TBuiltin _ -> false
 
@@ -2850,13 +2850,7 @@ let binop_can_fail : binop -> bool = function
   | Mul (OWrap, _)
   | Shl (OWrap, _, _)
   | Shr (OWrap, _, _)
-  | AddChecked _
-  | SubChecked _
-  | MulChecked _
-  | BoolAnd
-  | BoolOr
-  | BoolXor
-  | Cmp _ -> false
+  | BoolAnd | BoolOr | BoolXor | Cmp _ -> false
   | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true
 
 let mk_bool_not (b : texpr) : texpr =

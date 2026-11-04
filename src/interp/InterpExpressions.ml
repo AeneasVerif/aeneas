@@ -1181,9 +1181,6 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           | Cmp ->
               [%sanity_check] span (int_ty1 = int_ty2);
               TScalar (TInteger (Signed I8))
-          (* These return `(int, bool)` which isn't a literal type *)
-          | AddChecked | SubChecked | MulChecked ->
-              [%craise] span "Unimplemented binary operation"
           | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
                  than the operand *)
@@ -1494,7 +1491,6 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
   | Aggregate (aggregate_kind, ops) ->
       wrap_in_result (eval_rvalue_aggregate config span aggregate_kind ops ctx)
   | Discriminant p -> wrap_in_result (eval_discriminant config span p ctx)
-  | Len _ -> [%craise] span "Unhandled Len"
   | _ ->
       [%craise] span
         ("Unsupported operation: " ^ Print.EvalCtx.rvalue_to_string ctx rvalue)

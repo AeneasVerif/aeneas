@@ -7,13 +7,13 @@ include Charon.Values
  * write "abstraction" (because those values are not abstract, they simply are
  * inside abstractions) *)
 
-module BorrowId = IdGen ()
-module SharedBorrowId = IdGen ()
-module SymbolicValueId = IdGen ()
-module AbsId = IdGen ()
-module FunCallId = IdGen ()
-module LoopId = IdGen ()
-module MetaId = IdGen ()
+module BorrowId = OrdIdGen ()
+module SharedBorrowId = OrdIdGen ()
+module SymbolicValueId = OrdIdGen ()
+module AbsId = OrdIdGen ()
+module FunCallId = OrdIdGen ()
+module LoopId = OrdIdGen ()
+module MetaId = OrdIdGen ()
 
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, eq, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, eq, ord]
@@ -304,8 +304,8 @@ type abs_kind =
           computational content. *)
 [@@deriving show, eq, ord]
 
-module AbsBVarId = IdGen ()
-module AbsFVarId = IdGen ()
+module AbsBVarId = OrdIdGen ()
+module AbsFVarId = OrdIdGen ()
 
 (** A DeBruijn index identifying a group of bound variables *)
 type abs_db_scope_id = int [@@deriving show, eq, ord]
@@ -325,7 +325,7 @@ let ( abs_fvar_id_counter,
     environment, because they contain borrows for instance, typically because
     they might be overwritten during an assignment. *)
 module DummyVarId =
-IdGen ()
+OrdIdGen ()
 
 type dummy_var_id = DummyVarId.id [@@deriving show, eq, ord]
 

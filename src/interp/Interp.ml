@@ -47,7 +47,7 @@ let analyze_type_declarations (crate : crate)
           ("Encountered an error when analyzing the following type \
             declarations group:\n" ^ decls);
         infos)
-    TypeDeclId.Map.empty decls
+    TypeDeclId.TreeMap.empty decls
 
 let compute_contexts (crate : crate) : decls_ctx =
   let crate_graph = Deps.compute_graph_of_uses crate in
@@ -113,30 +113,30 @@ let compute_contexts (crate : crate) : decls_ctx =
      pretty printing. The set of declarations to extract is given by the [declarations]
      field.
   *)
-  let type_decl_ids = ref TypeDeclId.Set.empty in
-  let fun_decl_ids = ref FunDeclId.Set.empty in
-  let global_decl_ids = ref GlobalDeclId.Set.empty in
-  let trait_decl_ids = ref TraitDeclId.Set.empty in
-  let trait_impl_ids = ref TraitImplId.Set.empty in
+  let type_decl_ids = ref TypeDeclId.TreeSet.empty in
+  let fun_decl_ids = ref FunDeclId.TreeSet.empty in
+  let global_decl_ids = ref GlobalDeclId.TreeSet.empty in
+  let trait_decl_ids = ref TraitDeclId.TreeSet.empty in
+  let trait_impl_ids = ref TraitImplId.TreeSet.empty in
 
   let visitor =
     object
       inherit [_] iter_crate
 
       method! visit_type_decl_id _ id =
-        TypeDeclId.Set.add_in_place id type_decl_ids
+        TypeDeclId.TreeSet.add_in_place id type_decl_ids
 
       method! visit_fun_decl_id _ id =
-        FunDeclId.Set.add_in_place id fun_decl_ids
+        FunDeclId.TreeSet.add_in_place id fun_decl_ids
 
       method! visit_global_decl_id _ id =
-        GlobalDeclId.Set.add_in_place id global_decl_ids
+        GlobalDeclId.TreeSet.add_in_place id global_decl_ids
 
       method! visit_trait_decl_id _ id =
-        TraitDeclId.Set.add_in_place id trait_decl_ids
+        TraitDeclId.TreeSet.add_in_place id trait_decl_ids
 
       method! visit_trait_impl_id _ id =
-        TraitImplId.Set.add_in_place id trait_impl_ids
+        TraitImplId.TreeSet.add_in_place id trait_impl_ids
     end
   in
   List.iter (visitor#visit_declaration_group ()) declarations;
@@ -147,7 +147,7 @@ let compute_contexts (crate : crate) : decls_ctx =
       (fun id (d : type_decl) ->
         (* Charon introduces declarations for the builtin types (tuples, [Box],
            [str]): we handle those separately, and don't extract them *)
-        TypeDeclId.Set.mem id !type_decl_ids
+        TypeDeclId.TreeSet.mem id !type_decl_ids
         &&
         match d.src with
         | BuiltinType _ -> false
@@ -160,7 +160,7 @@ let compute_contexts (crate : crate) : decls_ctx =
   let fun_decls = crate.fun_decls in
   let to_extract =
     FunDeclId.Map.filter
-      (fun id _ -> FunDeclId.Set.mem id !fun_decl_ids)
+      (fun id _ -> FunDeclId.TreeSet.mem id !fun_decl_ids)
       fun_decls
   in
   let fun_infos = FunsAnalysis.analyze_module crate fun_decls in
@@ -169,7 +169,7 @@ let compute_contexts (crate : crate) : decls_ctx =
   let global_decls_to_extract =
     GlobalDeclId.Map.filter
       (fun id g ->
-        GlobalDeclId.Set.mem id !global_decl_ids
+        GlobalDeclId.TreeSet.mem id !global_decl_ids
         (* The globals without initializers are constants which we inline *)
         && Option.is_some (Charon.GAstUtils.init_fun_id_of_global g))
       crate.global_decls
@@ -177,21 +177,21 @@ let compute_contexts (crate : crate) : decls_ctx =
 
   let trait_decls_to_extract =
     TraitDeclId.Map.filter
-      (fun id _ -> TraitDeclId.Set.mem id !trait_decl_ids)
+      (fun id _ -> TraitDeclId.TreeSet.mem id !trait_decl_ids)
       crate.trait_decls
   in
 
   let trait_impls_to_extract =
     TraitImplId.Map.filter
-      (fun id _ -> TraitImplId.Set.mem id !trait_impl_ids)
+      (fun id _ -> TraitImplId.TreeSet.mem id !trait_impl_ids)
       crate.trait_impls
   in
 
   let trait_methods_to_extract =
-    let trait_method_ids = ref TraitDeclId.Map.empty in
+    let trait_method_ids = ref TraitDeclId.TreeMap.empty in
     let add_trait_method_id trait_decl_id method_id =
       trait_method_ids :=
-        TraitDeclId.Map.update trait_decl_id
+        TraitDeclId.TreeMap.update trait_decl_id
           (fun opt_set ->
             let set = Option.value opt_set ~default:TraitMethodId.Set.empty in
             Some (TraitMethodId.Set.add method_id set))
@@ -234,14 +234,15 @@ let compute_contexts (crate : crate) : decls_ctx =
           trait_decl.methods)
       trait_decls_to_extract;
 
-    TraitDeclId.Map.mapi
+    TraitDeclId.Map.filter_map
       (fun trait_decl_id (trait_decl : trait_decl) ->
-        match TraitDeclId.Map.find_opt trait_decl_id !trait_method_ids with
-        | None -> TraitMethodId.Map.empty
+        match TraitDeclId.TreeMap.find_opt trait_decl_id !trait_method_ids with
+        | None -> Some TraitMethodId.Map.empty
         | Some method_ids ->
-            TraitMethodId.Map.filter
-              (fun method_id _ -> TraitMethodId.Set.mem method_id method_ids)
-              trait_decl.methods)
+            Some
+              (TraitMethodId.Map.filter
+                 (fun method_id _ -> TraitMethodId.Set.mem method_id method_ids)
+                 trait_decl.methods))
       crate.trait_decls
   in
 

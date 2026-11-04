@@ -271,7 +271,7 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
               (* Structure or enumeration with 0 variants *) true
           | Enum [ _ ] -> (
               (* Non-recursive enumeration with 1 variant *)
-              let info = TypeDeclId.Map.find_opt id type_infos in
+              let info = TypeDeclId.TreeMap.find_opt id type_infos in
               match info with
               | None -> [%internal_error_opt_span] span
               | Some info -> not info.is_rec)

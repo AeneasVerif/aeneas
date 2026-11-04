@@ -599,7 +599,7 @@ type extraction_ctx = {
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
-  types_filter_type_args_map : bool list TypeDeclId.Map.t;
+  types_filter_type_args_map : bool list TypeDeclId.TreeMap.t;
       (** The map to filter the type arguments for the builtin type definitions.
 
           We need this for type `Vec`, for instance, which takes a useless (in
@@ -608,14 +608,14 @@ type extraction_ctx = {
 
           TODO: it would be cleaner to filter those types in a micro-pass,
           rather than at code generation time. *)
-  funs_filter_type_args_map : bool list FunDeclId.Map.t;
+  funs_filter_type_args_map : bool list FunDeclId.TreeMap.t;
       (** Same as {!types_filter_type_args_map}, but for functions *)
-  funs_filter_trait_clauses_map : bool list FunDeclId.Map.t;
+  funs_filter_trait_clauses_map : bool list FunDeclId.TreeMap.t;
       (** Same as {!types_filter_type_args_map}, but for functions *)
-  trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
+  trait_impls_filter_type_args_map : bool list TraitImplId.TreeMap.t;
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
-  trait_impls_filter_trait_clauses_map : bool list TraitImplId.Map.t;
+  trait_impls_filter_trait_clauses_map : bool list TraitImplId.TreeMap.t;
   extracted_opaque : bool ref;
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
