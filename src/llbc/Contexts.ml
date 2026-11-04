@@ -23,10 +23,12 @@ type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
+  keep_alive_hints : bool;
 }
 [@@deriving show]
 
-let mk_config (mode : interpreter_mode) : config = { mode }
+let mk_config (mode : interpreter_mode) : config =
+  { mode; keep_alive_hints = true }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;

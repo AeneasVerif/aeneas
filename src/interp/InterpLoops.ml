@@ -517,41 +517,48 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
   match config.mode with
   | ConcreteMode -> (eval_loop_concrete span eval_loop_body) ctx
   | SymbolicMode ->
-      (* Preemptively simplify the context by ending the unnecessary borrows/loans and getting
-         rid of the useless symbolic values (which are in anonymous variables) *)
-      let ctx, cc =
-        InterpBorrows.simplify_dummy_values_useless_abs config span ctx
-      in
+      let eval_loop_sym (config : config) =
+        (* Preemptively simplify the context by ending the unnecessary borrows/loans and getting
+           rid of the useless symbolic values (which are in anonymous variables) *)
+        let ctx, cc =
+          InterpBorrows.simplify_dummy_values_useless_abs config span ctx
+        in
 
-      (* We want to make sure the loop will *not* manipulate shared avalues
-         themselves containing shared loans (i.e., nested shared loans in
-         the abstractions), because it complexifies the matches between values
-         (when joining environments, or checking that two environments are
-         equivalent).
+        (* We want to make sure the loop will *not* manipulate shared avalues
+           themselves containing shared loans (i.e., nested shared loans in
+           the abstractions), because it complexifies the matches between values
+           (when joining environments, or checking that two environments are
+           equivalent).
 
-         We thus call {!reborrow_ashared_loans_symbolic_mutable_borrows} once
-         *before* diving into the loop, to make sure the shared values are deconstructed.
+           We thus call {!reborrow_ashared_loans_symbolic_mutable_borrows} once
+           *before* diving into the loop, to make sure the shared values are deconstructed.
 
-         Note that we will call this function again inside {!eval_loop_symbolic},
-         to introduce fresh, non-fixed abstractions containing the shared values
-         which can be manipulated (and thus borrowed, expanded, etc.) so
-         that the fixed abstractions are never modified.
+           Note that we will call this function again inside {!eval_loop_symbolic},
+           to introduce fresh, non-fixed abstractions containing the shared values
+           which can be manipulated (and thus borrowed, expanded, etc.) so
+           that the fixed abstractions are never modified.
 
-         This is important to understand: we call this function once here to
-         introduce *fixed* abstractions, and again later to introduce
-         *non-fixed* abstractions.
-      *)
-      let ctx, cc =
-        comp cc
-          (reborrow_ashared_loans_symbolic_borrows span None
-             ~with_abs_conts:true ctx)
+           This is important to understand: we call this function once here to
+           introduce *fixed* abstractions, and again later to introduce
+           *non-fixed* abstractions.
+        *)
+        let ctx, cc =
+          comp cc
+            (reborrow_ashared_loans_symbolic_borrows span None
+               ~with_abs_conts:true ctx)
+        in
+        let (ctx, res), cc =
+          comp cc (eval_loop_symbolic config span eval_loop_body ctx)
+        in
+        let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
+          match el with
+          | [ e ] -> cc e
+          | _ -> [%internal_error] span
+        in
+        ([ (ctx, res) ], cf)
       in
-      let (ctx, res), cc =
-        comp cc (eval_loop_symbolic config span eval_loop_body ctx)
-      in
-      let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
-        match el with
-        | [ e ] -> cc e
-        | _ -> [%internal_error] span
-      in
-      ([ (ctx, res) ], cf)
+      if config.keep_alive_hints then
+        try Errors.with_silent_errors (fun () -> eval_loop_sym config)
+        with Errors.CFailure _ | Errors.RFailure ->
+          eval_loop_sym { config with keep_alive_hints = false }
+      else eval_loop_sym config

@@ -83,6 +83,13 @@ module FileLineMap = Collections.MakeMap (FileLineOrderedType)
 let error_list : (string * int * Meta.span option * string) list ref = ref []
 let unique_errors = ref FileLineMap.empty
 
+let silent_errors = ref false
+
+let with_silent_errors (f : unit -> 'a) : 'a =
+  let old = !silent_errors in
+  silent_errors := true;
+  Fun.protect ~finally:(fun () -> silent_errors := old) f
+
 (** Save an error and print it at the same time.
 
     We prefer printing errors gradually rather than reporting everyting at the
@@ -104,11 +111,14 @@ let push_error (file : string) (line : int) (span : Meta.span option)
 (** Register an error, and throw an exception if [throw] is true *)
 let save_error_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  push_error file line span msg;
-  if !Config.fail_hard then (
-    let msg = format_error_message_with_file_line file line span msg in
-    log#serror (msg ^ "\n");
-    raise (Failure msg))
+  if !silent_errors then ()
+  else begin
+    push_error file line span msg;
+    if !Config.fail_hard then (
+      let msg = format_error_message_with_file_line file line span msg in
+      log#serror (msg ^ "\n");
+      raise (Failure msg))
+  end
 
 let save_error (file : string) (line : int) (span : Meta.span) (msg : string) =
   save_error_opt_span file line (Some span) msg
@@ -118,7 +128,8 @@ let add_loc (file : string) (line : int) (x : string -> int -> 'a) : 'a =
 
 let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  if !Config.fail_hard then (
+  if !silent_errors then raise (CFailure { span; file; line; msg })
+  else if !Config.fail_hard then (
     let msg = format_error_message_with_file_line file line span msg in
     log#serror (msg ^ "\n");
     raise (Failure msg))
@@ -132,7 +143,8 @@ let craise (file : string) (line : int) (span : Meta.span) (msg : string) =
 (** Throw an exception, but do not register an error *)
 let craise_opt_span_silent (file : string) (line : int)
     (span : Meta.span option) (msg : string) =
-  if !Config.fail_hard then
+  if !silent_errors then raise (CFailure { span; file; line; msg })
+  else if !Config.fail_hard then
     let msg = format_error_message_with_file_line file line span msg in
     raise (Failure msg)
   else raise (CFailure { span; file; line; msg })
