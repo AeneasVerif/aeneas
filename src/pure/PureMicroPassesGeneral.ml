@@ -741,9 +741,6 @@ let lift_binop (binop : binop) : bool =
   | Add _
   | Sub _
   | Mul _
-  | AddChecked _
-  | SubChecked _
-  | MulChecked _
   | Shl _
   | Shr _
   | Cmp _ -> true
