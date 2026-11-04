@@ -223,30 +223,30 @@ def massert_test : Result Unit := do
   let s ←
     lift (Array.to_slice
       (Array.make 5#usize [ 0#u32, 1#u32, 2#u32, 3#u32, 4#u32 ]))
-  let i ← core.slice.Slice.iter s
+  let i ← core.slice.Slice.iter (SharedBorrow.mk s)
   let it ← core.iter.traits.iterator.Iterator.step_by.default i 1#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1.val = 0#u32)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it1)
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 1#u32)
+  massert (i2.val = 1#u32)
 /--
 info: private def Do.Tests.massert_test : Result Unit :=
 do
   let s ← lift (Array.make 5#usize [0#u32, 1#u32, 2#u32, 3#u32, 4#u32] massert_test._proof_7).to_slice
-  let i ← core.slice.Slice.iter s
+  let i ← core.slice.Slice.iter ⟨s⟩
   let it ← core.iter.traits.iterator.Iterator.step_by.default i 1#usize
-  let (o, it1) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it
+  let (o, it1) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) ⟨it⟩
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
-  let (o1, it2) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it1
+  massert (i1.val = 0#u32)
+  let (o1, it2) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) ⟨it1⟩
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 1#u32)
+  massert (i2.val = 1#u32)
 -/
 #guard_msgs in
 #print massert_test
@@ -431,12 +431,12 @@ fun {T} x y => do
 
 def get_and_update (xs : alloc.vec.Vec U32) (i : Usize) :
   Result (U32 × (U32 → alloc.vec.Vec U32)) := do
-  let x ← alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) xs i
-  ok (x, fun _v => xs)
+  let x ← alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) (SharedBorrow.mk xs) i
+  ok (x.val, fun _v => xs)
 
 def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32) := do
-  let i1 := alloc.vec.Vec.len xs
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk xs)
   if i < i1
   then
     let (_, update_back) ← get_and_update xs i
@@ -449,7 +449,7 @@ partial_fixpoint
 info: @[irreducible] private def Do.Tests.mono_loop_test : alloc.vec.Vec U32 → Usize → Result (alloc.vec.Vec U32) :=
 Lean.Order.fix
   (fun f xs i =>
-    let i1 := xs.len;
+    let i1 := alloc.vec.Vec.len ⟨xs⟩;
     if i < i1 then do
       let (_, update_back) ← get_and_update xs i
       let i2 ← i + 1#usize

@@ -32,8 +32,7 @@ structure SimdTrait (Self : Type _) (Self_Vec : Type _) where
 /-- [multi_target::x86::Sse2]
     Source: 'tests/src/multi-target.rs', lines 14:4-14:20
     Visibility: public -/
-@[reducible]
-def x86.Sse2 := Unit
+structure x86.Sse2 where
 
 /-- [multi_target::x86::{impl multi_target::SimdTrait<u128> for multi_target::x86::Sse2}::add]:
     Source: 'tests/src/multi-target.rs', lines 19:8-21:9 -/
@@ -52,8 +51,7 @@ def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
 /-- [multi_target::arm::Neon]
     Source: 'tests/src/multi-target.rs', lines 29:4-29:20
     Visibility: public -/
-@[reducible]
-def arm.Neon := Unit
+structure arm.Neon where
 
 /-- [multi_target::arm::{impl multi_target::SimdTrait<u128> for multi_target::arm::Neon}::add]:
     Source: 'tests/src/multi-target.rs', lines 34:8-36:9 -/
@@ -129,13 +127,13 @@ structure Foo.«aarch64-apple-darwin» where
 /-- [multi_target::{multi_target::Foo::x86_64-apple-darwin}::f]:
     Source: 'tests/src/multi-target.rs', lines 83:4-83:18 -/
 def «Foox86_64-apple-darwin».f
-  (self : Foo.«x86_64-apple-darwin») : Result Unit := do
+  (self : SharedBorrow Foo.«x86_64-apple-darwin») : Result Unit := do
   ok ()
 
 /-- [multi_target::{multi_target::Foo::aarch64-apple-darwin}::f]:
     Source: 'tests/src/multi-target.rs', lines 83:4-83:18 -/
 def «Fooaarch64-apple-darwin».f
-  (self : Foo.«aarch64-apple-darwin») : Result Unit := do
+  (self : SharedBorrow Foo.«aarch64-apple-darwin») : Result Unit := do
   ok ()
 
 end multi_target

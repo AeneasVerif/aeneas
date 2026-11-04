@@ -86,15 +86,15 @@ instance (α : Type u) : Inhabited (Vec α) := by
   apply Vec.new
 
 @[simp, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::len" -canFail -lift (keepParams := [true,false])]
-abbrev Vec.len {α : Type u} (v : Vec α) : Usize :=
-  Usize.ofNatCore v.val.length (by grind)
+abbrev Vec.len {α : Type u} (v : SharedBorrow (Vec α)) : Usize :=
+  Usize.ofNatCore v.val.val.length (by grind)
 
 @[simp, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
-theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
+theorem Vec.len_val {α : Type u} (v : SharedBorrow (Vec α)) : (Vec.len v).val = v.val.length :=
   by simp
 
-grind_pattern Vec.len_val => v.length
-grind_pattern [agrind] Vec.len_val => v.length
+grind_pattern Vec.len_val => (Vec.len v).val
+grind_pattern [agrind] Vec.len_val => (Vec.len v).val
 
 instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
@@ -153,25 +153,25 @@ theorem Vec.set_opt_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: Option α) :
   simp [set_opt]
 
 @[expose, irreducible, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" (keepParams := [true,false])]
-def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
+def Vec.push {α : Type u} (v : MutBorrow (Vec α)) (x : α) : Result (Vec α)
   :=
-  let nlen := List.length v.val + 1
+  let nlen := List.length v.val.val + 1
   if h : nlen ≤ U32.max || nlen ≤ Usize.max then
-    ok (.from (List.concat v.val x) (by simp; scalar_tac))
+    ok (.from (List.concat v.val.val x) (by simp; scalar_tac))
   else
     fail maximumSizeExceeded
 
 @[step]
-theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
-  v.push x ⦃ v1 =>
-  v1.val = v.val ++ [x] ⦄ := by
+theorem Vec.push_spec {α : Type u} (v : MutBorrow (Vec α)) (x : α) (h : v.val.length < Usize.max) :
+  Vec.push v x ⦃ v1 =>
+  v1.val = v.val.val ++ [x] ⦄ := by
   unfold push; grind
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
-def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
-  if i.val < v.length then
-    if h : v.length < Usize.max then
-      ok (.from (v.val.insertIdx i x)
+def Vec.insert {α : Type u} (v: MutBorrow (Vec α)) (i: Usize) (x: α) : Result (Vec α) :=
+  if i.val < v.val.length then
+    if h : v.val.length < Usize.max then
+      ok (.from (v.val.val.insertIdx i x)
         (List.length_insertIdx_le_succ.trans (Nat.succ_le_of_lt h)))
     else
       fail maximumSizeExceeded
@@ -179,21 +179,24 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
     fail arrayOutOfBounds
 
 @[step]
-theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
-  (hbound : i.val < v.length)
-  (hsize : v.length < Usize.max) :
-  v.insert i x ⦃ nv => nv.val = v.val.insertIdx i x ⦄ := by
+theorem Vec.insert_spec {α : Type u} (v: MutBorrow (Vec α)) (i: Usize) (x: α)
+  (hbound : i.val < v.val.length)
+  (hsize : v.val.length < Usize.max) :
+  Vec.insert v i x ⦃ nv => nv.val = v.val.val.insertIdx i x ⦄ := by
   simp [insert, *]
 
-@[expose] def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
-  match v[i.val]? with
+/-- Small helper (this function doesn't model a specific Rust function): it is the
+    specialization of `Vec.index` to `usize` indices. -/
+@[expose] def Vec.index_usize {α : Type u} (v: SharedBorrow (Vec α)) (i: Usize) :
+  Result (SharedBorrow α) :=
+  match v.val[i.val]? with
   | none => fail .arrayOutOfBounds
-  | some x => ok x
+  | some x => ok (.mk x)
 
 @[step]
-theorem Vec.index_usize_spec {α : Type u} (v: Vec α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
+theorem Vec.index_usize_spec {α : Type u} (v: SharedBorrow (Vec α)) (i: Usize)
+  (hbound : i.val < v.val.length) :
+  Vec.index_usize v i ⦃ x => x.val = v.val.val[i.val] ⦄ := by
   simp only [index_usize]
   simp at *
   simp [*]
@@ -216,32 +219,34 @@ theorem Vec.update_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
 theorem Vec.set_length {α : Type u} (v: Vec α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
-@[expose] def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
-  Result (α × (α → Vec α)) :=
-  do let x ← Vec.index_usize v i
-     ok (x, Vec.set v i)
+/-- Small helper (this function doesn't model a specific Rust function): it is the
+    specialization of `Vec.index_mut` to `usize` indices. -/
+@[expose] def Vec.index_mut_usize {α : Type u} (v: MutBorrow (Vec α)) (i: Usize) :
+  Result (MutBorrow α × (α → Vec α)) :=
+  do let x ← Vec.index_usize (.mk v.val) i
+     ok (.mk x.val, Vec.set v.val i)
 
 @[step]
-theorem Vec.index_mut_usize_spec {α : Type u} (v: Vec α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x y => x = v.val[i.val] ∧ y = v.set i ⦄ := by
+theorem Vec.index_mut_usize_spec {α : Type u} (v: MutBorrow (Vec α)) (i: Usize)
+  (hbound : i.val < v.val.length) :
+  Vec.index_mut_usize v i ⦃ x y => x.val = v.val.val[i.val] ∧ y = v.val.set i ⦄ := by
   simp only [index_mut_usize]
-  apply spec_bind (index_usize_spec v i hbound)
+  apply spec_bind (index_usize_spec (.mk v.val) i hbound)
   intro x hx
   simp [hx]
 
 @[expose, rust_fun "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, @O>}::index"
   (keepParams := [true,true,false, true])]
 def Vec.index {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
-  (self : Vec T) (i : I) : Result Output :=
-  inst.index i self.slice
+  (self : SharedBorrow (Vec T)) (i : I) : Result (SharedBorrow Output) :=
+  inst.index i (.mk self.val.slice)
 
 @[expose, rust_fun "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, @O>}::index_mut"
   (keepParams := [true,true,false, true])]
 def Vec.index_mut {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
-  (self : Vec T) (i : I) :
-  Result (Output × (Output → Vec T)) := do
-  let ⟨o, back⟩ ← inst.index_mut i self.slice
+  (self : MutBorrow (Vec T)) (i : I) :
+  Result (MutBorrow Output × (Output → Vec T)) := do
+  let ⟨o, back⟩ ← inst.index_mut i (.mk self.val.slice)
   pure ⟨o, fun o' => {slice := back o'}⟩
 
 @[expose, reducible,
@@ -262,18 +267,18 @@ def Vec.IndexMut {T I Output : Type _}
 }
 
 @[simp, step_simps]
-theorem Vec.index_slice_index {α : Type _} (v : Vec α) (i : Usize) :
+theorem Vec.index_slice_index {α : Type _} (v : SharedBorrow (Vec α)) (i : Usize) :
   Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i =
   Vec.index_usize v i := by
   simp [Vec.index, Vec.index_usize, Slice.index_usize]
   rfl
 
 @[simp, step_simps]
-theorem Vec.index_mut_slice_index {α : Type _} (v : Vec α) (i : Usize) :
+theorem Vec.index_mut_slice_index {α : Type _} (v : MutBorrow (Vec α)) (i : Usize) :
   Vec.index_mut (core.slice.index.SliceIndexUsizeSlice α) v i =
   index_mut_usize v i := by
   simp [Vec.index_mut, Vec.index_mut_usize, Slice.index_mut_usize]
-  apply congrArg (fun k => bind (v.slice.index_usize i) k)
+  apply congrArg (fun k => bind (Slice.index_usize (.mk v.val.slice) i) k)
   funext x
   simp [Functor.map]
   funext x'
@@ -284,26 +289,26 @@ theorem Vec.index_mut_slice_index {α : Type _} (v : Vec α) (i : Usize) :
 -- Vec index/index_mut with RangeTo
 
 @[step]
-theorem Vec.index_RangeTo_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeTo Usize)
-    (h : r.end ≤ v.length) :
+theorem Vec.index_RangeTo_spec {α : Type _} (v : SharedBorrow (Vec α)) (r : core.ops.range.RangeTo Usize)
+    (h : r.end ≤ v.val.length) :
     Vec.index (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
-    ⦃ s1 =>
-      s1.val = v.val.slice 0 r.end ∧
-      s1.length = r.end ⦄ := by
+    ⦃ (s1 : SharedBorrow (Slice α)) =>
+      s1.val.val = v.val.val.slice 0 r.end ∧
+      s1.val.length = r.end ⦄ := by
   simp only [Vec.index]
-  have := core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec r v.slice h
+  have := core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec r (.mk v.val.slice) h
   exact this
 
 @[step]
-theorem Vec.index_mut_RangeTo_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeTo Usize)
-    (h : r.end ≤ v.length) :
+theorem Vec.index_mut_RangeTo_spec {α : Type _} (v : MutBorrow (Vec α)) (r : core.ops.range.RangeTo Usize)
+    (h : r.end ≤ v.val.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
-    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
-      s1.val = v.val.slice 0 r.end ∧
-      s1.length = r.«end» ∧
-      ∀ s', (back s').val = v.val.setSlice! 0 s'.val ⦄ := by
+    ⦃ (s1 : MutBorrow (Slice α)) (back : Slice α → Vec α) =>
+      s1.val.val = v.val.val.slice 0 r.end ∧
+      s1.val.length = r.«end» ∧
+      ∀ s', (back s').val = v.val.val.setSlice! 0 s'.val ⦄ := by
   simp only [Vec.index_mut]
-  have := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec r v.slice h
+  have := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec r (.mk v.val.slice) h
   simp [pure, Bind.bind]
   apply Aeneas.Std.WP.spec_bind this
   rintro ⟨s1, back⟩ hs
@@ -313,26 +318,26 @@ theorem Vec.index_mut_RangeTo_spec {α : Type _} (v : Vec α) (r : core.ops.rang
 -- Vec index/index_mut with RangeFrom
 
 @[step]
-theorem Vec.index_RangeFrom_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
-    (h : r.start ≤ v.length) :
+theorem Vec.index_RangeFrom_spec {α : Type _} (v : SharedBorrow (Vec α)) (r : core.ops.range.RangeFrom Usize)
+    (h : r.start ≤ v.val.length) :
     Vec.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
-    ⦃ s1 =>
-      s1.val = v.val.drop r.start ∧
-      s1.length = v.length - r.start.val ⦄ := by
+    ⦃ (s1 : SharedBorrow (Slice α)) =>
+      s1.val.val = v.val.val.drop r.start ∧
+      s1.val.length = v.val.length - r.start.val ⦄ := by
   simp only [Vec.index]
-  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec r v.slice h
+  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec r (.mk v.val.slice) h
   exact this
 
 @[step]
-theorem Vec.index_mut_RangeFrom_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
-    (h : r.start ≤ v.length) :
+theorem Vec.index_mut_RangeFrom_spec {α : Type _} (v : MutBorrow (Vec α)) (r : core.ops.range.RangeFrom Usize)
+    (h : r.start ≤ v.val.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
-    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
-      s1.val = v.val.drop r.start ∧
-      s1.length = v.length - r.start.val ∧
-      ∀ s', (back s').val = v.val.setSlice! r.start.val s'.val ⦄ := by
+    ⦃ (s1 : MutBorrow (Slice α)) (back : Slice α → Vec α) =>
+      s1.val.val = v.val.val.drop r.start ∧
+      s1.val.length = v.val.length - r.start.val ∧
+      ∀ s', (back s').val = v.val.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [Vec.index_mut]
-  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec r v.slice h
+  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec r (.mk v.val.slice) h
   simp [pure, Bind.bind]
   apply Aeneas.Std.WP.spec_bind this
   rintro ⟨s1, back⟩ hs
@@ -342,29 +347,29 @@ theorem Vec.index_mut_RangeFrom_spec {α : Type _} (v : Vec α) (r : core.ops.ra
 -- Vec index/index_mut with Range
 
 @[step]
-theorem Vec.index_Range_spec {α : Type _} (v : Vec α) (r : core.ops.range.Range Usize)
-    (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
+theorem Vec.index_Range_spec {α : Type _} (v : SharedBorrow (Vec α)) (r : core.ops.range.Range Usize)
+    (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.val.length) :
     Vec.index (core.slice.index.SliceIndexRangeUsizeSlice α) v r
-    ⦃ s1 =>
-      s1.val = v.val.slice r.start r.end ∧
-      s1.length = r.end - r.start ⦄ := by
+    ⦃ (s1 : SharedBorrow (Slice α)) =>
+      s1.val.val = v.val.val.slice r.start r.end ∧
+      s1.val.length = r.end - r.start ⦄ := by
   simp only [Vec.index]
-  have := @core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec α r v.slice h0 h1
+  have := @core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec α r (.mk v.val.slice) h0 h1
   exact this
 
 @[expose] def Vec.setSlice! {α : Type u} (s : Vec α) (i : ℕ) (s' : List α) : Vec α :=
   {slice := Slice.setSlice! s.slice i s'}
 
 @[step]
-theorem Vec.index_mut_Range_spec {α : Type _} (v : Vec α) (r : core.ops.range.Range Usize)
-    (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
+theorem Vec.index_mut_Range_spec {α : Type _} (v : MutBorrow (Vec α)) (r : core.ops.range.Range Usize)
+    (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.val.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
-    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
-      s1.val = v.val.slice r.start r.end ∧
-      s1.length = r.end - r.start ∧
-      ∀ s2, back s2 = Vec.setSlice! v r.start.val s2 ⦄ := by
+    ⦃ (s1 : MutBorrow (Slice α)) (back : Slice α → Vec α) =>
+      s1.val.val = v.val.val.slice r.start r.end ∧
+      s1.val.length = r.end - r.start ∧
+      ∀ s2, back s2 = Vec.setSlice! v.val r.start.val s2 ⦄ := by
   simp only [Vec.index_mut]
-  have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec r v.slice h0 h1
+  have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec r (.mk v.val.slice) h0 h1
   simp [pure, Bind.bind]
   apply Aeneas.Std.WP.spec_bind this
   rintro ⟨s1, back⟩ hs
@@ -377,17 +382,17 @@ end alloc.vec
 def alloc.vec.from_elem
   {T : Type _} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) : Result (alloc.vec.Vec T) := do
-  let l ← List.clone cloneInst.clone (List.replicate n.val x)
+  let l ← List.clone (fun x => cloneInst.clone (.mk x)) (List.replicate n.val x)
   ok (.from l.val (by have := l.property; scalar_tac))
 
 @[step]
 theorem alloc.vec.from_elem_spec {T : Type _} (cloneInst : core.clone.Clone T)
-  (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
+  (x : T) (n : Usize) (h : cloneInst.clone (.mk x) = ok x) :
   alloc.vec.from_elem cloneInst x n ⦃ v =>
   v.val = List.replicate n.val x ∧
   v.length = n.val ⦄ := by
   unfold from_elem
-  apply spec_bind (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
+  apply spec_bind (@List.clone_spec _ (fun x => cloneInst.clone (.mk x)) (List.replicate n.val x) (by intros; simp_all))
   intro l hl
   simp [hl]
 
@@ -396,18 +401,31 @@ def alloc.vec.Vec.with_capacity (T : Type _) (_ : Usize) : alloc.vec.Vec T := Ve
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice" (keepParams := [true, false])]
 def alloc.vec.Vec.extend_from_slice {T : Type _} (cloneInst : core.clone.Clone T)
-  (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
-  if h : v.length + s.length ≤ Usize.max then do
-    let s' ← List.clone cloneInst.clone s.val
-    ok (Vec.from (v.val ++ s'.val) (by
+  (v : MutBorrow (alloc.vec.Vec T)) (s : SharedBorrow (Slice T)) : Result (alloc.vec.Vec T) :=
+  if h : v.val.length + s.val.length ≤ Usize.max then do
+    let s' ← List.clone (fun x => cloneInst.clone (.mk x)) s.val.val
+    ok (Vec.from (v.val.val ++ s'.val) (by
       have hs := s'.property
       simpa [hs] using h))
   else fail .panic
 
+@[step]
+theorem alloc.vec.Vec.extend_from_slice_spec {T : Type _} (cloneInst : core.clone.Clone T)
+  (v : MutBorrow (alloc.vec.Vec T)) (s : SharedBorrow (Slice T))
+  (hClone : ∀ x ∈ s.val.val, cloneInst.clone (.mk x) = ok x)
+  (hLen : v.val.length + s.val.length ≤ Usize.max) :
+  alloc.vec.Vec.extend_from_slice cloneInst v s ⦃ nv =>
+    nv.val = v.val.val ++ s.val.val ⦄ := by
+  simp only [extend_from_slice, hLen, dite_true]
+  apply spec_bind (List.clone_spec hClone)
+  intro l hl
+  simp [hl]
+
 @[expose, rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
            -canFail -lift (keepParams := [true, false])]
-def alloc.vec.Vec.deref {T : Type _} (v : alloc.vec.Vec T) : Slice T :=
-  .from v.val v.property
+def alloc.vec.Vec.deref {T : Type _} (v : SharedBorrow (alloc.vec.Vec T)) :
+  SharedBorrow (Slice T) :=
+  .mk (.from v.val.val v.val.property)
 
 @[expose, reducible, rust_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
 def core.ops.deref.DerefVec {T : Type _} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
@@ -416,9 +434,9 @@ def core.ops.deref.DerefVec {T : Type _} : core.ops.deref.Deref (alloc.vec.Vec T
 
 @[expose, rust_fun "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>}::deref_mut"
            -canFail (keepParams := [true, false])]
-def alloc.vec.Vec.deref_mut {T : Type _} (v :  alloc.vec.Vec T) :
-   (Slice T) × (Slice T → alloc.vec.Vec T) :=
-   (v.slice, λ s => {slice := s})
+def alloc.vec.Vec.deref_mut {T : Type _} (v : MutBorrow (alloc.vec.Vec T)) :
+   (MutBorrow (Slice T)) × (Slice T → alloc.vec.Vec T) :=
+   (.mk v.val.slice, λ s => {slice := s})
 
 @[expose, reducible, rust_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
 def core.ops.deref.DerefMutVec {T : Type _} :
@@ -429,19 +447,19 @@ def core.ops.deref.DerefMutVec {T : Type _} :
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" (keepParams := [true,false])]
 def alloc.vec.Vec.resize {T : Type _} (cloneInst : core.clone.Clone T)
-  (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
-  if new_len.val < v.length then
-    ok (.from (v.val.resize new_len value) (by scalar_tac))
+  (v : MutBorrow (alloc.vec.Vec T)) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
+  if new_len.val < v.val.length then
+    ok (.from (v.val.val.resize new_len value) (by scalar_tac))
   else
-    let value ← cloneInst.clone value
-    ok (.from (v.val.resize new_len value) (by scalar_tac))
+    let value ← cloneInst.clone (.mk value)
+    ok (.from (v.val.val.resize new_len value) (by scalar_tac))
 
 @[step]
 theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
-  (v : alloc.vec.Vec T) (new_len : Usize) (value : T)
-  (hClone : cloneInst.clone value = ok value) :
+  (v : MutBorrow (alloc.vec.Vec T)) (new_len : Usize) (value : T)
+  (hClone : cloneInst.clone (.mk value) = ok value) :
   alloc.vec.Vec.resize cloneInst v new_len value ⦃ nv =>
-    nv.val = v.val.resize new_len value ⦄ := by
+    nv.val = v.val.val.resize new_len value ⦄ := by
   rw [resize]
   split
   . simp
@@ -501,16 +519,17 @@ def core.convert.FromVecArray (T : Type _) (N : Std.Usize) : core.convert.From
 
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
 @[expose, rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]
-def alloc.vec.FromBoxSliceVec.from {T : Type _} (v : alloc.vec.Vec T) : Result (Slice T) := ok v.slice
+def alloc.vec.FromBoxSliceVec.from {T : Type _} (v : alloc.vec.Vec T) : Result (Box (Slice T)) :=
+  ok (.mk v.slice)
 
 @[step]
 theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type _} (v : alloc.vec.Vec T) :
-  alloc.vec.FromBoxSliceVec.from v ⦃ s => s.length = v.length ∧ s.val = v.val⦄ := by
+  alloc.vec.FromBoxSliceVec.from v ⦃ s => s.val.length = v.length ∧ s.val.val = v.val⦄ := by
   simp [Vec.val, alloc.vec.FromBoxSliceVec.from]
 
 @[expose, reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]
 def core.convert.FromBoxSliceVec (T : Type _) :
-  core.convert.From (Slice T) (alloc.vec.Vec T) := {
+  core.convert.From (Box (Slice T)) (alloc.vec.Vec T) := {
   «from» := alloc.vec.FromBoxSliceVec.from
 }
 
@@ -588,9 +607,19 @@ theorem alloc.vec.Vec.setSlice!_getElem_suffix {α}
 @[expose, rust_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
 def alloc.vec.CloneVec.clone {T : Type _} (cloneInst : core.clone.Clone T)
-  (v : alloc.vec.Vec T) : Result (alloc.vec.Vec T) := do
-  let s ← Slice.clone cloneInst.clone v.slice
+  (v : SharedBorrow (alloc.vec.Vec T)) : Result (alloc.vec.Vec T) := do
+  let s ← Slice.clone (fun x => cloneInst.clone (.mk x)) v.val.slice
   ok {slice := s}
+
+@[step]
+theorem alloc.vec.CloneVec.clone_spec {T : Type _} (cloneInst : core.clone.Clone T)
+  (v : SharedBorrow (alloc.vec.Vec T))
+  (h : ∀ x ∈ v.val.val, cloneInst.clone (.mk x) = ok x) :
+  alloc.vec.CloneVec.clone cloneInst v ⦃ v' => v' = v.val ⦄ := by
+  simp only [clone]
+  apply spec_bind (Slice.clone_spec h)
+  intro s hs
+  simp [← hs]
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
@@ -604,9 +633,9 @@ def core.clone.CloneallocvecVec {T : Type _} (cloneInst : core.clone.Clone T) :
   (keepParams := [true, true, false, false])]
 def alloc.vec.partial_eq.PartialEqVec.eq
   {T : Type _} {U : Type _} (PartialEqInst : core.cmp.PartialEq T U)
-  (v0 : alloc.vec.Vec T) (v1 : alloc.vec.Vec U) : Result Bool :=
-  if v0.length = v1.length then
-    List.allM (fun (x0, x1) => PartialEqInst.eq x0 x1) (List.zip v0.val v1.val)
+  (v0 : SharedBorrow (alloc.vec.Vec T)) (v1 : SharedBorrow (alloc.vec.Vec U)) : Result Bool :=
+  if v0.val.length = v1.val.length then
+    List.allM (fun (x0, x1) => PartialEqInst.eq (.mk x0) (.mk x1)) (List.zip v0.val.val v1.val.val)
   else .ok false
 
 @[expose, rust_fun
@@ -614,9 +643,9 @@ def alloc.vec.partial_eq.PartialEqVec.eq
   (keepParams := [true, true, false, false])]
 def alloc.vec.partial_eq.PartialEqVec.ne
   {T : Type _} {U : Type _} (PartialEqInst : core.cmp.PartialEq T U)
-  (v0 : alloc.vec.Vec T) (v1 : alloc.vec.Vec U) : Result Bool :=
-  if v0.length = v1.length then
-    List.anyM (fun (x0, x1) => PartialEqInst.ne x0 x1) (List.zip v0.val v1.val)
+  (v0 : SharedBorrow (alloc.vec.Vec T)) (v1 : SharedBorrow (alloc.vec.Vec U)) : Result Bool :=
+  if v0.val.length = v1.val.length then
+    List.anyM (fun (x0, x1) => PartialEqInst.ne (.mk x0) (.mk x1)) (List.zip v0.val.val v1.val.val)
   else .ok true
 
 @[expose, reducible,
@@ -634,11 +663,11 @@ def core.cmp.PartialEqVec {T : Type _} {U : Type _}
   (keepParams := [true, false])]
 def alloc.vec.DebugVec.fmt
   {T : Type _} (_DebugInst : core.fmt.Debug T) :
-  alloc.vec.Vec T → core.fmt.Formatter →
+  SharedBorrow (alloc.vec.Vec T) → MutBorrow core.fmt.Formatter →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model
   -- We should call the fmt function on the elements of the vector
-  fun _ fmt => .ok (.Ok (), fmt)
+  fun _ fmt => .ok (.Ok (), fmt.val)
 
 @[expose, reducible,
   rust_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" (keepParams := [true, false])]
@@ -653,14 +682,14 @@ namespace Tests
     (slots : alloc.vec.Vec (List α))
     (n : Usize)
     (_ : ∀ i < slots.length, slots.val[i]! = .nil)
-    (Hlen : (↑slots.len : ℕ) + (↑n : ℕ) ≤ Usize.max)
+    (Hlen : (↑(alloc.vec.Vec.len (.mk slots)) : ℕ) + (↑n : ℕ) ≤ Usize.max)
     (_ : 0 < (↑n : ℕ))
     (slots1 : alloc.vec.Vec (List α))
     (hEq : (↑slots1 : List (List α)) = (↑slots : List (List α)) ++ [.nil])
     (n1 : Usize)
     (_ : (↑n : ℕ) = (↑n1 : ℕ) + 1)
     (_ : ∀ i < slots1.length, slots.val[i]! = .nil) :
-    (↑slots1.len : ℕ) + (↑n1 : ℕ) ≤ Usize.max
+    (↑(alloc.vec.Vec.len (.mk slots1)) : ℕ) + (↑n1 : ℕ) ≤ Usize.max
     := by
     scalar_tac
 
@@ -673,7 +702,8 @@ namespace Tests
       (↑capacity : ℕ) * (↑dividend : ℕ) ≤ Usize.max ∧
         (↑capacity : ℕ) * (↑dividend : ℕ) ≥ (↑divisor : ℕ))
     (slots : alloc.vec.Vec (List α))
-    (h2 : (↑slots.len : ℕ) = (↑(alloc.vec.Vec.new (List α)).len : ℕ) + (↑capacity : ℕ)) :
+    (h2 : (↑(alloc.vec.Vec.len (.mk slots)) : ℕ) =
+      (↑(alloc.vec.Vec.len (.mk (alloc.vec.Vec.new (List α)))) : ℕ) + (↑capacity : ℕ)) :
     (↑(↑divisor : ℕ) : ℤ) ≤
     (↑(↑slots : List (List α)).length : ℤ) * (↑(↑dividend : ℕ) : ℤ)
     := by

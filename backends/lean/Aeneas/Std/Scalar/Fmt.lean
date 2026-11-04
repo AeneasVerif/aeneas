@@ -6,46 +6,46 @@ public section
 namespace Aeneas.Std
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::LowerHex<u16>}::fmt"]
-def core.fmt.num.LowerHexU16.fmt (_ : U16) (fmt : core.fmt.Formatter) :
+def core.fmt.num.LowerHexU16.fmt (_ : SharedBorrow U16) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<u8>}::fmt"]
-def core.fmt.num.DebugU8.fmt (_ : U8) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugU8.fmt (_ : SharedBorrow U8) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<u16>}::fmt"]
-def core.fmt.num.DebugU16.fmt (_ : U16) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugU16.fmt (_ : SharedBorrow U16) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<u32>}::fmt"]
-def core.fmt.num.DebugU32.fmt (_ : U32) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugU32.fmt (_ : SharedBorrow U32) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<u64>}::fmt"]
-def core.fmt.num.DebugU64.fmt (_ : U64) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugU64.fmt (_ : SharedBorrow U64) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<u128>}::fmt"]
-def core.fmt.num.DebugU128.fmt (_ : U128) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugU128.fmt (_ : SharedBorrow U128) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<usize>}::fmt"]
-def core.fmt.num.DebugUsize.fmt (_ : Usize) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugUsize.fmt (_ : SharedBorrow Usize) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, reducible, rust_trait_impl "core::fmt::Debug<u8>"]
 def core.fmt.DebugU8 : core.fmt.Debug U8 := {
@@ -78,40 +78,40 @@ def core.fmt.DebugUsize : core.fmt.Debug Usize := {
 }
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<i8>}::fmt"]
-def core.fmt.num.DebugI8.fmt (_ : I8) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugI8.fmt (_ : SharedBorrow I8) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<i16>}::fmt"]
-def core.fmt.num.DebugI16.fmt (_ : I16) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugI16.fmt (_ : SharedBorrow I16) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<i32>}::fmt"]
-def core.fmt.num.DebugI32.fmt (_ : I32) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugI32.fmt (_ : SharedBorrow I32) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<i64>}::fmt"]
-def core.fmt.num.DebugI64.fmt (_ : I64) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugI64.fmt (_ : SharedBorrow I64) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<i128>}::fmt"]
-def core.fmt.num.DebugI128.fmt (_ : I128) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugI128.fmt (_ : SharedBorrow I128) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, rust_fun "core::fmt::num::{core::fmt::Debug<isize>}::fmt"]
-def core.fmt.num.DebugIsize.fmt (_ : Isize) (fmt : core.fmt.Formatter) :
+def core.fmt.num.DebugIsize.fmt (_ : SharedBorrow Isize) (fmt : MutBorrow core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
-  .ok (.Ok (), fmt)
+  .ok (.Ok (), fmt.val)
 
 @[expose, reducible, rust_trait_impl "core::fmt::Debug<i8>"]
 def core.fmt.DebugI8 : core.fmt.Debug I8 := {

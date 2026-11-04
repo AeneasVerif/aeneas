@@ -2139,15 +2139,15 @@ def loop (o : Option Usize)
   match o with
   | none => ok (pa_src, pe_dst)
   | some i => do
-      let a   ← Array.index_usize pa_src i
+      let a   ← Array.index_usize ⟨pa_src⟩ i
       let i1  ← (5#u32 + 0#u32 : Result U32)
       let i2  ← (5#u32 + 0#u32 : Result U32)
       let i3  ← i1 + i2
       let i4  ← 4#u32 * i3
-      massert (a ≤ i4)
-      let (_, index_mut_back) ← Array.index_mut_usize pa_src i
-      let i5  ← Array.index_usize pe_dst i
-      let c   ← core.convert.IntoFrom.into core.convert.FromU32U16 i5
+      massert (a.val ≤ i4)
+      let (_, index_mut_back) ← Array.index_mut_usize ⟨pa_src⟩ i
+      let i5  ← Array.index_usize ⟨pe_dst⟩ i
+      let c   ← core.convert.IntoFrom.into core.convert.FromU32U16 i5.val
       let pe_dst' ← Array.update pe_dst i (UScalar.cast UScalarTy.U16 c)
       ok (index_mut_back 0#u32, pe_dst')
 
@@ -2425,21 +2425,21 @@ open Aeneas Aeneas.Std Result
 /-- Function with a nested tuple destructuring (`let ((b0, b1), back) ← ...`)
     in the continuation after the first letRange extraction. -/
 def test59_fn (pk : Slice U8) : Result U8 := do
-  let a0 ← Slice.index_usize pk 0#usize         -- 0
-  let a1 ← Slice.index_usize pk 1#usize         -- 1
+  let a0 ← Slice.index_usize ⟨pk⟩ 0#usize       -- 0
+  let a1 ← Slice.index_usize ⟨pk⟩ 1#usize       -- 1
   -- Range 1 (bindings 2-4)
-  let a2 ← a0 + a1                              -- 2
+  let a2 ← a0.val + a1.val                      -- 2
   let a3 ← a2 + 1#u8                            -- 3
   let a4 ← a3 + 1#u8                            -- 4
   -- Continuation: nested tuple destructuring (binding 5)
-  let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize  -- 5
+  let ((b0, b1), back) ← core.slice.Slice.split_at_mut ⟨pk⟩ 2#usize  -- 5
   -- Range 2 (new bindings 4-5 after extraction)
-  let c0 ← Slice.index_usize b0 0#usize         -- 6
-  let c1 ← Slice.index_usize b1 0#usize         -- 7
+  let c0 ← Slice.index_usize ⟨b0.val⟩ 0#usize   -- 6
+  let c1 ← Slice.index_usize ⟨b1.val⟩ 0#usize   -- 7
   -- Rest
-  let pk1 := back (b0, b1)
-  let e0 ← Slice.index_usize pk1 0#usize
-  e0 + a4
+  let pk1 := back (b0.val, b1.val)
+  let e0 ← Slice.index_usize ⟨pk1⟩ 0#usize
+  e0.val + a4
 
 -- The second letRange must see past the f1 call's uncurry chain into the
 -- remaining bindings. Before the fix, rebuildUncurryFromTree produced
@@ -2450,9 +2450,10 @@ def test59_fn (pk : Slice U8) : Result U8 := do
   letRange 3 2 => test59_f2
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test59.test59_f1 : U8 → U8 → Result (UScalar UScalarTy.U8) :=
+info: def Aeneas.Command.Decompose.Tests.test59.test59_f1 : SharedBorrow U8 →
+  SharedBorrow U8 → Result (UScalar UScalarTy.U8) :=
 fun a0 a1 => do
-  let a2 ← a0 + a1
+  let a2 ← a0.val + a1.val
   let a3 ← a2 + 1#u8
   a3 + 1#u8
 -/
@@ -2463,10 +2464,10 @@ fun a0 a1 => do
 -- continuation, f2 returns (b0, b1, back) — the fvars needed by the continuation.
 /--
 info: def Aeneas.Command.Decompose.Tests.test59.test59_f2 : Slice U8 →
-  Result (Slice U8 × Slice U8 × (Slice U8 × Slice U8 → Slice U8)) :=
+  Result (MutBorrow (Slice U8) × MutBorrow (Slice U8) × (Slice U8 × Slice U8 → Slice U8)) :=
 fun pk => do
-  let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize
-  let _ ← b0.index_usize 0#usize
+  let ((b0, b1), back) ← core.slice.Slice.split_at_mut ⟨pk⟩ 2#usize
+  let _ ← Slice.index_usize ⟨b0.val⟩ 0#usize
   ok (b0, b1, back)
 -/
 #guard_msgs in
@@ -2475,14 +2476,14 @@ fun pk => do
 /--
 info: test59_eq : ∀ (pk : Slice U8),
   test59_fn pk = do
-    let a0 ← pk.index_usize 0#usize
-    let a1 ← pk.index_usize 1#usize
+    let a0 ← Slice.index_usize ⟨pk⟩ 0#usize
+    let a1 ← Slice.index_usize ⟨pk⟩ 1#usize
     let a4 ← test59_f1 a0 a1
     let (b0, b1, back) ← test59_f2 pk
-    let _ ← b1.index_usize 0#usize
-    let pk1 : Slice U8 := back (b0, b1)
-    let e0 ← pk1.index_usize 0#usize
-    e0 + a4
+    let _ ← Slice.index_usize ⟨b1.val⟩ 0#usize
+    let pk1 : Slice U8 := back (b0.val, b1.val)
+    let e0 ← Slice.index_usize ⟨pk1⟩ 0#usize
+    e0.val + a4
 -/
 #guard_msgs in
 #check @test59_eq

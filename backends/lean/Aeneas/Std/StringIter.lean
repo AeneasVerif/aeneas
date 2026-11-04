@@ -12,7 +12,8 @@ structure core.str.iter.Chars where
 
 -- TODO:
 @[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::next"]
-opaque core.str.iter.IteratorChars.next (_iter : core.str.iter.Chars) : Result ((Option Char) × core.str.iter.Chars)
+opaque core.str.iter.IteratorChars.next (_iter : MutBorrow core.str.iter.Chars) :
+  Result ((Option Char) × core.str.iter.Chars)
 
 -- TODO:
 @[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect"]
@@ -29,7 +30,7 @@ def core.iter.traits.iterator.IteratorChars :
 }
 
 @[expose, rust_fun "core::str::{str}::chars"]
-def core.str.Str.chars (s : Str) : Result core.str.iter.Chars :=
-  .ok { iter := { slice := s, i := 0 } }
+def core.str.Str.chars (s : SharedBorrow Str) : Result core.str.iter.Chars :=
+  .ok { iter := { slice := s.val, i := 0 } }
 
 end Aeneas.Std

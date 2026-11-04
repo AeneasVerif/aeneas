@@ -86,25 +86,25 @@ def field (s : Struct) : Result Std.U32 := do
 /-- [lean_keywords::{lean_keywords::Struct}::end]:
     Source: 'tests/src/lean-keywords.rs', lines 65:4-67:5
     Visibility: public -/
-def Struct.impl.end (self : Struct) : Result Std.U32 := do
-  ok self.start
+def Struct.impl.end (self : SharedBorrow Struct) : Result Std.U32 := do
+  ok self.val.start
 
 /-- [lean_keywords::Rec]
     Source: 'tests/src/lean-keywords.rs', lines 72:0-75:1
     Visibility: public -/
 inductive Rec where
-| mk : Option Rec → Std.U32 → Rec
+| mk : Option (Box Rec) → Std.U32 → Rec
 
 def Rec.end (x : Rec) := match x with | Rec.mk x1 _ => x1
 
 def Rec.v (x : Rec) := match x with | Rec.mk _ x1 => x1
 
 @[simp]
-theorem Rec.end._simpLemma_ («end» : Option Rec) (v : Std.U32) :
+theorem Rec.end._simpLemma_ («end» : Option (Box Rec)) (v : Std.U32) :
   (Rec.mk «end» v).end = «end» := by rfl
 
 @[simp]
-theorem Rec.v._simpLemma_ («end» : Option Rec) (v : Std.U32) :
+theorem Rec.v._simpLemma_ («end» : Option (Box Rec)) (v : Std.U32) :
   (Rec.mk «end» v).v = v := by rfl
 
 end lean_keywords

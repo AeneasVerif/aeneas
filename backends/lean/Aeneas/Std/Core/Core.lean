@@ -21,17 +21,17 @@ structure convert.From (Self T : Type _) where
 
 @[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
 structure clone.Clone (Self : Type _) where
-  clone : Self → Result Self
-  clone_from : Self → Self → Result Self := fun _ => clone
+  clone : SharedBorrow Self → Result Self
+  clone_from : MutBorrow Self → SharedBorrow Self → Result Self := fun _ => clone
 
 @[expose, trait_default]
 def clone.Clone.clone_from.default {Self : Type _} (CloneInst : core.clone.Clone Self)
-  (_self source : Self) : Result Self :=
+  (_self : MutBorrow Self) (source : SharedBorrow Self) : Result Self :=
   CloneInst.clone source
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
 @[expose, reducible, simp, step_simps]
-def clone.impls.CloneBool.clone (b : Bool) : Bool := b
+def clone.impls.CloneBool.clone (b : SharedBorrow Bool) : Bool := b.val
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<bool>"]
 def clone.CloneBool : clone.Clone Bool := {
@@ -54,18 +54,18 @@ def marker.CopyBool : core.marker.Copy Bool := {
    We return the old value of `dst`, i.e. `dst` itself.
    The new value of `dst` is `src`. -/
 @[expose, simp, step_simps, rust_fun "core::mem::replace" (canFail := false) (lift := false)]
-def mem.replace {a : Type _} (dst : a) (src : a) : a × a := (dst, src)
+def mem.replace {a : Type _} (dst : MutBorrow a) (src : a) : a × a := (dst.val, src)
 
 /- [core::mem::swap] -/
 @[expose, simp, step_simps, rust_fun "core::mem::swap" (canFail := false) (lift := false)]
-def mem.swap {T : Type _} (a b : T): T × T := (b, a)
+def mem.swap {T : Type _} (a b : MutBorrow T): T × T := (b.val, a.val)
 
 end core
 
 /-- Builtin clone implementation (used for some builtin types) -/
 def BuiltinClone (Self : Type _) : core.clone.Clone Self where
-  clone := .ok
-  clone_from := fun _ x => .ok x
+  clone := fun x => .ok x.val
+  clone_from := fun _ x => .ok x.val
 
 /-- Builtin clone implementation (used for some builtin types) -/
 def BuiltinCopy (Self : Type _) : core.marker.Copy Self where
@@ -93,14 +93,17 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
 
 @[expose, simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
-def core.option.Option.take {T: Type _} (self: Option T): Option T × Option T := (self, .none)
+def core.option.Option.take {T: Type _} (self: MutBorrow (Option T)): Option T × Option T :=
+  (self.val, .none)
 
 @[expose, simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
-def core.option.Option.is_none {T: Type _} (self: Option T): Bool := self.isNone
+def core.option.Option.is_none {T: Type _} (self: SharedBorrow (Option T)): Bool :=
+  self.val.isNone
 
 /-- Returns `true` if the option is `some`. -/
 @[expose, simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_some" -canFail -lift]
-def core.option.Option.is_some {T: Type _} (self: Option T): Bool := self.isSome
+def core.option.Option.is_some {T: Type _} (self: SharedBorrow (Option T)): Bool :=
+  self.val.isSome
 
 @[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type _) where
@@ -113,7 +116,8 @@ inductive core.panicking.AssertKind where
 | Match : core.panicking.AssertKind
 
 @[expose, rust_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"]
-def core.clone.impls.CloneShared.clone {T : Type _} (x : T) : Result T := .ok x
+def core.clone.impls.CloneShared.clone {T : Type _} (x : SharedBorrow (SharedBorrow T)) :
+  Result (SharedBorrow T) := .ok x.val
 
 end Std
 

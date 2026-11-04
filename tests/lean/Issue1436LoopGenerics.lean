@@ -33,7 +33,7 @@ def sum_loop.body
   := do
   let (o, it1) ←
     coreitertraitscollectIntoIteratorIU32Clause0_IntoIterInst.iteratorInst.next
-      it
+      (MutBorrow.mk it)
   match o with
   | none => ok (done acc)
   | some x =>
@@ -77,14 +77,14 @@ def rle_loop.body
   {T0 : Type _} {Clause0_IntoIter : Type _}
   (coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst :
   core.iter.traits.collect.IntoIterator T0 Std.U8 Clause0_IntoIter)
-  (iter : Clause0_IntoIter) (v : alloc.vec.Vec Std.U8) (count1 : Std.U8)
-  (current : Std.U8) :
-  Result (ControlFlow (Clause0_IntoIter × (alloc.vec.Vec Std.U8) × Std.U8 ×
-    Std.U8) ((alloc.vec.Vec Std.U8) × Std.U8 × Std.U8))
+  (v : alloc.vec.Vec Std.U8) (count1 : Std.U8) (current : Std.U8)
+  (iter : Clause0_IntoIter) :
+  Result (ControlFlow ((alloc.vec.Vec Std.U8) × Std.U8 × Std.U8 ×
+    Clause0_IntoIter) ((alloc.vec.Vec Std.U8) × Std.U8 × Std.U8))
   := do
   let (o, iter1) ←
     coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst.iteratorInst.next
-      iter
+      (MutBorrow.mk iter)
   match o with
   | none => ok (done (v, count1, current))
   | some next =>
@@ -92,15 +92,15 @@ def rle_loop.body
     then
       if count1 = 255#u8
       then
-        let v1 ← alloc.vec.Vec.push v count1
-        let v2 ← alloc.vec.Vec.push v1 current
-        ok (cont (iter1, v2, 1#u8, current))
+        let v1 ← alloc.vec.Vec.push (MutBorrow.mk v) count1
+        let v2 ← alloc.vec.Vec.push (MutBorrow.mk v1) current
+        ok (cont (v2, 1#u8, current, iter1))
       else let count2 ← count1 + 1#u8
-           ok (cont (iter1, v, count2, current))
+           ok (cont (v, count2, current, iter1))
     else
-      let v1 ← alloc.vec.Vec.push v count1
-      let v2 ← alloc.vec.Vec.push v1 current
-      ok (cont (iter1, v2, 1#u8, next))
+      let v1 ← alloc.vec.Vec.push (MutBorrow.mk v) count1
+      let v2 ← alloc.vec.Vec.push (MutBorrow.mk v1) current
+      ok (cont (v2, 1#u8, next, iter1))
 
 /-- [issue_1436_loop_generics::rle]: loop 0:
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 29:4-44:5
@@ -110,15 +110,15 @@ def rle_loop
   {T0 : Type _} {Clause0_IntoIter : Type _}
   (coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst :
   core.iter.traits.collect.IntoIterator T0 Std.U8 Clause0_IntoIter)
-  (iter : Clause0_IntoIter) (v : alloc.vec.Vec Std.U8) (count1 : Std.U8)
-  (current : Std.U8) :
+  (v : alloc.vec.Vec Std.U8) (count1 : Std.U8) (current : Std.U8)
+  (iter : Clause0_IntoIter) :
   Result ((alloc.vec.Vec Std.U8) × Std.U8 × Std.U8)
   := do
   loop
-    (fun (iter1, v1, count2, current1) => rle_loop.body
-      coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst iter1 v1 count2
-      current1)
-    (iter, v, count1, current)
+    (fun (v1, count2, current1, iter1) => rle_loop.body
+      coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst v1 count2
+      current1 iter1)
+    (v, count1, current, iter)
 
 /-- [issue_1436_loop_generics::rle]:
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 22:0-48:1
@@ -134,15 +134,15 @@ def rle
     coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst.into_iter bytes
   let (o, iter1) ←
     coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst.iteratorInst.next
-      iter
+      (MutBorrow.mk iter)
   match o with
   | none => ok (alloc.vec.Vec.new Std.U8)
   | some current =>
     let (v, count1, current1) ←
-      rle_loop coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst iter1
-        (alloc.vec.Vec.new Std.U8) 1#u8 current
-    let v1 ← alloc.vec.Vec.push v count1
-    alloc.vec.Vec.push v1 current1
+      rle_loop coreitertraitscollectIntoIteratorT0U8Clause0_IntoIterInst
+        (alloc.vec.Vec.new Std.U8) 1#u8 current iter1
+    let v1 ← alloc.vec.Vec.push (MutBorrow.mk v) count1
+    alloc.vec.Vec.push (MutBorrow.mk v1) current1
 
 /-- [issue_1436_loop_generics::count]: loop body 0:
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 54:4-56:5
@@ -155,7 +155,8 @@ def count_loop.body
   (it : Clause0_IntoIter) (n : Std.U32) :
   Result (ControlFlow (Clause0_IntoIter × Std.U32) Std.U32)
   := do
-  let (o, it1) ← coreitertraitscollectIntoIteratorInst.iteratorInst.next it
+  let (o, it1) ←
+    coreitertraitscollectIntoIteratorInst.iteratorInst.next (MutBorrow.mk it)
   match o with
   | none => ok (done n)
   | some _ =>
@@ -194,7 +195,7 @@ def count
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 60:0-62:1
     Visibility: public -/
 structure Tr (Self : Type _) where
-  f : Self → Result Std.U32
+  f : SharedBorrow Self → Result Std.U32
 
 /-- Trait declaration: [issue_1436_loop_generics::Wrap]
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 65:0-65:24
@@ -213,7 +214,7 @@ def loop_wrap_loop.body
   := do
   if i < n
   then
-    let i1 ← WrapInst.TrInst.f w
+    let i1 ← WrapInst.TrInst.f (SharedBorrow.mk w)
     let acc1 ← lift (core.num.U32.wrapping_add acc i1)
     let i2 ← i + 1#u32
     ok (cont (acc1, i2))
@@ -237,10 +238,11 @@ def loop_wrap_loop
     Visibility: public -/
 @[reducible]
 def loop_wrap
-  {T : Type _} {W : Type _} (WrapInst : Wrap W T) (w : W) (n : Std.U32) :
+  {T : Type _} {W : Type _} (WrapInst : Wrap W T) (w : SharedBorrow W)
+  (n : Std.U32) :
   Result Std.U32
   := do
-  loop_wrap_loop WrapInst w n 0#u32 0#u32
+  loop_wrap_loop WrapInst w.val n 0#u32 0#u32
 
 /-- Trait declaration: [issue_1436_loop_generics::HasN]
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 79:0-79:37
@@ -259,7 +261,7 @@ def loop_const_generic_loop.body
   := do
   if i < n
   then
-    let i1 ← HasNInst.TrInst.f x
+    let i1 ← HasNInst.TrInst.f (SharedBorrow.mk x)
     let acc1 ← lift (core.num.U32.wrapping_add acc i1)
     let i2 ← i + 1#u32
     ok (cont (acc1, i2))
@@ -283,10 +285,11 @@ def loop_const_generic_loop
     Visibility: public -/
 @[reducible]
 def loop_const_generic
-  {X : Type _} {N : Std.Usize} (HasNInst : HasN X N) (x : X) (n : Std.U32) :
+  {X : Type _} {N : Std.Usize} (HasNInst : HasN X N) (x : SharedBorrow X)
+  (n : Std.U32) :
   Result Std.U32
   := do
-  loop_const_generic_loop HasNInst x n 0#u32 0#u32
+  loop_const_generic_loop HasNInst x.val n 0#u32 0#u32
 
 /-- Trait declaration: [issue_1436_loop_generics::Wrap2]
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 94:0-94:30
@@ -305,7 +308,7 @@ def loop_wrap2_loop.body
   := do
   if i < n
   then
-    let i1 ← Wrap2Inst.WrapInst.TrInst.f w
+    let i1 ← Wrap2Inst.WrapInst.TrInst.f (SharedBorrow.mk w)
     let acc1 ← lift (core.num.U32.wrapping_add acc i1)
     let i2 ← i + 1#u32
     ok (cont (acc1, i2))
@@ -329,9 +332,10 @@ def loop_wrap2_loop
     Visibility: public -/
 @[reducible]
 def loop_wrap2
-  {T : Type _} {W : Type _} (Wrap2Inst : Wrap2 W T) (w : W) (n : Std.U32) :
+  {T : Type _} {W : Type _} (Wrap2Inst : Wrap2 W T) (w : SharedBorrow W)
+  (n : Std.U32) :
   Result Std.U32
   := do
-  loop_wrap2_loop Wrap2Inst w n 0#u32 0#u32
+  loop_wrap2_loop Wrap2Inst w.val n 0#u32 0#u32
 
 end issue_1436_loop_generics

@@ -18,7 +18,7 @@ One might want to prove the following theorem:
 ```
 @[step]
 theorem const_array_spec (i : Usize) (hi : i < 8) :
-  ∃ x, Array.index_usize const_array i = ok x ∧ x.val = i.val
+  ∃ x, Array.index_usize ⟨const_array⟩ i = ok x ∧ x.val.val = i.val
 ```
 
 It is possible to do so by using the following notation:
@@ -56,7 +56,7 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
   (hp : ∀ i x, p i x ↔ p' i x)
   (hPred : Std.Array.allIdx p a.val)
   (i : Usize) (h : i.val < n.val) (hn : n.val ≤ U32.max) :
-  Array.index_usize a i ⦃ v => p' i v ⦄ := by
+  Array.index_usize ⟨a⟩ i ⦃ v => p' i v.val ⦄ := by
   let rec aux (l : List α) (i : Nat) (hi : i + l.length = n)
     (hl : ∀ j, l[j]! = a[i + j]!)
     (h : Std.Array.allIdx p l i)
@@ -123,7 +123,8 @@ meta def parseStepArraySpec
     -- Elaborate the full theorem
     elabCommand
       (← `(command| $vis:declModifiers theorem $thm_name:ident $i (_ : Aeneas.Std.UScalar.val $i < Aeneas.Std.Array.length $array) :
-            Aeneas.Std.WP.spec (Aeneas.Std.Array.index_usize $array $i) (fun $x:ident => $pred) := by
+            Aeneas.Std.WP.spec (Aeneas.Std.Array.index_usize ⟨$array⟩ $i)
+              (fun y => (fun $x:ident => $pred) y.val) := by
             apply Aeneas.Std.Array.index_usize_const_spec
               (fun $i:ident $x:ident => $pred) (fun $i:ident $x:ident => $pred) $array
             · simp
@@ -146,6 +147,11 @@ def const_array : Array U32 8#usize := Array.make 8#usize [
 step_array_spec (name := const_array_spec) const_array[i]!
   { x => x.val = i.val }
   by native_decide -- The tactic to prove the proof obligation (expressed in terms of `Array.allIdx`)
+
+example (i : Usize) (h : i.val < 8) :
+  (do let x ← Array.index_usize ⟨const_array⟩ i; Result.ok x.val) ⦃ (y : U32) => y.val = i.val ⦄ := by
+  step as ⟨ x, hx ⟩
+  simp [hx]
 
 end Tests
 

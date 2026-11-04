@@ -13,7 +13,7 @@ def Option.allP {α : Type u} (p : α → Prop) (x : Option α) : Prop :=
   | none => true
   | some x => p x
 
-abbrev Subtree (T : Type) := Option (Node T)
+abbrev Subtree (T : Type) := Option (Box (Node T))
 
 mutual
 @[simp]
@@ -23,7 +23,7 @@ def Node.height: Node T -> Nat
 @[simp]
 def Subtree.height: Subtree T -> Nat
 | none => 0
-| some n => Node.height n
+| some n => Node.height n.val
 end
 
 mutual
@@ -34,7 +34,7 @@ def Node.size: Node T -> Nat
 @[simp]
 def Subtree.size: Subtree T -> Nat
 | none => 0
-| some n => 1 + Node.size n
+| some n => 1 + Node.size n.val
 end
 
 def Tree.nil: Tree T := { root := none }
@@ -50,7 +50,7 @@ mutual
 @[simp, reducible] def Subtree.v (tree: Subtree T) : Set T :=
   match tree with
   | none => ∅
-  | some node => node.v
+  | some node => node.val.v
 
 @[simp, reducible] def Node.v (node : Node T) : Set T :=
   match node with
@@ -64,7 +64,7 @@ mutual
 @[simp] def Subtree.forall (p: Node T -> Prop) (st : Subtree T) : Prop :=
   match st with
   | none => true
-  | some st => st.forall p
+  | some st => st.val.forall p
 termination_by Subtree.size st
 decreasing_by simp_wf
 
@@ -80,7 +80,7 @@ theorem Subtree.forall_left {p: Node T -> Prop} {t: Node T}: Node.forall p t -> 
   cases t; simp_all [Node.forall]
 
 @[simp]
-theorem Subtree.forall_right {p: Node T -> Prop} {t: Node T}: Subtree.forall p t -> Subtree.forall p t.right := by
+theorem Subtree.forall_right {p: Node T -> Prop} {t: Node T}: Node.forall p t -> Subtree.forall p t.right := by
   cases t; simp_all [Node.forall]
 
 mutual
@@ -109,11 +109,11 @@ def Node.balanceFactor (node : Node T) : ℤ :=
 def Subtree.balanceFactor (t: Subtree T): ℤ :=
   match t with
   | .none => 0
-  | .some x => x.balanceFactor
+  | .some x => x.val.balanceFactor
 
 @[simp]
-theorem Subtree.some_balanceFactor (t: Node T) :
-  Subtree.balanceFactor (some t) = t.balanceFactor := by
+theorem Subtree.some_balanceFactor (t: Box (Node T)) :
+  Subtree.balanceFactor (some t) = t.val.balanceFactor := by
   simp [balanceFactor]
 
 @[simp, reducible]
@@ -139,14 +139,17 @@ theorem Node.inv_imp_current [LinearOrder T] {node : Node T} (hInv : node.inv) :
   -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
   simp_all [Node.inv, Node.forall, Node.invAux]
 
-@[reducible]
 def Subtree.inv [LinearOrder T] (st : Subtree T) : Prop :=
   match st with
   | none => true
-  | some node => node.inv
+  | some node => node.val.inv
 
 @[simp]
-theorem Subtree.inv_some [LinearOrder T] (s : Node T) : Subtree.inv (some s) = s.inv := by
+theorem Subtree.inv_none [LinearOrder T] : Subtree.inv (none : Subtree T) = True := by
+  simp [Subtree.inv]
+
+@[simp]
+theorem Subtree.inv_some [LinearOrder T] (s : Box (Node T)) : Subtree.inv (some s) = s.val.inv := by
   rfl
 
 @[reducible]
@@ -156,11 +159,11 @@ def Tree.height (t : Tree T) := Subtree.height t.root
 def Tree.inv [LinearOrder T] (t : Tree T) : Prop := Subtree.inv t.root
 
 @[simp]
-theorem Node.inv_mk [LinearOrder T] (value : T) (left right : Option (Node T)) (bf : I8):
+theorem Node.inv_mk [LinearOrder T] (value : T) (left right : Subtree T) (bf : I8):
   (Node.mk value left right bf).inv ↔
   ((Node.mk value left right bf).invAux ∧
    Subtree.inv left ∧ Subtree.inv right) := by
-  have : ∀ (n : Option (Node T)), Subtree.forall invAux n = Subtree.inv n := by
+  have : ∀ (n : Subtree T), Subtree.forall invAux n = Subtree.inv n := by
     unfold Subtree.forall
     simp [Subtree.inv]
   constructor <;>
@@ -236,35 +239,48 @@ theorem Tree.find_loop_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (value : T) (t : Subtree T) (hInv : Subtree.inv t) :
-  Tree.find_loop OrdInst value t ⦃ b => b ↔ value ∈ Subtree.v t ⦄ := by
+  Tree.find_loop OrdInst t value ⦃ b => b ↔ value ∈ Subtree.v t ⦄ := by
   unfold find_loop
-  match t with
-  | none => simp
-  | some (.mk v left right height) =>
-    simp only
-    have hCmp := Ospec.infallible -- TODO
-    step as ⟨ ordering ⟩; clear hCmp
-    have hInvLeft := Node.inv_left hInv
-    have hInvRight := Node.inv_right hInv
-    cases ordering <;> simp only
-    . /- node.value < value -/
-      step
-      have hNotIn := Node.lt_imp_not_in_left _ hInv
-      simp_all
-      intro; simp_all
-    . /- node.value = value -/
-      simp_all
-    . /- node.value > value -/
-      step
-      have hNotIn := Node.lt_imp_not_in_right _ hInv
-      simp_all
-      intro; simp_all
+  apply loop.spec_decr_nat (measure := Subtree.size)
+    (inv := fun t' => Subtree.inv t' ∧ (value ∈ Subtree.v t' ↔ value ∈ Subtree.v t))
+  · intro t' ⟨ hInv', hIff ⟩
+    unfold find_loop.body
+    match t' with
+    | none => simp_all
+    | some ⟨ .mk v left right height ⟩ =>
+      simp only
+      have hCmp := Ospec.infallible -- TODO
+      step as ⟨ ordering ⟩; clear hCmp
+      have hInvLeft := Node.inv_left hInv'
+      have hInvRight := Node.inv_right hInv'
+      cases ordering <;> simp only at *
+      . /- node.value < value -/
+        simp at *
+        have hNotIn := Node.lt_imp_not_in_left (Node.mk v left right height) ((Node.inv_mk _ _ _ _).mpr hInv') value (by simp [*])
+        have hNe : value ≠ v := (_root_.ne_of_lt (by assumption)).symm
+        simp at hNotIn
+        split_conjs
+        · assumption
+        · rw [← hIff]; simp_all
+        · agrind
+      . /- node.value = value -/
+        simp_all
+      . /- node.value > value -/
+        simp at *
+        have hNotIn := Node.lt_imp_not_in_right (Node.mk v left right height) ((Node.inv_mk _ _ _ _).mpr hInv') value (by simp [*])
+        have hNe : value ≠ v := _root_.ne_of_lt (by assumption)
+        simp at hNotIn
+        split_conjs
+        · assumption
+        · rw [← hIff]; simp_all
+        · agrind
+  · simp [*]
 
 theorem Tree.find_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
-  (t : Tree T) (value : T) (hInv : t.inv) :
-  Tree.find OrdInst t value ⦃ b => b ↔ value ∈ t.v ⦄
+  (t : SharedBorrow (Tree T)) (value : T) (hInv : t.val.inv) :
+  Tree.find OrdInst t value ⦃ b => b ↔ value ∈ t.val.v ⦄
   := by
   rw [find]
   step
@@ -276,28 +292,28 @@ set_option maxHeartbeats 5000000
 @[step]
 theorem Node.rotate_left_spec
   {T : Type} [LinearOrder T]
-  (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
+  (x z : T) (a b c : Subtree T) (bf_x bf_z : I8)
   -- Invariants for the subtrees
   (hInvA : Subtree.inv a)
   (hInvZ : Node.inv ⟨ z, b, c, bf_z ⟩)
   -- Invariant for the complete tree (but without the bounds on the balancing operation)
-  (hInvX : Node.invAuxNotBalanced ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩)
+  (hInvX : Node.invAuxNotBalanced ⟨ x, a, some ⟨ ⟨ z, b, c, bf_z ⟩ ⟩, bf_x ⟩)
   -- The tree is not balanced
   (hBfX : bf_x.val = 2)
   -- Z has a positive balance factor
   (hBfZ : 0 ≤ bf_z.val)
   :
-  rotate_left ⟨ x, a, none, bf_x ⟩ ⟨ z, b, c, bf_z ⟩
+  rotate_left ⟨ ⟨ x, a, none, bf_x ⟩ ⟩ ⟨ z, b, c, bf_z ⟩
   ⦃ ntree =>
-    let tree : Node T := ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩
+    let tree : Node T := ⟨ x, a, some ⟨ ⟨ z, b, c, bf_z ⟩ ⟩, bf_x ⟩
     -- We reestablished the invariant
-    Node.inv ntree ∧
+    Node.inv ntree.val ∧
     -- The tree contains the nodes we expect
-    Node.v ntree = Node.v tree ∧
+    Node.v ntree.val = Node.v tree ∧
     -- The height is the same as before. The original height is 2 + height b, and by
     -- inserting an element (which produced subtree c) we got a new height of
     -- 3 + height b; after the rotation we get back to 2 + height b.
-    Node.height ntree = 2 + Subtree.height b ⦄
+    Node.height ntree.val = 2 + Subtree.height b ⦄
   := by
   rw [rotate_left]
   simp [core.mem.replace]
@@ -391,28 +407,28 @@ theorem Node.rotate_left_spec
 @[step]
 theorem Node.rotate_right_spec
   {T : Type} [LinearOrder T]
-  (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
+  (x z : T) (a b c : Subtree T) (bf_x bf_z : I8)
   -- Invariants for the subtrees
   (hInvC : Subtree.inv c)
   (hInvZ : Node.inv ⟨ z, a, b, bf_z ⟩)
   -- Invariant for the complete tree (but without the bounds on the balancing operation)
-  (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩)
+  (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ ⟨ z, a, b, bf_z ⟩ ⟩, c, bf_x ⟩)
   -- The tree is not balanced
   (hBfX : bf_x.val = -2)
   -- Z has a positive balance factor
   (hBfZ : bf_z.val ≤ 0)
   :
-  rotate_right ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩
+  rotate_right ⟨ ⟨ x, none, c, bf_x ⟩ ⟩ ⟨ z, a, b, bf_z ⟩
   ⦃ ntree =>
-    let tree : Node T := ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩
+    let tree : Node T := ⟨ x, some ⟨ ⟨ z, a, b, bf_z ⟩ ⟩, c, bf_x ⟩
     -- We reestablished the invariant
-    Node.inv ntree ∧
+    Node.inv ntree.val ∧
     -- The tree contains the nodes we expect
-    Node.v ntree = Node.v tree ∧
+    Node.v ntree.val = Node.v tree ∧
     -- The height is the same as before. The original height is 2 + height b, and by
     -- inserting an element (which produced subtree c) we got a new height of
     -- 3 + height b; after the rotation we get back to 2 + height b.
-    Node.height ntree = 2 + Subtree.height b ⦄
+    Node.height ntree.val = 2 + Subtree.height b ⦄
   := by
   rw [rotate_right]
   simp [core.mem.replace]
@@ -505,29 +521,29 @@ theorem Node.rotate_right_spec
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
-  (a b t0 t1 : Option (Node T))
+  (a b t0 t1 : Subtree T)
   -- Invariants for the subtrees
-  (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ z, t0, some ⟨ y, a, b, bf_y ⟩, bf_z ⟩, t1, bf_x ⟩)
-  (hInvZ : Node.inv ⟨ z, t0, some ⟨ y, a, b, bf_y ⟩, bf_z ⟩)
+  (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ ⟨ z, t0, some ⟨ ⟨ y, a, b, bf_y ⟩ ⟩, bf_z ⟩ ⟩, t1, bf_x ⟩)
+  (hInvZ : Node.inv ⟨ z, t0, some ⟨ ⟨ y, a, b, bf_y ⟩ ⟩, bf_z ⟩)
   (hInv1 : Subtree.inv t1)
   -- The tree is not balanced
   (hBfX : bf_x.val = -2)
   -- Z has a positive balance factor
   (hBfZ : bf_z.val = 1)
   :
-  let x_tree := ⟨ x, none, t1, bf_x ⟩
-  let y_tree := ⟨ y, a, b, bf_y ⟩
-  let z_tree := ⟨ z, t0, some y_tree, bf_z ⟩
-  let tree : Node T := ⟨ x, some z_tree, t1, bf_x ⟩
-  rotate_left_right x_tree z_tree ⦃ ntree =>
+  let x_tree : Node T := ⟨ x, none, t1, bf_x ⟩
+  let y_tree : Node T := ⟨ y, a, b, bf_y ⟩
+  let z_tree : Node T := ⟨ z, t0, some ⟨ y_tree ⟩, bf_z ⟩
+  let tree : Node T := ⟨ x, some ⟨ z_tree ⟩, t1, bf_x ⟩
+  rotate_left_right ⟨ ⟨ x_tree ⟩ ⟩ ⟨ z_tree ⟩ ⦃ ntree =>
     -- We reestablished the invariant
-    Node.inv ntree ∧
+    Node.inv ntree.val ∧
     -- The tree contains the nodes we expect
-    Node.v ntree = Node.v tree ∧
+    Node.v ntree.val = Node.v tree ∧
     -- The height is the same as before. The original height is 2 + height a, and by
     -- inserting an element (which produced subtree c) we got a new height of
     -- 3 + height b; after the rotation we get back to 2 + height b.
-    Node.height ntree = 2 + Subtree.height t0 ⦄
+    Node.height ntree.val = 2 + Subtree.height t0 ⦄
   := by
   intro x_tree y_tree z_tree tree
   simp [rotate_left_right] -- TODO: this inlines the local decls
@@ -631,30 +647,30 @@ theorem Node.rotate_left_right_spec
 theorem Node.rotate_right_left_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
-  (a b t0 t1 : Option (Node T))
+  (a b t0 t1 : Subtree T)
   -- Invariants for the subtrees
-  (hInvX : Node.invAuxNotBalanced ⟨ x, t1, some ⟨ z, some ⟨ y, b, a, bf_y ⟩, t0, bf_z ⟩, bf_x ⟩)
-  (hInvZ : Node.inv ⟨ z, some ⟨ y, b, a, bf_y ⟩, t0, bf_z ⟩)
+  (hInvX : Node.invAuxNotBalanced ⟨ x, t1, some ⟨ ⟨ z, some ⟨ ⟨ y, b, a, bf_y ⟩ ⟩, t0, bf_z ⟩ ⟩, bf_x ⟩)
+  (hInvZ : Node.inv ⟨ z, some ⟨ ⟨ y, b, a, bf_y ⟩ ⟩, t0, bf_z ⟩)
   (hInv1 : Subtree.inv t1)
   -- The tree is not balanced
   (hBfX : bf_x.val = 2)
   -- Z has a negative balance factor
   (hBfZ : bf_z.val = -1)
   :
-  let x_tree := ⟨ x, t1, none, bf_x ⟩
-  let y_tree := ⟨ y, b, a, bf_y ⟩
-  let z_tree := ⟨ z, some y_tree, t0, bf_z ⟩
-  let tree : Node T := ⟨ x, t1, some z_tree, bf_x ⟩
-  rotate_right_left x_tree z_tree
+  let x_tree : Node T := ⟨ x, t1, none, bf_x ⟩
+  let y_tree : Node T := ⟨ y, b, a, bf_y ⟩
+  let z_tree : Node T := ⟨ z, some ⟨ y_tree ⟩, t0, bf_z ⟩
+  let tree : Node T := ⟨ x, t1, some ⟨ z_tree ⟩, bf_x ⟩
+  rotate_right_left ⟨ ⟨ x_tree ⟩ ⟩ ⟨ z_tree ⟩
   ⦃ ntree =>
     -- We reestablished the invariant
-    Node.inv ntree ∧
+    Node.inv ntree.val ∧
     -- The tree contains the nodes we expect
-    Node.v ntree = Node.v tree ∧
+    Node.v ntree.val = Node.v tree ∧
     -- The height is the same as before. The original height is 2 + height b, and by
     -- inserting an element (which produced subtree c) we got a new height of
     -- 3 + height b; after the rotation we get back to 2 + height b.
-    Node.height ntree = 2 + Subtree.height t1 ⦄
+    Node.height ntree.val = 2 + Subtree.height t1 ⦄
   := by
   intro x_tree y_tree z_tree tree
   simp [rotate_right_left] -- TODO: this inlines the local decls
@@ -754,6 +770,11 @@ theorem Node.rotate_right_left_spec
       . -- Height
         scalar_tac
 
+@[simp]
+theorem Node.mk_eta (n : Node T) :
+  Node.mk n.value n.left n.right n.balance_factor = n := by
+  cases n; rfl
+
 -- For the proofs of termination
 @[simp]
 theorem Node.left_height_lt_height (n : Node T) :
@@ -770,16 +791,17 @@ mutual
 @[step]
 theorem Node.insert_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
-  (node : Node T) (value : T)
-  (hInv : Node.inv node) :
+  (node : MutBorrow (Box (Node T))) (value : T)
+  (hInv : Node.inv node.val.val) :
   Node.insert OrdInst node value
   ⦃ b node' =>
-    Node.inv node' ∧
-    Node.v node' = Node.v node ∪ {value} ∧
-    (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+    Node.inv node'.val ∧
+    Node.v node'.val = Node.v node.val.val ∪ {value} ∧
+    (if b then node'.val.height = node.val.val.height + 1 else node'.val.height = node.val.val.height) ∧
     -- This is important for some of the proofs
-    (b → node'.balanceFactor ≠ 0)  ⦄ := by
+    (b → node'.val.balanceFactor ≠ 0)  ⦄ := by
   unfold Node.insert
+  simp only [Node.mk_eta]
   have hCmp := Ospec.infallible -- TODO
   step as ⟨ ordering ⟩
   split <;> rename _ => hEq <;> clear hCmp <;> simp at *
@@ -787,35 +809,36 @@ theorem Node.insert_spec
     step as ⟨ updt, node', h1, h2 ⟩
     simp_all
   . -- value = node.value
-    cases node; simp_all
+    obtain ⟨ ⟨ ⟨ ⟩ ⟩ ⟩ := node
+    simp_all
   . -- node.value < value
     step as ⟨ updt, node', h1, h2 ⟩
     simp_all
-termination_by (node.height, 1)
+termination_by (node.val.val.height, 1)
 decreasing_by all_goals simp_wf
 
 @[step]
 theorem Tree.insert_in_opt_node_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
-  (tree : Option (Node T)) (value : T)
-  (hInv : Subtree.inv tree) :
+  (tree : MutBorrow (Subtree T)) (value : T)
+  (hInv : Subtree.inv tree.val) :
   Tree.insert_in_opt_node OrdInst tree value
   ⦃ b tree' =>
     Subtree.inv tree' ∧
-    Subtree.v tree' = Subtree.v tree ∪ {value} ∧
-    (if b then Subtree.height tree' = Subtree.height tree + 1
-    else Subtree.height tree' = Subtree.height tree) ∧
-    (b → Subtree.height tree > 0 → Subtree.balanceFactor tree' ≠ 0) ⦄ := by
+    Subtree.v tree' = Subtree.v tree.val ∪ {value} ∧
+    (if b then Subtree.height tree' = Subtree.height tree.val + 1
+    else Subtree.height tree' = Subtree.height tree.val) ∧
+    (b → Subtree.height tree.val > 0 → Subtree.balanceFactor tree' ≠ 0) ⦄ := by
   unfold Tree.insert_in_opt_node
-  cases hNode : tree <;> simp
+  cases hNode : tree.val <;> simp
   . -- tree = none
     simp [Node.invAux, Node.balanceFactor]
   . -- tree = some
-    rename Node T => node
-    have hNodeInv : Node.inv node := by simp_all
+    rename Box (Node T) => node
+    have hNodeInv : Node.inv node.val := by simp_all
     step as ⟨ updt, tree' ⟩
     simp_all
-termination_by (Subtree.height tree, 2)
+termination_by (Subtree.height tree.val, 2)
 decreasing_by simp_wf; simp [*]
 
 -- TODO: any modification triggers the replay of the whole proof
@@ -823,18 +846,20 @@ decreasing_by simp_wf; simp [*]
 theorem Node.insert_in_left_spec
   {T : Type} (OrdInst : Ord T)
   [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
-  (node : Node T) (value : T)
-  (hInv : Node.inv node)
-  (hLt : value < node.value) :
+  (node : MutBorrow (Box (Node T))) (value : T)
+  (hInv : Node.inv node.val.val)
+  (hLt : value < node.val.val.value) :
   Node.insert_in_left OrdInst node value
   ⦃ b node' =>
-    Node.inv node' ∧
-    Node.v node' = Node.v node ∪ {value} ∧
-    (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
-    (b → node'.balanceFactor ≠ 0) ⦄ := by
+    Node.inv node'.val ∧
+    Node.v node'.val = Node.v node.val.val ∪ {value} ∧
+    (if b then node'.val.height = node.val.val.height + 1 else node'.val.height = node.val.val.height) ∧
+    (b → node'.val.balanceFactor ≠ 0) ⦄ := by
   unfold Node.insert_in_left
-  have hInvLeft : Subtree.inv node.left := by cases node; simp_all
+  have hInvLeft : Subtree.inv node.val.val.left := Node.inv_left hInv
   step as ⟨ updt, left_opt' ⟩
+  obtain ⟨ ⟨ node ⟩ ⟩ := node
+  simp only at *
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
@@ -852,9 +877,10 @@ theorem Node.insert_in_left_spec
         split
         . -- rotate_right
           -- TODO: fix step
-          cases h:left' with | mk z a b bf_z =>
+          rcases h : left' with ⟨ ⟨ z, a, b, bf_z ⟩ ⟩
           step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
+          . simp_all
           . simp_all
           . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
@@ -873,16 +899,16 @@ theorem Node.insert_in_left_spec
               scalar_tac
         . -- rotate_left_right
           simp
-          cases h:left'
-          rename_i z t0 y bf_z
+          rcases h : left' with ⟨ ⟨ z, t0, y, bf_z ⟩ ⟩
           cases h: y
           . -- Can't get there
             simp_all [Node.balanceFactor, Node.invAux]
           . rename_i y
-            cases h: y with | mk y a b bf_y =>
+            rcases h : y with ⟨ ⟨ y, a, b, bf_y ⟩ ⟩
             step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+            . simp_all
             . simp_all
             . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
@@ -915,25 +941,27 @@ theorem Node.insert_in_left_spec
       tauto
     . simp_all
       cases node; simp_all
-termination_by (node.height, 0)
+termination_by (node.val.val.height, 0)
 decreasing_by simp_wf
 
 @[step]
 theorem Node.insert_in_right_spec
   {T : Type} (OrdInst : Ord T)
   [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
-  (node : Node T) (value : T)
-  (hInv : Node.inv node)
-  (hGt : value > node.value) :
+  (node : MutBorrow (Box (Node T))) (value : T)
+  (hInv : Node.inv node.val.val)
+  (hGt : value > node.val.val.value) :
   Node.insert_in_right OrdInst node value
   ⦃ b node' =>
-    Node.inv node' ∧
-    Node.v node' = Node.v node ∪ {value} ∧
-    (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
-    (b → node'.balanceFactor ≠ 0) ⦄ := by
+    Node.inv node'.val ∧
+    Node.v node'.val = Node.v node.val.val ∪ {value} ∧
+    (if b then node'.val.height = node.val.val.height + 1 else node'.val.height = node.val.val.height) ∧
+    (b → node'.val.balanceFactor ≠ 0) ⦄ := by
   unfold Node.insert_in_right
-  have hInvLeft : Subtree.inv node.right := by cases node; simp_all
+  have hInvLeft : Subtree.inv node.val.val.right := Node.inv_right hInv
   step as ⟨ updt, right_opt' ⟩
+  obtain ⟨ ⟨ node ⟩ ⟩ := node
+  simp only at *
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
@@ -952,10 +980,10 @@ theorem Node.insert_in_right_spec
           cases node
           rename_i x a right balance_factor
           -- TODO: fix step
-          cases h:right'
-          rename_i z b c bf_z
+          rcases h : right' with ⟨ ⟨ z, b, c, bf_z ⟩ ⟩
           step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
+          . simp_all
           . simp_all
           . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
           . simp_all [Node.balanceFactor]
@@ -973,17 +1001,16 @@ theorem Node.insert_in_right_spec
           cases node
           rename_i x t1 right balance_factor
           simp
-          cases h:right'
-          rename_i z y t0 bf_z
+          rcases h : right' with ⟨ ⟨ z, y, t0, bf_z ⟩ ⟩
           cases h: y
           . -- Can't get there
             simp_all [Node.balanceFactor, Node.invAux]
           . rename_i y
-            cases h: y
-            rename_i y b a bf_y
+            rcases h : y with ⟨ ⟨ y, b, a, bf_y ⟩ ⟩
             step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . simp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+            . simp_all
             . simp_all
             . simp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
@@ -1013,7 +1040,7 @@ theorem Node.insert_in_right_spec
       cases node; simp_all
     . simp_all
       cases node; simp_all
-termination_by (node.height, 0)
+termination_by (node.val.val.height, 0)
 decreasing_by simp_wf
 
 end
@@ -1021,13 +1048,13 @@ end
 @[step]
 theorem Tree.insert_spec {T : Type}
   (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
-  (tree : Tree T) (value : T)
-  (hInv : tree.inv) :
+  (tree : MutBorrow (Tree T)) (value : T)
+  (hInv : tree.val.inv) :
   Tree.insert OrdInst tree value
   ⦃ updt tree' =>
     tree'.inv ∧
-    (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
-    tree'.v = tree.v ∪ {value} ⦄ := by
+    (if updt then tree'.height = tree.val.height + 1 else tree'.height = tree.val.height) ∧
+    tree'.v = tree.val.v ∪ {value} ⦄ := by
   unfold Tree.insert
   step as ⟨ updt, tree' ⟩
   simp [*]

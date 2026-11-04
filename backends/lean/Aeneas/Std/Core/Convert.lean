@@ -26,7 +26,7 @@ def core.convert.IntoFrom {T : Type _} {U : Type _} (fromInst : core.convert.Fro
 
 @[rust_trait "core::convert::AsRef"]
 structure core.convert.AsRef (Self : Type _) (T : Type _) where
-  as_ref : Self → Result T
+  as_ref : SharedBorrow Self → Result (SharedBorrow T)
 
 @[expose, simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
 def core.convert.FromSame.from {T : Type _} (x : T) : T := x
@@ -70,12 +70,13 @@ def core.convert.TryInto.Blanket {T U E : Type _}
 
 @[rust_trait "core::convert::AsMut"]
 structure core.convert.AsMut (Self : Type _) (T : Type _) where
-  as_mut : Self → Result (T × (T → Self))
+  as_mut : MutBorrow Self → Result (MutBorrow T × (T → Self))
 
 /-- `Result::is_ok`: `true` on `Ok`, `false` on `Err`. -/
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::is_ok"]
-def core.result.Result.is_ok {T E : Type _} :
-    core.result.Result T E → Std.Result Bool
+def core.result.Result.is_ok {T E : Type _}
+    (r : SharedBorrow (core.result.Result T E)) : Std.Result Bool :=
+  match r.val with
   | .Ok _ => .ok true
   | .Err _ => .ok false
 
@@ -119,9 +120,10 @@ def core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
 /-- Step spec for `Result::is_ok`: returns `true` iff the input is `Ok`. -/
 @[step]
 theorem core.result.Result.is_ok.step_spec {T E : Type _}
-    (r : core.result.Result T E) :
+    (r : SharedBorrow (core.result.Result T E)) :
     core.result.Result.is_ok r
-    ⦃ (b : Bool) => b = r.ok? ⦄ := by
+    ⦃ (b : Bool) => b = r.val.ok? ⦄ := by
+  obtain ⟨ r ⟩ := r
   match r with
   | .Ok v => grind [is_ok]
   | .Err e => grind [is_ok]

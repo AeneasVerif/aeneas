@@ -26,7 +26,7 @@ mutual
     Source: 'tests/src/list-borrows.rs', lines 3:0-6:1
     Visibility: public -/
 inductive LCell where
-| mk : Std.I32 → List → LCell
+| mk : MutBorrow Std.I32 → List → LCell
 
 /-- [list_borrows::List]
     Source: 'tests/src/list-borrows.rs', lines 8:0-11:1
@@ -34,7 +34,7 @@ inductive LCell where
 @[discriminant isize]
 inductive List where
 | Nil : List
-| Cons : LCell → List
+| Cons : Box LCell → List
 
 end
 
@@ -43,45 +43,56 @@ def LCell.value (x : LCell) := match x with | LCell.mk x1 _ => x1
 def LCell.next (x : LCell) := match x with | LCell.mk _ x1 => x1
 
 @[simp]
-theorem LCell.value._simpLemma_ (value : Std.I32) (next : List) :
+theorem LCell.value._simpLemma_ (value : MutBorrow Std.I32) (next : List) :
   (LCell.mk value next).value = value := by rfl
 
 @[simp]
-theorem LCell.next._simpLemma_ (value : Std.I32) (next : List) :
+theorem LCell.next._simpLemma_ (value : MutBorrow Std.I32) (next : List) :
   (LCell.mk value next).next = next := by rfl
 
 /-- [list_borrows::cons]:
     Source: 'tests/src/list-borrows.rs', lines 14:0-16:1 -/
 def cons
-  (value : Std.I32) (next : List) :
+  (value : MutBorrow Std.I32) (next : List) :
   Result (List × (List → (Std.I32 × List)))
   := do
   let back :=
     fun l =>
       let (i, l1) :=
         match l with
-        | List.Cons (LCell.mk i1 l2) => (i1, l2)
-        | _ => ((LCell.mk value next).value, (LCell.mk value next).next)
-      ((LCell.mk i l1).value, (LCell.mk i l1).next)
-  ok (List.Cons (LCell.mk (LCell.mk value next).value
-    (LCell.mk value next).next), back)
+        | List.Cons (Box.mk (LCell.mk (MutBorrow.mk i1) l2)) => (i1, l2)
+        | _ => ((LCell.mk value next).value.val, (LCell.mk value next).next)
+      ((LCell.mk (MutBorrow.mk i) l1).value.val,
+        (LCell.mk (MutBorrow.mk i) l1).next)
+  ok (List.Cons (Box.mk (LCell.mk (LCell.mk value next).value
+    (LCell.mk value next).next)), back)
+
+/-- [list_borrows::increment_list]: loop body 0:
+    Source: 'tests/src/list-borrows.rs', lines 19:4-22:5 -/
+@[rust_loop_body]
+def increment_list_loop.body
+  (l : List) (back : List → List) :
+  Result (ControlFlow (List × (List → List)) List)
+  := do
+  match l with
+  | List.Nil => ok (done (back List.Nil))
+  | List.Cons l1 =>
+    let i ← l1.val.value.val + 1#i32
+    ok (cont (l1.val.next,
+      fun l2 => back (List.Cons (Box.mk (LCell.mk (MutBorrow.mk i) l2)))))
 
 /-- [list_borrows::increment_list]: loop 0:
     Source: 'tests/src/list-borrows.rs', lines 19:4-22:5 -/
 @[rust_loop]
-def increment_list_loop (l : List) : Result List := do
-  match l with
-  | List.Nil => ok List.Nil
-  | List.Cons l1 =>
-    let i ← l1.value + 1#i32
-    let back ← increment_list_loop l1.next
-    ok (List.Cons (LCell.mk i back))
-partial_fixpoint
+def increment_list_loop (l : List) (back : List → List) : Result List := do
+  loop
+    (fun (l1, back1) => increment_list_loop.body l1 back1)
+    (l, back)
 
 /-- [list_borrows::increment_list]:
     Source: 'tests/src/list-borrows.rs', lines 18:0-23:1 -/
 @[reducible]
 def increment_list (l : List) : Result List := do
-  increment_list_loop l
+  increment_list_loop l (fun l1 => l1)
 
 end list_borrows

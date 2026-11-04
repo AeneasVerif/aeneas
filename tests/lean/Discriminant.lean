@@ -44,10 +44,12 @@ def AlertLevel.Insts.CoreMarkerStructuralPartialEq :
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18
     Visibility: public -/
 def AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
-  (self : AlertLevel) (other : AlertLevel) : Result Bool := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  ok (self1 = other1)
+  (self : SharedBorrow AlertLevel) (other : SharedBorrow AlertLevel) :
+  Result Bool
+  := do
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  ok (__self_discr = __arg1_discr)
 
 /-- Trait implementation: [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}]
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
@@ -76,10 +78,12 @@ def AlertLevelU8.Insts.CoreMarkerStructuralPartialEq :
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18
     Visibility: public -/
 def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
-  (self : AlertLevelU8) (other : AlertLevelU8) : Result Bool := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  ok (self1 = other1)
+  (self : SharedBorrow AlertLevelU8) (other : SharedBorrow AlertLevelU8) :
+  Result Bool
+  := do
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  ok (__self_discr = __arg1_discr)
 
 /-- Trait implementation: [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}]
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/

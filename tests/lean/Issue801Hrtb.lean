@@ -27,7 +27,11 @@ structure T (Self : Type _) (X : Type _) where
 
 /-- [issue_801_hrtb::test]:
     Source: 'tests/src/issue-801-hrtb.rs', lines 8:0-10:1 -/
-def test {P : Type _} (TPSharedU8Inst : T P Std.U8) : Result Std.U8 := do
-  TPSharedU8Inst.dummy
+def test
+  {P : Type _} (TPSharedU8Inst : T P (SharedBorrow Std.U8)) :
+  Result Std.U8
+  := do
+  let i ← TPSharedU8Inst.dummy
+  ok i.val
 
 end issue_801_hrtb

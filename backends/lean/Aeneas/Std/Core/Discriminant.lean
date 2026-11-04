@@ -27,7 +27,7 @@ this definition, while it is actually not used in the extracted model: we just w
 it as builtin so that it doesn't generate any axiom for it (this is a way of ignoring it). -/
 @[expose, rust_fun "core::intrinsics::discriminant_value"]
 def core.intrinsics.discriminant_value
-  {T : Type _} (DiscrInst : DiscriminantKind T) (_ : T) :
+  {T : Type _} (DiscrInst : DiscriminantKind T) (_ : SharedBorrow T) :
   Result (DiscrInst.Discriminant) := .fail .undef -- TODO: we need
 
 end Aeneas.Std

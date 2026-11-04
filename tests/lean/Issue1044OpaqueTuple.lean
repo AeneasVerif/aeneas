@@ -44,13 +44,13 @@ def update_adjacent_loop.body
   Result (ControlFlow ((Slice GF16) × Std.Usize) (Slice GF16))
   := do
   let i1 ← i + 2#usize
-  let i2 := Slice.len into
+  let i2 := Slice.len (SharedBorrow.mk into)
   if i1 <= i2
   then
-    let g ← Slice.index_usize into i
+    let g ← Slice.index_usize (SharedBorrow.mk into) i
     let i3 ← i + 1#usize
-    let g1 ← Slice.index_usize into i3
-    let (i4, i5) ← mul2 a.value g.value g1.value
+    let g1 ← Slice.index_usize (SharedBorrow.mk into) i3
+    let (i4, i5) ← mul2 a.value g.val.value g1.val.value
     let into1 ← Slice.update into i ({ value := i4 } : GF16)
     let s ← Slice.update into1 i3 ({ value := i5 } : GF16)
     ok (cont (s, i1))
@@ -70,7 +70,8 @@ def update_adjacent_loop
     Source: 'tests/src/issue-1044-opaque-tuple.rs', lines 13:0-19:1
     Visibility: public -/
 @[reducible]
-def update_adjacent (a : GF16) (into : Slice GF16) : Result (Slice GF16) := do
-  update_adjacent_loop a into 0#usize
+def update_adjacent
+  (a : GF16) (into : MutBorrow (Slice GF16)) : Result (Slice GF16) := do
+  update_adjacent_loop a into.val 0#usize
 
 end issue_1044_opaque_tuple

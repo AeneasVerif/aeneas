@@ -14,9 +14,9 @@ open Result ScalarElab
 
 /- [core::cmp::impls::{core::cmp::PartialEq<u8> for u8}::eq]:
    Name pattern: core::cmp::impls::{core::cmp::PartialEq<u8, u8>}::eq -/
-scalar @[simp] abbrev core.cmp.impls.PartialEq'S.eq (x y : «%S») : Bool := x = y
+scalar @[simp] abbrev core.cmp.impls.PartialEq'S.eq (x y : SharedBorrow «%S») : Bool := x.val = y.val
 
-scalar @[simp] abbrev core.cmp.impls.PartialEq'S.ne (x y : «%S») : Bool := ¬ x = y
+scalar @[simp] abbrev core.cmp.impls.PartialEq'S.ne (x y : SharedBorrow «%S») : Bool := ¬ x.val = y.val
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::PartialEq<u8> for u8}]
    Name pattern: core::cmp::PartialEq<u8, u8> -/
@@ -31,27 +31,33 @@ scalar @[expose, reducible] def core.cmp.Eq'S : core.cmp.Eq «%S» := {
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::partial_cmp]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::partial_cmp -/
-scalar def core.cmp.impls.PartialOrd'S.partial_cmp (x y : «%S») : Option Ordering := some (compare x.val y.val)
+scalar def core.cmp.impls.PartialOrd'S.partial_cmp (x y : SharedBorrow «%S») : Option Ordering :=
+  some (compare x.val.val y.val.val)
 
 /- [core::cmp::impls::{core::cmp::Ord for u8}::cmp]:
    Name pattern: core::cmp::impls::{core::cmp::Ord<u8>}::cmp -/
-scalar @[simp] abbrev core.cmp.impls.Ord'S.cmp (x y : «%S») : Ordering := compare x.val y.val
+scalar @[simp] abbrev core.cmp.impls.Ord'S.cmp (x y : SharedBorrow «%S») : Ordering :=
+  compare x.val.val y.val.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::lt]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::lt -/
-scalar @[expose] def core.cmp.impls.PartialOrd'S.lt (x y : «%S») : Bool := x.val < y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.lt (x y : SharedBorrow «%S») : Bool :=
+  x.val.val < y.val.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::le]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::le -/
-scalar @[expose] def core.cmp.impls.PartialOrd'S.le (x y : «%S») : Bool := x.val ≤ y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.le (x y : SharedBorrow «%S») : Bool :=
+  x.val.val ≤ y.val.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::gt]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::gt -/
-scalar @[expose] def core.cmp.impls.PartialOrd'S.gt (x y : «%S») : Bool := x.val > y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.gt (x y : SharedBorrow «%S») : Bool :=
+  x.val.val > y.val.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::ge]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::ge -/
-scalar @[expose] def core.cmp.impls.PartialOrd'S.ge (x y : «%S») : Bool := x.val ≥ y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.ge (x y : SharedBorrow «%S») : Bool :=
+  x.val.val ≥ y.val.val
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}]
    Name pattern: core::cmp::PartialOrd<u8, u8> -/

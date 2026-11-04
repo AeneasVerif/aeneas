@@ -28,7 +28,8 @@ structure From (Self : Type _) (T : Type _) where
 /-- Trait declaration: [from_to::To]
     Source: 'tests/src/from_to.rs', lines 7:0-11:1 -/
 structure To (Self : Type _) where
-  «to» : forall {T : Type} (FromInst : From T Self), Self → Result T
+  «to» : forall {T : Type} (FromInst : From T Self), SharedBorrow Self →
+    Result T
 
 /-- [from_to::{impl from_to::From<u32> for u32}::from]:
     Source: 'tests/src/from_to.rs', lines 14:4-16:5 -/
@@ -45,10 +46,10 @@ def U32.Insts.From_toFromU32 : From Std.U32 Std.U32 := {
 /-- [from_to::{impl from_to::To for u32}::to]:
     Source: 'tests/src/from_to.rs', lines 20:4-22:5 -/
 def U32.Insts.From_toTo.to
-  {T : Type _} (FromTU32Inst : From T Std.U32) (self : Std.U32) :
+  {T : Type _} (FromTU32Inst : From T Std.U32) (self : SharedBorrow Std.U32) :
   Result T
   := do
-  FromTU32Inst.«from» self
+  FromTU32Inst.«from» self.val
 
 /-- Trait implementation: [from_to::{impl from_to::To for u32}]
     Source: 'tests/src/from_to.rs', lines 19:0-23:1 -/

@@ -24,7 +24,9 @@ namespace slices
     Source: 'tests/src/slices.rs', lines 3:0-5:1
     Visibility: public -/
 def slice_subslice_from_shared
-  (x : Slice Std.U32) : Result (Slice Std.U32) := do
+  (x : SharedBorrow (Slice Std.U32)) :
+  Result (SharedBorrow (Slice Std.U32))
+  := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice
     Std.U32) x { start := 0#usize }
 
@@ -32,8 +34,8 @@ def slice_subslice_from_shared
     Source: 'tests/src/slices.rs', lines 7:0-9:1
     Visibility: public -/
 def slice_subslice_from_mut
-  (x : Slice Std.U32) :
-  Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
+  (x : MutBorrow (Slice Std.U32)) :
+  Result ((MutBorrow (Slice Std.U32)) × (Slice Std.U32 → Slice Std.U32))
   := do
   core.slice.index.Slice.index_mut
     (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U32) x
@@ -43,8 +45,8 @@ def slice_subslice_from_mut
     Source: 'tests/src/slices.rs', lines 11:0-13:1
     Visibility: public -/
 def split_at
-  {T : Type _} (x : Slice T) (n : Std.Usize) :
-  Result ((Slice T) × (Slice T))
+  {T : Type _} (x : SharedBorrow (Slice T)) (n : Std.Usize) :
+  Result ((SharedBorrow (Slice T)) × (SharedBorrow (Slice T)))
   := do
   core.slice.Slice.split_at x n
 
@@ -52,8 +54,9 @@ def split_at
     Source: 'tests/src/slices.rs', lines 15:0-17:1
     Visibility: public -/
 def split_at_mut
-  {T : Type _} (x : Slice T) (n : Std.Usize) :
-  Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T))
+  {T : Type _} (x : MutBorrow (Slice T)) (n : Std.Usize) :
+  Result (((MutBorrow (Slice T)) × (MutBorrow (Slice T))) × (((Slice T) ×
+    (Slice T)) → Slice T))
   := do
   core.slice.Slice.split_at_mut x n
 
@@ -61,21 +64,21 @@ def split_at_mut
     Source: 'tests/src/slices.rs', lines 19:0-22:1
     Visibility: public -/
 def split_at_mut_and_deref
-  {T : Type _} (coremarkerCopyInst : core.marker.Copy T) (x : Slice T)
-  (n : Std.Usize) :
+  {T : Type _} (coremarkerCopyInst : core.marker.Copy T)
+  (x : MutBorrow (Slice T)) (n : Std.Usize) :
   Result ((T × T) × (Slice T))
   := do
-  let ((left, right), split_at_mut_back) ← core.slice.Slice.split_at_mut x n
-  let t ← Slice.index_usize left 0#usize
-  let t1 ← Slice.index_usize right 0#usize
-  let x1 := split_at_mut_back (left, right)
-  ok ((t, t1), x1)
+  let ((s, s1), split_at_mut_back) ← core.slice.Slice.split_at_mut x n
+  let t ← Slice.index_usize (SharedBorrow.mk s.val) 0#usize
+  let t1 ← Slice.index_usize (SharedBorrow.mk s1.val) 0#usize
+  let x1 := split_at_mut_back (s.val, s1.val)
+  ok ((t.val, t1.val), x1)
 
 /-- [slices::swap]:
     Source: 'tests/src/slices.rs', lines 24:0-26:1
     Visibility: public -/
 def swap
-  {T : Type _} (x : Slice T) (n : Std.Usize) (m : Std.Usize) :
+  {T : Type _} (x : MutBorrow (Slice T)) (n : Std.Usize) (m : Std.Usize) :
   Result (Slice T)
   := do
   core.slice.Slice.swap x n m
@@ -83,7 +86,7 @@ def swap
 /-- [slices::from_vec]:
     Source: 'tests/src/slices.rs', lines 28:0-30:1
     Visibility: public -/
-def from_vec {T : Type _} (x : alloc.vec.Vec T) : Result (Slice T) := do
+def from_vec {T : Type _} (x : alloc.vec.Vec T) : Result (Box (Slice T)) := do
   alloc.vec.FromBoxSliceVec.from x
 
 end slices

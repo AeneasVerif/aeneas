@@ -46,15 +46,15 @@ open CList
 @[simp, grind, agrind] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.toList
+  | CCons hd tl => hd :: tl.val.toList
 
-/-- Theorem about `list_nth_mut1`: verbose version -/
-theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
+/-- Theorem about `list_nth_mut1_loop`: verbose version -/
+theorem list_nth_mut1_loop_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃ x back =>
+  list_nth_mut1_loop l i ⦃ x back =>
     x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
-  unfold list_nth_mut1 list_nth_mut1_loop
+  unfold list_nth_mut1_loop
   split
   . rename_i hd tl
     split
@@ -64,20 +64,20 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       . -- Reasoning about `List.index`:
         have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
-        have hIndex := @List.getElem_cons_zero _ hd tl.toList (by grind)
+        have hIndex := @List.getElem_cons_zero _ hd tl.val.toList (by grind)
         simp only [hIndex]
       . intro x
         -- Reasoning about `List.update`:
         have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
-        have hUpdate := @List.set_cons_zero _ hd tl.toList x
+        have hUpdate := @List.set_cons_zero _ hd tl.val.toList x
         simp only [hUpdate]
     . simp at *
       step as ⟨ i1, hi1 ⟩
       step as ⟨ tl1, back, htl1, hback ⟩
       simp
       split_conjs
-      . have hIndex := List.getElem_cons_nzero hd tl.toList i.val (by grind) (by grind)
+      . have hIndex := List.getElem_cons_nzero hd tl.val.toList i.val (by grind) (by grind)
         simp only [hIndex]
         simp only [htl1]
         have hiEq : i1.val = i.val - 1 := by scalar_tac
@@ -85,25 +85,27 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       . -- Backward function
         intro x'
         simp [hback]
-        have hUpdate := List.set_cons_nzero hd tl.toList i.val (by scalar_tac) x'
+        have hUpdate := List.set_cons_nzero hd tl.val.toList i.val (by scalar_tac) x'
         simp only [hUpdate]
         have hiEq : i1.val = i.val - 1 := by scalar_tac
         simp only [hiEq]
   . simp at h
+termination_by i.val
+decreasing_by scalar_decr_tac
 
-/-- Theorem about `list_nth_mut1`: simpler version.
+/-- Theorem about `list_nth_mut1_loop`: simpler version.
 
     Remark: a simple way of simplifying the context is simply to
     call `simp_all`. Below, we're trying to be a bit more precise with
     the calls to the simplifier, for instance by using `simp [*]`
     or `simp at *` when it is enough.
  -/
-theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
+theorem list_nth_mut1_loop_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃ x back =>
+  list_nth_mut1_loop l i ⦃ x back =>
     x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
-  unfold list_nth_mut1 list_nth_mut1_loop
+  unfold list_nth_mut1_loop
   split
   . rename_i hd tl
     split
@@ -122,23 +124,45 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
         intro x'
         simp [*]
   . simp at h
+termination_by i.val
+decreasing_by scalar_decr_tac
 
 -- TODO: move
 attribute [agrind =] List.getElem_cons_zero List.set_cons_zero
 
 /- Even simpler: `step*` can do most of the work -/
-theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
+@[step]
+theorem list_nth_mut1_loop_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃ x back =>
+  list_nth_mut1_loop l i ⦃ x back =>
     x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
-  unfold list_nth_mut1 list_nth_mut1_loop
+  unfold list_nth_mut1_loop
   /- `step*` repeatedly applies `step`, while doing a case disjunction whenever it
       encounters a branching. Note that one can automatically generate the corresponding
       proof script by using `step*?`. -/
   step*
   simp
   simp_lists [*]
+termination_by i.val
+decreasing_by scalar_decr_tac
+
+/-- Theorem about `list_nth_mut1`.
+
+    `list_nth_mut1` takes a mutable borrow `l : MutBorrow (CList T)`: we reason about the
+    borrowed value `l.val`. It returns a mutable borrow `x` to the element (we reason about
+    its value `x.val`) together with a backward function `back`, which receives the new value
+    of the element and returns the new value of the list.
+
+    The proof simply calls `list_nth_mut1_loop` (and uses the `@[step]` theorem above). -/
+@[step]
+theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : MutBorrow (CList T)) (i : U32)
+  (h : i.val < l.val.toList.length) :
+  list_nth_mut1 l i ⦃ x back =>
+    x.val = l.val.toList[i.val] ∧
+    ∀ x', (back x').toList = l.val.toList.set i.val x' ⦄ := by
+  unfold list_nth_mut1
+  step*
 
 /-- Theorem about `list_tail_loop`: verbose version -/
 @[step]
@@ -168,18 +192,18 @@ theorem list_tail_loop_spec' {T : Type} (l : CList T) :
   step*
 
 @[step]
-theorem list_tail_spec {T : Type} (l : CList T) :
+theorem list_tail_spec {T : Type} (l : MutBorrow (CList T)) :
   list_tail l ⦃ tl back =>
-    tl = CNil ∧
-    ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
+    tl.val = CNil ∧
+    ∀ tl', (back tl').toList = l.val.toList ++ tl'.toList ⦄ := by
   unfold list_tail
   step*
 
 /-- Theorem about `append_in_place` -/
 @[step]
-theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
+theorem append_in_place_spec {T : Type} (l0 : MutBorrow (CList T)) (l1 : CList T) :
   append_in_place l0 l1 ⦃ l2 =>
-    l2.toList = l0.toList ++ l1.toList ⦄ := by
+    l2.toList = l0.val.toList ++ l1.toList ⦄ := by
   unfold append_in_place
   step*
 
@@ -193,6 +217,8 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
     simp at *
     simp [hl1]
   . simp
+termination_by l.toList.length
+decreasing_by agrind
 
 -- Simple version
 @[step]
@@ -202,6 +228,8 @@ theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
   unfold reverse_loop
   step*
   agrind
+termination_by l.toList.length
+decreasing_by agrind
 
 
 theorem reverse_spec {T : Type} (l : CList T) :
@@ -270,9 +298,9 @@ theorem all_nil_impl_toInt_eq_zero
     simp_all
 
 /-- The theorem about `zero` -/
-theorem zero_spec (x : alloc.vec.Vec U32) :
+theorem zero_spec (x : MutBorrow (alloc.vec.Vec U32)) :
   zero x ⦃ x' =>
-    x'.length = x.length ∧
+    x'.length = x.val.length ∧
     toInt x' = 0 ⦄ := by
   unfold zero
   step as ⟨ x', hLength, hSame, hZero ⟩
@@ -362,12 +390,13 @@ termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 /-- The proof about `add_no_overflow` -/
-theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
-  (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+theorem add_no_overflow_spec
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32))
+  (hLength : x.val.length = y.val.length)
+  (hNoOverflow : ∀ (j : Nat), j < x.val.length → x.val[j]!.val + y.val[j]!.val ≤ U32.max) :
   add_no_overflow x y ⦃ x' =>
-    x'.length = y.length ∧
-    toInt x' = toInt x + toInt y ⦄ := by
+    x'.length = y.val.length ∧
+    toInt x' = toInt x.val + toInt y.val ⦄ := by
   unfold add_no_overflow
   step as ⟨ x' ⟩
   grind
@@ -442,12 +471,12 @@ decreasing_by scalar_decr_tac
 /-- The proof about `add_with_carry` -/
 @[step]
 theorem add_with_carry_spec
-  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
-  (hLength : x.length = y.length) :
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32))
+  (hLength : x.val.length = y.val.length) :
   add_with_carry x y ⦃ c x' =>
-    x'.length = x.length ∧
+    x'.length = x.val.length ∧
     c.val ≤ 1 ∧
-    toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by
+    toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x.val + toInt y.val ⦄ := by
   unfold add_with_carry
   step as ⟨ c, x' ⟩
   simp_all

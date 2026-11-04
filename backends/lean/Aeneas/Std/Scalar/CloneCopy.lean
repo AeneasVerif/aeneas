@@ -12,10 +12,12 @@ open Result Error ScalarElab
 -/
 
 -- Remark: the command `uscalar` turns the name `Clone'S` into `CloneU8`, `CloneU16`, etc.
-uscalar @[expose, reducible, simp] def core.clone.impls.Clone'S.clone (x : «%S») : «%S» := x
-uscalar @[reducible, simp] def core.clone.impls.Clone'S.clone_from (_ x : «%S») : «%S» := x
-iscalar @[expose, reducible, simp] def core.clone.impls.Clone'S.clone (x : «%S») : «%S» := x
-iscalar @[reducible, simp] def core.clone.impls.Clone'S.clone_from (_ x : «%S») : «%S» := x
+uscalar @[expose, reducible, simp] def core.clone.impls.Clone'S.clone (x : SharedBorrow «%S») : «%S» := x.val
+uscalar @[reducible, simp] def core.clone.impls.Clone'S.clone_from (_ : MutBorrow «%S») (x : SharedBorrow «%S») :
+  «%S» := x.val
+iscalar @[expose, reducible, simp] def core.clone.impls.Clone'S.clone (x : SharedBorrow «%S») : «%S» := x.val
+iscalar @[reducible, simp] def core.clone.impls.Clone'S.clone_from (_ : MutBorrow «%S») (x : SharedBorrow «%S») :
+  «%S» := x.val
 
 uscalar @[expose, reducible] def core.clone.Clone'S : core.clone.Clone «%S» := {
   clone := liftFun1 core.clone.impls.Clone'S.clone

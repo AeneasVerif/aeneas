@@ -30,12 +30,13 @@ def first_nonzero_loop.body
   Result (ControlFlow (core.ops.range.Range Std.Usize) Std.Usize)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done idx)
   | some i =>
-    let i1 ← Slice.index_usize xs i
-    if i1 != 0#u8
+    let i1 ← Slice.index_usize (SharedBorrow.mk xs) i
+    if i1.val != 0#u8
     then ok (done i)
     else ok (cont iter1)
 
@@ -44,7 +45,7 @@ def first_nonzero_loop.body
     Visibility: public -/
 @[rust_loop]
 def first_nonzero_loop
-  (iter : core.ops.range.Range Std.Usize) (xs : Slice Std.U8) (idx : Std.Usize)
+  (xs : Slice Std.U8) (idx : Std.Usize) (iter : core.ops.range.Range Std.Usize)
   :
   Result Std.Usize
   := do
@@ -55,9 +56,9 @@ def first_nonzero_loop
 /-- [issue_1206_loop_break::first_nonzero]:
     Source: 'tests/src/issue-1206-loop-break.rs', lines 4:0-13:1
     Visibility: public -/
-def first_nonzero (xs : Slice Std.U8) : Result Std.Usize := do
+def first_nonzero (xs : SharedBorrow (Slice Std.U8)) : Result Std.Usize := do
   let idx := Slice.len xs
   let i := Slice.len xs
-  first_nonzero_loop { start := 0#usize, «end» := i } xs idx
+  first_nonzero_loop xs.val idx { start := 0#usize, «end» := i }
 
 end issue_1206_loop_break

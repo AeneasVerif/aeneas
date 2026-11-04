@@ -454,6 +454,15 @@ let variant_concatenate_type_name = ref true
     ]} *)
 let use_tuple_structs = ref true
 
+(** If true, erase the boxes and the (shared and mutable) borrows in the
+    translation: [Box<T>], [&T] and [&mut T] are all translated to [T].
+
+    Otherwise, those types are translated to wrappers ([Box T],
+    [SharedBorrow T], [MutBorrow T]): the values are still purified (the
+    wrappers simply contain the value, and mutable borrows are still handled
+    through backward functions) but the types are preserved. *)
+let erase_boxes_and_borrows = ref true
+
 let backend_has_tuple_projectors backend =
   match backend with
   | Lean -> true

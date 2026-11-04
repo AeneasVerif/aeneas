@@ -23,8 +23,8 @@ namespace vec
 /-- [vec::use_extend_from_slice]:
     Source: 'tests/src/vec.rs', lines 5:0-7:1 -/
 def use_extend_from_slice
-  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (v : alloc.vec.Vec T)
-  (s : Slice T) :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (v : MutBorrow (alloc.vec.Vec T)) (s : SharedBorrow (Slice T)) :
   Result (alloc.vec.Vec T)
   := do
   alloc.vec.Vec.extend_from_slice corecloneCloneInst v s

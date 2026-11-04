@@ -485,6 +485,7 @@ type names_map_init = {
   keywords : string list;
   builtin_adts : (builtin_ty * string) list;
   builtin_structs : (builtin_ty * string) list;
+  builtin_fields : (builtin_ty * FieldId.id * string) list;
   builtin_variants : (builtin_ty * VariantId.id * string) list;
   builtin_pure_functions : (pure_builtin_fun_id * string) list;
 }
@@ -496,6 +497,10 @@ let names_maps_add_builtin_type (id_to_string : id -> string) (id : builtin_ty)
 let names_maps_add_builtin_struct (id_to_string : id -> string)
     (id : builtin_ty) (name : string) (nm : names_maps) : names_maps =
   names_maps_add id_to_string (StructId (TBuiltin id)) None name nm
+
+let names_maps_add_builtin_field (id_to_string : id -> string) (id : builtin_ty)
+    (field_id : FieldId.id) (name : string) (nm : names_maps) : names_maps =
+  names_maps_add id_to_string (FieldId (TBuiltin id, field_id)) None name nm
 
 let names_maps_add_builtin_variant (id_to_string : id -> string)
     (id : builtin_ty) (variant_id : VariantId.id) (name : string)
@@ -1149,6 +1154,9 @@ let builtin_adts () : (builtin_ty * string) list =
         (TStr, "Str");
         (TRawPtr Mut, "MutRawPtr");
         (TRawPtr Const, "ConstRawPtr");
+        (TBox, "Box");
+        (TSharedBorrow, "SharedBorrow");
+        (TMutBorrow, "MutBorrow");
       ]
   | Coq | FStar | HOL4 ->
       [
@@ -1164,10 +1172,27 @@ let builtin_adts () : (builtin_ty * string) list =
 
 let builtin_struct_constructors () : (builtin_ty * string) list =
   match backend () with
-  | Lean -> [ (TArray, "Array.make") ]
+  | Lean ->
+      [
+        (TArray, "Array.make");
+        (TBox, "Box.mk");
+        (TSharedBorrow, "SharedBorrow.mk");
+        (TMutBorrow, "MutBorrow.mk");
+      ]
   | Coq -> [ (TArray, "mk_array") ]
   | FStar -> [ (TArray, "mk_array") ]
   | HOL4 -> [ (TArray, "mk_array") ]
+
+(** The fields of the builtin structures *)
+let builtin_fields () : (builtin_ty * FieldId.id * string) list =
+  match backend () with
+  | Lean ->
+      [
+        (TBox, FieldId.zero, "val");
+        (TSharedBorrow, FieldId.zero, "val");
+        (TMutBorrow, FieldId.zero, "val");
+      ]
+  | Coq | FStar | HOL4 -> []
 
 let builtin_variants () : (builtin_ty * VariantId.id * string) list =
   match backend () with
@@ -1260,6 +1285,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (IndexMutAtIndex Array, "Array.index_mut_usize");
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
+        (ResultUnwrapMutBorrow, "core.result.Result.unwrap.mut_borrow");
         (GetTarget, "get_target");
         (TargetFeatureEnabled, "target_feature_enabled");
       ]
@@ -1283,6 +1309,7 @@ let names_map_init () : names_map_init =
     keywords = keywords ();
     builtin_adts = builtin_adts ();
     builtin_structs = builtin_struct_constructors ();
+    builtin_fields = builtin_fields ();
     builtin_variants = builtin_variants ();
     builtin_pure_functions = builtin_pure_functions ();
   }
@@ -1345,6 +1372,12 @@ let initialize_names_maps () : names_maps =
       (fun nm (type_id, name) ->
         names_maps_add_builtin_struct id_to_string type_id name nm)
       nm init.builtin_structs
+  in
+  let nm =
+    List.fold_left
+      (fun nm (type_id, field_id, name) ->
+        names_maps_add_builtin_field id_to_string type_id field_id name nm)
+      nm init.builtin_fields
   in
   let nm =
     List.fold_left
@@ -1987,7 +2020,7 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
     Note that once the formatter generated a basename, we add an index if
     necessary to prevent name clashes: the burden of name clashes checks is thus
     on the caller's side. *)
-let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
+let rec ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
     (basename : string option) (ty : ty) : string =
   (* Small helper to derive var names from ADT type names.
 
@@ -2028,6 +2061,11 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBuiltin TSlice -> "s"
           | TBuiltin TStr -> "s"
           | TBuiltin (TRawPtr _) -> "p"
+          | TBuiltin (TBox | TSharedBorrow | TMutBorrow) -> (
+              (* Use the type of the wrapped value *)
+              match generics.types with
+              | [ ty ] -> ctx_compute_var_basename span ctx None ty
+              | _ -> [%internal_error] span)
           | TAdtId adt_id ->
               let def =
                 TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls

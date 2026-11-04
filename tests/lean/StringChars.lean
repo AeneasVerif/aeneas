@@ -23,7 +23,7 @@ namespace string_chars
 /-- [string_chars::collect]:
     Source: 'tests/src/string-chars.rs', lines 3:0-6:1 -/
 def collect : Result Unit := do
-  let c ← core.str.Str.chars (toStr "hello")
+  let c ← core.str.Str.chars (SharedBorrow.mk (toStr "hello"))
   let _ ←
     core.iter.traits.iterator.Iterator.collect.default
       core.iter.traits.iterator.IteratorChars
@@ -33,13 +33,17 @@ def collect : Result Unit := do
 /-- [string_chars::print_vec]:
     Source: 'tests/src/string-chars.rs', lines 8:0-11:1 -/
 def print_vec : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#i32, 3#i32, 2#i32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 1#i32, 3#i32, 2#i32 ])))
   let v ← alloc.slice.Slice.to_vec core.clone.CloneI32 s
   let a ←
-    core.fmt.rt.Argument.new_debug (core.fmt.DebugVec core.fmt.DebugI32) v
+    core.fmt.rt.Argument.new_debug (core.fmt.DebugVec core.fmt.DebugI32)
+      (SharedBorrow.mk v)
   let a1 ←
-    core.fmt.Arguments.new (Array.make 4#usize [ 192#u8, 1#u8, 10#u8, 0#u8 ])
-      (Array.make 1#usize [ a ])
+    core.fmt.Arguments.new (SharedBorrow.mk
+      (Array.make 4#usize [ 192#u8, 1#u8, 10#u8, 0#u8 ])) (SharedBorrow.mk
+      (Array.make 1#usize [ a ]))
   std.io.stdio._print a1
 
 end string_chars

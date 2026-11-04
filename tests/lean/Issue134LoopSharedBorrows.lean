@@ -23,28 +23,39 @@ namespace issue_134_loop_shared_borrows
 /-- [issue_134_loop_shared_borrows::AVLNode]
     Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 3:0-5:1 -/
 inductive AVLNode where
-| mk : Option AVLNode → AVLNode
+| mk : Option (Box AVLNode) → AVLNode
 
 def AVLNode.child (x : AVLNode) := match x with | AVLNode.mk x1 => x1
 
 @[simp]
-theorem AVLNode.child._simpLemma_ (child : Option AVLNode) :
+theorem AVLNode.child._simpLemma_ (child : Option (Box AVLNode)) :
   (AVLNode.mk child).child = child := by rfl
 
 /-- [issue_134_loop_shared_borrows::AVLTreeSet]
     Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 7:0-9:1 -/
 structure AVLTreeSet where
-  root : Option AVLNode
+  root : Option (Box AVLNode)
+
+/-- [issue_134_loop_shared_borrows::{issue_134_loop_shared_borrows::AVLNode}::find]: loop body 0:
+    Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 15:8-17:9
+    Visibility: public -/
+@[rust_loop_body]
+def AVLNode.find_loop.body
+  (current_tree : Option (Box AVLNode)) :
+  Result (ControlFlow (Option (Box AVLNode)) Unit)
+  := do
+  match current_tree with
+  | none => ok (done ())
+  | some current_node => ok (cont current_node.val.child)
 
 /-- [issue_134_loop_shared_borrows::{issue_134_loop_shared_borrows::AVLNode}::find]: loop 0:
     Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 15:8-17:9
     Visibility: public -/
 @[rust_loop]
-def AVLNode.find_loop (current_tree : Option AVLNode) : Result Unit := do
-  match current_tree with
-  | none => ok ()
-  | some current_node => AVLNode.find_loop current_node.child
-partial_fixpoint
+def AVLNode.find_loop (current_tree : Option (Box AVLNode)) : Result Unit := do
+  loop
+    (fun current_tree1 => AVLNode.find_loop.body current_tree1)
+    current_tree
 
 /-- [issue_134_loop_shared_borrows::{issue_134_loop_shared_borrows::AVLNode}::find]:
     Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 12:4-20:5

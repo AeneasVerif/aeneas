@@ -123,7 +123,9 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
             (* Translate the type *)
             let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
             (* If the type is unit, do nothing *)
-            if ty_is_unit ty then ()
+            if
+              ty_is_unit ty || V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_expr
+            then ()
             else
               (* Otherwise lookup the variable - note that the variable may
                  not be present in the context in case of error: we delegate
@@ -737,7 +739,11 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let call, args = destruct_apps call_e in
           match args with
           | [ x ] ->
-              let call = { call with ty = mk_arrows [ x.ty ] x.ty } in
+              let ret_ty =
+                if !Config.erase_boxes_and_borrows then x.ty
+                else mk_wrapper_ty WBox x.ty
+              in
+              let call = { call with ty = mk_arrows [ x.ty ] ret_ty } in
               [%add_loc] mk_app ctx.span call x
           | _ -> [%internal_error] ctx.span
         in
@@ -771,18 +777,30 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               ExtractName.match_name ctx.decls_ctx.crate unwrap_pat
                 fun_decl.item_meta.name
             then
-              (* Update the call *)
+              (* Update the call.
+
+                 If we preserve the borrows and the [Ok] type is a mutable
+                 borrow, the backward function receives the borrowed value
+                 (not the borrow): we need to use a dedicated model. *)
+              let id =
+                match call.generics.types with
+                | TRef (_, _, RMut) :: _
+                  when not !Config.erase_boxes_and_borrows ->
+                    ResultUnwrapMutBorrow
+                | ty :: _ when ty_has_different_back_repr ctx ty ->
+                    (* For instance: [Result<Box<&mut T>, E>] *)
+                    [%craise] ctx.span
+                      "Unsupported: calling [Result::unwrap] on a result whose \
+                       [Ok] type is a box or a tuple containing mutable \
+                       borrows"
+                | _ -> ResultUnwrapMut
+              in
               let app, args = destruct_apps call_e in
               match app.e with
               | Qualif { id = _; generics } ->
                   [%add_loc] mk_apps ctx.span
                     {
-                      e =
-                        Qualif
-                          {
-                            id = FunOrOp (Fun (Pure ResultUnwrapMut));
-                            generics;
-                          };
+                      e = Qualif { id = FunOrOp (Fun (Pure id)); generics };
                       ty = app.ty;
                     }
                     args
@@ -846,46 +864,62 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     [%add_loc] mk_apps ctx.span func [ v ]
   in
 
-  (* Create the cast expression *)
+  (* Create the cast expression.
+
+     Note that the value we cast is a box or a reference: if we preserve the
+     boxes and borrows, we need to project the value out of the wrapper,
+     cast it, then wrap it again. *)
+  let rec unwrap_then_cast (mk_cast : texpr -> texpr) (arg : texpr) : texpr =
+    match ty_as_wrapper_opt arg.ty with
+    | Some (k, _) ->
+        mk_wrapper_texpr ctx.span k
+          (unwrap_then_cast mk_cast (mk_wrapper_proj ctx.span arg))
+    | None -> mk_cast arg
+  in
   let cast_expr =
-    match info with
-    | None ->
-        (* This is a cast from a boxed array to a boxed slice: we simply insert
+    unwrap_then_cast
+      (fun arg ->
+        match info with
+        | None ->
+            (* This is a cast from a boxed array to a boxed slice: we simply insert
            a call to [array_to_slice] *)
-        mk_array_to_slice arg
-    | Some (adt_id, generics, field_id, ty0, _) ->
-        (* This is cast between structures.
+            mk_array_to_slice arg
+        | Some (adt_id, generics, field_id, ty0, _) ->
+            (* This is cast between structures.
            We update the last field of the structure by using [array_to_slice] *)
-        let adt_id = TAdtId adt_id in
-        let generics = ctx_translate_fwd_generic_args ctx generics in
-        let adt_ty = TAdt (adt_id, generics) in
+            let adt_id = TAdtId adt_id in
+            let generics = ctx_translate_fwd_generic_args ctx generics in
+            let adt_ty = TAdt (adt_id, generics) in
 
-        (* Create the field access expression *)
-        let ty0 = ctx_translate_fwd_ty ctx ty0 in
-        let field =
-          let qualif : qualif = { id = Proj { adt_id; field_id }; generics } in
-          let qualif_ty = mk_arrows [ adt_ty ] ty0 in
-          let qualif = { e = Qualif qualif; ty = qualif_ty } in
-          [%add_loc] mk_app ctx.span qualif arg
-        in
+            (* Create the field access expression *)
+            let ty0 = ctx_translate_fwd_ty ctx ty0 in
+            let field =
+              let qualif : qualif =
+                { id = Proj { adt_id; field_id }; generics }
+              in
+              let qualif_ty = mk_arrows [ adt_ty ] ty0 in
+              let qualif = { e = Qualif qualif; ty = qualif_ty } in
+              [%add_loc] mk_app ctx.span qualif arg
+            in
 
-        (* Create the array to slice expression *)
-        let nfield = mk_array_to_slice field in
+            (* Create the array to slice expression *)
+            let nfield = mk_array_to_slice field in
 
-        (* Create the field update expression *)
-        let updt =
-          let updt =
-            StructUpdate
-              {
-                struct_id = adt_id;
-                init = Some arg;
-                updates = [ (field_id, nfield) ];
-              }
-          in
-          let ty = arg.ty in
-          { e = updt; ty }
-        in
-        updt
+            (* Create the field update expression *)
+            let updt =
+              let updt =
+                StructUpdate
+                  {
+                    struct_id = adt_id;
+                    init = Some arg;
+                    updates = [ (field_id, nfield) ];
+                  }
+              in
+              let ty = arg.ty in
+              { e = updt; ty }
+            in
+            updt)
+      arg
   in
 
   (* Create the let-binding *)
@@ -1368,10 +1402,27 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   (* We use translate_fwd_ty to translate the global type *)
   let ty = decl.ty in
   let gval = { e = Qualif global_expr; ty } in
-  let e = translate_expr e ctx in
-  [%add_loc] mk_closed_checked_let ctx decl.can_fail
-    (mk_tpat_from_fvar None var)
-    gval e
+  (* If the global is a shared reference, the symbolic value we introduce is
+     the borrowed value: if we preserve the borrows, we need to project it
+     out of the reference *)
+  match ty_as_wrapper_opt ty with
+  | Some (_, inner_ty) when inner_ty = var.ty ->
+      let ctx, tmp = fresh_var None ty ctx in
+      let e = translate_expr e ctx in
+      let e =
+        [%add_loc] mk_closed_checked_let ctx false
+          (mk_tpat_from_fvar None var)
+          (mk_wrapper_proj ctx.span (mk_texpr_from_fvar tmp))
+          e
+      in
+      [%add_loc] mk_closed_checked_let ctx decl.can_fail
+        (mk_tpat_from_fvar None tmp)
+        gval e
+  | _ ->
+      let e = translate_expr e ctx in
+      [%add_loc] mk_closed_checked_let ctx decl.can_fail
+        (mk_tpat_from_fvar None var)
+        gval e
 
 and translate_assertion (ectx : C.eval_ctx) (expected : bool) (v : V.tvalue)
     (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1405,15 +1456,20 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
              values in the symbolic ADT *)
           [%craise] ctx.span "Unreachable"
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
-          (* The (mut/shared) borrow type is extracted to identity: we thus simply
-             introduce an reassignment *)
+          (* The (mut/shared) borrow type is either extracted to the identity,
+             in which case we simply introduce a reassignment, or to a wrapper,
+             in which case we project the borrowed value *)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let next_e = translate_expr e ctx in
           let monadic = false in
+          let bound = mk_opt_mplace_texpr scrutinee_mplace scrutinee in
+          let bound =
+            if !Config.erase_boxes_and_borrows then bound
+            else mk_wrapper_proj ctx.span bound
+          in
           [%add_loc] mk_closed_checked_let ctx monadic
             (mk_tpat_from_fvar None var)
-            (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
-            next_e
+            bound next_e
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
           [%craise] ctx.span "Unreachable")
@@ -1553,13 +1609,18 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
         | [ v ] -> v
         | _ -> [%craise] ctx.span "Unreachable"
       in
-      (* We simply introduce an assignment - the box type is the
-       * identity when extracted ([box a = a]) *)
+      (* We simply introduce an assignment - the box type is either the
+         identity when extracted ([box a = a]), or a wrapper in which case
+         we project the boxed value *)
       let monadic = false in
+      let bound = mk_opt_mplace_texpr scrutinee_mplace scrutinee in
+      let bound =
+        if !Config.erase_boxes_and_borrows then bound
+        else mk_wrapper_proj ctx.span bound
+      in
       [%add_loc] mk_closed_checked_let ctx monadic
         (mk_tpat_from_fvar None var)
-        (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
-        branch
+        bound branch
   | Some TStr ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
@@ -1597,14 +1658,31 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         in
         ({ e = StructUpdate su; ty = var.ty }, false)
     | VaCgValue cg_id -> ({ e = CVar cg_id; ty = var.ty }, false)
-    | VaTraitConstValue (trait_ref, const_id) ->
+    | VaTraitConstValue (trait_ref, const_id, is_static_ref) ->
         let trait_ref =
           translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
         let qualif_id = TraitConst (trait_ref, const_id) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
-        let ty = mk_result_ty var.ty in
-        ({ e = Qualif qualif; ty }, true)
+        if is_static_ref && not !Config.erase_boxes_and_borrows then
+          (* The constant is a shared reference, while the symbolic value is
+             the borrowed value: we need to project it out of the reference *)
+          let const_ty = mk_wrapper_ty WShared var.ty in
+          let const_e : texpr =
+            { e = Qualif qualif; ty = mk_result_ty const_ty }
+          in
+          let ctx, tmp = fresh_var None const_ty ctx in
+          let tmp_e = mk_texpr_from_fvar tmp in
+          let e =
+            [%add_loc] mk_closed_checked_let ctx true
+              (mk_tpat_from_fvar None tmp)
+              const_e
+              (mk_result_ok_texpr ctx.span (mk_wrapper_proj ctx.span tmp_e))
+          in
+          (e, true)
+        else
+          let ty = mk_result_ty var.ty in
+          ({ e = Qualif qualif; ty }, true)
     | VaDiscriminant adt_sv ->
         (* Discriminant read *)
         let adt_ty = ctx_translate_fwd_ty ctx adt_sv.sv_ty in
@@ -1621,14 +1699,30 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         (e, false)
     | VaDynTrait (v, trait_ref) ->
         let v = tvalue_to_texpr ctx ectx v in
-        let dyn_ty = var.ty in
         let trait_ref =
           translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
-        let qualif_id = MkDynTrait trait_ref in
-        let qualif = { id = qualif_id; generics = empty_generic_args } in
-        let qualif : texpr = { e = Qualif qualif; ty = mk_arrow v.ty dyn_ty } in
-        let e = [%add_loc] mk_app ctx.span qualif v in
+        let mk_dyn (v : texpr) (dyn_ty : ty) : texpr =
+          let qualif_id = MkDynTrait trait_ref in
+          let qualif = { id = qualif_id; generics = empty_generic_args } in
+          let qualif : texpr =
+            { e = Qualif qualif; ty = mk_arrow v.ty dyn_ty }
+          in
+          [%add_loc] mk_app ctx.span qualif v
+        in
+        (* The value we convert is a reference (or a box) to a value of the
+           type which implements the trait: if we preserve the borrows and
+           boxes, we need to project the value out of the wrapper (and wrap
+           the dynamic value if the destination is itself wrapped, like in
+           [Box<T> ~> Box<dyn Trait>]) *)
+        let e =
+          match (ty_as_wrapper_opt v.ty, ty_as_wrapper_opt var.ty) with
+          | Some _, Some (k, dyn_ty) ->
+              mk_wrapper_texpr ctx.span k
+                (mk_dyn (mk_wrapper_proj ctx.span v) dyn_ty)
+          | Some _, None -> mk_dyn (mk_wrapper_proj ctx.span v) var.ty
+          | None, _ -> mk_dyn v var.ty
+        in
         (e, false)
     | VaFnDef { kind; generics } ->
         let id = translate_fn_ptr_kind ctx kind in

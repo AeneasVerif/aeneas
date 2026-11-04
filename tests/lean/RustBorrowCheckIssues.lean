@@ -36,14 +36,16 @@ axiom core.mem.drop {T : Type _} : T → Result Unit
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::as_mut"]
 axiom core.option.Option.as_mut
-  {T : Type _} : Option T → Result ((Option T) × (Option T → Option T))
+  {T : Type _} :
+  MutBorrow (Option T) → Result ((Option (MutBorrow T)) × (Option (MutBorrow
+    T) → Option T))
 
 /-- [rust_borrow_check_issues::unnecessary_error]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 13:0-32:1 -/
 def unnecessary_error : Result Unit := do
-  core.mem.drop 2#u32
+  core.mem.drop (SharedBorrow.mk 2#u32)
   let _ ← 2#u32 + 1#u32
-  core.mem.drop 0#u32
+  core.mem.drop (SharedBorrow.mk 0#u32)
 
 /-- [rust_borrow_check_issues::unnecessary_error_2]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 35:0-52:1 -/
@@ -51,41 +53,46 @@ def unnecessary_error_2 (b0 : Bool) (b1 : Bool) : Result Unit := do
   let i ← if b0
             then ok 0#u32
             else ok 1#u32
-  let _ ← if b1
-            then do
-                 core.mem.drop 2#u32
-                 ok 2#u32
-            else ok 0#u32
+  let _ ←
+    if b1
+    then do
+         core.mem.drop (SharedBorrow.mk 2#u32)
+         ok 2#u32
+    else ok 0#u32
   let _ ← 2#u32 + 1#u32
-  core.mem.drop i
+  core.mem.drop (SharedBorrow.mk i)
 
 /-- [rust_borrow_check_issues::X]
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 58:0-60:1 -/
 inductive X where
-| mk : Option X → X
+| mk : Option (Box X) → X
 
 def X.next (x : X) := match x with | X.mk x1 => x1
 
 @[simp]
-theorem X.next._simpLemma_ (next : Option X) : (X.mk next).next = next :=
+theorem X.next._simpLemma_ (next : Option (Box X)) : (X.mk next).next = next :=
   by rfl
 
 /-- [rust_borrow_check_issues::no_control_flow]: loop body 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 65:4-67:5 -/
 @[rust_loop_body]
 def no_control_flow_loop.body
-  (p : Option X) (back : Option X → Option X) :
-  Result (ControlFlow ((Option X) × (Option X → Option X)) Unit)
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result (ControlFlow ((Option (Box X)) × (Option (Box X) → Option (Box X)))
+    Unit)
   := do
   match p with
   | none => ok (done ())
-  | some now => ok (cont (now.next, fun o => back (some (X.mk o))))
+  | some now =>
+    ok (cont (now.val.next, fun o => back (some (Box.mk (X.mk o)))))
 
 /-- [rust_borrow_check_issues::no_control_flow]: loop 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 65:4-67:5 -/
 @[rust_loop]
 def no_control_flow_loop
-  (p : Option X) (back : Option X → Option X) : Result Unit := do
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result Unit
+  := do
   loop
     (fun (p1, back1) => no_control_flow_loop.body p1 back1)
     (p, back)
@@ -94,24 +101,28 @@ def no_control_flow_loop
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 62:0-68:1 -/
 @[reducible]
 def no_control_flow : Result Unit := do
-  no_control_flow_loop (some (X.mk none)) (fun o => o)
+  no_control_flow_loop (some (Box.mk (X.mk none))) (fun o => o)
 
 /-- [rust_borrow_check_issues::conditional]: loop body 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 73:4-77:5 -/
 @[rust_loop_body]
 def conditional_loop.body
-  (p : Option X) (back : Option X → Option X) :
-  Result (ControlFlow ((Option X) × (Option X → Option X)) Unit)
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result (ControlFlow ((Option (Box X)) × (Option (Box X) → Option (Box X)))
+    Unit)
   := do
   match p with
   | none => ok (done ())
-  | some now => ok (cont (now.next, fun o => back (some (X.mk o))))
+  | some now =>
+    ok (cont (now.val.next, fun o => back (some (Box.mk (X.mk o)))))
 
 /-- [rust_borrow_check_issues::conditional]: loop 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 73:4-77:5 -/
 @[rust_loop]
 def conditional_loop
-  (p : Option X) (back : Option X → Option X) : Result Unit := do
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result Unit
+  := do
   loop
     (fun (p1, back1) => conditional_loop.body p1 back1)
     (p, back)
@@ -120,31 +131,35 @@ def conditional_loop
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 70:0-78:1 -/
 @[reducible]
 def conditional : Result Unit := do
-  conditional_loop (some (X.mk none)) (fun o => o)
+  conditional_loop (some (Box.mk (X.mk none))) (fun o => o)
 
 /-- [rust_borrow_check_issues::unwrap_option_mut]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 82:0-87:1 -/
 def unwrap_option_mut
-  {T : Type _} (x : Option T) : Result (T × (T → Option T)) := do
+  {T : Type _} (x : Option (MutBorrow T)) :
+  Result ((MutBorrow T) × (T → Option (MutBorrow T)))
+  := do
   match x with
   | none => fail panic
-  | some x1 => ok (x1, some)
+  | some t => let back := fun t1 => some (MutBorrow.mk t1)
+              ok (t, back)
 
 /-- [rust_borrow_check_issues::conditional_with_indirection]: loop body 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 92:4-96:5 -/
 @[rust_loop_body]
 def conditional_with_indirection_loop.body
-  (p : Option X) (back : Option X → Option X) :
-  Result (ControlFlow ((Option X) × (Option X → Option X)) Unit)
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result (ControlFlow ((Option (Box X)) × (Option (Box X) → Option (Box X)))
+    Unit)
   := do
   match p with
   | none => ok (done ())
   | some _ =>
-    let (o, as_mut_back) ← core.option.Option.as_mut p
+    let (o, as_mut_back) ← core.option.Option.as_mut (MutBorrow.mk p)
     let (x, unwrap_option_mut_back) ← unwrap_option_mut o
-    ok (cont (x.next,
+    ok (cont (x.val.val.next,
       fun o1 =>
-        let o2 := unwrap_option_mut_back (X.mk o1)
+        let o2 := unwrap_option_mut_back (Box.mk (X.mk o1))
         let o3 := as_mut_back o2
         back o3))
 
@@ -152,7 +167,9 @@ def conditional_with_indirection_loop.body
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 92:4-96:5 -/
 @[rust_loop]
 def conditional_with_indirection_loop
-  (p : Option X) (back : Option X → Option X) : Result Unit := do
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result Unit
+  := do
   loop
     (fun (p1, back1) => conditional_with_indirection_loop.body p1 back1)
     (p, back)
@@ -161,25 +178,26 @@ def conditional_with_indirection_loop
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 89:0-97:1 -/
 @[reducible]
 def conditional_with_indirection : Result Unit := do
-  conditional_with_indirection_loop (some (X.mk none)) (fun o => o)
+  conditional_with_indirection_loop (some (Box.mk (X.mk none))) (fun o => o)
 
 /-- [rust_borrow_check_issues::conditional_with_indirection_2]: loop body 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 102:4-106:5 -/
 @[rust_loop_body]
 def conditional_with_indirection_2_loop.body
-  (b0 : Bool) (p : Option X) (back : Option X → Option X) :
-  Result (ControlFlow ((Option X) × (Option X → Option X)) Unit)
+  (b0 : Bool) (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) :
+  Result (ControlFlow ((Option (Box X)) × (Option (Box X) → Option (Box X)))
+    Unit)
   := do
   match p with
   | none => ok (done ())
   | some _ =>
     if b0
     then
-      let (o, as_mut_back) ← core.option.Option.as_mut p
+      let (o, as_mut_back) ← core.option.Option.as_mut (MutBorrow.mk p)
       let (x, unwrap_option_mut_back) ← unwrap_option_mut o
-      ok (cont (x.next,
+      ok (cont (x.val.val.next,
         fun o1 =>
-          let o2 := unwrap_option_mut_back (X.mk o1)
+          let o2 := unwrap_option_mut_back (Box.mk (X.mk o1))
           let o3 := as_mut_back o2
           back o3))
     else ok (cont (p, back))
@@ -188,7 +206,9 @@ def conditional_with_indirection_2_loop.body
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 102:4-106:5 -/
 @[rust_loop]
 def conditional_with_indirection_2_loop
-  (p : Option X) (back : Option X → Option X) (b0 : Bool) : Result Unit := do
+  (p : Option (Box X)) (back : Option (Box X) → Option (Box X)) (b0 : Bool) :
+  Result Unit
+  := do
   loop
     (fun (p1, back1) => conditional_with_indirection_2_loop.body b0 p1 back1)
     (p, back)
@@ -197,6 +217,7 @@ def conditional_with_indirection_2_loop
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 99:0-107:1 -/
 @[reducible]
 def conditional_with_indirection_2 (b0 : Bool) : Result Unit := do
-  conditional_with_indirection_2_loop (some (X.mk none)) (fun o => o) b0
+  conditional_with_indirection_2_loop (some (Box.mk (X.mk none))) (fun o => o)
+    b0
 
 end rust_borrow_check_issues

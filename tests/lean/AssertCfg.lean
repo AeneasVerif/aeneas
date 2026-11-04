@@ -278,19 +278,20 @@ def assert_in_loop_loop.body
   Result (ControlFlow (core.ops.range.Range Std.Usize) Unit)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done ())
   | some i =>
-    let x ← Array.index_usize a i
-    massert (x < 100#u32)
+    let x ← Array.index_usize (SharedBorrow.mk a) i
+    massert (x.val < 100#u32)
     ok (cont iter1)
 
 /-- [assert_cfg::assert_in_loop]: loop 0:
     Source: 'tests/src/assert-cfg.rs', lines 162:4-165:5 -/
 @[rust_loop]
 def assert_in_loop_loop
-  (iter : core.ops.range.Range Std.Usize) (a : Array Std.U32 10#usize) :
+  (a : Array Std.U32 10#usize) (iter : core.ops.range.Range Std.Usize) :
   Result Unit
   := do
   loop
@@ -300,30 +301,32 @@ def assert_in_loop_loop
 /-- [assert_cfg::assert_in_loop]:
     Source: 'tests/src/assert-cfg.rs', lines 161:0-166:1 -/
 @[reducible]
-def assert_in_loop (a : Array Std.U32 10#usize) : Result Unit := do
-  assert_in_loop_loop { start := 0#usize, «end» := 10#usize } a
+def assert_in_loop
+  (a : SharedBorrow (Array Std.U32 10#usize)) : Result Unit := do
+  assert_in_loop_loop a.val { start := 0#usize, «end» := 10#usize }
 
 /-- [assert_cfg::assert_or_in_loop]: loop body 0:
     Source: 'tests/src/assert-cfg.rs', lines 173:4-185:5 -/
 @[rust_loop_body]
 def assert_or_in_loop_loop.body
-  (iter : core.ops.range.Range Std.Usize) (a : Array Std.U32 10#usize) :
-  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Array Std.U32
-    10#usize)) (Array Std.U32 10#usize))
+  (a : Array Std.U32 10#usize) (iter : core.ops.range.Range Std.Usize) :
+  Result (ControlFlow ((Array Std.U32 10#usize) × (core.ops.range.Range
+    Std.Usize)) (Array Std.U32 10#usize))
   := do
-  let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  let (o, r) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done a)
   | some i =>
-    let c ← Array.index_usize a i
-    massert (c < 100#u32)
-    let c1 ← lift (core.num.U32.wrapping_sub c 200#u32)
+    let c ← Array.index_usize (SharedBorrow.mk a) i
+    massert (c.val < 100#u32)
+    let c1 ← lift (core.num.U32.wrapping_sub c.val 200#u32)
     let i1 ← lift (IScalar.hcast .U32 (-200)#i32)
     massert ((c1 >= i1) || (c1 < 100#u32))
-    let iter2 ← if c1 >= i1
-                  then ok iter1
-                  else ok iter1
+    let iter1 ← if c1 >= i1
+                  then ok r
+                  else ok r
     let i2 ← c1 >>> 16#i32
     let i3 ← lift (100#u32 &&& i2)
     let c2 ← lift (core.num.U32.wrapping_add c1 i3)
@@ -334,24 +337,26 @@ def assert_or_in_loop_loop.body
     let c3 ← lift (core.num.U32.wrapping_add c2 i6)
     massert (c3 < 100#u32)
     let a1 ← Array.update a i c3
-    ok (cont (iter2, a1))
+    ok (cont (a1, iter1))
 
 /-- [assert_cfg::assert_or_in_loop]: loop 0:
     Source: 'tests/src/assert-cfg.rs', lines 173:4-185:5 -/
 @[rust_loop]
 def assert_or_in_loop_loop
-  (iter : core.ops.range.Range Std.Usize) (a : Array Std.U32 10#usize) :
+  (a : Array Std.U32 10#usize) (iter : core.ops.range.Range Std.Usize) :
   Result (Array Std.U32 10#usize)
   := do
   loop
-    (fun (iter1, a1) => assert_or_in_loop_loop.body iter1 a1)
-    (iter, a)
+    (fun (a1, iter1) => assert_or_in_loop_loop.body a1 iter1)
+    (a, iter)
 
 /-- [assert_cfg::assert_or_in_loop]:
     Source: 'tests/src/assert-cfg.rs', lines 172:0-186:1 -/
 @[reducible]
 def assert_or_in_loop
-  (a : Array Std.U32 10#usize) : Result (Array Std.U32 10#usize) := do
-  assert_or_in_loop_loop { start := 0#usize, «end» := 10#usize } a
+  (a : MutBorrow (Array Std.U32 10#usize)) :
+  Result (Array Std.U32 10#usize)
+  := do
+  assert_or_in_loop_loop a.val { start := 0#usize, «end» := 10#usize }
 
 end assert_cfg

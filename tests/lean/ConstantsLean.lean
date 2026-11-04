@@ -33,7 +33,8 @@ def use_params
   let i ← ParamsInst.N
   let i1 ← ParamsInst.M
   let i2 ← i * i1
-  lift (core.cmp.impls.PartialEqUsize.eq n i2)
+  lift (core.cmp.impls.PartialEqUsize.eq (SharedBorrow.mk n) (SharedBorrow.mk
+    i2))
 
 /-- [constants_lean::N]
     Source: 'tests/src/constants-lean.rs', lines 12:0-12:19 -/
@@ -49,8 +50,9 @@ def use_params
 
 /-- [constants_lean::Wrapper]
     Source: 'tests/src/constants-lean.rs', lines 16:0-16:65 -/
-def Wrapper (N1 : Std.Usize) (M1 : Std.Usize) :=
-  Array Std.U8 N1 × Array Std.U8 N1
+structure Wrapper (N1 : Std.Usize) (M1 : Std.Usize) where
+  _0 : Array Std.U8 N1
+  _1 : Array Std.U8 N1
 
 /-- [constants_lean::{constants_lean::Wrapper<N, M>}::NM]
     Source: 'tests/src/constants-lean.rs', lines 19:4-19:28 -/
@@ -164,12 +166,13 @@ def THREE_FEATURES : Std.U32 :=
 /-- [constants_lean::StaticRef]
     Source: 'tests/src/constants-lean.rs', lines 61:0-61:38
     Visibility: public -/
-@[reducible]
-def StaticRef := Std.U8
+structure StaticRef where
+  _0 : SharedBorrow Std.U8
 
 /-- [constants_lean::STATIC_REF]
     Source: 'tests/src/constants-lean.rs', lines 63:0-63:44 -/
-@[global_simps, irreducible] def STATIC_REF : StaticRef := 0#u8
+@[global_simps, irreducible]
+def STATIC_REF : StaticRef := { _0 := (SharedBorrow.mk 0#u8) }
 
 /-- [constants_lean::get_static_ref]:
     Source: 'tests/src/constants-lean.rs', lines 65:0-67:1
@@ -181,25 +184,25 @@ def get_static_ref : Result StaticRef := do
     Source: 'tests/src/constants-lean.rs', lines 69:0-71:1
     Visibility: public -/
 def read_static_ref : Result Std.U8 := do
-  let i := STATIC_REF
-  ok i
+  ok STATIC_REF._0.val
 
 /-- [constants_lean::StaticStr]
     Source: 'tests/src/constants-lean.rs', lines 73:0-76:1
     Visibility: public -/
 structure StaticStr where
-  «name» : Str
+  «name» : SharedBorrow Str
   value : Std.U32
 
 /-- [constants_lean::STATIC_STR]
     Source: 'tests/src/constants-lean.rs', lines 78:0-81:2 -/
 @[global_simps, irreducible]
-def STATIC_STR : StaticStr := { «name» := (toStr "hello"), value := 3#u32 }
+def STATIC_STR : StaticStr :=
+  { «name» := (SharedBorrow.mk (toStr "hello")), value := 3#u32 }
 
 /-- [constants_lean::get_static_str_name]:
     Source: 'tests/src/constants-lean.rs', lines 83:0-85:1
     Visibility: public -/
-def get_static_str_name : Result Str := do
+def get_static_str_name : Result (SharedBorrow Str) := do
   ok STATIC_STR.name
 
 /-- Trait declaration: [constants_lean::HasStaticRef]
@@ -213,6 +216,7 @@ structure HasStaticRef (Self : Type _) where
     Visibility: public -/
 def read_trait_static_ref
   {T : Type _} (HasStaticRefInst : HasStaticRef T) : Result Std.U8 := do
-  HasStaticRefInst.C
+  let sr ← HasStaticRefInst.C
+  ok sr._0.val
 
 end constants_lean

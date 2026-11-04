@@ -83,20 +83,20 @@ def i32_use_wrapping_shr (x : Std.I32) (s : Std.U32) : Result Std.I32 := do
 /-- [scalars::shr_into_index_mut]:
     Source: 'tests/src/scalars.rs', lines 57:0-59:1 -/
 def shr_into_index_mut
-  (x : Std.U64) (out : Array Std.U64 2#usize) :
+  (x : Std.U64) (out : MutBorrow (Array Std.U64 2#usize)) :
   Result (Array Std.U64 2#usize)
   := do
   let i ← x >>> 20#i32
-  Array.update out 0#usize i
+  Array.update out.val 0#usize i
 
 /-- [scalars::shl_into_index_mut]:
     Source: 'tests/src/scalars.rs', lines 62:0-64:1 -/
 def shl_into_index_mut
-  (x : Std.U64) (out : Array Std.U64 2#usize) :
+  (x : Std.U64) (out : MutBorrow (Array Std.U64 2#usize)) :
   Result (Array Std.U64 2#usize)
   := do
   let i ← x <<< 20#i32
-  Array.update out 0#usize i
+  Array.update out.val 0#usize i
 
 /-- [scalars::add_and]:
     Source: 'tests/src/scalars.rs', lines 66:0-68:1 -/
@@ -295,7 +295,7 @@ def test_is_power_of_two_usize : Result Unit := do
 def test_try_from_usize_u32_ok : Result Unit := do
   let r ←
     core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from 5#usize
-  let b ← core.result.Result.is_ok r
+  let b ← core.result.Result.is_ok (SharedBorrow.mk r)
   massert b
 
 /- Unit test for [scalars::test_try_from_usize_u32_ok] -/
@@ -329,7 +329,7 @@ def use_question_mark
     Visibility: public -/
 def test_question_mark_ok : Result Unit := do
   let r ← use_question_mark 10#u32 2#u32
-  let b ← core.result.Result.is_ok r
+  let b ← core.result.Result.is_ok (SharedBorrow.mk r)
   massert b
   let i ← core.result.Result.unwrap core.fmt.DebugUnit r
   massert (i = 6#u32)
@@ -342,7 +342,7 @@ def test_question_mark_ok : Result Unit := do
     Visibility: public -/
 def test_question_mark_err : Result Unit := do
   let r ← use_question_mark 10#u32 0#u32
-  let b ← core.result.Result.is_ok r
+  let b ← core.result.Result.is_ok (SharedBorrow.mk r)
   massert (¬ b)
 
 /- Unit test for [scalars::test_question_mark_err] -/

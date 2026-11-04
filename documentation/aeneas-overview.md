@@ -29,8 +29,9 @@ Rust source
 **Key properties of the translation:**
 
 - **Ownership-driven:** Rust's borrow checker guarantees that mutable references
-  are unique. Aeneas exploits this to turn references into plain values and
-  generate backward continuations that propagate updates — no heap model needed.
+  are unique. Aeneas exploits this to turn references into values (wrapped in
+  `SharedBorrow`/`MutBorrow`, see below) and generate backward continuations
+  that propagate updates — no heap model needed.
 - **Modular:** Each function is translated independently. There is no
   whole-program analysis.
 - **Sound:** The generated code faithfully models the semantics of the original
@@ -50,20 +51,23 @@ function wrapped in the `Result` monad.
 
 **Rust:**
 ```rust
-fn incr(x: &mut i32) -> i32 {
+fn incr(x: &mut i32) {
     *x = *x + 1;
-    *x
 }
 ```
 
 **Lean (generated):**
 ```lean
-def incr (x : I32) : Result I32 :=
-  x + 1#i32
+def incr (x : MutBorrow I32) : Result I32 :=
+  x.val + 1#i32
 ```
 
-The `&mut i32` parameter becomes a plain `I32` value. Arithmetic is checked:
-overflow produces `fail`.
+The `&mut i32` parameter becomes a `MutBorrow I32` value: `MutBorrow` is a
+simple wrapper structure with a single field `val` (likewise, `&T` becomes
+`SharedBorrow T` and `Box<T>` becomes `Box T`). There is no heap model: the
+wrappers simply contain the borrowed values. As the generated code is pure,
+`incr` returns the new value of the borrowed integer, that the caller then uses
+to update its own variable. Arithmetic is checked: overflow produces `fail`.
 
 ### 2.2 Backward Continuations (The Key Insight)
 
@@ -81,19 +85,22 @@ fn choose<'a, T>(b: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
 
 **Lean (generated):**
 ```lean
-def choose {T : Type _} (b : Bool) (x : T) (y : T) :
-    Result (T × (T → T × T)) :=
+def choose {T : Type _} (b : Bool) (x : MutBorrow T) (y : MutBorrow T) :
+    Result ((MutBorrow T) × (T → (T × T))) := do
   if b
-  then ok (x, fun z => (z, y))
-  else ok (y, fun z => (x, z))
+  then let back := fun x1 => (x1, y.val)
+       ok (x, back)
+  else let back := fun y1 => (x.val, y1)
+       ok (y, back)
 ```
 
-**Reading the result type:** `Result (T × (T → T × T))` means:
+**Reading the result type:** `Result ((MutBorrow T) × (T → (T × T)))` means:
 - The function may fail (`Result`).
-- On success it returns a pair: the selected value (`T`) and a backward
-  continuation (`T → T × T`).
-- The backward continuation takes the final value written through the borrow and
-  returns the updated `x` and `y`.
+- On success it returns a pair: the selected borrow (`MutBorrow T`) and a
+  backward continuation (`T → T × T`).
+- The backward continuation takes the final value written through the borrow
+  (a `T`: backward continuations manipulate the borrowed values, not the
+  borrows) and returns the updated values of `x` and `y`.
 
 **Analogy with lenses:** The forward function is a "get" that extracts a view.
 The backward continuation is a "put" that writes the modified value back into
@@ -103,9 +110,9 @@ the original structure.
 ```lean
 -- Rust: let r = choose(true, &mut a, &mut b); *r += 1;
 -- After translation, the caller:
---   1. Calls `choose` to get (value, back)
---   2. Computes the new value (value + 1)
---   3. Calls `back (value + 1)` to get updated (a', b')
+--   1. Calls `choose` to get (r, back), where `r : MutBorrow T`
+--   2. Computes the new value (r.val + 1)
+--   3. Calls `back (r.val + 1)` to get updated (a', b')
 ```
 
 ### 2.3 The Result Error Monad
@@ -231,13 +238,17 @@ Each scalar value `s` has a `.val` field that extracts the underlying natural nu
 |------------------------------|-------------------------------|
 | `[T; N]` (fixed-size array)  | `Array T n`                   |
 | `Vec<T>`                     | `Vec T`                       |
-| `Box<T>`                     | `T` (indirection is erased)   |
+| `Box<T>`                     | `Box T` (wrapper with a field `val`, no heap model) |
 
 ### 3.4 Conventions
 
-- **Mutable reference parameters** become plain value parameters.
-- **Returned mutable borrows** produce a tuple of (value, backward continuation).
-- **Shared borrows (`&T`)** become plain `T` parameters (the value may be copied).
+- **Mutable reference parameters** (`&mut T`) become `MutBorrow T` parameters
+  (a wrapper around the borrowed value); the function also returns the new
+  value of the borrowed data (of type `T`).
+- **Returned mutable borrows** produce a tuple of (`MutBorrow T` value, backward
+  continuation taking the new value of type `T`).
+- **Shared borrows (`&T`)** become `SharedBorrow T` parameters (a wrapper around
+  the borrowed value, which may be copied).
 - **Pattern matching** maps directly to `match` in Lean.
 - **Recursive functions** become Lean recursive functions (may require termination proofs).
 - **Traits** are translated to Lean type classes.
@@ -326,20 +337,21 @@ theorem add_spec (a b : U32) (h : a.val + b.val < U32.max) :
 
 ```lean
 @[step]
-theorem list_nth_mut1_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-    (h : i.val < l.toList.length) :
+theorem list_nth_mut1_spec {T : Type} [Inhabited T] (l : MutBorrow (CList T)) (i : U32)
+    (h : i.val < l.val.toList.length) :
     list_nth_mut1 l i ⦃ x back =>
-      x = l.toList[i.val]! ∧
-      ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
-  unfold list_nth_mut1 list_nth_mut1_loop
+      x.val = l.val.toList[i.val] ∧
+      ∀ x', (back x').toList = l.val.toList.set i.val x' ⦄ := by
+  unfold list_nth_mut1
   step*
-  simp_all
 ```
 
 **Reading this spec:**
-- `list_nth_mut1 l i` returns a value `x` and a backward function `back`.
-- `x = l.toList[i.val]!` — the returned value is the `i`-th element.
-- `∀ x', (back x').toList = l.toList.set i.val x'` — calling `back` with a new
+- `list_nth_mut1 l i` returns a borrow `x : MutBorrow T` and a backward
+  function `back : T → CList T`.
+- `x.val = l.val.toList[i.val]` — the returned borrow points to the `i`-th
+  element.
+- `∀ x', (back x').toList = l.val.toList.set i.val x'` — calling `back` with a new
   value `x'` produces a list where position `i` has been replaced by `x'`.
 
 This is the lens pattern: `x` is the "get", and `back` is the "set".
@@ -427,12 +439,12 @@ described in Section 4.
 
 | Rust Concept             | Lean Translation                                             |
 |--------------------------|--------------------------------------------------------------|
-| `&mut T` parameter       | `T` parameter (passed by value)                              |
-| Returning `&'a mut T`    | Returns `Result (T × (T → ...))` with backward continuation  |
-| `&T` (shared borrow)     | `T` parameter (immutable, may be copied)                     |
+| `&mut T` parameter       | `MutBorrow T` parameter; the new value of type `T` is returned |
+| Returning `&'a mut T`    | Returns `Result (MutBorrow T × (T → ...))` with backward continuation |
+| `&T` (shared borrow)     | `SharedBorrow T` parameter (immutable, may be copied)        |
 | `panic!()`               | `fail` in the `Result` monad                                 |
 | Integer overflow         | `fail` (all arithmetic is checked)                           |
-| `Box<T>`                 | `T` (heap indirection erased)                                |
+| `Box<T>`                 | `Box T` (wrapper with a field `val`, no heap model)          |
 | Pattern matching         | `match` in Lean                                              |
 | Recursive functions      | Lean recursive functions (may need termination proofs)       |
 | Traits                   | Type classes in Lean                                         |
@@ -443,9 +455,9 @@ described in Section 4.
 
 Think of the translation as follows:
 
-1. **Values, not references.** Every `&mut T` becomes a `T`. Rust's ownership
-   guarantees there is exactly one owner, so passing by value is semantically
-   equivalent.
+1. **Values, not references.** Every `&mut T` becomes a `MutBorrow T`, which
+   simply wraps a value of type `T` (`x.val`). Rust's ownership guarantees there
+   is exactly one owner, so passing by value is semantically equivalent.
 
 2. **Backward continuations = lenses.** When a function hands out a mutable
    borrow, it also hands out a way to "put back" the modified value. This is

@@ -24,7 +24,7 @@ namespace static
     Source: 'tests/src/static.rs', lines 3:0-5:1
     Visibility: public -/
 structure WithSlice (Self : Type _) where
-  SLICE : Result (Slice Std.U16)
+  SLICE : Result (SharedBorrow (Slice Std.U16))
 
 /-- [static::read]:
     Source: 'tests/src/static.rs', lines 27:0-29:1 -/
@@ -33,12 +33,14 @@ def read
   Result Std.U16
   := do
   let s ← WithSliceInst.SLICE
-  Slice.index_usize s i
+  let i1 ← Slice.index_usize s i
+  ok i1.val
 
 /-- [static::use_static::PREFIX]
     Source: 'tests/src/static.rs', lines 40:4-40:34 -/
 @[global_simps, irreducible]
-def use_static.PREFIX : Array Std.U8 1#usize := Array.make 1#usize [ 0#u8 ]
+def use_static.PREFIX : SharedBorrow (Array Std.U8 1#usize) :=
+  SharedBorrow.mk (Array.make 1#usize [ 0#u8 ])
 
 /-- [static::use_static]:
     Source: 'tests/src/static.rs', lines 39:0-42:1 -/
@@ -51,37 +53,38 @@ def use_static : Result Unit := do
 
 /-- [static::ret_static]:
     Source: 'tests/src/static.rs', lines 46:0-48:1 -/
-def ret_static : Result Std.U32 := do
-  ok GLOBAL
+def ret_static : Result (SharedBorrow Std.U32) := do
+  ok (SharedBorrow.mk GLOBAL)
 
 /-- [static::ret_str]:
     Source: 'tests/src/static.rs', lines 50:0-52:1 -/
-def ret_str : Result Str := do
-  ok (toStr "hello")
+def ret_str : Result (SharedBorrow Str) := do
+  ok (SharedBorrow.mk (toStr "hello"))
 
 /-- [static::take_static]:
     Source: 'tests/src/static.rs', lines 54:0-56:1 -/
-def take_static (x : Std.U32) : Result Std.U32 := do
-  ok x
+def take_static (x : SharedBorrow Std.U32) : Result Std.U32 := do
+  ok x.val
 
 /-- [static::call_take_static]:
     Source: 'tests/src/static.rs', lines 58:0-60:1 -/
 def call_take_static : Result Std.U32 := do
-  take_static GLOBAL
+  take_static (SharedBorrow.mk GLOBAL)
 
 /-- [static::choose_static]:
     Source: 'tests/src/static.rs', lines 62:0-68:1 -/
-def choose_static (b : Bool) (x : Std.U32) : Result Std.U32 := do
+def choose_static
+  (b : Bool) (x : SharedBorrow Std.U32) : Result (SharedBorrow Std.U32) := do
   if b
   then ok x
-  else ok GLOBAL
+  else ok (SharedBorrow.mk GLOBAL)
 
 /-- [static::branch_str]:
     Source: 'tests/src/static.rs', lines 70:0-76:1 -/
-def branch_str (b : Bool) : Result Str := do
+def branch_str (b : Bool) : Result (SharedBorrow Str) := do
   if b
-  then ok (toStr "a")
-  else ok (toStr "b")
+  then ok (SharedBorrow.mk (toStr "a"))
+  else ok (SharedBorrow.mk (toStr "b"))
 
 /-- [static::loop_global::CARRAY]
     Source: 'tests/src/static.rs', lines 79:4-79:36 -/
@@ -99,8 +102,8 @@ def loop_global_loop.body
   if i < n
   then
     let i1 ← i % 2#usize
-    let i2 ← Array.index_usize loop_global.CARRAY i1
-    let s1 ← s + i2
+    let i2 ← Array.index_usize (SharedBorrow.mk loop_global.CARRAY) i1
+    let s1 ← s + i2.val
     let i3 ← i + 1#usize
     ok (cont (s1, i3))
   else ok (done s)
@@ -123,37 +126,42 @@ def loop_global (n : Std.Usize) : Result Std.U32 := do
 /-- [static::pair]:
     Source: 'tests/src/static.rs', lines 89:0-91:1 -/
 def pair
-  (x : Std.U32) : Result ((Std.U32 × Std.U32) × (Std.U32 → Std.U32)) := do
-  ok ((x, GLOBAL), fun x1 => x1)
+  (x : MutBorrow Std.U32) :
+  Result (((MutBorrow Std.U32) × (SharedBorrow Std.U32)) × (Std.U32 →
+    Std.U32))
+  := do
+  ok ((x, SharedBorrow.mk GLOBAL), fun x1 => x1)
 
 /-- [static::use_pair]:
     Source: 'tests/src/static.rs', lines 93:0-97:1 -/
-def use_pair (y : Std.U32) : Result (Std.U32 × Std.U32) := do
-  let ((a, b), pair_back) ← pair y
-  let a1 ← a + 1#u32
-  let y1 := pair_back a1
-  ok (b, y1)
+def use_pair (y : MutBorrow Std.U32) : Result (Std.U32 × Std.U32) := do
+  let ((i, i1), pair_back) ← pair y
+  let a ← i.val + 1#u32
+  let y1 := pair_back a
+  ok (i1.val, y1)
 
 /-- [static::incr_static_mut]:
     Source: 'tests/src/static.rs', lines 99:0-101:1 -/
-def incr_static_mut (x : Std.U32) : Result Std.U32 := do
-  x + 1#u32
+def incr_static_mut (x : MutBorrow Std.U32) : Result Std.U32 := do
+  x.val + 1#u32
 
 /-- [static::ret_static_mut]:
     Source: 'tests/src/static.rs', lines 103:0-105:1 -/
 def ret_static_mut
-  (x : Std.U32) : Result (Std.U32 × (Std.U32 → Std.U32)) := do
+  (x : MutBorrow Std.U32) :
+  Result ((MutBorrow Std.U32) × (Std.U32 → Std.U32))
+  := do
   ok (x, fun x1 => x1)
 
 /-- [static::StaticRef]
     Source: 'tests/src/static.rs', lines 107:0-109:1 -/
 structure StaticRef where
-  x : Std.U32
+  x : SharedBorrow Std.U32
 
 /-- [static::mk_static_ref]:
     Source: 'tests/src/static.rs', lines 111:0-113:1 -/
 def mk_static_ref : Result StaticRef := do
-  ok { x := GLOBAL }
+  ok { x := (SharedBorrow.mk GLOBAL) }
 
 /-- [static::loop_take_static]: loop body 0:
     Source: 'tests/src/static.rs', lines 118:4-121:5 -/
@@ -164,7 +172,7 @@ def loop_take_static_loop.body
   := do
   if i < n
   then
-    let i1 ← take_static GLOBAL
+    let i1 ← take_static (SharedBorrow.mk GLOBAL)
     let s1 ← s + i1
     let i2 ← i + 1#u32
     ok (cont (s1, i2))
@@ -187,23 +195,23 @@ def loop_take_static (n : Std.U32) : Result Std.U32 := do
 
 /-- [static::take_static_unit]:
     Source: 'tests/src/static.rs', lines 125:0-125:40 -/
-def take_static_unit (_x : Std.U32) : Result Unit := do
+def take_static_unit (_x : SharedBorrow Std.U32) : Result Unit := do
   ok ()
 
 /-- [static::call_take_static_unit]:
     Source: 'tests/src/static.rs', lines 127:0-129:1 -/
 def call_take_static_unit : Result Unit := do
-  take_static_unit GLOBAL
+  take_static_unit (SharedBorrow.mk GLOBAL)
 
 /-- [static::take_str]:
     Source: 'tests/src/static.rs', lines 131:0-131:32 -/
-def take_str (_s : Str) : Result Unit := do
+def take_str (_s : SharedBorrow Str) : Result Unit := do
   ok ()
 
 /-- [static::call_take_str]:
     Source: 'tests/src/static.rs', lines 133:0-135:1 -/
 def call_take_str : Result Unit := do
-  take_str (toStr "hello")
+  take_str (SharedBorrow.mk (toStr "hello"))
 
 /-- [static::loop_glob]: loop body 0:
     Source: 'tests/src/static.rs', lines 142:4-145:5 -/
@@ -255,13 +263,19 @@ def loop_choose_loop
 
 /-- [static::loop_choose]:
     Source: 'tests/src/static.rs', lines 149:0-157:1 -/
-@[reducible]
-def loop_choose (x : Std.U32) (n : Std.U32) : Result Std.U32 := do
-  loop_choose_loop n x 0#u32
+def loop_choose
+  (x : SharedBorrow Std.U32) (n : Std.U32) :
+  Result (SharedBorrow Std.U32)
+  := do
+  let r ← loop_choose_loop n x.val 0#u32
+  ok (SharedBorrow.mk r)
 
 /-- [static::choose]:
     Source: 'tests/src/static.rs', lines 159:0-165:1 -/
-def choose (b : Bool) (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
+def choose
+  (b : Bool) (x : SharedBorrow Std.U32) (y : SharedBorrow Std.U32) :
+  Result (SharedBorrow Std.U32)
+  := do
   if b
   then ok x
   else ok y
@@ -274,9 +288,10 @@ def loop_choose_call_loop.body
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
   if i < n
-  then let r1 ← choose true r GLOBAL
-       let i1 ← i + 1#u32
-       ok (cont (r1, i1))
+  then
+    let i1 ← choose true (SharedBorrow.mk r) (SharedBorrow.mk GLOBAL)
+    let i2 ← i + 1#u32
+    ok (cont (i1.val, i2))
   else ok (done r)
 
 /-- [static::loop_choose_call]: loop 0:
@@ -290,9 +305,12 @@ def loop_choose_call_loop
 
 /-- [static::loop_choose_call]:
     Source: 'tests/src/static.rs', lines 167:0-175:1 -/
-@[reducible]
-def loop_choose_call (x : Std.U32) (n : Std.U32) : Result Std.U32 := do
-  loop_choose_call_loop n x 0#u32
+def loop_choose_call
+  (x : SharedBorrow Std.U32) (n : Std.U32) :
+  Result (SharedBorrow Std.U32)
+  := do
+  let r ← loop_choose_call_loop n x.val 0#u32
+  ok (SharedBorrow.mk r)
 
 /-- [static::loop_static_mut]: loop body 0:
     Source: 'tests/src/static.rs', lines 183:4-187:5 -/
@@ -303,11 +321,11 @@ def loop_static_mut_loop.body
   := do
   if i < n
   then
-    let (r1, ret_static_mut_back) ← ret_static_mut r
-    let r2 ← r1 + 1#u32
-    let i1 ← i + 1#u32
-    ok (cont (fun i2 => let i3 := ret_static_mut_back i2
-                        back i3, r2, i1))
+    let (i1, ret_static_mut_back) ← ret_static_mut (MutBorrow.mk r)
+    let r1 ← i1.val + 1#u32
+    let i2 ← i + 1#u32
+    ok (cont (fun i3 => let i4 := ret_static_mut_back i3
+                        back i4, r1, i2))
   else ok (done (back r))
 
 /-- [static::loop_static_mut]: loop 0:
@@ -324,47 +342,55 @@ def loop_static_mut_loop
 /-- [static::loop_static_mut]:
     Source: 'tests/src/static.rs', lines 180:0-188:1 -/
 @[reducible]
-def loop_static_mut (x : Std.U32) (n : Std.U32) : Result Std.U32 := do
-  loop_static_mut_loop (fun i => i) n x 0#u32
+def loop_static_mut
+  (x : MutBorrow Std.U32) (n : Std.U32) : Result Std.U32 := do
+  loop_static_mut_loop (fun i => i) n x.val 0#u32
 
 /-- [static::outlives]:
     Source: 'tests/src/static.rs', lines 191:0-193:1 -/
-def outlives (x : Std.U32) : Result Std.U32 := do
+def outlives (x : SharedBorrow Std.U32) : Result (SharedBorrow Std.U32) := do
   ok x
 
 /-- [static::call_outlives]:
     Source: 'tests/src/static.rs', lines 195:0-197:1 -/
 def call_outlives : Result Std.U32 := do
-  outlives GLOBAL
+  let i ← outlives (SharedBorrow.mk GLOBAL)
+  ok i.val
 
 /-- [static::outlives2]:
     Source: 'tests/src/static.rs', lines 199:0-202:1 -/
-def outlives2 (x : Std.U32) (y : Std.U32) : Result (Std.U32 × Std.U32) := do
-  let x1 ← x + 1#u32
+def outlives2
+  (x : MutBorrow Std.U32) (y : SharedBorrow Std.U32) :
+  Result ((SharedBorrow Std.U32) × Std.U32)
+  := do
+  let x1 ← x.val + 1#u32
   ok (y, x1)
 
 /-- [static::call_outlives2]:
     Source: 'tests/src/static.rs', lines 204:0-206:1 -/
-def call_outlives2 (x : Std.U32) : Result (Std.U32 × Std.U32) := do
-  outlives2 x GLOBAL
+def call_outlives2 (x : MutBorrow Std.U32) : Result (Std.U32 × Std.U32) := do
+  let (i, x1) ← outlives2 x (SharedBorrow.mk GLOBAL)
+  ok (i.val, x1)
 
 /-- [static::outlives_mut]:
     Source: 'tests/src/static.rs', lines 208:0-210:1 -/
 def outlives_mut
-  (x : Std.U32) : Result (Std.U32 × (Std.U32 → Std.U32)) := do
+  (x : MutBorrow Std.U32) :
+  Result ((MutBorrow Std.U32) × (Std.U32 → Std.U32))
+  := do
   ok (x, fun x1 => x1)
 
 /-- [static::incr_outlives_mut]:
     Source: 'tests/src/static.rs', lines 212:0-214:1 -/
-def incr_outlives_mut (x : Std.U32) : Result Std.U32 := do
+def incr_outlives_mut (x : MutBorrow Std.U32) : Result Std.U32 := do
   let (i, outlives_mut_back) ← outlives_mut x
-  let i1 ← i + 1#u32
+  let i1 ← i.val + 1#u32
   ok (outlives_mut_back i1)
 
 /-- [static::read_static_ref]:
     Source: 'tests/src/static.rs', lines 218:0-220:1 -/
 def read_static_ref (s : StaticRef) : Result Std.U32 := do
-  ok s.x
+  ok s.x.val
 
 /-- [static::read_mk_static_ref]:
     Source: 'tests/src/static.rs', lines 222:0-224:1 -/
@@ -374,80 +400,87 @@ def read_mk_static_ref : Result Std.U32 := do
 
 /-- [static::get_static_ref]:
     Source: 'tests/src/static.rs', lines 226:0-228:1 -/
-def get_static_ref (s : StaticRef) : Result Std.U32 := do
+def get_static_ref (s : StaticRef) : Result (SharedBorrow Std.U32) := do
   ok s.x
 
 /-- [static::read_get_static_ref]:
     Source: 'tests/src/static.rs', lines 230:0-232:1 -/
 def read_get_static_ref : Result Std.U32 := do
   let sr ← mk_static_ref
-  get_static_ref sr
+  let i ← get_static_ref sr
+  ok i.val
 
 /-- [static::ref_static_ref]:
     Source: 'tests/src/static.rs', lines 234:0-236:1 -/
-def ref_static_ref (s : StaticRef) : Result Std.U32 := do
-  ok s.x
+def ref_static_ref
+  (s : SharedBorrow StaticRef) : Result (SharedBorrow Std.U32) := do
+  ok s.val.x
 
 /-- [static::ref_mut_static_ref]:
     Source: 'tests/src/static.rs', lines 238:0-240:1 -/
-def ref_mut_static_ref (s : StaticRef) : Result StaticRef := do
-  ok { x := GLOBAL }
+def ref_mut_static_ref (s : MutBorrow StaticRef) : Result StaticRef := do
+  ok { x := (SharedBorrow.mk GLOBAL) }
 
 /-- [static::StaticMut]
     Source: 'tests/src/static.rs', lines 242:0-244:1 -/
 structure StaticMut where
-  x : Std.U32
+  x : MutBorrow Std.U32
 
 /-- [static::incr_hidden_static_mut]:
     Source: 'tests/src/static.rs', lines 246:0-248:1 -/
 def incr_hidden_static_mut (s : StaticMut) : Result StaticMut := do
-  let i ← s.x + 1#u32
-  ok { x := i }
+  let i ← s.x.val + 1#u32
+  ok { x := (MutBorrow.mk i) }
 
 /-- [static::get_hidden_static_mut]:
     Source: 'tests/src/static.rs', lines 250:0-252:1 -/
 def get_hidden_static_mut
-  (s : StaticMut) : Result (Std.U32 × (Std.U32 → StaticMut)) := do
-  let back := fun i => ({ x := i } : StaticMut)
+  (s : StaticMut) :
+  Result ((MutBorrow Std.U32) × (Std.U32 → StaticMut))
+  := do
+  let back := fun i => ({ x := (MutBorrow.mk i) } : StaticMut)
   ok (s.x, back)
 
 /-- [static::Mixed]
     Source: 'tests/src/static.rs', lines 254:0-257:1 -/
 structure Mixed where
-  x : Std.U32
-  y : Std.U32
+  x : MutBorrow Std.U32
+  y : SharedBorrow Std.U32
 
 /-- [static::use_mixed]:
     Source: 'tests/src/static.rs', lines 259:0-261:1 -/
 def use_mixed (m : Mixed) : Result Mixed := do
-  let i ← m.x + m.y
-  ok { m with x := i }
+  let i ← m.x.val + m.y.val
+  ok { m with x := (MutBorrow.mk i) }
 
 /-- [static::get_mixed]:
     Source: 'tests/src/static.rs', lines 263:0-265:1 -/
 def get_mixed
-  (m : Mixed) : Result ((Std.U32 × Std.U32) × (Std.U32 → Mixed)) := do
-  let back := fun i => { m with x := i }
+  (m : Mixed) :
+  Result (((MutBorrow Std.U32) × (SharedBorrow Std.U32)) × (Std.U32 →
+    Mixed))
+  := do
+  let back := fun i => { m with x := (MutBorrow.mk i) }
   ok ((m.x, m.y), back)
 
 /-- [static::call_mixed]:
     Source: 'tests/src/static.rs', lines 267:0-269:1 -/
-def call_mixed (x : Std.U32) : Result Std.U32 := do
-  let m ← use_mixed { x, y := GLOBAL }
-  ok m.x
+def call_mixed (x : MutBorrow Std.U32) : Result Std.U32 := do
+  let m ← use_mixed { x, y := (SharedBorrow.mk GLOBAL) }
+  ok m.x.val
 
 /-- [static::call_incr_hidden_static_mut]:
     Source: 'tests/src/static.rs', lines 271:0-273:1 -/
-def call_incr_hidden_static_mut (x : Std.U32) : Result Std.U32 := do
+def call_incr_hidden_static_mut (x : MutBorrow Std.U32) : Result Std.U32 := do
   let sm ← incr_hidden_static_mut { x }
-  ok sm.x
+  ok sm.x.val
 
 /-- [static::call_get_hidden_static_mut]:
     Source: 'tests/src/static.rs', lines 275:0-277:1 -/
-def call_get_hidden_static_mut (x : Std.U32) : Result Std.U32 := do
+def call_get_hidden_static_mut (x : MutBorrow Std.U32) : Result Std.U32 := do
   let (i, get_hidden_static_mut_back) ← get_hidden_static_mut { x }
-  let i1 ← i + 1#u32
-  ok (get_hidden_static_mut_back i1).x
+  let i1 ← i.val + 1#u32
+  ok (get_hidden_static_mut_back i1).x.val
 
 /-- [static::id_hidden_static_mut]:
     Source: 'tests/src/static.rs', lines 279:0-281:1 -/
@@ -464,11 +497,13 @@ def loop_hidden_static_mut_loop.body
   := do
   if i1 < n
   then
-    let (sm, id_hidden_static_mut_back) ← id_hidden_static_mut { x := i }
-    let i2 ← sm.x + 1#u32
+    let (sm, id_hidden_static_mut_back) ←
+      id_hidden_static_mut { x := (MutBorrow.mk i) }
+    let i2 ← sm.x.val + 1#u32
     let i3 ← i1 + 1#u32
-    ok (cont (fun i4 => back (id_hidden_static_mut_back { x := i4 }).x, i2,
-      i3))
+    ok (cont
+      (fun i4 => back
+         (id_hidden_static_mut_back { x := (MutBorrow.mk i4) }).x.val, i2, i3))
   else ok (done (back i))
 
 /-- [static::loop_hidden_static_mut]: loop 0:
@@ -486,8 +521,8 @@ def loop_hidden_static_mut_loop
     Source: 'tests/src/static.rs', lines 283:0-291:1 -/
 def loop_hidden_static_mut
   (s : StaticMut) (n : Std.U32) : Result StaticMut := do
-  let back ← loop_hidden_static_mut_loop (fun i => i) n s.x 0#u32
-  ok { x := back }
+  let back ← loop_hidden_static_mut_loop (fun i => i) n s.x.val 0#u32
+  ok { x := (MutBorrow.mk back) }
 
 /-- [static::loop_hidden_static_mut1]: loop body 0:
     Source: 'tests/src/static.rs', lines 296:4-300:5 -/
@@ -498,10 +533,11 @@ def loop_hidden_static_mut1_loop.body
   := do
   if i < n
   then
-    let (r1, get_hidden_static_mut_back) ← get_hidden_static_mut { x := r }
-    let r2 ← r1 + 1#u32
-    let i1 ← i + 1#u32
-    ok (cont (fun i2 => back (get_hidden_static_mut_back i2).x, r2, i1))
+    let (i1, get_hidden_static_mut_back) ←
+      get_hidden_static_mut { x := (MutBorrow.mk r) }
+    let r1 ← i1.val + 1#u32
+    let i2 ← i + 1#u32
+    ok (cont (fun i3 => back (get_hidden_static_mut_back i3).x.val, r1, i2))
   else ok (done (back r))
 
 /-- [static::loop_hidden_static_mut1]: loop 0:
@@ -518,8 +554,9 @@ def loop_hidden_static_mut1_loop
 /-- [static::loop_hidden_static_mut1]:
     Source: 'tests/src/static.rs', lines 293:0-301:1 -/
 @[reducible]
-def loop_hidden_static_mut1 (x : Std.U32) (n : Std.U32) : Result Std.U32 := do
-  loop_hidden_static_mut1_loop (fun i => i) n x 0#u32
+def loop_hidden_static_mut1
+  (x : MutBorrow Std.U32) (n : Std.U32) : Result Std.U32 := do
+  loop_hidden_static_mut1_loop (fun i => i) n x.val 0#u32
 
 /-- [static::branch_hidden_static_mut]:
     Source: 'tests/src/static.rs', lines 303:0-306:1 -/
@@ -530,11 +567,12 @@ def branch_hidden_static_mut
     then
       do
       let (s1, id_hidden_static_mut_back) ← id_hidden_static_mut s
-      ok (s1.x, fun i1 => (id_hidden_static_mut_back { x := i1 }).x)
-    else ok (s.x, fun i1 => i1)
+      ok (s1.x.val,
+        fun i1 => (id_hidden_static_mut_back { x := (MutBorrow.mk i1) }).x.val)
+    else ok (s.x.val, fun i1 => i1)
   let i1 ← i + 1#u32
   let i2 := back i1
-  ok { x := i2 }
+  ok { x := (MutBorrow.mk i2) }
 
 /-- [static::loop_hidden_static_ref]: loop body 0:
     Source: 'tests/src/static.rs', lines 312:4-316:5 -/
@@ -569,17 +607,17 @@ def loop_hidden_static_ref (n : Std.U32) : Result Std.U32 := do
 
 /-- [static::read_opt_static]:
     Source: 'tests/src/static.rs', lines 322:0-327:1 -/
-def read_opt_static (o : Option Std.U32) : Result Std.U32 := do
+def read_opt_static (o : Option (SharedBorrow Std.U32)) : Result Std.U32 := do
   match o with
   | none => ok 0#u32
-  | some x => ok x
+  | some i => ok i.val
 
 /-- [static::read_opt_static_ref]:
     Source: 'tests/src/static.rs', lines 329:0-334:1 -/
 def read_opt_static_ref (o : Option StaticRef) : Result Std.U32 := do
   match o with
   | none => ok 0#u32
-  | some sr => ok sr.x
+  | some sr => ok sr.x.val
 
 /-- [static::Outer]
     Source: 'tests/src/static.rs', lines 336:0-338:1 -/
@@ -589,92 +627,92 @@ structure Outer where
 /-- [static::read_outer]:
     Source: 'tests/src/static.rs', lines 340:0-342:1 -/
 def read_outer (o : Outer) : Result Std.U32 := do
-  ok o.s.x
+  ok o.s.x.val
 
 /-- [static::StaticEnum]
     Source: 'tests/src/static.rs', lines 344:0-347:1 -/
 @[discriminant isize]
 inductive StaticEnum where
-| A : Std.U32 → StaticEnum
+| A : SharedBorrow Std.U32 → StaticEnum
 | B : StaticEnum
 
 /-- [static::read_static_enum]:
     Source: 'tests/src/static.rs', lines 349:0-354:1 -/
 def read_static_enum (e : StaticEnum) : Result Std.U32 := do
   match e with
-  | StaticEnum.A x => ok x
+  | StaticEnum.A i => ok i.val
   | StaticEnum.B => ok 0#u32
 
 /-- [static::StaticList]
     Source: 'tests/src/static.rs', lines 356:0-359:1 -/
 @[discriminant isize]
 inductive StaticList where
-| Cons : Std.U32 → StaticList → StaticList
+| Cons : SharedBorrow Std.U32 → Box StaticList → StaticList
 | Nil : StaticList
 
 /-- [static::static_list_head]:
     Source: 'tests/src/static.rs', lines 361:0-366:1 -/
 def static_list_head (l : StaticList) : Result Std.U32 := do
   match l with
-  | StaticList.Cons x _ => ok x
+  | StaticList.Cons i _ => ok i.val
   | StaticList.Nil => ok 0#u32
 
 /-- [static::Named]
     Source: 'tests/src/static.rs', lines 369:0-372:1 -/
 structure Named where
-  «name» : Str
+  «name» : SharedBorrow Str
   v : Std.U32
 
 /-- [static::get_name]:
     Source: 'tests/src/static.rs', lines 374:0-376:1 -/
-def get_name (n : Named) : Result Str := do
-  ok n.name
+def get_name (n : SharedBorrow Named) : Result (SharedBorrow Str) := do
+  ok n.val.name
 
 /-- [static::set_name]:
     Source: 'tests/src/static.rs', lines 378:0-381:1 -/
-def set_name (n : Named) : Result Named := do
-  let i ← n.v + 1#u32
-  ok { «name» := (toStr "hello"), v := i }
+def set_name (n : MutBorrow Named) : Result Named := do
+  let i ← n.val.v + 1#u32
+  ok { «name» := (SharedBorrow.mk (toStr "hello")), v := i }
 
 /-- [static::mk_named]:
     Source: 'tests/src/static.rs', lines 383:0-385:1 -/
 def mk_named : Result Named := do
-  ok { «name» := (toStr "a"), v := 0#u32 }
+  ok { «name» := (SharedBorrow.mk (toStr "a")), v := 0#u32 }
 
 /-- [static::use_named]:
     Source: 'tests/src/static.rs', lines 387:0-392:1 -/
 def use_named : Result Std.U32 := do
   let n ← mk_named
-  let n1 ← set_name n
-  let _ ← get_name n1
+  let n1 ← set_name (MutBorrow.mk n)
+  let _ ← get_name (SharedBorrow.mk n1)
   ok n1.v
 
 /-- [static::C]
     Source: 'tests/src/static.rs', lines 394:0-397:1
     Visibility: public -/
 structure C where
-  d : Std.Usize
+  d : SharedBorrow Std.Usize
   x : Std.Usize
 
 /-- [static::read_c]:
     Source: 'tests/src/static.rs', lines 399:0-401:1
     Visibility: public -/
-def read_c (c : C) : Result (Std.Usize × C) := do
-  ok (c.x, c)
+def read_c (c : MutBorrow C) : Result (Std.Usize × C) := do
+  ok (c.val.x, c.val)
 
 /-- [static::update_c]:
     Source: 'tests/src/static.rs', lines 403:0-405:1
     Visibility: public -/
-def update_c (c : C) : Result C := do
-  let i ← c.x + c.d
-  ok { c with x := i }
+def update_c (c : MutBorrow C) : Result C := do
+  let i ← c.val.x + c.val.d.val
+  ok { c.val with x := i }
 
 /-- [static::call_read_c]:
     Source: 'tests/src/static.rs', lines 407:0-409:1
     Visibility: public -/
-def call_read_c (c : C) : Result (Std.Usize × C) := do
+def call_read_c (c : MutBorrow C) : Result (Std.Usize × C) := do
   let (i, c1) ← read_c c
-  let (i1, c2) ← read_c c1
+  let (i1, c2) ← read_c (MutBorrow.mk c1)
   let i2 ← i + i1
   ok (i2, c2)
 
@@ -682,72 +720,84 @@ def call_read_c (c : C) : Result (Std.Usize × C) := do
     Source: 'tests/src/static.rs', lines 416:4-422:5 -/
 @[rust_loop_body]
 def loop_opt_static_loop.body
-  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (acc : Std.U32) :
-  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  (n : Std.U32) (o : Option (SharedBorrow Std.U32)) (i : Std.U32)
+  (acc : Std.U32) :
+  Result (ControlFlow ((Option (SharedBorrow Std.U32)) × Std.U32 × Std.U32)
+    Std.U32)
   := do
   if i < n
   then
-    let acc1 ← match o with
-                 | none => ok acc
-                 | some x => acc + x
+    let (o1, acc1) ←
+      match o with
+      | none => ok (none, acc)
+      | some i1 => do
+                   let acc2 ← acc + i1.val
+                   ok (o, acc2)
     let i1 ← i + 1#u32
-    ok (cont (i1, acc1))
+    ok (cont (o1, i1, acc1))
   else ok (done acc)
 
 /-- [static::loop_opt_static]: loop 0:
     Source: 'tests/src/static.rs', lines 416:4-422:5 -/
 @[rust_loop]
 def loop_opt_static_loop
-  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (acc : Std.U32) :
+  (o : Option (SharedBorrow Std.U32)) (n : Std.U32) (i : Std.U32)
+  (acc : Std.U32) :
   Result Std.U32
   := do
   loop
-    (fun (i1, acc1) => loop_opt_static_loop.body o n i1 acc1)
-    (i, acc)
+    (fun (o1, i1, acc1) => loop_opt_static_loop.body n o1 i1 acc1)
+    (o, i, acc)
 
 /-- [static::loop_opt_static]:
     Source: 'tests/src/static.rs', lines 413:0-424:1 -/
 @[reducible]
-def loop_opt_static (o : Option Std.U32) (n : Std.U32) : Result Std.U32 := do
+def loop_opt_static
+  (o : Option (SharedBorrow Std.U32)) (n : Std.U32) : Result Std.U32 := do
   loop_opt_static_loop o n 0#u32 0#u32
 
 /-- [static::branch_opt_static]:
     Source: 'tests/src/static.rs', lines 426:0-432:1 -/
 def branch_opt_static
-  (o : Option Std.U32) (p : Option Std.U32) (b : Bool) : Result Std.U32 := do
+  (o : Option (SharedBorrow Std.U32)) (p : Option (SharedBorrow Std.U32))
+  (b : Bool) :
+  Result Std.U32
+  := do
   let q ← if b
             then ok o
             else ok p
   match q with
   | none => ok 0#u32
-  | some x => ok x
+  | some i => ok i.val
 
 /-- [static::copy_opt_static]:
     Source: 'tests/src/static.rs', lines 434:0-441:1 -/
-def copy_opt_static (o : Option Std.U32) : Result Std.U32 := do
+def copy_opt_static (o : Option (SharedBorrow Std.U32)) : Result Std.U32 := do
   match o with
   | none => ok 0#u32
-  | some x => match o with
+  | some i => match o with
               | none => ok 0#u32
-              | some y => x + y
+              | some i1 => i.val + i1.val
 
 /-- [static::dup_opt_static]:
     Source: 'tests/src/static.rs', lines 443:0-445:1 -/
 def dup_opt_static
-  (o : Option Std.U32) : Result ((Option Std.U32) × (Option Std.U32)) := do
+  (o : Option (SharedBorrow Std.U32)) :
+  Result ((Option (SharedBorrow Std.U32)) × (Option (SharedBorrow Std.U32)))
+  := do
   ok (o, o)
 
 /-- [static::CopyStaticRef]
     Source: 'tests/src/static.rs', lines 448:0-450:1 -/
 structure CopyStaticRef where
-  x : Std.U32
+  x : SharedBorrow Std.U32
 
 /-- [static::{impl core::clone::Clone for static::CopyStaticRef}::clone]:
     Source: 'tests/src/static.rs', lines 447:9-447:14
     Visibility: public -/
 def CopyStaticRef.Insts.CoreCloneClone.clone
-  (self : CopyStaticRef) : Result CopyStaticRef := do
-  ok self
+  (self : SharedBorrow CopyStaticRef) : Result CopyStaticRef := do
+  ok self.val
 
 /-- Trait implementation: [static::{impl core::clone::Clone for static::CopyStaticRef}]
     Source: 'tests/src/static.rs', lines 447:9-447:14 -/
@@ -798,41 +848,44 @@ def loop_copy_static_ref_loop
 @[reducible]
 def loop_copy_static_ref
   (s : CopyStaticRef) (n : Std.U32) : Result Std.U32 := do
-  loop_copy_static_ref_loop s.x n 0#u32 0#u32
+  loop_copy_static_ref_loop s.x.val n 0#u32 0#u32
 
 /-- [static::join_concrete_static_ref]:
     Source: 'tests/src/static.rs', lines 467:0-477:1 -/
 def join_concrete_static_ref (b : Bool) : Result Std.U32 := do
-  let o ← if b
-            then ok (some ({ x := GLOBAL } : StaticRef))
-            else ok none
+  let o ←
+    if b
+    then ok (some ({ x := (SharedBorrow.mk GLOBAL) } : StaticRef))
+    else ok none
   match o with
   | none => ok 0#u32
-  | some sr => ok sr.x
+  | some sr => ok sr.x.val
 
 /-- [static::join_concrete_static]:
     Source: 'tests/src/static.rs', lines 479:0-485:1 -/
 def join_concrete_static (b : Bool) : Result Std.U32 := do
   let o ← if b
-            then ok (some GLOBAL)
+            then ok (some (SharedBorrow.mk GLOBAL))
             else ok none
   match o with
   | none => ok 0#u32
-  | some x => ok x
+  | some i => ok i.val
 
 /-- [static::opt_static_mut]:
     Source: 'tests/src/static.rs', lines 488:0-493:1 -/
-def opt_static_mut (o : Option Std.U32) : Result (Option Std.U32) := do
+def opt_static_mut
+  (o : Option (MutBorrow Std.U32)) : Result (Option (MutBorrow Std.U32)) := do
   match o with
   | none => ok none
-  | some x => let x1 ← x + 1#u32
-              ok (some x1)
+  | some i => let x ← i.val + 1#u32
+              ok (some (MutBorrow.mk x))
 
 /-- [static::branch_opt_static_mut]:
     Source: 'tests/src/static.rs', lines 495:0-501:1 -/
 def branch_opt_static_mut
-  (o : Option Std.U32) (p : Option Std.U32) (b : Bool) :
-  Result ((Option Std.U32) × (Option Std.U32))
+  (o : Option (MutBorrow Std.U32)) (p : Option (MutBorrow Std.U32)) (b : Bool)
+  :
+  Result ((Option (MutBorrow Std.U32)) × (Option (MutBorrow Std.U32)))
   := do
   let (q, back) ←
     if b
@@ -840,15 +893,17 @@ def branch_opt_static_mut
     else ok (p, fun o1 => (o, o1))
   match q with
   | none => ok (back none)
-  | some x => let x1 ← x + 1#u32
-              ok (back (some x1))
+  | some i => let x ← i.val + 1#u32
+              ok (back (some (MutBorrow.mk x)))
 
 /-- [static::copy_in_loop_static]: loop body 0:
     Source: 'tests/src/static.rs', lines 507:4-510:5 -/
 @[rust_loop_body]
 def copy_in_loop_static_loop.body
-  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (r : Option Std.U32) :
-  Result (ControlFlow (Std.U32 × (Option Std.U32)) (Option Std.U32))
+  (o : Option (SharedBorrow Std.U32)) (n : Std.U32) (i : Std.U32)
+  (r : Option (SharedBorrow Std.U32)) :
+  Result (ControlFlow (Std.U32 × (Option (SharedBorrow Std.U32))) (Option
+    (SharedBorrow Std.U32)))
   := do
   if i < n
   then let i1 ← i + 1#u32
@@ -859,8 +914,9 @@ def copy_in_loop_static_loop.body
     Source: 'tests/src/static.rs', lines 507:4-510:5 -/
 @[rust_loop]
 def copy_in_loop_static_loop
-  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (r : Option Std.U32) :
-  Result (Option Std.U32)
+  (o : Option (SharedBorrow Std.U32)) (n : Std.U32) (i : Std.U32)
+  (r : Option (SharedBorrow Std.U32)) :
+  Result (Option (SharedBorrow Std.U32))
   := do
   loop
     (fun (i1, r1) => copy_in_loop_static_loop.body o n i1 r1)
@@ -870,29 +926,31 @@ def copy_in_loop_static_loop
     Source: 'tests/src/static.rs', lines 504:0-512:1 -/
 @[reducible]
 def copy_in_loop_static
-  (o : Option Std.U32) (n : Std.U32) : Result (Option Std.U32) := do
+  (o : Option (SharedBorrow Std.U32)) (n : Std.U32) :
+  Result (Option (SharedBorrow Std.U32))
+  := do
   copy_in_loop_static_loop o n 0#u32 none
 
 /-- [static::copy_in_branch_static]:
     Source: 'tests/src/static.rs', lines 514:0-527:1 -/
 def copy_in_branch_static
-  (o : Option Std.U32) (b : Bool) : Result Std.U32 := do
+  (o : Option (SharedBorrow Std.U32)) (b : Bool) : Result Std.U32 := do
   let acc ←
     if b
     then match o with
          | none => ok 0#u32
-         | some x => ok x
+         | some i => ok i.val
     else ok 0#u32
   let x ← match o with
             | none => ok 0#u32
-            | some x1 => ok x1
+            | some i => ok i.val
   acc + x
 
 /-- [static::WithStaticRef]
     Source: 'tests/src/static.rs', lines 531:0-531:43
     Visibility: public -/
-@[reducible]
-def WithStaticRef := Str
+structure WithStaticRef where
+  _0 : SharedBorrow Str
 
 /-- [static::question_mark_static_ref]:
     Source: 'tests/src/static.rs', lines 533:0-535:1
@@ -915,7 +973,7 @@ def question_mark_static_ref
 @[discriminant isize]
 inductive StaticError where
 | Decode : StaticError
-| InvalidParams : Str → StaticError
+| InvalidParams : SharedBorrow Str → StaticError
 
 /-- [static::static_error_parse]:
     Source: 'tests/src/static.rs', lines 542:0-548:1 -/
@@ -953,8 +1011,8 @@ def static_error_match
     Source: 'tests/src/static.rs', lines 562:0-566:1
     Visibility: public -/
 def static_error_with_region
-  (r : core.result.Result Std.U8 WithStaticRef) :
-  Result (core.result.Result Std.U8 WithStaticRef)
+  (r : core.result.Result (SharedBorrow Std.U8) WithStaticRef) :
+  Result (core.result.Result (SharedBorrow Std.U8) WithStaticRef)
   := do
   ok r
 
@@ -962,9 +1020,10 @@ def static_error_with_region
     Source: 'tests/src/static.rs', lines 568:0-572:1
     Visibility: public -/
 def static_error_with_mut_region
-  (r : core.result.Result Std.U8 WithStaticRef) :
-  Result ((core.result.Result Std.U8 WithStaticRef) × (core.result.Result
-    Std.U8 WithStaticRef → core.result.Result Std.U8 WithStaticRef))
+  (r : core.result.Result (MutBorrow Std.U8) WithStaticRef) :
+  Result ((core.result.Result (MutBorrow Std.U8) WithStaticRef) ×
+    (core.result.Result (MutBorrow Std.U8) WithStaticRef → core.result.Result
+    (MutBorrow Std.U8) WithStaticRef))
   := do
   ok (r, fun r1 => r1)
 
@@ -972,19 +1031,21 @@ def static_error_with_mut_region
     Source: 'tests/src/static.rs', lines 574:0-580:1
     Visibility: public -/
 def static_error_shared_ret
-  (x : Std.U32) (b : Bool) :
-  Result (core.result.Result Std.U32 StaticError)
+  (x : SharedBorrow Std.U32) (b : Bool) :
+  Result (core.result.Result (SharedBorrow Std.U32) StaticError)
   := do
   if b
-  then ok (core.result.Result.Err (StaticError.InvalidParams (toStr "bad")))
+  then
+    ok (core.result.Result.Err (StaticError.InvalidParams (SharedBorrow.mk
+      (toStr "bad"))))
   else ok (core.result.Result.Ok x)
 
 /-- [static::static_error_outlives]:
     Source: 'tests/src/static.rs', lines 582:0-584:1
     Visibility: public -/
 def static_error_outlives
-  (r : core.result.Result Std.U8 Std.U8) :
-  Result (core.result.Result Std.U8 Std.U8)
+  (r : core.result.Result (SharedBorrow Std.U8) (SharedBorrow Std.U8)) :
+  Result (core.result.Result (SharedBorrow Std.U8) (SharedBorrow Std.U8))
   := do
   ok r
 
@@ -1000,8 +1061,8 @@ def static_error_raw_ptr
 /-- [static::static_error_get]:
     Source: 'tests/src/static.rs', lines 594:0-600:1 -/
 def static_error_get
-  (v : Slice Std.U8) (i : Std.Usize) :
-  Result (core.result.Result Std.U8 StaticError)
+  (v : SharedBorrow (Slice Std.U8)) (i : Std.Usize) :
+  Result (core.result.Result (SharedBorrow Std.U8) StaticError)
   := do
   let i1 := Slice.len v
   if i < i1
@@ -1020,14 +1081,14 @@ def static_error_loop_question_mark_loop.body
   := do
   if i < n
   then
-    let r ← static_error_get v i
+    let r ← static_error_get (SharedBorrow.mk v) i
     let cf ← core.result.Result.Insts.CoreOpsTry.branch r
     match cf with
-    | core.ops.control_flow.ControlFlow.Continue val =>
-      let i1 ← lift (UScalar.cast .U32 val)
-      let s1 ← s + i1
-      let i2 ← i + 1#usize
-      ok (cont (i2, s1))
+    | core.ops.control_flow.ControlFlow.Continue i1 =>
+      let i2 ← lift (UScalar.cast .U32 i1.val)
+      let s1 ← s + i2
+      let i3 ← i + 1#usize
+      ok (cont (i3, s1))
     | core.ops.control_flow.ControlFlow.Break residual =>
       let r1 ←
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
@@ -1052,19 +1113,20 @@ def static_error_loop_question_mark_loop
     Visibility: public -/
 @[reducible]
 def static_error_loop_question_mark
-  (v : Slice Std.U8) (n : Std.Usize) :
+  (v : SharedBorrow (Slice Std.U8)) (n : Std.Usize) :
   Result (core.result.Result Std.U32 StaticError)
   := do
-  static_error_loop_question_mark_loop v n 0#usize 0#u32
+  static_error_loop_question_mark_loop v.val n 0#usize 0#u32
 
 /-- [static::static_error_loop_call]: loop body 0:
     Source: 'tests/src/static.rs', lines 617:4-620:5
     Visibility: public -/
 @[rust_loop_body]
 def static_error_loop_call_loop.body
-  (n : Std.U32) (r : core.result.Result Std.U8 WithStaticRef) (i : Std.U32) :
-  Result (ControlFlow ((core.result.Result Std.U8 WithStaticRef) × Std.U32)
-    (core.result.Result Std.U8 WithStaticRef))
+  (n : Std.U32) (r : core.result.Result (SharedBorrow Std.U8) WithStaticRef)
+  (i : Std.U32) :
+  Result (ControlFlow ((core.result.Result (SharedBorrow Std.U8) WithStaticRef)
+    × Std.U32) (core.result.Result (SharedBorrow Std.U8) WithStaticRef))
   := do
   if i < n
   then
@@ -1078,8 +1140,9 @@ def static_error_loop_call_loop.body
     Visibility: public -/
 @[rust_loop]
 def static_error_loop_call_loop
-  (r : core.result.Result Std.U8 WithStaticRef) (n : Std.U32) (i : Std.U32) :
-  Result (core.result.Result Std.U8 WithStaticRef)
+  (r : core.result.Result (SharedBorrow Std.U8) WithStaticRef) (n : Std.U32)
+  (i : Std.U32) :
+  Result (core.result.Result (SharedBorrow Std.U8) WithStaticRef)
   := do
   loop
     (fun (r1, i1) => static_error_loop_call_loop.body n r1 i1)
@@ -1090,8 +1153,8 @@ def static_error_loop_call_loop
     Visibility: public -/
 @[reducible]
 def static_error_loop_call
-  (r : core.result.Result Std.U8 WithStaticRef) (n : Std.U32) :
-  Result (core.result.Result Std.U8 WithStaticRef)
+  (r : core.result.Result (SharedBorrow Std.U8) WithStaticRef) (n : Std.U32) :
+  Result (core.result.Result (SharedBorrow Std.U8) WithStaticRef)
   := do
   static_error_loop_call_loop r n 0#u32
 
@@ -1099,77 +1162,81 @@ def static_error_loop_call
     Source: 'tests/src/static.rs', lines 626:0-629:1
     Visibility: public -/
 structure CtxWithStaticRef where
-  «name» : Str
+  «name» : SharedBorrow Str
   v : Std.U32
 
 /-- [static::ctx_with_static_ref_get_v]:
     Source: 'tests/src/static.rs', lines 631:0-633:1
     Visibility: public -/
 def ctx_with_static_ref_get_v
-  (c : CtxWithStaticRef) :
-  Result (Std.U32 × (Std.U32 → CtxWithStaticRef))
+  (c : MutBorrow CtxWithStaticRef) :
+  Result ((MutBorrow Std.U32) × (Std.U32 → CtxWithStaticRef))
   := do
-  let back := fun i => { c with v := i }
-  ok (c.v, back)
+  let back := fun i => { c.val with v := i }
+  ok (MutBorrow.mk c.val.v, back)
 
 /-- [static::swap_with_static_ref]:
     Source: 'tests/src/static.rs', lines 635:0-637:1
     Visibility: public -/
 def swap_with_static_ref
-  (x : WithStaticRef) (y : WithStaticRef) :
+  (x : MutBorrow WithStaticRef) (y : MutBorrow WithStaticRef) :
   Result (WithStaticRef × WithStaticRef)
   := do
-  let (x1, y1) := core.mem.swap x y
-  ok (x1, y1)
+  ok (core.mem.swap x y)
 
 /-- [static::shared_ref_static_error]:
     Source: 'tests/src/static.rs', lines 639:0-643:1
     Visibility: public -/
 def shared_ref_static_error
-  (r : core.result.Result Std.U32 StaticError) :
-  Result (core.result.Result Std.U32 StaticError)
+  (r : SharedBorrow (core.result.Result Std.U32 StaticError)) :
+  Result (SharedBorrow (core.result.Result Std.U32 StaticError))
   := do
   ok r
 
 /-- [static::MutRefWrapper]
     Source: 'tests/src/static.rs', lines 647:0-647:47
     Visibility: public -/
-@[reducible]
-def MutRefWrapper (T : Type _) := T
+structure MutRefWrapper (T : Type _) where
+  _0 : MutBorrow T
 
 /-- [static::mut_ref_wrapper_get_v]:
     Source: 'tests/src/static.rs', lines 649:0-651:1
     Visibility: public -/
 def mut_ref_wrapper_get_v
   (c : MutRefWrapper CtxWithStaticRef) :
-  Result (Std.U32 × (Std.U32 → MutRefWrapper CtxWithStaticRef))
+  Result ((MutBorrow Std.U32) × (Std.U32 → MutRefWrapper CtxWithStaticRef))
   := do
-  let back := fun i => { c with v := i }
-  ok (c.v, back)
+  let back :=
+    fun i => ({ _0 := (MutBorrow.mk { c._0.val with v := i }) } : MutRefWrapper
+      CtxWithStaticRef)
+  ok (MutBorrow.mk c._0.val.v, back)
 
 /-- [static::shorten_static_str]:
     Source: 'tests/src/static.rs', lines 654:0-656:1
     Visibility: public -/
-def shorten_static_str (s : Str) : Result Str := do
+def shorten_static_str (s : SharedBorrow Str) : Result (SharedBorrow Str) := do
   ok s
 
 /-- [static::pick_static_ref]:
     Source: 'tests/src/static.rs', lines 658:0-664:1
     Visibility: public -/
-def pick_static_ref (x : Str) (w : WithStaticRef) (b : Bool) : Result Str := do
+def pick_static_ref
+  (x : SharedBorrow Str) (w : WithStaticRef) (b : Bool) :
+  Result (SharedBorrow Str)
+  := do
   if b
   then ok x
-  else ok w
+  else ok w._0
 
 /-- [static::write_static_ref]:
     Source: 'tests/src/static.rs', lines 666:0-669:1
     Visibility: public -/
 def write_static_ref
-  (x : (Str × Std.U32)) (s : WithStaticRef) :
-  Result (Std.U32 × (Std.U32 → (Str × Std.U32)))
+  (x : MutBorrow ((SharedBorrow Str) × Std.U32)) (s : WithStaticRef) :
+  Result ((MutBorrow Std.U32) × (Std.U32 → ((SharedBorrow Str) × Std.U32)))
   := do
-  let (_, i) := x
-  let back := fun i1 => (s, i1)
-  ok (i, back)
+  let (_, i) := x.val
+  let back := fun i1 => (s._0, i1)
+  ok (MutBorrow.mk i, back)
 
 end static

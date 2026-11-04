@@ -488,6 +488,36 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 #define_bv_decide_toBitVec Ordering
 
 /-!
+# Boxes and Borrows
+
+Aeneas purifies the boxes and the borrows: the values of type `Box<T>`, `&T` and
+`&mut T` are simply translated to wrappers around values of type `T` (the mutable
+borrows are still handled with backward functions which propagate the updates).
+We nonetheless preserve the types, by using the wrappers below.
+-/
+
+/-- The type of boxes: `Box<T>` -/
+structure Box (α : Type u) where
+  val : α
+deriving Inhabited, BEq, DecidableEq, Repr, Hashable
+
+/-- The type of shared borrows: `&T` -/
+structure SharedBorrow (α : Type u) where
+  val : α
+deriving Inhabited, BEq, DecidableEq, Repr, Hashable
+
+/-- The type of mutable borrows: `&mut T`.
+
+    Note that the updates performed through the mutable borrows are propagated
+    by means of backward functions: a backward function receives the new value of
+    the borrowed value (of type `T`), not a value of type `MutBorrow T`. -/
+structure MutBorrow (α : Type u) where
+  val : α
+deriving Inhabited, BEq, DecidableEq, Repr, Hashable
+
+attribute [ext, pp_using_anonymous_constructor] Box SharedBorrow MutBorrow
+
+/-!
 # Dyn
 -/
 

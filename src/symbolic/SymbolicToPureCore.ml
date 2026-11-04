@@ -164,6 +164,17 @@ type bs_ctx = {
       (** Whenever we encounter a new symbolic value (introduced because of a
           symbolic expansion or upon ending an abstraction, for instance) we
           introduce a new variable (with a let-binding). *)
+  sv_to_expr : texpr V.SymbolicValueId.Map.t;
+      (** Some symbolic values are not directly translated to variables, but to
+          expressions.
+
+          This happens when we preserve the borrow types (see
+          {!Config.erase_boxes_and_borrows}): when a symbolic value of type
+          [&mut T] is given back by a backward function, the backward function
+          gives back a value of type [T]. We introduce a variable [x] of type
+          [T] and map the symbolic value to [MutBorrow.mk x].
+
+          This map has priority over [sv_to_var]. *)
   fresh_fvar_id : unit -> fvar_id;
   fvars : fvar FVarId.Map.t;
       (** The free variables introduced so far.

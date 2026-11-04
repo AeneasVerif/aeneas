@@ -25,7 +25,7 @@ namespace issue_270_loop_list
     Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type _) where
-| Cons : T → List T → List T
+| Cons : T → Box (List T) → List T
 | Nil : List T
 
 /-- [issue_270_loop_list::foo]: loop 0:
@@ -33,15 +33,15 @@ inductive List (T : Type _) where
 @[rust_loop]
 def foo_loop (t : List (List Std.U8)) : Result Unit := do
   match t with
-  | List.Cons _ tt => foo_loop tt
+  | List.Cons _ tt => foo_loop tt.val
   | List.Nil => ok ()
 partial_fixpoint
 
 /-- [issue_270_loop_list::foo]:
     Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 -/
-def foo (v : List (List Std.U8)) : Result Unit := do
-  match v with
-  | List.Cons _ t => foo_loop t
+def foo (v : SharedBorrow (List (List Std.U8))) : Result Unit := do
+  match v.val with
+  | List.Cons _ t => foo_loop t.val
   | List.Nil => ok ()
 
 end issue_270_loop_list

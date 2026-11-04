@@ -31,7 +31,7 @@ namespace loop_shared_borrow_proj
   "alloc::vec::{core::iter::traits::collect::IntoIterator<&'a alloc::vec::Vec<@T>, &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 axiom SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
   {T : Type _} (A : Type _) :
-  alloc.vec.Vec T → Result (core.slice.iter.Iter T)
+  SharedBorrow (alloc.vec.Vec T) → Result (core.slice.iter.Iter T)
 
 /-- [loop_shared_borrow_proj::Cap]
     Source: 'tests/src/loop-shared-borrow-proj.rs', lines 7:0-9:1
@@ -47,12 +47,12 @@ axiom Guard : Type
 /-- [loop_shared_borrow_proj::wrap]:
     Source: 'tests/src/loop-shared-borrow-proj.rs', lines 21:0-23:1
     Visibility: public -/
-axiom wrap : Cap → Result Guard
+axiom wrap : SharedBorrow Cap → Result Guard
 
 /-- [loop_shared_borrow_proj::{loop_shared_borrow_proj::Guard<'a>}::get]:
     Source: 'tests/src/loop-shared-borrow-proj.rs', lines 28:4-30:5
     Visibility: public -/
-axiom Guard.get : Guard → Result Cap
+axiom Guard.get : SharedBorrow Guard → Result (SharedBorrow Cap)
 
 /-- [loop_shared_borrow_proj::carve]: loop body 0:
     Source: 'tests/src/loop-shared-borrow-proj.rs', lines 35:4-41:1
@@ -62,10 +62,10 @@ def carve_loop.body
   (x : Std.U32) (iter : core.slice.iter.Iter Std.U32) :
   Result (ControlFlow (core.slice.iter.Iter Std.U32) Bool)
   := do
-  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
+  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk iter)
   match o with
   | none => ok (done true)
-  | some c => if c = x
+  | some i => if i.val = x
               then ok (done false)
               else ok (cont iter1)
 
@@ -74,7 +74,7 @@ def carve_loop.body
     Visibility: public -/
 @[rust_loop]
 def carve_loop
-  (iter : core.slice.iter.Iter Std.U32) (x : Std.U32) : Result Bool := do
+  (x : Std.U32) (iter : core.slice.iter.Iter Std.U32) : Result Bool := do
   loop
     (fun iter1 => carve_loop.body x iter1)
     iter
@@ -82,12 +82,12 @@ def carve_loop
 /-- [loop_shared_borrow_proj::carve]:
     Source: 'tests/src/loop-shared-borrow-proj.rs', lines 33:0-41:1
     Visibility: public -/
-def carve (cap_ref : Cap) (x : Std.U32) : Result Bool := do
+def carve (cap_ref : SharedBorrow Cap) (x : Std.U32) : Result Bool := do
   let parent ← wrap cap_ref
-  let c ← Guard.get parent
+  let c ← Guard.get (SharedBorrow.mk parent)
   let iter ←
     SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-      alloc.alloc.Global c.children
-  carve_loop iter x
+      alloc.alloc.Global (SharedBorrow.mk c.val.children)
+  carve_loop x iter
 
 end loop_shared_borrow_proj

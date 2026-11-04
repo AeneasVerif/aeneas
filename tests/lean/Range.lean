@@ -22,7 +22,7 @@ namespace range
 
 /-- [range::use_range]:
     Source: 'tests/src/range.rs', lines 3:0-5:1 -/
-def use_range (s : Slice Bool) : Result Unit := do
+def use_range (s : SharedBorrow (Slice Bool)) : Result Unit := do
   let _ ←
     core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice
       Bool) s { start := 0#usize, «end» := 1#usize }
@@ -30,7 +30,7 @@ def use_range (s : Slice Bool) : Result Unit := do
 
 /-- [range::use_range_to]:
     Source: 'tests/src/range.rs', lines 7:0-9:1 -/
-def use_range_to (s : Slice Bool) : Result Unit := do
+def use_range_to (s : SharedBorrow (Slice Bool)) : Result Unit := do
   let _ ←
     core.slice.index.Slice.index (core.slice.index.SliceIndexRangeToUsizeSlice
       Bool) s { «end» := 1#usize }

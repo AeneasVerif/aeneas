@@ -18,10 +18,10 @@ The `⦃ result => postcondition ⦄` notation is the weakest-precondition spec 
 For functions with backward continuations:
 ```lean
 @[step]
-theorem choose_spec {T : Type} (b : Bool) (x y : T) :
+theorem choose_spec {T : Type} (b : Bool) (x y : MutBorrow T) :
   choose b x y ⦃ z back =>
-    (b → z = x ∧ ∀ z', back z' = (z', y)) ∧
-    (¬b → z = y ∧ ∀ z', back z' = (x, z')) ⦄ := by ...
+    (b → z = x ∧ ∀ z', back z' = (z', y.val)) ∧
+    (¬b → z = y ∧ ∀ z', back z' = (x.val, z')) ⦄ := by ...
 ```
 
 ## The `step*?` Workflow

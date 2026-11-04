@@ -46,7 +46,7 @@ theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U3
 /- [tutorial::CList]
    Source: 'src/lib.rs', lines 32:0-32:17 -/
 inductive CList (T : Type) where
-| CCons : T → CList T → CList T
+| CCons : T → Box (CList T) → CList T
 | CNil : CList T
 
 open CList
@@ -55,39 +55,56 @@ open CList
 
     By putting this definition in the namespace `CList`, we give the possibility of using the `.`
     notation: if `x` has type `CList α` we can write `x.toList` instead of `toList x`.
+
+    Note that the tail of a `CCons` has type `Box (CList α)`: the Rust type `Box<T>` is
+    translated to the structure `Box T`, which simply wraps a value of type `T` that we can
+    access through the field `val`.
  -/
 @[simp, grind, scalar_tac_simps, simp_lists]
 def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.toList
+  | CCons hd tl => hd :: tl.val.toList
 
 /- [tutorial::list_nth]:
-   Source: 'src/lib.rs', lines 37:0-37:56 -/
-def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
-  match l with
+   Source: 'src/lib.rs', lines 35:0-48:1
+
+   The Rust function takes a shared borrow `&CList<T>` and returns a shared borrow `&T`:
+   those are translated to the structures `SharedBorrow (CList T)` and `SharedBorrow T`,
+   which simply wrap values of type `CList T` and `T` (accessible through the field `val`). -/
+def list_nth {T : Type} (l : SharedBorrow (CList T)) (i : U32) : Result (SharedBorrow T) :=
+  match l.val with
   | CList.CCons x tl =>
     if i = 0#u32
-    then Result.ok x
+    then Result.ok (SharedBorrow.mk x)
     else do
          let i1 ← i - 1#u32
-         list_nth tl i1
+         list_nth (SharedBorrow.mk tl.val) i1
   | CList.CNil => Result.fail .panic
 partial_fixpoint
 
-/-- Theorem about `list_nth` -/
-theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.toList.length) :
-  list_nth l i ⦃ x => x = l.toList[i.val] ⦄
+/-- Theorem about `list_nth`.
+
+    Note that because the proof is recursive (it calls itself on the tail of the list,
+    when we use `step` on the recursive call to `list_nth`) we need to prove that it
+    terminates: we use `termination_by` and `decreasing_by` (see `i32_id_spec` below
+    for more explanations). -/
+theorem list_nth_spec {T : Type} [Inhabited T] (l : SharedBorrow (CList T)) (i : U32)
+  (h : i.val < l.val.toList.length) :
+  list_nth l i ⦃ x => x.val = l.val.toList[i.val] ⦄
   := by
   unfold list_nth
   split
-  . split
+  . -- We use the equation `l.val = CCons ...` introduced by `split` to simplify `h`
+    simp [*] at h
+    split
     . simp_all
     . step as ⟨ i1 ⟩
       step as ⟨ x ⟩
       simp_lists [*]
-  . simp at h
+  . simp [*] at h
+termination_by i.val
+decreasing_by scalar_decr_tac
 
 /- [tutorial::i32_id]:
    Source: 'src/lib.rs', lines 78:0-78:29 -/
@@ -170,7 +187,7 @@ decreasing_by scalar_decr_tac
 end
 
 /- [tutorial::list_nth_mut1]: loop 0:
-   Source: 'src/lib.rs', lines 107:0-116:1 -/
+   Source: 'src/lib.rs', lines 124:4-132:1 -/
 def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : U32) :
   Result (T × (T → CList T))
@@ -178,27 +195,32 @@ def list_nth_mut1_loop
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
-    then
-      let back := fun ret => CList.CCons ret tl
-      Result.ok (x, back)
+    then Result.ok (x, fun t => CList.CCons t tl)
     else
       do
       let i1 ← i - 1#u32
-      let (t, back) ← list_nth_mut1_loop tl i1
-      let back1 :=
-        fun ret => CList.CCons x (back ret)
+      let (t, back) ← list_nth_mut1_loop tl.val i1
+      let back1 := fun t1 => let c := back t1
+                             CList.CCons x (Box.mk c)
       Result.ok (t, back1)
   | CList.CNil => Result.fail .panic
 partial_fixpoint
 
 /- [tutorial::list_nth_mut1]:
-   Source: 'src/lib.rs', lines 107:0-107:77 -/
-@[reducible]
+   Source: 'src/lib.rs', lines 123:0-132:1
+
+   The Rust function takes a mutable borrow `&mut CList<T>` and returns a mutable borrow
+   `&mut T`. As for the shared borrows, the mutable borrows are translated to a structure
+   wrapping a value: `MutBorrow (CList T)` and `MutBorrow T`. The function also returns a
+   *backward function*, which receives the new value of the element (of type `T`) and
+   computes the new value of the list (of type `CList T`).
+ -/
 def list_nth_mut1
-  {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → CList T))
-  :=
-  list_nth_mut1_loop l i
+  {T : Type} (l : MutBorrow (CList T)) (i : U32) :
+  Result ((MutBorrow T) × (T → CList T))
+  := do
+  let (t, back) ← list_nth_mut1_loop l.val i
+  Result.ok (MutBorrow.mk t, back)
 
 /-
   # #####################################################################
@@ -418,7 +440,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 
 /- # Some proofs of programs -/
 
-/-- Theorem about `list_nth_mut1`.
+/-- Theorem about `list_nth_mut1_loop`.
 
     **Hints**:
     - you can use `step` to automatically apply a lemma, then refine it into
@@ -435,75 +457,116 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
       purpose.
     - a simpler one, which is closer to what one would write in a real
       development
+
+    **Termination**: the proof is recursive (when you use `step` on the recursive call to
+    `list_nth_mut1_loop`, it uses the theorem we are currently proving): you will need to
+    add the following lines after the proof, to show that it terminates (see `i32_id_spec`
+    above for more explanations):
+    ```
+    termination_by i.val
+    decreasing_by scalar_decr_tac
+    ```
  -/
-theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
+@[step]
+theorem list_nth_mut1_loop_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃ x back =>
+  list_nth_mut1_loop l i ⦃ x back =>
     x = l.toList[i.val] ∧
     -- Specification of the backward function
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
-  unfold list_nth_mut1 list_nth_mut1_loop
+  unfold list_nth_mut1_loop
   sorry
 
+/-- Theorem about `list_nth_mut1`.
+
+    `list_nth_mut1` takes a mutable borrow `l : MutBorrow (CList T)`: we reason about the
+    borrowed value `l.val`. It returns a mutable borrow `x` to the element (we reason about
+    its value `x.val`) together with a backward function `back`, which receives the new value
+    of the element and returns the new value of the list.
+
+    The proof simply calls `list_nth_mut1_loop` (and uses the `@[step]` theorem above). -/
+@[step]
+theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : MutBorrow (CList T)) (i : U32)
+  (h : i.val < l.val.toList.length) :
+  list_nth_mut1 l i ⦃ x back =>
+    x.val = l.val.toList[i.val] ∧
+    ∀ x', (back x').toList = l.val.toList.set i.val x' ⦄ := by
+  unfold list_nth_mut1
+  step*
+
 /- [tutorial::list_tail]: loop 0:
-   Source: 'src/lib.rs', lines 118:0-123:1 -/
+   Source: 'src/lib.rs', lines 135:4-137:5 -/
 def list_tail_loop
-  {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → CList T))
-  :=
+  {T : Type} (l : CList T) : Result (CList T → CList T) :=
   match l with
   | CList.CCons t tl =>
     do
-    let (c, back) ← list_tail_loop tl
-    let back1 :=
-      fun ret => CList.CCons t (back ret)
-    Result.ok (c, back1)
-  | CList.CNil => Result.ok (CList.CNil, fun ret => ret)
+    let back ← list_tail_loop tl.val
+    Result.ok (fun c => let c1 := back c
+                        CList.CCons t (Box.mk c1))
+  | CList.CNil => Result.ok (fun c => c)
 partial_fixpoint
 
 /- [tutorial::list_tail]:
-   Source: 'src/lib.rs', lines 118:0-118:68 -/
-@[reducible]
+   Source: 'src/lib.rs', lines 134:0-139:1 -/
 def list_tail
-  {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → CList T))
-  :=
-  list_tail_loop l
+  {T : Type} (l : MutBorrow (CList T)) :
+  Result ((MutBorrow (CList T)) × (CList T → CList T))
+  := do
+  let back ← list_tail_loop l.val
+  Result.ok (MutBorrow.mk CList.CNil, back)
 
 /- [tutorial::append_in_place]:
-   Source: 'src/lib.rs', lines 125:0-125:67 -/
+   Source: 'src/lib.rs', lines 141:0-144:1 -/
 def append_in_place
-  {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) :=
+  {T : Type} (l0 : MutBorrow (CList T)) (l1 : CList T) : Result (CList T) :=
   do
   let (_, list_tail_back) ← list_tail l0
   Result.ok (list_tail_back l1)
 
 
-/-- Theorem about `list_tail`: exercise -/
+/-- Theorem about `list_tail_loop`: exercise -/
 @[step]
-theorem list_tail_spec {T : Type} (l : CList T) :
-  list_tail l ⦃ tl back =>
-    tl = CList.CNil ∧
+theorem list_tail_loop_spec {T : Type} (l : CList T) :
+  list_tail_loop l ⦃ back =>
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
-  unfold list_tail list_tail_loop
+  unfold list_tail_loop
   sorry
+
+/-- Theorem about `list_tail` -/
+@[step]
+theorem list_tail_spec {T : Type} (l : MutBorrow (CList T)) :
+  list_tail l ⦃ tl back =>
+    tl.val = CList.CNil ∧
+    ∀ tl', (back tl').toList = l.val.toList ++ tl'.toList ⦄ := by
+  unfold list_tail
+  step*
 
 /-- Theorem about `append_in_place`: exercise -/
 @[step]
-theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  append_in_place l0 l1 ⦃ l2 => l2.toList = l0.toList ++ l1.toList ⦄ := by
+theorem append_in_place_spec {T : Type} (l0 : MutBorrow (CList T)) (l1 : CList T) :
+  append_in_place l0 l1 ⦃ l2 => l2.toList = l0.val.toList ++ l1.toList ⦄ := by
   unfold append_in_place
   sorry
 
 /- [tutorial::reverse]: loop 0:
-   Source: 'src/lib.rs', lines 147:4-154:1 -/
+   Source: 'src/lib.rs', lines 148:4-152:5 -/
 def reverse_loop
   {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
   match l with
-  | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
+  | CList.CCons hd tl => reverse_loop tl.val (CList.CCons hd (Box.mk out))
   | CList.CNil => Result.ok out
 partial_fixpoint
 
+/-- Theorem about `reverse_loop`: exercise.
+
+    **Termination**: if Lean fails to prove that your (recursive) proof terminates, you can
+    add the following lines after the proof:
+    ```
+    termination_by l.toList.length
+    decreasing_by agrind
+    ```
+ -/
 @[step]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   reverse_loop l out ⦃ l' =>
@@ -540,15 +603,20 @@ theorem reverse_spec {T : Type} (l : CList T) :
 attribute [-simp] Int.reducePow Nat.reducePow
 
 /- [tutorial::zero]: loop 0:
-   Source: 'src/lib.rs', lines 6:4-11:1 -/
+   Source: 'src/lib.rs', lines 164:4-167:5
+
+   Note that the loop function manipulates the vector `x` itself: when calling a function
+   which expects a (shared or mutable) borrow, we simply wrap `x` (`SharedBorrow.mk x`,
+   `MutBorrow.mk x`). -/
 def zero_loop
   (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
-  let i1 := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk x)
   if i < i1
   then
     do
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32)
+        (MutBorrow.mk x) i
     let i2 ← i + 1#usize
     let x1 := index_mut_back 0#u32
     zero_loop x1 i2
@@ -586,9 +654,13 @@ theorem zero_loop_spec
   sorry
 
 /- [tutorial::zero]:
-   Source: 'src/lib.rs', lines 5:0-5:28 -/
-def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
-  zero_loop x 0#usize
+   Source: 'src/lib.rs', lines 162:0-168:1
+
+   The Rust function takes a mutable borrow `x : &mut Vec<u32>`: we translate it to a
+   function which takes a value of type `MutBorrow (alloc.vec.Vec U32)` and returns the new
+   value of the borrowed vector (of type `alloc.vec.Vec U32`). -/
+def zero (x : MutBorrow (alloc.vec.Vec U32)) : Result (alloc.vec.Vec U32) :=
+  zero_loop x.val 0#usize
 
 /-- You will need this lemma for the proof of `zero_spec`
 
@@ -620,28 +692,33 @@ theorem all_nil_impl_toInt_eq_zero
   sorry
 
 /-- The theorem about `zero` -/
-theorem zero_spec (x : alloc.vec.Vec U32) :
+theorem zero_spec (x : MutBorrow (alloc.vec.Vec U32)) :
   zero x ⦃ x' =>
-    x'.length = x.length ∧
+    x'.length = x.val.length ∧
     toInt x' = 0 ⦄ := by
   unfold zero
   sorry
 
 /- [tutorial::add_no_overflow]: loop 0:
-   Source: 'src/lib.rs', lines 19:4-24:1 -/
+   Source: 'src/lib.rs', lines 177:4-180:5
+
+   Note that `alloc.vec.Vec.index` returns a shared borrow and `alloc.vec.Vec.index_mut`
+   returns a mutable borrow: we access the values with `.val`. -/
 def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32)
   :=
-  let i1 := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk x)
   if i < i1
   then
     do
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32)
+        (SharedBorrow.mk y) i
     let (i3, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
-    let i4 ← i3 + i2
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32)
+        (MutBorrow.mk x) i
+    let i4 ← i3.val + i2.val
     let i5 ← i + 1#usize
     let x1 := index_mut_back i4
     add_no_overflow_loop x1 y i5
@@ -700,48 +777,49 @@ theorem add_no_overflow_loop_spec
   sorry
 
 /- [tutorial::add_no_overflow]:
-   Source: 'src/lib.rs', lines 18:0-18:50 -/
+   Source: 'src/lib.rs', lines 175:0-181:1 -/
 def add_no_overflow
-  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32)) :
   Result (alloc.vec.Vec U32)
   :=
-  add_no_overflow_loop x y 0#usize
+  add_no_overflow_loop x.val y.val 0#usize
 
 /-- The proof about `add_no_overflow` -/
-theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
-  (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), (_ : j < x.length) → x[j].val + y[j].val ≤ U32.max) :
+theorem add_no_overflow_spec
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32))
+  (hLength : x.val.length = y.val.length)
+  (hNoOverflow : ∀ (j : Nat), j < x.val.length → x.val[j]!.val + y.val[j]!.val ≤ U32.max) :
   add_no_overflow x y ⦃ x' =>
-    x'.length = y.length ∧
-    toInt x' = toInt x + toInt y ⦄ := by
+    x'.length = y.val.length ∧
+    toInt x' = toInt x.val + toInt y.val ⦄ := by
   unfold add_no_overflow
   sorry
 
 /- [tutorial::add_with_carry]: loop 0:
-   Source: 'src/lib.rs', lines 39:4-50:1 -/
+   Source: 'src/lib.rs', lines 190:4-197:5 -/
 def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
   Result (U8 × (alloc.vec.Vec U32))
   :=
-  let i1 := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk x)
   if i < i1
   then
     do
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-        U32) x i
-    let i3 := UScalar.cast .U32 c0
-    let p := core.num.U32.overflowing_add i2 i3
-    let (sum, c1) := p
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32)
+        (SharedBorrow.mk x) i
+    let i3 ← lift (UScalar.cast .U32 c0)
+    let (sum, c1) ← lift (core.num.U32.overflowing_add i2.val i3)
     let i4 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
-    let p1 := core.num.U32.overflowing_add sum i4
-    let (sum1, c2) := p1
-    let i5 := UScalar.cast_fromBool .U8 c1
-    let i6 := UScalar.cast_fromBool .U8 c2
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32)
+        (SharedBorrow.mk y) i
+    let (sum1, c2) ← lift (core.num.U32.overflowing_add sum i4.val)
+    let i5 ← lift (UScalar.cast_fromBool .U8 c1)
+    let i6 ← lift (UScalar.cast_fromBool .U8 c2)
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32)
+        (MutBorrow.mk x) i
     let i7 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
@@ -765,22 +843,22 @@ theorem add_with_carry_loop_spec
   sorry
 
 /- [tutorial::add_with_carry]:
-   Source: 'src/lib.rs', lines 37:0-37:55 -/
+   Source: 'src/lib.rs', lines 186:0-199:1 -/
 def add_with_carry
-  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32)) :
   Result (U8 × (alloc.vec.Vec U32))
   :=
-  add_with_carry_loop x y 0#u8 0#usize
+  add_with_carry_loop x.val y.val 0#u8 0#usize
 
 /-- The proof about `add_with_carry` -/
 @[step]
 theorem add_with_carry_spec
-  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
-  (hLength : x.length = y.length) :
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32))
+  (hLength : x.val.length = y.val.length) :
   add_with_carry x y ⦃ c x' =>
-    x'.length = x.length ∧
+    x'.length = x.val.length ∧
     c.val ≤ 1 ∧
-    toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by
+    toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x.val + toInt y.val ⦄ := by
   unfold add_with_carry
   sorry
 
@@ -788,67 +866,69 @@ theorem add_with_carry_spec
 /-- We leave it to you to state the theorems for the functions below -/
 
 /- [tutorial::max]:
-   Source: 'src/lib.rs', lines 26:0-26:37 -/
+   Source: 'src/lib.rs', lines 201:0-203:1 -/
 def max (x : Usize) (y : Usize) : Result Usize :=
   if x > y
   then Result.ok x
   else Result.ok y
 
 /- [tutorial::get_or_zero]:
-   Source: 'src/lib.rs', lines 30:0-30:45 -/
-def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
+   Source: 'src/lib.rs', lines 205:0-207:1 -/
+def get_or_zero (y : SharedBorrow (alloc.vec.Vec U32)) (i : Usize) : Result U32 :=
   let i1 := alloc.vec.Vec.len y
   if i < i1
-  then
-    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
+  then do
+    let i2 ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
+    Result.ok i2.val
   else Result.ok 0#u32
 
 /- [tutorial::add]: loop 0:
-   Source: 'src/lib.rs', lines 60:4-76:1 -/
+   Source: 'src/lib.rs', lines 221:4-229:5 -/
 def add_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :
-  Result (alloc.vec.Vec U32)
+  Result ((alloc.vec.Vec U32) × U8)
   :=
   if i < max1
   then
     do
-    let yi ← get_or_zero y i
+    let yi ← get_or_zero (SharedBorrow.mk y) i
     let i1 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) x i
-    let i2 := UScalar.cast .U32 c0
-    let p := core.num.U32.overflowing_add i1 i2
-    let (sum, c1) := p
-    let p1 := core.num.U32.overflowing_add sum yi
-    let (sum1, c2) := p1
-    let i3 := UScalar.cast_fromBool .U8 c1
-    let i4 := UScalar.cast_fromBool .U8 c2
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32)
+        (SharedBorrow.mk x) i
+    let i2 ← lift (UScalar.cast .U32 c0)
+    let (sum, c1) ← lift (core.num.U32.overflowing_add i1.val i2)
+    let (sum1, c2) ← lift (core.num.U32.overflowing_add sum yi)
+    let i3 ← lift (UScalar.cast_fromBool .U8 c1)
+    let i4 ← lift (UScalar.cast_fromBool .U8 c2)
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32)
+        (MutBorrow.mk x) i
     let i5 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_loop x1 y max1 c01 i5
-  else
-    if c0 != 0#u8
-    then do
-         let i1 := UScalar.cast .U32 c0
-         alloc.vec.Vec.push x i1
-    else Result.ok x
+  else Result.ok (x, c0)
 partial_fixpoint
 
 /- [tutorial::add]:
-   Source: 'src/lib.rs', lines 55:0-55:38 -/
+   Source: 'src/lib.rs', lines 214:0-235:1 -/
 def add
-  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
+  (x : MutBorrow (alloc.vec.Vec U32)) (y : SharedBorrow (alloc.vec.Vec U32)) :
   Result (alloc.vec.Vec U32)
   :=
   do
-  let i := alloc.vec.Vec.len x
+  let i := alloc.vec.Vec.len (SharedBorrow.mk x.val)
   let i1 := alloc.vec.Vec.len y
   let max1 ← max i i1
   let x1 ← alloc.vec.Vec.resize core.clone.CloneU32 x max1 0#u32
-  add_loop x1 y max1 0#u8 0#usize
+  let (x2, c0) ← add_loop x1 y.val max1 0#u8 0#usize
+  if c0 != 0#u8
+  then
+    let i2 ← lift (UScalar.cast .U32 c0)
+    alloc.vec.Vec.push (MutBorrow.mk x2) i2
+  else Result.ok x2
 
 open ControlFlow
 /-- Trait declaration: [tutorial::Hash]

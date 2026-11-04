@@ -31,7 +31,7 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
   | VaArray vl ->
       "[" ^ String.concat ", " (List.map (Values.tvalue_to_string env) vl) ^ "]"
   | VaCgValue cg_id -> const_generic_db_var_to_string env (Free cg_id)
-  | VaTraitConstValue (trait_ref, const_id) ->
+  | VaTraitConstValue (trait_ref, const_id, _) ->
       let name =
         Charon.GAstUtils.get_assoc_const_name env.crate
           trait_ref.trait_decl_ref.id const_id

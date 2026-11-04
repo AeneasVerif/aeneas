@@ -479,7 +479,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                   ( ctx0,
                     None,
                     value_as_symbolic span sval.value,
-                    SymbolicAst.VaTraitConstValue (trait_ref, const_id),
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_id, true),
                     e )
               in
               (borrow, ctx, cf)
@@ -499,7 +499,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                   ( ctx0,
                     None,
                     value_as_symbolic span v.value,
-                    SymbolicAst.VaTraitConstValue (trait_ref, const_id),
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_id, false),
                     e )
               in
               (v, ctx, cf))

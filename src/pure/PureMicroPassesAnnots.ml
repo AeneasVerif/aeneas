@@ -204,7 +204,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                     { types = [ hole ]; const_generics; trait_refs = [] } )
               in
               (known_f_ty, [ collection_ty; TLiteral (TUInt Usize) ], false)
-          | ResultUnwrapMut -> (hole, mk_holes (), false)
+          | ResultUnwrapMut | ResultUnwrapMutBorrow -> (hole, mk_holes (), false)
           | GetTarget -> (f.ty, mk_known (), false)
           | TargetFeatureEnabled -> (f.ty, mk_known (), false)
         end

@@ -69,7 +69,9 @@ type fvar_id = FVarId.id [@@deriving show, ord]
 (** The builtin types for the pure AST.
 
     In comparison with LLBC:
-    - we removed [Box] (because it is translated as the identity: [Box T = T])
+    - [Box], [&T] and [&mut T] are either erased (they are translated as the
+      identity: [Box T = T]) or translated to wrappers ([TBox], [TSharedBorrow],
+      [TMutBorrow]) depending on {!Config.erase_boxes_and_borrows}.
     - we added:
     - [Result]: the type used in the error monad. This allows us to have a
       unified treatment of expressions (especially when we have to unfold the
@@ -94,6 +96,24 @@ type builtin_ty =
           declarations for the slices). For now, we use a dedicated type to
           "mark" the raw pointers, and make sure that those functions are
           actually not used in the translation. *)
+  | TBox
+      (** A box. Only used if {!Config.erase_boxes_and_borrows} is [false].
+
+          This type is a wrapper with a single field (the boxed value): we
+          manipulate it like a structure. *)
+  | TSharedBorrow
+      (** A shared borrow. Only used if {!Config.erase_boxes_and_borrows} is
+          [false].
+
+          This type is a wrapper with a single field (the borrowed value): we
+          manipulate it like a structure. *)
+  | TMutBorrow
+      (** A mutable borrow. Only used if {!Config.erase_boxes_and_borrows} is
+          [false].
+
+          This type is a wrapper with a single field (the borrowed value): we
+          manipulate it like a structure. Note that the mutable borrows are
+          still purified: we use backward functions to propagate the updates. *)
 [@@deriving show, ord]
 
 type array_or_slice = Array | Slice [@@deriving show, ord]
@@ -139,6 +159,11 @@ type pure_builtin_fun_id =
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
           with mutable borrows - TODO: remove *)
+  | ResultUnwrapMutBorrow
+      (** Same as [ResultUnwrapMut], but for the case where the [Ok] type is
+          exactly a mutable borrow and we preserve the borrow types (see
+          {!Config.erase_boxes_and_borrows}): the backward function receives the
+          borrowed value, not the borrow - TODO: remove *)
   | GetTarget
       (** Returns the compilation target as a pure string, i.e., a value of type
           [TPureString].

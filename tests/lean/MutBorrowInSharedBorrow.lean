@@ -28,100 +28,114 @@ namespace mut_borrow_in_shared_borrow
     Name pattern: [core::slice::{[@T]}::first]
     Visibility: public -/
 @[rust_fun "core::slice::{[@T]}::first"]
-axiom core.slice.Slice.first {T : Type _} : Slice T → Result (Option T)
+axiom core.slice.Slice.first
+  {T : Type _} : SharedBorrow (Slice T) → Result (Option (SharedBorrow T))
 
 /-- [mut_borrow_in_shared_borrow::MutFieldAccessViaShared]
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 15:0-17:1 -/
 structure MutFieldAccessViaShared where
-  data : Std.U32
+  data : MutBorrow Std.U32
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::MutFieldAccessViaShared<'a>}::get]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 22:4-24:5 -/
 def MutFieldAccessViaShared.get
-  (self : MutFieldAccessViaShared) : Result Std.U32 := do
-  ok self.data
+  (self : SharedBorrow MutFieldAccessViaShared) : Result Std.U32 := do
+  ok self.val.data.val
 
 /-- [mut_borrow_in_shared_borrow::use_mut_field_access_via_shared]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 27:0-31:1 -/
 def use_mut_field_access_via_shared : Result Unit := do
-  let _ ← MutFieldAccessViaShared.get { data := 42#u32 }
+  let _ ←
+    MutFieldAccessViaShared.get (SharedBorrow.mk
+      { data := (MutBorrow.mk 42#u32) })
   ok ()
 
 /-- [mut_borrow_in_shared_borrow::use_mut_field_access_via_shared_param]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 35:0-38:1 -/
 def use_mut_field_access_via_shared_param
-  (x : Std.U32) : Result (Std.U32 × Std.U32) := do
-  let i ← MutFieldAccessViaShared.get { data := x }
-  ok (i, x)
+  (x : MutBorrow Std.U32) : Result (Std.U32 × Std.U32) := do
+  let i ← MutFieldAccessViaShared.get (SharedBorrow.mk { data := x })
+  ok (i, x.val)
 
 /-- [mut_borrow_in_shared_borrow::SliceWrapper]
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 44:0-46:1 -/
 structure SliceWrapper (T : Type _) where
-  buf : Slice T
+  buf : MutBorrow (Slice T)
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::SliceWrapper<'a, T>}::len]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 49:4-51:5 -/
 def SliceWrapper.len
-  {T : Type _} (self : SliceWrapper T) : Result Std.Usize := do
-  ok (Slice.len self.buf)
+  {T : Type _} (self : SharedBorrow (SliceWrapper T)) : Result Std.Usize := do
+  ok (Slice.len (SharedBorrow.mk self.val.buf.val))
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::SliceWrapper<'a, T>}::first]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 53:4-55:5 -/
 def SliceWrapper.first
-  {T : Type _} (self : SliceWrapper T) : Result (Option T) := do
-  core.slice.Slice.first self.buf
+  {T : Type _} (self : SharedBorrow (SliceWrapper T)) :
+  Result (Option (SharedBorrow T))
+  := do
+  core.slice.Slice.first (SharedBorrow.mk self.val.buf.val)
 
 /-- [mut_borrow_in_shared_borrow::use_slice_wrapper]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 58:0-62:1 -/
 def use_slice_wrapper : Result Unit := do
   let (s, _) ←
-    lift (Array.to_slice_mut (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
-  let _ ← SliceWrapper.len { buf := s }
+    lift (Array.as_mut_slice (MutBorrow.mk
+      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])))
+  let _ ← SliceWrapper.len (SharedBorrow.mk { buf := s })
   ok ()
 
 /-- [mut_borrow_in_shared_borrow::use_slice_wrapper_param]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 66:0-69:1 -/
 def use_slice_wrapper_param
-  (buf : Slice Std.U32) : Result (Std.Usize × (Slice Std.U32)) := do
-  let i ← SliceWrapper.len { buf }
-  ok (i, buf)
+  (buf : MutBorrow (Slice Std.U32)) :
+  Result (Std.Usize × (Slice Std.U32))
+  := do
+  let i ← SliceWrapper.len (SharedBorrow.mk { buf })
+  ok (i, buf.val)
 
 /-- [mut_borrow_in_shared_borrow::MixedBorrows]
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 75:0-78:1 -/
 structure MixedBorrows (T : Type _) where
-  shared : Slice T
-  mutable : Slice T
+  shared : SharedBorrow (Slice T)
+  mutable : MutBorrow (Slice T)
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::MixedBorrows<'a, T>}::shared_len]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 81:4-83:5 -/
 def MixedBorrows.shared_len
-  {T : Type _} (self : MixedBorrows T) : Result Std.Usize := do
-  ok (Slice.len self.shared)
+  {T : Type _} (self : SharedBorrow (MixedBorrows T)) : Result Std.Usize := do
+  ok (Slice.len self.val.shared)
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::MixedBorrows<'a, T>}::mutable_len]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 85:4-87:5 -/
 def MixedBorrows.mutable_len
-  {T : Type _} (self : MixedBorrows T) : Result Std.Usize := do
-  ok (Slice.len self.mutable)
+  {T : Type _} (self : SharedBorrow (MixedBorrows T)) : Result Std.Usize := do
+  ok (Slice.len (SharedBorrow.mk self.val.mutable.val))
 
 /-- [mut_borrow_in_shared_borrow::use_mixed_borrows]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 90:0-99:1 -/
 def use_mixed_borrows : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])))
   let (s1, _) ←
-    lift (Array.to_slice_mut (Array.make 3#usize [ 4#u32, 5#u32, 6#u32 ]))
-  let _ ← MixedBorrows.shared_len { shared := s, mutable := s1 }
-  let _ ← MixedBorrows.mutable_len { shared := s, mutable := s1 }
+    lift (Array.as_mut_slice (MutBorrow.mk
+      (Array.make 3#usize [ 4#u32, 5#u32, 6#u32 ])))
+  let _ ←
+    MixedBorrows.shared_len (SharedBorrow.mk { shared := s, mutable := s1 })
+  let _ ←
+    MixedBorrows.mutable_len (SharedBorrow.mk { shared := s, mutable := s1 })
   ok ()
 
 /-- [mut_borrow_in_shared_borrow::use_mixed_borrows_param]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 103:0-106:1 -/
 def use_mixed_borrows_param
-  (shared : Slice Std.U32) (mutable : Slice Std.U32) :
+  (shared : SharedBorrow (Slice Std.U32)) (mutable : MutBorrow (Slice Std.U32))
+  :
   Result ((Std.Usize × Std.Usize) × (Slice Std.U32))
   := do
-  let i ← MixedBorrows.shared_len { shared, mutable }
-  let i1 ← MixedBorrows.mutable_len { shared, mutable }
-  ok ((i, i1), mutable)
+  let i ← MixedBorrows.shared_len (SharedBorrow.mk { shared, mutable })
+  let i1 ← MixedBorrows.mutable_len (SharedBorrow.mk { shared, mutable })
+  ok ((i, i1), mutable.val)
 
 end mut_borrow_in_shared_borrow

@@ -119,19 +119,19 @@ info: Try this:
 trace:
 -/
 #guard_msgs in
-example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
+example (s : Slice U32) (h : ∀ i (hi : i < (Slice.len ⟨s⟩)), s[i] < U32.max) :
   callSlicemapM s ⦃ s' =>
-    s'.len = s.len ∧
-    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
+    (Slice.len ⟨s'⟩) = (Slice.len ⟨s⟩) ∧
+    ∀ i (hi₁ : i < (Slice.len ⟨s⟩)) (hi₂ : i < (Slice.len ⟨s'⟩)), s'[i].val = s[i].val + 1
     ⦄ := by
   unfold callSlicemapM
   step*? +inferPost
   trace_state
 
-example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
+example (s : Slice U32) (h : ∀ i (hi : i < (Slice.len ⟨s⟩)), s[i] < U32.max) :
   callSlicemapM s ⦃ s' =>
-    s'.len = s.len ∧
-    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
+    (Slice.len ⟨s'⟩) = (Slice.len ⟨s⟩) ∧
+    ∀ i (hi₁ : i < (Slice.len ⟨s⟩)) (hi₂ : i < (Slice.len ⟨s'⟩)), s'[i].val = s[i].val + 1
     ⦄ := by
   unfold callSlicemapM
   let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
@@ -164,20 +164,20 @@ info: Try this:
 trace:
 -/
 #guard_msgs in
-example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
+example (s : Slice U32) (h : ∀ i (hi : i < (Slice.len ⟨s⟩)), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
   callSlicemapMTwice s ⦃ s' =>
-    s'.len = s.len ∧
-    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
+    (Slice.len ⟨s'⟩) = (Slice.len ⟨s⟩) ∧
+    ∀ i (hi₁ : i < (Slice.len ⟨s⟩)) (hi₂ : i < (Slice.len ⟨s'⟩)), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
     ⦄ := by
   unfold callSlicemapMTwice
   step*? +inferPost
   trace_state
 
 #guard_msgs in
-example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
+example (s : Slice U32) (h : ∀ i (hi : i < (Slice.len ⟨s⟩)), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
   callSlicemapMTwice s ⦃ s' =>
-    s'.len = s.len ∧
-    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
+    (Slice.len ⟨s'⟩) = (Slice.len ⟨s⟩) ∧
+    ∀ i (hi₁ : i < (Slice.len ⟨s⟩)) (hi₂ : i < (Slice.len ⟨s'⟩)), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
     ⦄ := by
   unfold callSlicemapMTwice
   let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec

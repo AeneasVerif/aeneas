@@ -24,13 +24,13 @@ namespace tutorial
     Source: 'src/lib.rs', lines 1:0-7:1
     Visibility: public -/
 def choose
-  {T : Type _} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → (T × T)))
+  {T : Type _} (b : Bool) (x : MutBorrow T) (y : MutBorrow T) :
+  Result ((MutBorrow T) × (T → (T × T)))
   := do
   if b
-  then let back := fun x1 => (x1, y)
+  then let back := fun x1 => (x1, y.val)
        ok (x, back)
-  else let back := fun y1 => (x, y1)
+  else let back := fun y1 => (x.val, y1)
        ok (y, back)
 
 /-- [tutorial::mul2_add1]:
@@ -50,16 +50,16 @@ def mul2_add1_add (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
 /-- [tutorial::incr]:
     Source: 'src/lib.rs', lines 17:0-19:1
     Visibility: public -/
-def incr (x : Std.U32) : Result Std.U32 := do
-  x + 1#u32
+def incr (x : MutBorrow Std.U32) : Result Std.U32 := do
+  x.val + 1#u32
 
 /-- [tutorial::use_incr]:
     Source: 'src/lib.rs', lines 21:0-26:1
     Visibility: public -/
 def use_incr : Result Unit := do
-  let x ← incr 0#u32
-  let x1 ← incr x
-  let _ ← incr x1
+  let x ← incr (MutBorrow.mk 0#u32)
+  let x1 ← incr (MutBorrow.mk x)
+  let _ ← incr (MutBorrow.mk x1)
   ok ()
 
 /-- [tutorial::CList]
@@ -67,19 +67,22 @@ def use_incr : Result Unit := do
     Visibility: public -/
 @[discriminant isize]
 inductive CList (T : Type _) where
-| CCons : T → CList T → CList T
+| CCons : T → Box (CList T) → CList T
 | CNil : CList T
 
 /-- [tutorial::list_nth]:
     Source: 'src/lib.rs', lines 35:0-48:1
     Visibility: public -/
-def list_nth {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
-  match l with
+def list_nth
+  {T : Type _} (l : SharedBorrow (CList T)) (i : Std.U32) :
+  Result (SharedBorrow T)
+  := do
+  match l.val with
   | CList.CCons x tl =>
     if i = 0#u32
-    then ok x
+    then ok (SharedBorrow.mk x)
     else let i1 ← i - 1#u32
-         list_nth tl i1
+         list_nth (SharedBorrow.mk tl.val) i1
   | CList.CNil => fail panic
 partial_fixpoint
 
@@ -87,20 +90,21 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 50:0-63:1
     Visibility: public -/
 def list_nth_mut
-  {T : Type _} (l : CList T) (i : Std.U32) :
-  Result (T × (T → CList T))
+  {T : Type _} (l : MutBorrow (CList T)) (i : Std.U32) :
+  Result ((MutBorrow T) × (T → CList T))
   := do
-  match l with
+  match l.val with
   | CList.CCons x tl =>
     if i = 0#u32
     then let back := fun t => CList.CCons t tl
-         ok (x, back)
+         ok (MutBorrow.mk x, back)
     else
       let i1 ← i - 1#u32
-      let (x1, list_nth_mut_back) ← list_nth_mut tl i1
-      let back := fun t => let tl1 := list_nth_mut_back t
-                           CList.CCons x tl1
-      ok (x1, back)
+      let (t, list_nth_mut_back) ← list_nth_mut (MutBorrow.mk tl.val) i1
+      let back :=
+        fun t1 => let c := list_nth_mut_back t1
+                  CList.CCons x (Box.mk c)
+      ok (t, back)
   | CList.CNil => fail panic
 partial_fixpoint
 
@@ -114,16 +118,19 @@ def list_nth1_loop {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
     if i = 0#u32
     then ok x
     else let i1 ← i - 1#u32
-         list_nth1_loop tl i1
+         list_nth1_loop tl.val i1
   | CList.CNil => fail panic
 partial_fixpoint
 
 /-- [tutorial::list_nth1]:
     Source: 'src/lib.rs', lines 65:0-74:1
     Visibility: public -/
-@[reducible]
-def list_nth1 {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
-  list_nth1_loop l i
+def list_nth1
+  {T : Type _} (l : SharedBorrow (CList T)) (i : Std.U32) :
+  Result (SharedBorrow T)
+  := do
+  let t ← list_nth1_loop l.val i
+  ok (SharedBorrow.mk t)
 
 /-- [tutorial::i32_id]:
     Source: 'src/lib.rs', lines 76:0-83:1
@@ -164,15 +171,15 @@ end
     Source: 'src/lib.rs', lines 105:0-107:1
     Visibility: public -/
 structure Counter (Self : Type _) where
-  incr : Self → Result (Std.Usize × Self)
+  incr : MutBorrow Self → Result (Std.Usize × Self)
 
 /-- [tutorial::{impl tutorial::Counter for usize}::incr]:
     Source: 'src/lib.rs', lines 110:4-114:5
     Visibility: public -/
 def Usize.Insts.TutorialCounter.incr
-  (self : Std.Usize) : Result (Std.Usize × Std.Usize) := do
-  let self1 ← self + 1#usize
-  ok (self, self1)
+  (self : MutBorrow Std.Usize) : Result (Std.Usize × Std.Usize) := do
+  let self1 ← self.val + 1#usize
+  ok (self.val, self1)
 
 /-- Trait implementation: [tutorial::{impl tutorial::Counter for usize}]
     Source: 'src/lib.rs', lines 109:0-115:1 -/
@@ -185,7 +192,7 @@ def Usize.Insts.TutorialCounter : Counter Std.Usize := {
     Source: 'src/lib.rs', lines 117:0-119:1
     Visibility: public -/
 def use_counter
-  {T : Type _} (CounterInst : Counter T) (cnt : T) :
+  {T : Type _} (CounterInst : Counter T) (cnt : MutBorrow T) :
   Result (Std.Usize × T)
   := do
   CounterInst.incr cnt
@@ -204,9 +211,9 @@ def list_nth_mut1_loop
     then ok (x, fun t => CList.CCons t tl)
     else
       let i1 ← i - 1#u32
-      let (t, back) ← list_nth_mut1_loop tl i1
+      let (t, back) ← list_nth_mut1_loop tl.val i1
       let back1 := fun t1 => let c := back t1
-                             CList.CCons x c
+                             CList.CCons x (Box.mk c)
       ok (t, back1)
   | CList.CNil => fail panic
 partial_fixpoint
@@ -214,12 +221,12 @@ partial_fixpoint
 /-- [tutorial::list_nth_mut1]:
     Source: 'src/lib.rs', lines 123:0-132:1
     Visibility: public -/
-@[reducible]
 def list_nth_mut1
-  {T : Type _} (l : CList T) (i : Std.U32) :
-  Result (T × (T → CList T))
+  {T : Type _} (l : MutBorrow (CList T)) (i : Std.U32) :
+  Result ((MutBorrow T) × (T → CList T))
   := do
-  list_nth_mut1_loop l i
+  let (t, back) ← list_nth_mut1_loop l.val i
+  ok (MutBorrow.mk t, back)
 
 /-- [tutorial::list_tail]: loop 0:
     Source: 'src/lib.rs', lines 135:4-137:5
@@ -229,9 +236,9 @@ def list_tail_loop
   {T : Type _} (l : CList T) : Result (CList T → CList T) := do
   match l with
   | CList.CCons t tl =>
-    let back ← list_tail_loop tl
+    let back ← list_tail_loop tl.val
     ok (fun c => let c1 := back c
-                 CList.CCons t c1)
+                 CList.CCons t (Box.mk c1))
   | CList.CNil => ok (fun c => c)
 partial_fixpoint
 
@@ -239,17 +246,19 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 134:0-139:1
     Visibility: public -/
 def list_tail
-  {T : Type _} (l : CList T) :
-  Result ((CList T) × (CList T → CList T))
+  {T : Type _} (l : MutBorrow (CList T)) :
+  Result ((MutBorrow (CList T)) × (CList T → CList T))
   := do
-  let back ← list_tail_loop l
-  ok (CList.CNil, back)
+  let back ← list_tail_loop l.val
+  ok (MutBorrow.mk CList.CNil, back)
 
 /-- [tutorial::append_in_place]:
     Source: 'src/lib.rs', lines 141:0-144:1
     Visibility: public -/
 def append_in_place
-  {T : Type _} (l0 : CList T) (l1 : CList T) : Result (CList T) := do
+  {T : Type _} (l0 : MutBorrow (CList T)) (l1 : CList T) :
+  Result (CList T)
+  := do
   let (_, list_tail_back) ← list_tail l0
   ok (list_tail_back l1)
 
@@ -260,7 +269,7 @@ def append_in_place
 def reverse_loop
   {T : Type _} (l : CList T) (out : CList T) : Result (CList T) := do
   match l with
-  | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
+  | CList.CCons hd tl => reverse_loop tl.val (CList.CCons hd (Box.mk out))
   | CList.CNil => ok out
 partial_fixpoint
 
@@ -279,12 +288,12 @@ def zero_loop
   (x : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
   := do
-  let i1 := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk x)
   if i < i1
   then
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (MutBorrow.mk x) i
     let i2 ← i + 1#usize
     let x1 := index_mut_back 0#u32
     zero_loop x1 i2
@@ -295,8 +304,11 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 162:0-168:1
     Visibility: public -/
 @[reducible]
-def zero (x : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
-  zero_loop x 0#usize
+def zero
+  (x : MutBorrow (alloc.vec.Vec Std.U32)) :
+  Result (alloc.vec.Vec Std.U32)
+  := do
+  zero_loop x.val 0#usize
 
 /-- [tutorial::add_no_overflow]: loop 0:
     Source: 'src/lib.rs', lines 177:4-180:5
@@ -306,15 +318,16 @@ def add_no_overflow_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
   := do
-  let i1 := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk x)
   if i < i1
   then
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (SharedBorrow.mk y) i
     let (i3, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
-        i
-    let i4 ← i3 + i2
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (MutBorrow.mk x) i
+    let i4 ← i3.val + i2.val
     let i5 ← i + 1#usize
     let x1 := index_mut_back i4
     add_no_overflow_loop x1 y i5
@@ -326,10 +339,11 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def add_no_overflow
-  (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) :
+  (x : MutBorrow (alloc.vec.Vec Std.U32))
+  (y : SharedBorrow (alloc.vec.Vec Std.U32)) :
   Result (alloc.vec.Vec Std.U32)
   := do
-  add_no_overflow_loop x y 0#usize
+  add_no_overflow_loop x.val y.val 0#usize
 
 /-- [tutorial::add_with_carry]: loop 0:
     Source: 'src/lib.rs', lines 190:4-197:5
@@ -340,22 +354,24 @@ def add_with_carry_loop
   (i : Std.Usize) :
   Result (Std.U8 × (alloc.vec.Vec Std.U32))
   := do
-  let i1 := alloc.vec.Vec.len x
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk x)
   if i < i1
   then
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (SharedBorrow.mk x) i
     let i3 ← lift (UScalar.cast .U32 c0)
-    let (sum, c1) ← lift (core.num.U32.overflowing_add i2 i3)
+    let (sum, c1) ← lift (core.num.U32.overflowing_add i2.val i3)
     let i4 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
-    let (sum1, c2) ← lift (core.num.U32.overflowing_add sum i4)
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (SharedBorrow.mk y) i
+    let (sum1, c2) ← lift (core.num.U32.overflowing_add sum i4.val)
     let i5 ← lift (UScalar.cast_fromBool .U8 c1)
     let i6 ← lift (UScalar.cast_fromBool .U8 c2)
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (MutBorrow.mk x) i
     let i7 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
@@ -367,10 +383,11 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def add_with_carry
-  (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) :
+  (x : MutBorrow (alloc.vec.Vec Std.U32))
+  (y : SharedBorrow (alloc.vec.Vec Std.U32)) :
   Result (Std.U8 × (alloc.vec.Vec Std.U32))
   := do
-  add_with_carry_loop x y 0#u8 0#usize
+  add_with_carry_loop x.val y.val 0#u8 0#usize
 
 /-- [tutorial::max]:
     Source: 'src/lib.rs', lines 201:0-203:1 -/
@@ -382,10 +399,15 @@ def max (x : Std.Usize) (y : Std.Usize) : Result Std.Usize := do
 /-- [tutorial::get_or_zero]:
     Source: 'src/lib.rs', lines 205:0-207:1 -/
 def get_or_zero
-  (y : alloc.vec.Vec Std.U32) (i : Std.Usize) : Result Std.U32 := do
+  (y : SharedBorrow (alloc.vec.Vec Std.U32)) (i : Std.Usize) :
+  Result Std.U32
+  := do
   let i1 := alloc.vec.Vec.len y
   if i < i1
-  then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
+  then
+    let i2 ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
+    ok i2.val
   else ok 0#u32
 
 /-- [tutorial::add]: loop 0:
@@ -399,18 +421,19 @@ def add_loop
   := do
   if i < max1
   then
-    let yi ← get_or_zero y i
+    let yi ← get_or_zero (SharedBorrow.mk y) i
     let i1 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (SharedBorrow.mk x) i
     let i2 ← lift (UScalar.cast .U32 c0)
-    let (sum, c1) ← lift (core.num.U32.overflowing_add i1 i2)
+    let (sum, c1) ← lift (core.num.U32.overflowing_add i1.val i2)
     let (sum1, c2) ← lift (core.num.U32.overflowing_add sum yi)
     let i3 ← lift (UScalar.cast_fromBool .U8 c1)
     let i4 ← lift (UScalar.cast_fromBool .U8 c2)
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        (MutBorrow.mk x) i
     let i5 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_loop x1 y max1 c01 i5
@@ -421,17 +444,19 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 214:0-235:1
     Visibility: public -/
 def add
-  (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) :
+  (x : MutBorrow (alloc.vec.Vec Std.U32))
+  (y : SharedBorrow (alloc.vec.Vec Std.U32)) :
   Result (alloc.vec.Vec Std.U32)
   := do
-  let i := alloc.vec.Vec.len x
+  let i := alloc.vec.Vec.len (SharedBorrow.mk x.val)
   let i1 := alloc.vec.Vec.len y
   let max1 ← max i i1
   let x1 ← alloc.vec.Vec.resize core.clone.CloneU32 x max1 0#u32
-  let (x2, c0) ← add_loop x1 y max1 0#u8 0#usize
+  let (x2, c0) ← add_loop x1 y.val max1 0#u8 0#usize
   if c0 != 0#u8
-  then let i2 ← lift (UScalar.cast .U32 c0)
-       alloc.vec.Vec.push x2 i2
+  then
+    let i2 ← lift (UScalar.cast .U32 c0)
+    alloc.vec.Vec.push (MutBorrow.mk x2) i2
   else ok x2
 
 /-- Trait declaration: [tutorial::Hash]

@@ -54,11 +54,11 @@ def x86.sum_loop.body
   (x : Slice Std.U32) (sum : Std.U32) (i : Std.Usize) :
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
   := do
-  let i1 := Slice.len x
+  let i1 := Slice.len (SharedBorrow.mk x)
   if i < i1
   then
-    let i2 ← Slice.index_usize x i
-    let sum1 ← lift (core.num.U32.wrapping_add sum i2)
+    let i2 ← Slice.index_usize (SharedBorrow.mk x) i
+    let sum1 ← lift (core.num.U32.wrapping_add sum i2.val)
     let i3 ← i + 1#usize
     ok (cont (sum1, i3))
   else ok (done sum)
@@ -76,9 +76,9 @@ def x86.sum_loop
 /-- [target_features::x86::sum]:
     Source: 'tests/src/target-features.rs', lines 35:4-43:5
     Visibility: public -/
-def x86.sum (x : Slice Std.U32) : Result Std.U32 := do
+def x86.sum (x : SharedBorrow (Slice Std.U32)) : Result Std.U32 := do
   massert (target_feature_enabled "avx2")
-  x86.sum_loop x 0#u32 0#usize
+  x86.sum_loop x.val 0#u32 0#usize
 
 /-- [target_features::arm::add]:
     Source: 'tests/src/target-features.rs', lines 49:4-51:5

@@ -36,26 +36,44 @@ the model must be provided in `FunsExternal.lean` (or `TypesExternal.lean` respe
 ### Translation patterns
 | Rust | Lean |
 |---|---|
-| `&mut T` param | `T` param (by value) |
-| Return `&'a mut T` | Returns `Result (T × (T → ...))` — backward continuation |
-| `&T` (shared) | `T` param (may be copied) |
+| `&mut T` param | `MutBorrow T` param; the new value (of type `T`) is returned |
+| Return `&'a mut T` | Returns `Result (MutBorrow T × (T → ...))` — backward continuation |
+| `&T` (shared) | `SharedBorrow T` param (may be copied) |
 | `panic!()` | `fail` |
 | Integer overflow | `fail` |
-| `Box<T>` | `T` |
+| `Box<T>` | `Box T` |
 | `Vec<T>` | `Vec T` (Aeneas Vec, backed by `List`) |
 | `[T; N]` | `Array T N` |
 | Pattern match | `match` |
 | Traits | Type classes |
 
+### Boxes and borrows
+`Box T`, `SharedBorrow T` and `MutBorrow T` (namespace `Aeneas.Std`) are simple
+structures with a single field `val` (they are printed as `⟨x⟩` and have `@[ext]`).
+There is no heap model: they simply wrap the boxed/borrowed value. The values are
+still purified: a function taking `x : MutBorrow T` returns the new value of
+`x.val` (of type `T`), and backward functions receive and give back the borrowed
+*values* (of type `T`), not the borrows. Note that inside ADTs the forward types are
+kept: a backward function for a returned `Option<&mut T>` receives an
+`Option (MutBorrow T)`.
+
+Spec theorems should be stated over general wrapper arguments (e.g.
+`(x : MutBorrow (alloc.vec.Vec U32))`, with postconditions about `x.val`) rather than
+over `MutBorrow.mk x`: they then apply both to `f (MutBorrow.mk v)` and to `f x`.
+For functions which simply call a loop (`def f (x : MutBorrow T) := f_loop x.val`,
+marked `@[reducible]`), state the `@[step]` theorem on the loop function `f_loop`:
+`step` matches the reduced call `f_loop v`.
+
 ### The backward continuation pattern
 When a Rust function returns a mutable borrow, the Lean translation returns a tuple `(value, backward_fn)`:
 ```lean
-def choose {T : Type _} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → T × T)) :=
-  if b then ok (x, fun z => (z, y))
-  else ok (y, fun z => (x, z))
+def choose {T : Type _} (b : Bool) (x : MutBorrow T) (y : MutBorrow T) :
+  Result ((MutBorrow T) × (T → (T × T))) := do
+  if b then ok (x, fun x1 => (x1, y.val))
+  else ok (y, fun y1 => (x.val, y1))
 ```
-The backward function propagates updates back to the original variables.
+The backward function propagates updates back to the original variables: it takes
+the new value of the borrowed data (of type `T`, not `MutBorrow T`).
 
 ### Writing models of Rust code
 When writing hand-written models of Rust functions (e.g., in `FunsExternal.lean`):
@@ -82,10 +100,10 @@ theorem function_name.spec (params : Types) (preconditions : hypotheses) :
 ### With backward function
 ```lean
 @[step]
-theorem function_name.spec (param1 : U32) (param2 : Slice U16)
-    (hpre : param1.val < param2.length) :
-    function_name param1 param2 ⦃ (result : U32) (back : U32 → Slice U16) =>
-      postcondition_on_result ∧
+theorem function_name.spec (param1 : U32) (param2 : MutBorrow (Slice U16))
+    (hpre : param1.val < param2.val.length) :
+    function_name param1 param2 ⦃ (result : MutBorrow U16) (back : U16 → Slice U16) =>
+      postcondition_on_result ∧ -- e.g., about `result.val`
       postcondition_on_backward_function back ⦄ := by ...
 ```
 
@@ -873,7 +891,9 @@ step_array_spec (name := const_array_spec) const_array[i]!
 
 -- This generates (roughly):
 -- @[step] theorem const_array_spec (i : Usize) (_ : i.val < 8) :
---   Array.index_usize const_array i ⦃ x => x.val = i.val ⦄
+--   Array.index_usize ⟨const_array⟩ i ⦃ y => (fun x => x.val = i.val) y.val ⦄
+-- (the predicate is about the element `x`: `Array.index_usize` returns a
+-- `SharedBorrow` of the element)
 ```
 
 ### When to use

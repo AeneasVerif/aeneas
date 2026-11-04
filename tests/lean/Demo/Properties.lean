@@ -32,14 +32,14 @@ open CList
 @[simp, grind] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.toList
+  | CCons hd tl => hd :: tl.val.toList
 
-theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.toList.length) :
-  list_nth l i ⦃ x => x = l.toList[i.val]! ⦄
+theorem list_nth_spec {T : Type} [Inhabited T] (l : SharedBorrow (CList T)) (i : U32)
+  (h : i.val < l.val.toList.length) :
+  list_nth l i ⦃ x => x.val = l.val.toList[i.val]! ⦄
   := by
   unfold list_nth
-  match l with
+  match hl : l.val with
   | CNil =>
     simp_all
   | CCons hd tl =>
@@ -51,6 +51,8 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       step as ⟨ i1 ⟩
       step as ⟨ x ⟩
       simp_lists [*]
+termination_by l.val
+decreasing_by simp [hl]; cases tl; simp; agrind
 
 theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   i32_id n ⦃ n' => n' = n ⦄ := by
@@ -64,15 +66,17 @@ theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
 termination_by n.toNat
 decreasing_by simp_wf; scalar_tac
 
-theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
+theorem list_tail_spec {T : Type} [Inhabited T] (l : MutBorrow (CList T)) :
   list_tail l ⦃ tl back =>
-    tl = CList.CNil ∧
-    ∀ tl', let l' := back tl'; l'.toList = l.toList ++ tl'.toList ⦄ := by
+    tl.val = CList.CNil ∧
+    ∀ tl', let l' := back tl'; l'.toList = l.val.toList ++ tl'.toList ⦄ := by
   unfold list_tail
-  match l with
+  match hl : l.val with
   | CNil => simp
   | CCons hd tl =>
     step as ⟨ back ⟩
     grind
+termination_by l.val
+decreasing_by simp [hl]; cases tl; simp; agrind
 
 end demo

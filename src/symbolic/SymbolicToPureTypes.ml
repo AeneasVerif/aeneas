@@ -132,6 +132,16 @@ and translate_trait_ref_kind (span : Meta.span option)
   | Dyn -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | UnknownTrait s -> [%craise_opt_span] span ("Unknown trait found: " ^ s)
 
+(** Translate a reference type, given the translation of the type of the
+    borrowed value: the reference is either erased, or translated to a wrapper
+    (see {!Config.erase_boxes_and_borrows}). *)
+let translate_ref_ty (rkind : T.ref_kind) (ty : ty) : ty =
+  if !Config.erase_boxes_and_borrows then ty
+  else
+    match rkind with
+    | RShared -> mk_wrapper_ty WShared ty
+    | RMut -> mk_wrapper_ty WMut ty
+
 (** Translate a signature type - TODO: factor out the different translation
     functions *)
 let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
@@ -147,9 +157,11 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
               [%sanity_check_opt_span] span (generics.const_generics = []);
               mk_simpl_tuple_ty generics.types
           | T.TBox -> (
-              (* Eliminate the boxes *)
               match generics.types with
-              | [ ty ] -> ty
+              | [ ty ] ->
+                  (* Eliminate the boxes, or wrap them *)
+                  if !Config.erase_boxes_and_borrows then ty
+                  else mk_wrapper_ty WBox ty
               | _ ->
                   [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
@@ -170,7 +182,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TScalar ty -> TLiteral (translate_literal_type ty)
   | TNever -> TNever
-  | TRef (_, rty, _) -> translate span rty
+  | TRef (_, rty, rkind) -> translate_ref_ty rkind (translate span rty)
   | TRawPtr (ty, rkind) ->
       let mut =
         match rkind with
@@ -331,8 +343,10 @@ let translate_type_id (span : Meta.span option) (tref : T.type_decl_ref) :
   | Some T.TTuple -> TTuple
   | Some T.TStr -> TBuiltin TStr
   | Some T.TBox ->
-      (* Boxes have to be eliminated: this type id shouldn't be translated *)
-      [%craise_opt_span] span "Unexpected box type"
+      if !Config.erase_boxes_and_borrows then
+        (* Boxes have to be eliminated: this type id shouldn't be translated *)
+        [%craise_opt_span] span "Unexpected box type"
+      else TBuiltin TBox
 
 (** Translate a type, seen as an input/output of a forward function (preserve
     all borrows, etc.).
@@ -357,9 +371,11 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
              identity *)
           mk_simpl_tuple_ty t_generics.types
       | Some TBox -> (
-          (* We eliminate boxes *)
+          (* We eliminate boxes, or wrap them *)
           match t_generics.types with
-          | [ bty ] -> bty
+          | [ bty ] ->
+              if !Config.erase_boxes_and_borrows then bty
+              else mk_wrapper_ty WBox bty
           | _ ->
               [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
@@ -378,7 +394,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
   | TVar var -> TVar var
   | TNever -> TNever
   | TScalar scalar_ty -> TLiteral (translate_literal_type scalar_ty)
-  | TRef (_, rty, _) -> translate rty
+  | TRef (_, rty, rkind) -> translate_ref_ty rkind (translate rty)
   | TRawPtr (ty, rkind) ->
       let mut =
         match rkind with
