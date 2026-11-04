@@ -494,7 +494,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               List.map
                 (fun (aid, fv) ->
                   let fvar = mk_texpr_from_fvar (Option.get fv) in
-                  (aid, { fvar; can_fail = false }))
+                  (aid, { fvar; is_effectful = false }))
                 backs
             in
             let ctx =
@@ -548,7 +548,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | _ -> [%craise] ctx.span "Unreachable"
             in
             let effect_info =
-              { can_fail = false; can_diverge = false; is_rec = false }
+              { is_effectful = false; can_diverge = false; is_rec = false }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_tpat_from_fvar dest_mplace dest in
@@ -562,7 +562,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
              * is thus monadic) *)
             let effect_info =
               {
-                can_fail = overflow <> OWrap;
+                is_effectful = overflow <> OWrap;
                 can_diverge = false;
                 is_rec = false;
               }
@@ -627,7 +627,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
         in
         (* Note that casts can fail *)
-        let effect_info = { can_fail; can_diverge = false; is_rec = false } in
+        let effect_info =
+          { is_effectful = can_fail; can_diverge = false; is_rec = false }
+        in
         let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
         let dest = mk_tpat_from_fvar dest_mplace dest in
         (ctx, Unop (Cast kind), effect_info, args, [], dest)
@@ -643,7 +645,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         | [ arg0; arg1 ] ->
             let effect_info =
               {
-                can_fail = ExpressionsUtils.binop_can_fail binop;
+                is_effectful = ExpressionsUtils.binop_can_fail binop;
                 can_diverge = false;
                 is_rec = false;
               }
@@ -705,7 +707,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpr) -> x.ty)) args in
   let ret_ty =
-    if effect_info.can_fail then mk_result_ty dest_v.ty else dest_v.ty
+    if effect_info.is_effectful then mk_result_ty dest_v.ty else dest_v.ty
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
@@ -798,14 +800,15 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     ^ pure_ty_to_string ctx call_e.ty];
   [%sanity_check] ctx.span
     (let call_ty =
-       if effect_info.can_fail then unwrap_result_ty ctx.span call_e.ty
+       if effect_info.is_effectful then unwrap_result_ty ctx.span call_e.ty
        else call_e.ty
      in
      dest_v.ty = call_ty);
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
   (* Put together *)
-  [%add_loc] mk_closed_checked_let ctx effect_info.can_fail dest_v call_e next_e
+  [%add_loc] mk_closed_checked_let ctx effect_info.is_effectful dest_v call_e
+    next_e
 
 and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     (ctx : bs_ctx) : texpr =
@@ -1160,7 +1163,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
         (* Introduce a match if necessary *)
         let ctx, (output, call) = decompose_let_match ctx output call in
         (* Translate the next expression and construct the let *)
-        [%add_loc] mk_closed_checked_let ctx info.can_fail output call
+        [%add_loc] mk_closed_checked_let ctx info.is_effectful output call
           (next_e ctx)
 
 and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs)
@@ -1320,7 +1323,7 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
         (V.AbsId.Set.mem abs.abs_id ctx.ignored_abs_ids
         || (back_inputs = [] && outputs = []));
       next_e ctx
-  | Some { fvar = func; can_fail } ->
+  | Some { fvar = func; is_effectful } ->
       [%ltrace
         let args = List.map (texpr_to_string ctx) args in
         "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
@@ -1335,14 +1338,14 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
         "About to reconstruct let-bindings:" ^ "\n- output: "
         ^ tpat_to_string ctx output ^ "\n- call: " ^ texpr_to_string ctx call
         ^ "\n- next:\n" ^ texpr_to_string ctx next_e];
-      [%add_loc] mk_closed_checked_let ctx can_fail output call next_e
+      [%add_loc] mk_closed_checked_let ctx is_effectful output call next_e
 
 and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
     (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "abs:\n" ^ abs_to_string ctx abs];
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* Translate the continuation *)
-  let ctx, can_fail, output, abs_e =
+  let ctx, is_effectful, output, abs_e =
     translate_ended_abs_to_texpr ctx ectx abs abs_level
   in
   [%ldebug
@@ -1351,7 +1354,7 @@ and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
   (* Put everything together *)
-  [%add_loc] mk_closed_checked_let ctx can_fail output abs_e next_e
+  [%add_loc] mk_closed_checked_let ctx is_effectful output abs_e next_e
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1645,11 +1648,11 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
               in
               (* Check that the function lives in the expected effect - otherwise we
                  have to lift it *)
-              [%cassert] ctx.span sg.sg.fwd_info.effect_info.can_fail
+              [%cassert] ctx.span sg.sg.fwd_info.effect_info.is_effectful
                 "Unimplemented";
               [%cassert] ctx.span
                 (RegionGroupId.Map.for_all
-                   (fun _ (e : fun_effect_info) -> not e.can_fail)
+                   (fun _ (e : fun_effect_info) -> not e.is_effectful)
                    sg.sg.back_effect_info)
                 "Unimplemented";
               (* Substitute *)
@@ -1724,7 +1727,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
                 mk_simpl_tuple_texpr ctx.span outputs
               in
               (* Wrap in a result if the backward function can fail *)
-              if effect_info.can_fail then mk_result_ok_texpr ctx.span output
+              if effect_info.is_effectful then
+                mk_result_ok_texpr ctx.span output
               else output
             in
             let mk_panic =
@@ -1819,7 +1823,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
     List.map
       (fun (sg : back_sg_info) ->
         if !Config.simplify_merged_fwd_backs then
-          sg.inputs = [] && sg.effect_info.can_fail
+          sg.inputs = [] && sg.effect_info.is_effectful
         else false)
       (RegionGroupId.Map.values ctx.sg.fun_ty.back_sg)
   in
@@ -1870,7 +1874,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
 
   (* Bind the expression for the forward output *)
   let pat = mk_tpat_from_fvar None pure_fwd_var in
-  [%add_loc] mk_closed_checked_let ctx fwd_effect_info.can_fail pat fwd_e e
+  [%add_loc] mk_closed_checked_let ctx fwd_effect_info.is_effectful pat fwd_e e
 
 and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
   [%ldebug symbolic_loop_to_string ctx0 loop];
@@ -1923,7 +1927,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
         let fvars =
           List.map
             (fun (aid, fv) ->
-              (aid, { fvar = mk_texpr_from_fvar fv; can_fail = false }))
+              (aid, { fvar = mk_texpr_from_fvar fv; is_effectful = false }))
             fvars
         in
         {
@@ -2105,7 +2109,7 @@ and translate_let (ctx0 : bs_ctx) (lete : S.let_expr) : texpr =
         let fvars =
           List.map
             (fun (aid, fv) ->
-              (aid, { fvar = mk_texpr_from_fvar fv; can_fail = false }))
+              (aid, { fvar = mk_texpr_from_fvar fv; is_effectful = false }))
             fvars
         in
         {
