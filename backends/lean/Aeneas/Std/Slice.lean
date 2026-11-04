@@ -4,7 +4,7 @@ public import Aeneas.Data.List
 public import Aeneas.Std.Array.Core
 public import Aeneas.Std.Range
 public import Aeneas.Std.Core.Ops
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.Core.Ptr
 public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 public import Aeneas.Std.SliceDef
 public section
@@ -56,6 +56,54 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
+
+/-! Raw-pointer exposures of slices. The functional slice model has no address: `as_ptr`/`as_mut_ptr`
+copy the slice to a fresh shared/exclusive exposure, removed when the borrow ends.
+`from_raw_parts` shares cells, allowing raw reads but not writes; `from_raw_parts_mut`
+exclusively borrows them, blocking raw access to those cells.
+The returned back computations run when the borrow ends. -/
+
+/-- `borrowRange` of `len` cells, as a slice. -/
+def RawPtr.borrowSlice {T : Type} (repr : Repr T) (q : RawPtr T) (len : Usize) : Result (Slice T) := do
+  let values ← q.borrowRange repr len.val
+  if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
+
+/-- Ends the shared exposure created by `as_ptr`: its read-only cells must still hold `s`.
+Casting the pointer to mutable cannot authorize writes; the temporary block is removed. -/
+def Slice.end_as_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
+  p.endSharedExposure repr s.val
+
+def Slice.as_ptr {T : Type} (repr : Repr T) (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.allocSharedExposure repr s.val) fun p =>
+    .ok (p, Slice.end_as_ptr repr s p)
+
+/-- Ends the mutable exposure of `as_mut_ptr`: the cells become the new slice and their
+temporary block is removed. -/
+def Slice.end_as_mut_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : MutRawPtr T) : Result (Slice T) := do
+  let values ← p.readRange repr s.length
+  p.endExposure repr s.length
+  if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
+
+def Slice.as_mut_ptr {T : Type} (repr : Repr T) (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
+  Aeneas.Std.bind (RawPtr.allocExposure repr s.val) fun p => .ok (p, Slice.end_as_mut_ptr repr s p)
+
+/-- Back function of `from_raw_parts_mut`: ends the borrow of the cells with the final slice. -/
+def core.slice.raw.from_raw_parts_mut.back {T : Type} (repr : Repr T) (p : MutRawPtr T) (len : Usize)
+    (s : Slice T) : Result Unit :=
+  if s.length = len.val then p.endBorrowRange repr s.val else .fail .undef
+
+def core.slice.raw.from_raw_parts {T : Type} (repr : Repr T) (p : ConstRawPtr T) (len : Usize) :
+    Result (Slice T × Result Unit) :=
+  Aeneas.Std.bind (p.shareRange repr len.val) fun values =>
+  if h : values.length ≤ Usize.max then
+    let s := Slice.from values h
+    .ok (s, p.endShareRange repr s.val)
+  else .fail .undef
+
+def core.slice.raw.from_raw_parts_mut {T : Type} (repr : Repr T) (p : MutRawPtr T) (len : Usize) :
+    Result (Slice T × (Slice T → Result Unit)) :=
+  Aeneas.Std.bind (p.borrowSlice repr len) fun s =>
+    .ok (s, core.slice.raw.from_raw_parts_mut.back repr p len)
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h

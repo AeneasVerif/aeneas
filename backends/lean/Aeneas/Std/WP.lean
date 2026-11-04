@@ -37,21 +37,23 @@ def effectWP : EffectWP RustEffect where
   State := Unit
   wp effect _ _ :=
     match effect with
-    | .fail _ => False
+    | .guardedModify .. => False
+    | .fail e => e = .oom
 
 instance : EffectWP.Monotonic effectWP where
-  wp_monotonic _ := False.elim
+  wp_monotonic := by
+    intro effect _ _ _ _ h
+    cases effect
+    · exact h
+    · exact h
 
 instance : EffectWP.Conjunctive effectWP where
   wp_conj := by
-    intro _ _ _ hNonempty hAll
+    intro effect _ _ hNonempty hAll
     obtain ⟨C₀, hC₀⟩ := hNonempty
-    exact (hAll C₀ hC₀).elim
-
-instance : EffectWP.ExcludedMiracle effectWP where
-  wp_excludedMiracle := by
-    rintro ⟨⟩ _ h
-    exact h
+    cases effect
+    · exact hAll C₀ hC₀
+    · exact hAll C₀ hC₀
 
 def spec (m : Result α) (p : Post α) : Prop :=
   DWP effectWP m (fun value _ => p value) ()
@@ -97,10 +99,19 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := DWP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => DWP.vis_view h, False.elim⟩
+theorem spec_vis (e : RustEffect.Input) (k : RustEffect.Output e → Result α) : spec (.vis e k) p ↔
+    (match e with | .guardedModify .. => False | .fail error => error = .oom) := by
+  cases e
+  · exact ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
+  · exact ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ e = .oom :=
+  ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
+
+@[simp]
+theorem spec_oom : spec (Result.oom : Result α) p :=
+  (spec_fail .oom).mpr rfl
 
 @[simp, grind =, agrind =]
 theorem spec_div : spec div p ↔ False := ⟨DWP.div_false, False.elim⟩
@@ -116,7 +127,7 @@ theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (uncurry f) ↔ False := by simp
+    spec (fail e) (uncurry f) ↔ e = .oom := spec_fail e
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
@@ -139,9 +150,27 @@ theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec 
     spec m (fun value => p value ∧ q value) :=
   DWP.and_iff.mpr ⟨h₁, h₂⟩
 
-theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value :=
-  let ⟨value, _, hp⟩ := DWP.exists h
-  ⟨value, hp⟩
+/-- An effect-free specification either returns the specified value or aborts
+    with OOM. A specification alone no longer establishes successful return. -/
+theorem spec_ok_or_oom {m : Result α} {p : Post α} (h : spec m p) :
+    (∃ value, m = .ok value ∧ p value) ∨ m = Result.oom := by
+  cases m
+  · rename_i value
+    exact .inl ⟨value, rfl, (spec_ok value).mp h⟩
+  · rename_i effect k
+    cases effect
+    · exact False.elim ((spec_vis _ _).mp h)
+    · rename_i error
+      have he : error = .oom := (spec_vis _ _).mp h
+      subst error
+      exact .inr (Result.vis_fail _ _)
+  · exact False.elim (spec_div.mp h)
+
+theorem spec_exists {m : Result α} {p : Post α} (h : spec m p)
+    (noOOM : m ≠ Result.oom) : ∃ value, p value := by
+  rcases spec_ok_or_oom h with ⟨value, _, hp⟩ | oom
+  · exact ⟨value, hp⟩
+  · exact (noOOM oom).elim
 
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
@@ -158,13 +187,18 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := DWLP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => DWLP.vis_view h, False.elim⟩
+theorem dspec_vis (e : RustEffect.Input) (k : RustEffect.Output e → Result α) : dspec (.vis e k) p ↔
+    (match e with | .guardedModify .. => False | .fail error => error = .oom) := by
+  cases e
+  · exact ⟨fun h => DWLP.vis_view h, fun h => DWLP.vis h⟩
+  · exact ⟨fun h => DWLP.vis_view h, fun h => DWLP.vis h⟩
 
 @[simp, grind =, agrind =]
 theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.div
 
 @[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ e = .oom :=
+  ⟨fun h => DWLP.vis_view h, fun h => DWLP.vis h⟩
 
 theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
     dspec m (fun value => p value ∧ q value) :=
@@ -695,7 +729,11 @@ instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.e
       | .div => Q.2.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
-      cases x <;> simp
+      cases x
+      · simp
+      · rename_i i _
+        cases i <;> simp
+      · simp
   }
 set_option match.ignoreUnusedAlts false
 
@@ -709,37 +747,49 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
     · cbv
     · simp
       rename_i i k
-      cases i; cbv
+      cases i <;> cbv
     · cbv
 
 
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- unreachable: `RustEffect` currently only has the `fail` effect.
+                  fun _ => ⌜False⌝, -- unreacheable
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
     intro hspec
     simp only [WP.wp, PredTrans.apply] at hspec
     split at hspec <;> simp_all
     rename_i x eff heq a
-    cases eff
-    have : heq = PEmpty.elim := by funext; contradiction
-    simp [*] at *
-    try trivial
+    cases eff with
+    | guardedModify => simp_all
+    | fail =>
+      have : heq = PEmpty.elim := by funext; contradiction
+      simp [*] at *
+      try trivial
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : spec x Q) :
-    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
+    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure))) x ⌜True⌝
+      (fun r => ⌜Q r⌝, fun e => ⌜e.down = Error.oom⌝,
+        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
+  rcases spec_ok_or_oom h with ⟨value, rfl, hp⟩ | rfl
+  · simpa [Triple, WP.wp, PredTrans.apply] using hp
+  · simp [Triple, WP.wp, PredTrans.apply, Result.oom]
 
 theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : dspec x Q) :
-    ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
-  cases x <;> simp [*] at *
-  trivial
+    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure))) x ⌜x ≠ .div⌝
+      (fun r => ⌜Q r⌝, fun e => ⌜e.down = Error.oom⌝,
+        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
+  cases x
+  · simpa [Triple, WP.wp, PredTrans.apply] using h
+  · rename_i effect k
+    cases effect
+    · exact False.elim ((dspec_vis _ _).mp h)
+    · simpa [Triple, WP.wp, PredTrans.apply] using h
+  · simp [Triple]
 
 end Aeneas.Std.WP
 
