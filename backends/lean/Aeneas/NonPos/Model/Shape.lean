@@ -216,7 +216,7 @@ class Shape (F : Fam.{pu, v} I → Type w) where
   cond : ∀ {X : Fam.{pu, v} I} [∀ k, Dom (X k)], F X → Prop
   sd : ShapeData F cond
 
-def Shape.dom (F : Fam.{pu, v} I → Type w) [Shape F] (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (F X) :=
+abbrev Shape.dom (F : Fam.{pu, v} I → Type w) [Shape F] (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (F X) :=
   (Shape.sd (F := F)).dom X
 
 /-- A pointed shape: no plain field of unpointed type (so no lifting, totality is trivial). -/

@@ -159,7 +159,7 @@ def B.fb {Self : Type} (d : B Self) : ∀ {O : Type} (AInst : A O), Self → O �
 example {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat) :
     Shape.cond (F := A.F (.A Self)) (X := Fix A.F) ⟨fa, ⟨⟩⟩ ↔
       ∀ O : Type, Cont (fun BInst : B O => (fa BInst : Self → O → Option Nat)) := by
-  nonpos_cond_simp; exact Iff.rfl
+  nonpos_cond_simp
 
 -- Using it: an instance of `A` for `Nat` that calls back into the `B` dictionary it is given.
 def natA₀ : A Nat := A.mk (fun {O} _ _ _ => none) (by nonpos_cont)
