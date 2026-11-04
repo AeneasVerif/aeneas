@@ -65,7 +65,7 @@ type ty_info = type_borrows_info [@@deriving show]
 type partial_type_info = type_param_info list option g_type_info
 [@@deriving show]
 
-type type_infos = type_decl_info TypeDeclId.Map.t [@@deriving show]
+type type_infos = type_decl_info TypeDeclId.TreeMap.t [@@deriving show]
 
 let expl_info_init = { under_borrow = false; under_mut_borrow = false }
 
@@ -236,6 +236,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         mut_regions (* We can have bound vars because of arrows *)
     | RErased -> [%internal_error_opt_span] span
     | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
+    | RLub _ -> [%craise_opt_span] span "Unexpected Lub region"
     | RBody _ -> [%craise_opt_span] span "unsupported: Body region"
   in
 
@@ -384,7 +385,8 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TAdt { id = adt_id; generics; builtin = None } ->
         (* Lookup the information for this type definition *)
         let adt_info =
-          [%silent_unwrap_opt_span] span (TypeDeclId.Map.find_opt adt_id infos)
+          [%silent_unwrap_opt_span] span
+            (TypeDeclId.TreeMap.find_opt adt_id infos)
         in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
@@ -471,6 +473,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
                   if RegionId.Set.mem adt_rid adt_info.mut_regions then
                     update_mut_regions_with_rid mut_regions rid
                   else mut_regions
+              | RLub _ -> [%craise_opt_span] span "Unexpected Lub region"
               | RBody _ -> [%craise_opt_span] span "unsupported: Body region")
             ty_info.mut_regions
             (RegionId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
@@ -542,7 +545,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
       | Opaque | TDeclError _ -> [%craise] def.item_meta.span "unreachable"
     in
     (* Explore the types and accumulate information *)
-    let type_decl_info = TypeDeclId.Map.find def.def_id infos in
+    let type_decl_info = TypeDeclId.TreeMap.find def.def_id infos in
     let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in
     (* TODO: substitute the types *)
     let type_decl_info =
@@ -554,7 +557,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
     in
     let type_decl_info = partial_type_info_to_type_decl_info type_decl_info in
     (* Update the information for the type definition we explored *)
-    let infos = TypeDeclId.Map.add def.def_id type_decl_info infos in
+    let infos = TypeDeclId.TreeMap.add def.def_id type_decl_info infos in
     (* Return *)
     infos
 
@@ -580,7 +583,7 @@ let analyze_type_declaration_group (span : Meta.span option) (crate : crate)
   let infos =
     List.fold_left
       (fun infos (def : type_decl) ->
-        TypeDeclId.Map.add def.def_id
+        TypeDeclId.TreeMap.add def.def_id
           (initialize_type_decl_info ~is_rec span crate def)
           infos)
       infos decl_defs
@@ -732,6 +735,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
           | RVar (Free rid) -> RegionId.Set.mem rid regions
           | RVar (Bound _) -> [%craise_opt_span] span "Not handled yet"
           | RStatic -> false
+          | RLub _ -> [%craise_opt_span] span "Unexpected Lub region"
           | RBody _ -> [%craise_opt_span] span "unsupported: Body region"
         in
         if add then (
@@ -781,8 +785,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                   types = _;
                   const_generics = _;
                   trait_clauses = _;
-                  regions_outlive;
-                  types_outlive;
+                  outlives;
                   trait_type_constraints = _;
                 } =
                   params
@@ -795,7 +798,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                       [%craise_opt_span] span
                         "Bound regions are not handled yet"
                   | RVar (Free _) -> add_outlives r0 [ r1 ]
-                  | RStatic | RErased | RBody _ ->
+                  | RStatic | RErased | RBody _ | RLub _ ->
                       [%internal_error_opt_span] span
                 in
 
@@ -809,23 +812,16 @@ let compute_outlive_proj_ty (span : Meta.span option)
                   end
                 in
 
-                (* Visit the region outlives constraints (the first region outlives the second)  *)
+                (* Visit the outlives constraints (the left region or type
+                   outlives the right region). *)
                 List.iter
-                  (fun (pred : (region, region) outlives_pred region_binder) ->
+                  (fun (pred : outlives_pred region_binder) ->
                     [%cassert_opt_span] span (pred.binder_regions = [])
                       "Bound regions are not supported yet";
-                    let r0, r1 = pred.binder_value in
-                    visit_region_register_outlive r0 r1)
-                  regions_outlive;
-
-                (* Visit the type outlives constraints (the type outlives the region) *)
-                List.iter
-                  (fun (pred : (ty, region) outlives_pred region_binder) ->
-                    [%cassert_opt_span] span (pred.binder_regions = [])
-                      "Bound regions are not supported yet";
-                    let ty, r = pred.binder_value in
-                    outlive_visitor#visit_ty r ty)
-                  types_outlive
+                    match pred.binder_value with
+                    | RLub ty, r -> outlive_visitor#visit_ty r ty
+                    | r0, r1 -> visit_region_register_outlive r0 r1)
+                  outlives
             | Some (TTuple | TBox | TStr) -> super#visit_ty outer ty
           end
         | TArray _ | TSlice _ -> super#visit_ty outer ty
@@ -969,8 +965,8 @@ let compute_outlive_proj_ty (span : Meta.span option)
     detect such cases and reject them.
 
     Such implied bounds come from two sources:
-    - the [regions_outlive] / [types_outlive] predicates of the declarations of
-      the ADTs mentioned in the types (Charon materializes them transitively);
+    - the [outlives] predicates of the declarations of the ADTs mentioned in the
+      types (Charon materializes them transitively);
     - the borrows we dive into: in a borrow [&'r T], the lifetime ['r] of the
       borrow must be shorter than (i.e. is outlived by) every lifetime appearing
       in the referent [T]. We track the borrow regions we have dived into to
@@ -1041,18 +1037,17 @@ let check_no_bound_free_implied_bounds (span : Meta.span option)
                       Charon.Substitute.predicates_substitute subst
                         decl.generics
                     in
-                    (* [r0] outlives [r1] *)
+                    (* [RLub ty] outlives [r] when every region of [ty]
+                       outlives [r]. *)
                     List.iter
-                      (fun (p : (region, region) outlives_pred region_binder) ->
-                        let r0, r1 = p.binder_value in
-                        check_pair r0 r1)
-                      preds.regions_outlive;
-                    (* [ty] outlives [r]: every region of [ty] outlives [r] *)
-                    List.iter
-                      (fun (p : (ty, region) outlives_pred region_binder) ->
-                        let ty, r = p.binder_value in
-                        List.iter (fun rt -> check_pair rt r) (regions_of_ty ty))
-                      preds.types_outlive)
+                      (fun (p : outlives_pred region_binder) ->
+                        match p.binder_value with
+                        | RLub ty, r ->
+                            List.iter
+                              (fun rt -> check_pair rt r)
+                              (regions_of_ty ty)
+                        | r0, r1 -> check_pair r0 r1)
+                      preds.outlives)
             | _ -> ());
             (* Dive into the generic arguments. The region arguments are checked
                against [outer] by [visit_region], the type arguments are
