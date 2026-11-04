@@ -575,28 +575,37 @@ end Arr
 section Instances
 variable {I : Type pu}
 
+/-! Each of these keeps its `dom` (the `Dom` of the shape) as the term instance search builds for
+the same type (`Dom.pprod`, `Dom.pi`, the given instance), and is reducible, so that `Shape.dom`
+reaches it in a few steps: comparing it with the `Dom` that instance search finds is then cheap. -/
+
 /-- Data: a plain field of any admissible type (lifted in the model). -/
-def Model.Shape.data (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) :=
-  Shape.data' A
+@[reducible] def Model.Shape.data (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) :=
+  { Shape.data' A with dom := fun _ _ => ‹Dom A› }
 /-- Constant: a plain field of a pointed admissible type. -/
-def Model.Shape.const (A : Type w) [Dom A] [NonPos.Pointed A] :
-    ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) := Shape.const' A
+@[reducible] def Model.Shape.const (A : Type w) [Dom A] [NonPos.Pointed A] :
+    ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) :=
+  { Shape.const' A with dom := fun _ _ => ‹Dom A› }
 /-- A plain field of a structure of the group. -/
-def Model.Shape.var (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) :=
-  Shape.var' k
+@[reducible] def Model.Shape.var (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) :=
+  { Shape.var' k with dom := fun _ inst => inst k }
 /-- A binder, whose body is pointed. -/
-def Model.Shape.pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
+@[reducible] def Model.Shape.pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)]
+    [∀ t, Shape.Pointed (G t)] :
     ShapeData (fun X => (t : T) → G t X) (fun f => ∀ t, Shape.cond (F := G t) (f t)) :=
-  Shape.pi' (fun t => Shape.sd (F := G t)) (fun t D T y => Shape.Pointed.total D T y)
+  { Shape.pi' (fun t => Shape.sd (F := G t)) (fun t D T y => Shape.Pointed.total D T y) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pi T (fun t => G t X) (fun t => Shape.dom (G t) X) }
 /-- A dictionary binder, whose body is pointed. -/
-def Model.Shape.arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
+@[reducible] def Model.Shape.arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
     ShapeData (fun X => X k → G X)
       (fun f => Cont (inst_1 := Shape.dom (F := G) _) f ∧ ∀ d, Shape.cond (F := G) (f d)) :=
-  Shape.arr' k (Shape.sd (F := G)) (fun D T y => Shape.Pointed.total D T y)
+  { Shape.arr' k (Shape.sd (F := G)) (fun D T y => Shape.Pointed.total D T y) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pi (X k) (fun _ => G X) (fun _ => Shape.dom G X) }
 /-- Two fields. -/
-def Model.Shape.prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G] :
+@[reducible] def Model.Shape.prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G] :
     ShapeData (fun X => F X ×' G X) (fun x => Shape.cond (F := F) x.1 ∧ Shape.cond (F := G) x.2) :=
-  Shape.prod' (Shape.sd (F := F)) (Shape.sd (F := G))
+  { Shape.prod' (Shape.sd (F := F)) (Shape.sd (F := G)) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pprod (F X) (G X) (Shape.dom F X) (Shape.dom G X) }
 
 /-! Pointedness, piece by piece. -/
 
