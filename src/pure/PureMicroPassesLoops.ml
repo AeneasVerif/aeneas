@@ -415,9 +415,12 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
           | FVar fid when FVarId.Set.mem fid loop_conts ->
               (* Check if all the free variables which appear in the call
                  are loop outputs or were introduced before the loop: if yes,
-                 simplify. *)
+                 simplify (unless the call returns a Result, i.e., is effectful). *)
               let fvars = texpr_get_fvars e in
-              if FVarId.Set.subset fvars all_vars then (
+              if
+                FVarId.Set.subset fvars all_vars
+                && Option.is_none (opt_destruct_result span e.ty)
+              then (
                 (* Simplify: introduce a fresh output var *)
                 [%ldebug
                   "Simplifying call to backward function:\n"

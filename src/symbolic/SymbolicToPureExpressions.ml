@@ -486,15 +486,16 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let ctx =
             let backs, ignored =
               List.partition
-                (fun (_, v) -> Option.is_some v)
-                (List.combine call.abstractions back_vars)
+                (fun (_, (_, v)) -> Option.is_some v)
+                (List.combine call.abstractions (List.combine back_tys back_vars))
             in
             let ignored = List.map fst ignored in
             let backs =
               List.map
-                (fun (aid, fv) ->
+                (fun (aid, (back_ty, fv)) ->
+                  let back_sg, _ = Option.get back_ty in
                   let fvar = mk_texpr_from_fvar (Option.get fv) in
-                  (aid, { fvar; is_effectful = false }))
+                  (aid, { fvar; is_effectful = back_sg.effect_info.is_effectful }))
                 backs
             in
             let ctx =
@@ -1936,24 +1937,28 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
         List.partition_map
           (fun (abs, ty) ->
             match ty with
-            | Some ty -> Left (abs.V.abs_id, ty)
-            | None -> Right abs.abs_id)
+            | Some ty -> Left (abs, ty)
+            | None -> Right abs.V.abs_id)
           (List.combine absl abs_tys)
       in
       (* Introduce free variables for the abs *)
       let ctx, fvars =
         List.fold_left_map
-          (fun ctx (aid, ty) ->
+          (fun ctx (abs, ty) ->
             let ctx, fvar = fresh_var (Some "back") ty ctx in
-            (ctx, (aid, fvar)))
+            (ctx, (abs, fvar)))
           ctx abs_tys
       in
       (* Register the mapping from abs to free variable *)
       let ctx =
         let fvars =
           List.map
-            (fun (aid, fv) ->
-              (aid, { fvar = mk_texpr_from_fvar fv; is_effectful = false }))
+            (fun (abs, fv) ->
+              ( abs.V.abs_id,
+                {
+                  fvar = mk_texpr_from_fvar fv;
+                  is_effectful = Option.is_some abs.V.alive_hint;
+                } ))
             fvars
         in
         {
@@ -2118,24 +2123,28 @@ and translate_let (ctx0 : bs_ctx) (lete : S.let_expr) : texpr =
         List.partition_map
           (fun (abs, ty) ->
             match ty with
-            | Some ty -> Left (abs.V.abs_id, ty)
-            | None -> Right abs.abs_id)
+            | Some ty -> Left (abs, ty)
+            | None -> Right abs.V.abs_id)
           (List.combine absl abs_tys)
       in
       (* Introduce free variables for the abs *)
       let ctx, fvars =
         List.fold_left_map
-          (fun ctx (aid, ty) ->
+          (fun ctx (abs, ty) ->
             let ctx, fvar = fresh_var (Some "back") ty ctx in
-            (ctx, (aid, fvar)))
+            (ctx, (abs, fvar)))
           ctx abs_tys
       in
       (* Register the mapping from abs to free variable *)
       let ctx =
         let fvars =
           List.map
-            (fun (aid, fv) ->
-              (aid, { fvar = mk_texpr_from_fvar fv; is_effectful = false }))
+            (fun (abs, fv) ->
+              ( abs.V.abs_id,
+                {
+                  fvar = mk_texpr_from_fvar fv;
+                  is_effectful = Option.is_some abs.V.alive_hint;
+                } ))
             fvars
         in
         {

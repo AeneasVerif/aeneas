@@ -588,7 +588,8 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
             x ) ->
           [%ldebug "Case: result"];
           (* return/fail case *)
-          if variant_id = result_ok_id then
+          if not monadic then super#visit_Let env monadic lv rv next
+          else if variant_id = result_ok_id then
             (* Return case - note that the simplification we just perform
                  might have unlocked the tuple simplification below *)
             self#visit_Let env false lv x next
