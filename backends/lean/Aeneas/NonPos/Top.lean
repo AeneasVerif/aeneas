@@ -474,11 +474,6 @@ macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
   `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.const,
       Shape.var, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
-/-- `Cont (projection of the dictionary `e`)`, from `Fix.cond e`.  (The general fallback of
-`nonposProjCondProof?` below.) -/
-macro "nonpos_proj" e:term : tactic =>
-  `(tactic| (have h := Fix.cond _ $e; nonpos_cond_simp at h; solve_by_elim [And.left, And.right]))
-
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
 arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
 condition `Fix.cond F e` has the nested shape of the tuple (a plain field's part is `True`), so it
@@ -563,11 +558,9 @@ elab_rules : tactic
         return ← `(tactic| apply Cont.app (f := $(← stx fn')) (t := $(← Term.exprToSyntax a)))
       if let some u := fn'.find? isProj then
         if a == d && !dep u then
-          let proj ← `(tactic| nonpos_proj $(← Term.exprToSyntax u.appArg!))
           if !dep fn' then
-            if let some pf ← nonposProjCondProof? fn' then
-              return ← `(tactic| first | exact $(← Term.exprToSyntax pf) | $(← `(tacticSeq| $proj:tactic)))
-          return proj
+            if let some pf ← nonposProjCondProof? fn' then return ← `(tactic| exact $(← Term.exprToSyntax pf))
+          throwError "nonpos_cont: continuity of {← ppExpr fn'} in its dictionary argument is not known"
         return ← `(tactic| refine Cont.app₂ (f := $(← stx fn')) (a := $(← stx a)) ?_ (by intro _; nonpos_cont) ?_)
       if let some c := unfoldable then return ← `(tactic| delta $(mkIdent c):ident)
       if a == d then throwError "nonpos_cont: continuity of {← ppExpr fn'} is not known"

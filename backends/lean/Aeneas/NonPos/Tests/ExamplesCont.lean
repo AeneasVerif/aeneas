@@ -57,7 +57,8 @@ example {O : Type} (BlaInst : Bla O) (o : Int) (s : O) : Cont (fun inst : Bla In
   -- h : ∀ (Other : Type), Cont (fun inst : Bla Other => BlaInst.add inst)
   exact h Int
 
--- the tactic: two `Cont.app`, then `nonpos_proj BlaInst`, which is the last four lines above.
+-- the tactic: two `Cont.app`, then the last line above, built directly as `((Fix.cond _ BlaInst).2.1 Int).1`
+-- (the condition has the nested shape of the tuple `⟨to_num, add, ⟨⟩⟩`, and `add`'s part is its `.2.1`).
 example {O : Type} (BlaInst : Bla O) (o : Int) (s : O) : Cont (fun inst : Bla Int => BlaInst.add inst o s) := by
   nonpos_cont
 
