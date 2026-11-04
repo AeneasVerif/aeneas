@@ -24,7 +24,7 @@ def lastPtr (fallback : Ptr) : Entries → Ptr
 
 /-- Every payload and both links, with exclusive ownership of each node. -/
 def chain (repr : Aeneas.Std.Repr Node) (previous root : Ptr) : Entries → Assertion
-  | [] => emp
+  | [] => empty
   | (node, value) :: rest =>
     sep (nodeAt repr node previous (firstPtr root rest) value) (chain repr node root rest)
 
@@ -43,9 +43,9 @@ theorem sepSwap (P Q R : Assertion) (h : Fragment) :
   exact ⟨sep_mono (fun h hp => (sep_comm P Q h).mp hp) (fun _ hp => hp),
     sep_mono (fun h hp => (sep_comm Q P h).mp hp) (fun _ hp => hp)⟩
 
-theorem sepEmpRight (P : Assertion) : sep P emp = P := by
+theorem sepEmpRight (P : Assertion) : sep P empty = P := by
   funext h
-  exact propext ((sep_comm P emp h).trans (sep_emp_left P h))
+  exact propext ((sep_comm P empty h).trans (sep_empty_left P h))
 
 variable (repr : Aeneas.Std.Repr Node) (layout : NodeLayout repr)
     (hsize : 0 < repr.size)

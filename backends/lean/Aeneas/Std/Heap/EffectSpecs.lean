@@ -320,15 +320,13 @@ theorem add.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
 /-- Allocation is demonic over compatible placement and representation together.
 Exposure promises decodability, not an admissible scalar encoding of pointer lanes. -/
 theorem newBlock.spec (repr : Repr T) (value : T) (own : Bool) (s : Heap) (F : Fragment)
-    (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] own s p s') :
+    (hi : s.Inv) (hm : Fragment.Matches s F) :
     Spec (RawPtr.newBlock repr [value] own)
       (fun p s' => s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 own)
             (if own then pointsTo repr p p.address value else readable repr p p.address value) h) s := by
-  apply Spec.checkedModify.mpr
-  refine ⟨feasible, ?_⟩
+  apply Spec.allocatingModify.mpr
   rintro p s' ⟨data, bptr, root, encoded, hn⟩
   have single : ∃ bytes, data = [bytes] ∧
       (if own then repr.encode value bytes else State.exposes repr s bptr.val value bytes) := by
@@ -354,34 +352,30 @@ theorem newBlock.spec (repr : Repr T) (value : T) (own : Bool) (s : Heap) (F : F
   · exact ⟨bytes, hbytes, hb⟩
 
 theorem intoRaw.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
-    (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] true s p s') :
+    (hi : s.Inv) (hm : Fragment.Matches s F) :
     Spec (alloc.boxed.Box.into_raw repr value)
       (fun p s' => s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 true) (pointsTo repr p p.address value) h) s :=
-  newBlock.spec repr value true s F hi hm feasible
+  newBlock.spec repr value true s F hi hm
 
 /-- Owned conversion supplies lexical return authority as well as its bytes. -/
 theorem intoRaw_return.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
-    (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] true s p s') :
+    (hi : s.Inv) (hm : Fragment.Matches s F) :
     Spec (alloc.boxed.Box.into_raw repr value)
       (fun p s' => RootReturn s' p.provenance ∧ s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 true) (pointsTo repr p p.address value) h) s := by
-  have ordinary := Spec.checkedModify.mp (intoRaw.spec repr value s F hi hm feasible)
-  apply Spec.checkedModify.mpr
-  refine ⟨ordinary.1, ?_⟩
+  have ordinary := Spec.allocatingModify.mp (intoRaw.spec repr value s F hi hm)
+  apply Spec.allocatingModify.mpr
   intro p s' run
   obtain ⟨data, bptr, root, encoded, allocated⟩ := run
   exact ⟨owned_newBlock_root hi allocated,
-    ordinary.2 p s' ⟨data, bptr, root, encoded, allocated⟩⟩
+    ordinary p s' ⟨data, bptr, root, encoded, allocated⟩⟩
 
 /-- Allocating another owner preserves the return authority of existing live views. -/
 theorem intoRaw_preserving.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
-    (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] true s p s') :
+    (hi : s.Inv) (hm : Fragment.Matches s F) :
     Spec (alloc.boxed.Box.into_raw repr value)
       (fun p s' =>
         (∀ base actual, s.allocations base = some actual → actual.active = true →
@@ -389,22 +383,20 @@ theorem intoRaw_preserving.spec (repr : Repr T) (value : T) (s : Heap) (F : Frag
         RootReturn s' p.provenance ∧ s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 true) (pointsTo repr p p.address value) h) s := by
-  have ordinary := Spec.checkedModify.mp (intoRaw_return.spec repr value s F hi hm feasible)
-  apply Spec.checkedModify.mpr
-  refine ⟨ordinary.1, ?_⟩
+  have ordinary := Spec.allocatingModify.mp (intoRaw_return.spec repr value s F hi hm)
+  apply Spec.allocatingModify.mpr
   intro p s' run
   obtain ⟨data, bptr, root, encoded, allocated⟩ := run
   exact ⟨fun _ _ old active authority => authority.newOwned hi old active allocated,
-    ordinary.2 p s' ⟨data, bptr, root, encoded, allocated⟩⟩
+    ordinary p s' ⟨data, bptr, root, encoded, allocated⟩⟩
 
 theorem allocExposure.spec (repr : Repr T) (value : T) (s : Heap) (F : Fragment)
-    (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] false s p s') :
+    (hi : s.Inv) (hm : Fragment.Matches s F) :
     Spec (RawPtr.allocExposure repr [value])
       (fun p s' => s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 false) (readable repr p p.address value) h) s :=
-  newBlock.spec repr value false s F hi hm feasible
+  newBlock.spec repr value false s F hi hm
 
 /-- A static descriptor calibration recovers an admissible representation from
 exclusive exposure. The alias exclusion argument stays inside the library. -/
@@ -412,14 +404,12 @@ theorem allocExposure_encoded.spec (repr : Repr T) (value : T)
     (calibrated : ∀ bytes, repr.decode bytes = some value →
       (∀ i : Fin repr.size, ∀ q lane, bytes[i.val] = .pointer q lane → repr.Carries value q) →
       repr.encode value bytes)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] false s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     Spec (RawPtr.allocExposure repr [value])
       (fun p s' => s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 false) (pointsTo repr p p.address value) h) s := by
-  apply Spec.checkedModify.mpr
-  refine ⟨feasible, ?_⟩
+  apply Spec.allocatingModify.mpr
   rintro p s' ⟨data, bptr, root, exposed, created⟩
   cases data
   · contradiction
@@ -442,7 +432,7 @@ theorem read_free.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
           Result.checkedModify (fun s (_ : Unit) s' =>
             (if own then Heap.returnOwned repr p 1 s else Heap.endExposureAt repr p 1 0 s) = some s')
           pure value)
-      (fun x h => x = value ∧ emp h) s := by
+      (fun x h => x = value ∧ empty h) s := by
   intro h F hp hd hm hinv
   obtain ⟨a, b, hab, hh, ha, hv⟩ := hp
   have readableMatch : Fragment.Matches s b := by
@@ -467,7 +457,7 @@ theorem read_free.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
 theorem fromRaw.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (value : T) (s : Heap) (hsize : 0 < repr.size) (authority : RootReturn s p.provenance) :
     TripleAt (sep (alloc repr p bptr 1 true) (pointsTo repr p bptr value))
-      (alloc.boxed.Box.from_raw repr p) (fun x h => x = value ∧ emp h) s := by
+      (alloc.boxed.Box.from_raw repr p) (fun x h => x = value ∧ empty h) s := by
   intro h F hp hd hm hinv
   obtain ⟨a, b, hab, hh, ha, hb⟩ := hp
   exact read_free.spec repr p bptr value true s hsize (fun _ => authority) h F
@@ -476,7 +466,7 @@ theorem fromRaw.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
 theorem end_from_mut.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (value : T) (hsize : 0 < repr.size) :
     Triple (sep (alloc repr p bptr 1 false) (readable repr p bptr value))
-      (core.ptr.end_from_mut repr p) (fun x h => x = value ∧ emp h) := by
+      (core.ptr.end_from_mut repr p) (fun x h => x = value ∧ empty h) := by
   intro h F s hp hd hm hinv
   exact read_free.spec repr p bptr value false s hsize (by simp) h F hp hd hm hinv
 
@@ -670,7 +660,7 @@ theorem add_alloc (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
 theorem fromRaw (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (value : T) (hsize : 0 < repr.size) (mem : p.provenance ∈ roots) :
     RootTriple roots (sep (alloc repr p bptr 1 true) (pointsTo repr p bptr value))
-      (alloc.boxed.Box.from_raw repr p) (fun x h => x = value ∧ emp h) := by
+      (alloc.boxed.Box.from_raw repr p) (fun x h => x = value ∧ empty h) := by
   intro h F s hp hd hm hi hr
   obtain ⟨a, b, hab, hh, ha, hv⟩ := hp
   have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
@@ -705,7 +695,7 @@ theorem fromRaw (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
         · contradiction
   have returned : Spec (Result.checkedModify (State.returnOwned repr p 1))
       (fun (_ : Unit) s' => (∀ root ∈ roots, RootReturn s' root) ∧
-        ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ emp h') s := by
+        ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ empty h') s := by
     exact Spec.checkedModify.mpr ⟨returning.1, fun u s' run =>
       ⟨fun root member => (exactReturn s' run).symm ▸ (hr root member).retire p.provenance,
         returning.2 u s' run⟩⟩

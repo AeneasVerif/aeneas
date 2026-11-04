@@ -114,6 +114,7 @@ package «tests» {}
 @[default_target] lean_lib RawTransmute
 @[default_target] lean_lib RawTransmuteExternals
 @[default_target] lean_lib RawValueCasts
+@[default_target] lean_lib RawZeroize
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Scalars

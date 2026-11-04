@@ -22,7 +22,6 @@ def copy_stored_pointer (source destination : RawPtr (RawPtr U32)) : Result (Raw
   HeapWP.copy_pointer source destination
   RawPtr.read (Aeneas.Std.Repr.pointer U32) destination
 
-unseal Result in
 /-- **Spec theorem for `raw_memory_views::copy_stored_pointer`**
     Copying into writable (possibly uninitialized) storage preserves the exact
     pointer, including its provenance. It requires no pointee permission. -/
@@ -54,7 +53,6 @@ def copy_and_use (source destination : RawPtr (RawPtr U32)) (value : U32) : Resu
   MutRawPtr.write raw_box.u32Repr target value
   RawPtr.read raw_box.u32Repr target
 
-unseal Result in
 /-- A copied pointer supports subsequent access when the caller separately
     owns its pointee. Copying itself does not manufacture this permission. -/
 theorem copy_and_use.spec (source destination : RawPtr (RawPtr U32))
@@ -94,12 +92,11 @@ theorem copy_and_use.spec (source destination : RawPtr (RawPtr U32))
   obtain ⟨resultEq, post⟩ := (sep_and_left _ _ _ _).mp post
   exact ⟨h₂, hd₂, hm₂, hi₂, resultEq, (sep_comm _ _ _).mp post⟩
 
-unseal Result in
 /-- Address comparison is pure and confers no memory permission. -/
 theorem same_address.spec (p q : RawPtr U32) :
-    ⦃ emp ⦄ same_address p q
-    ⦃ (result : Bool) => fun h => result = (p.address == q.address) ∧ emp h ⦄ :=
-  HeapWP.Triple.pure emp _
+    ⦃ empty ⦄ same_address p q
+    ⦃ (result : Bool) => fun h => result = (p.address == q.address) ∧ empty h ⦄ :=
+  HeapWP.Triple.pure empty _
 
 /-- A pointer with the same address but an unissued provenance cannot be read. -/
 theorem same_address.unissued_read_rejected (p : RawPtr U32) (s : Heap)
@@ -127,7 +124,6 @@ def copy_after_deallocation_tail (word : RawPtr U32)
   let copied ← copy_stored_pointer source destination
   pure (before, copied.address)
 
-unseal Result in
 /-- **Raw-tail spec for `raw_memory_views::copy_after_deallocation`**
     Physical deallocation preserves the saved pointer's symbolic lanes.
     A subsequent byte copy and pointer load succeed and preserve its address;

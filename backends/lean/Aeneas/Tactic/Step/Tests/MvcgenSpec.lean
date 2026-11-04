@@ -16,20 +16,26 @@ For every @[step] theorem, the attribute handler also generates an `mvcgen` spec
 -/
 
 example {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
-    ⦃ ⌜ True ⌝ ⦄ (x + y) ⦃ ⇓ z => ⌜ z.val = x.val + y.val ⌝ ⦄ := by
+    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure)))
+      (x + y) ⌜True⌝
+      (fun z => ⌜z.val = x.val + y.val⌝, fun e => ⌜e.down = Error.oom⌝,
+        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
   mvcgen; scalar_tac
 
 example {x y : U8} :
-    ⦃ ⌜ True ⌝ ⦄
+    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure)))
       (do
         if x < 10#u8
         then x * 2#u8
         else pure y)
-    ⦃ ⇓ z => ⌜ z.val ≠ y → z.val < 20 ⌝ ⦄ := by
+      ⌜True⌝
+      (fun z => ⌜z.val ≠ y → z.val < 20⌝, fun e => ⌜e.down = Error.oom⌝,
+        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
   mvcgen <;> scalar_tac
 
 example (arr : Array U8 25#usize) (i : Usize) (a : U8) (hi : i < arr.length) :
-    ⦃ ⌜ True ⌝ ⦄
-      Array.update arr i a
-    ⦃ ⇓ r => ⌜ r.get? i = some a ⌝ ⦄ := by
+    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure)))
+      (Array.update arr i a) ⌜True⌝
+      (fun r => ⌜r.get? i = some a⌝, fun e => ⌜e.down = Error.oom⌝,
+        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
   mvcgen; grind

@@ -68,7 +68,6 @@ def fill_exposed (values : Vector U8 4) : Result (Vector U8 4) := do
   fill_raw (p.cast U8) 4#usize 3#u8
   back
 
-unseal Result in
 private theorem end_exposed.spec (p : RawPtr (Vector U8 4)) (values : Vector U8 4)
     (h F : Fragment) (s₀ : Heap)
     (hp : (alloc (byteVectorRepr 4) p p.address 1 false ∗
@@ -106,26 +105,24 @@ private theorem end_exposed.spec (p : RawPtr (Vector U8 4)) (values : Vector U8 
   rintro _ s₂ ⟨retired, h₂, _, hm₂, hi₂, rfl⟩
   exact (HeapWP.Spec.pure _ _ _).mpr ⟨rfl, retired, by simpa using hm₂, hi₂⟩
 
-unseal Result in
 /-- A complete nested raw exposure executes four raw writes and retires only
     its fresh view. In particular, every existing outer-view record is retained. -/
 theorem fill_exposed.spec (values : Vector U8 4) (s₀ : Heap) (F : Fragment)
-    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F)
-    (feasible : ∃ p s₁, State.newBlock (byteVectorRepr 4) [values] false s₀ p s₁) :
+    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F) :
     HeapWP.Spec (fill_exposed values)
       (fun result s₁ => result = Vector.replicate 4 3#u8 ∧ Heap.NewView s₀ s₁ ∧
         (∀ blk, s₁.allocations s₀.next = some blk → blk.active = false) ∧
         Fragment.Matches s₁ F ∧ s₁.Inv) s₀ := by
   simp only [fill_exposed, core.ptr.from_mut, Aeneas.Std.bind_assoc, bind_ok]
   have exposed := HeapWP.allocExposure_encoded.spec (byteVectorRepr 4) values
-    (byteVectorRepr_calibrated values) s₀ F hi hm feasible
-  obtain ⟨enabled, post⟩ := HeapWP.Spec.checkedModify.mp exposed
-  have exposed' := HeapWP.Spec.checkedModify.mpr
-    ⟨enabled, fun p s₁ run => And.intro
+    (byteVectorRepr_calibrated values) s₀ F hi hm
+  have post := HeapWP.Spec.allocatingModify.mp exposed
+  have exposed' := HeapWP.Spec.allocatingModify.mpr
+    (fun p s₁ run => And.intro
       (show p.provenance = s₀.next ∧ Heap.NewView s₀ s₁ from by
         obtain ⟨data, base, root, _, created⟩ := run
         exact Heap.newBlock_newView created)
-      (post p s₁ run)⟩
+      (post p s₁ run))
   apply HeapWP.Spec.bind exposed'
   rintro p s₁ ⟨⟨fresh, scope⟩, _, h₁, hd₁, hm₁, hi₁, a, b, apart, joined, owner, point⟩
   have bytes := (byteVector_pointsTo p p.address values b).mp point
@@ -224,17 +221,14 @@ def update_middle (middle : Slice U8) : Result (Slice U8) := do
     finish_middle (back (.from updated.toList (by scalar_tac)))
   else .fail .panic
 
-unseal Result in
 theorem update_middle.spec (middle : Slice U8) (length : middle.length = 12)
-    (s₀ : Heap) (F : Fragment) (hi : s₀.Inv) (hm : Fragment.Matches s₀ F)
-    (feasible : ∃ p s₁, State.newBlock (byteVectorRepr 4)
-      [Vector.replicate 4 2#u8] false s₀ p s₁) :
+    (s₀ : Heap) (F : Fragment) (hi : s₀.Inv) (hm : Fragment.Matches s₀ F) :
     HeapWP.Spec (update_middle middle)
       (fun result s₁ => result.val = middleResult.toList ∧ Heap.NewView s₀ s₁ ∧
         (∀ blk, s₁.allocations s₀.next = some blk → blk.active = false) ∧
         Fragment.Matches s₁ F ∧ s₁.Inv) s₀ := by
   unfold update_middle
-  apply HeapWP.Spec.bind (pure_heap_spec (prepare_middle.spec middle length) s₀)
+  apply HeapWP.Spec.bind (HeapWP.Spec.of_spec (prepare_middle.spec middle length) s₀)
   rintro ⟨smaller, back⟩ s₁ ⟨⟨small, returns⟩, same⟩
   subst s₁
   have size : smaller.val.length = 4 := by simp [small]
@@ -245,7 +239,7 @@ theorem update_middle.spec (middle : Slice U8) (length : middle.length = 12)
     apply Vector.toList_inj.mp
     simp [small]
   rw [vector]
-  apply HeapWP.Spec.bind (fill_exposed.spec _ s₀ F hi hm feasible)
+  apply HeapWP.Spec.bind (fill_exposed.spec _ s₀ F hi hm)
   rintro updated s₂ ⟨rfl, scope, inactive, frame, inv⟩
   have restored := returns (Slice.from (Vector.replicate 4 3#u8).toList (by scalar_tac)) (by simp)
   have restoredLength :
@@ -253,7 +247,7 @@ theorem update_middle.spec (middle : Slice U8) (length : middle.length = 12)
     change (back _).val.length = 12
     rw [restored]
     simp
-  apply HeapWP.Spec.mono (pure_heap_spec (finish_middle.spec _ restoredLength) s₂)
+  apply HeapWP.Spec.mono (HeapWP.Spec.of_spec (finish_middle.spec _ restoredLength) s₂)
   rintro result s₃ ⟨resultEq, same⟩
   subst s₃
   refine ⟨?_, scope, inactive, frame, inv⟩
@@ -267,16 +261,13 @@ def update_middle_raw (p : MutRawPtr U8) : Result Unit := do
   let updated ← update_middle middle
   back updated
 
-unseal Result in
 /-- The outer mutable borrow remains returnable after a real inner exposure,
     writes, and retirement. The arbitrary frame includes neighboring bytes
     and the original Box's allocation ownership. -/
 theorem update_middle_raw.spec (p : RawPtr U8) (base : BasePtr) (initial : Vector U8 12)
     (h F : Fragment) (s₀ : Heap) (hp : pointsToRange Aeneas.Std.Repr.u8 p base initial 0 h)
     (hd : h.Disjoint F) (hm : Fragment.Matches s₀ (h ∪ F)) (hi : s₀.Inv)
-    (authority : RootReturn s₀ p.provenance)
-    (feasible : ∀ values s₁, State.borrowRange Aeneas.Std.Repr.u8 p 12 s₀ values s₁ →
-      ∃ q s₂, State.newBlock (byteVectorRepr 4) [Vector.replicate 4 2#u8] false s₁ q s₂) :
+    (authority : RootReturn s₀ p.provenance) :
     HeapWP.Spec (update_middle_raw p)
       (fun _ s₁ => RootReturn s₁ p.provenance ∧
         ∃ h₁, h₁.Disjoint F ∧ Fragment.Matches s₁ (h₁ ∪ F) ∧ s₁.Inv ∧
@@ -308,7 +299,7 @@ theorem update_middle_raw.spec (p : RawPtr U8) (base : BasePtr) (initial : Vecto
     obtain ⟨blk, lookup, _⟩ := matches_cellsHeap.mp matching 0 (by decide)
     exact hi₁.base_lt lookup
   apply HeapWP.Spec.bind (update_middle.spec (Slice.from initial.toList lengthFits) (by simp)
-    s₁ (h₁ ∪ F) hi₁ hm₁ (feasible values s₁ run))
+    s₁ (h₁ ∪ F) hi₁ hm₁)
   rintro updated s₂ ⟨updatedEq, scope, inactive, frame, inv⟩
   have authority₂ := authority₁.after_scoped_view hi₁ issued scope inactive
   have updatedLength : updated.length = (12#usize).val := by

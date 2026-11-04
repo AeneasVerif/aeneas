@@ -137,7 +137,7 @@ theorem round_trip_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
           let value ← RawPtr.read repr p
           let _ ← alloc.boxed.Box.from_raw repr p
           pure value)
-      (fun value h => value = replacement ∧ emp h) := by
+      (fun value h => value = replacement ∧ empty h) := by
   apply HeapWP.RootTriple.bind
     (HeapWP.RootTriple.write_owned repr p bptr initial replacement true noPointers hsize)
   intro _
@@ -149,18 +149,17 @@ theorem round_trip_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq (fun _ hp => hp)
     (fun _ _ hp => hp.2) (HeapWP.RootTriple.fromRaw repr p bptr replacement hsize (by simp)))
   intro _
-  exact HeapWP.RootTriple.pure emp replacement
+  exact HeapWP.RootTriple.pure empty replacement
 
 /-- The actual lifecycle consumes its allocation and preserves any matching frame.
 Allocation requires compatible concrete placement, not bounded ghost identifiers. -/
 theorem round_trip.spec (repr : Aeneas.Std.Repr U32) (initial replacement : U32)
     (noPointers : ∀ q, ¬ repr.Carries replacement q) (hsize : 0 < repr.size)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [initial] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (round_trip repr initial replacement)
       (fun value s' => value = replacement ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold round_trip
-  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr initial s F hi hm feasible)
+  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr initial s F hi hm)
   rintro p s' ⟨authority, _, h, hd, hm', hi', hp⟩
   apply HeapWP.Spec.mono
     (round_trip_tail.spec repr p p.address initial replacement noPointers hsize
@@ -180,7 +179,7 @@ theorem stored_pointer_tail.spec (repr : Aeneas.Std.Repr U32)
           MutRawPtr.write repr loaded replacement
           let _ ← alloc.boxed.Box.from_raw pointerRepr slot
           alloc.boxed.Box.from_raw repr target)
-      (fun value h => value = replacement ∧ emp h) := by
+      (fun value h => value = replacement ∧ empty h) := by
   let targetOwn := sep (alloc repr target targetBase 1 true) (pointsTo repr target targetBase initial)
   let slotOwn := sep (alloc pointerRepr slot slotBase 1 true) (pointsTo pointerRepr slot slotBase target)
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq
@@ -200,7 +199,7 @@ theorem stored_pointer_tail.spec (repr : Aeneas.Std.Repr U32)
   intro _
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq
     (fun _ hp => hp)
-    (fun _ h hp => (sep_emp_left
+    (fun _ h hp => (sep_empty_left
       (sep (alloc repr target targetBase 1 true) (pointsTo repr target targetBase replacement)) h).mp
         (sep_mono (fun _ hp => hp.2) (fun _ h => h) hp))
     (HeapWP.RootTriple.frame
@@ -215,30 +214,14 @@ theorem stored_pointer.spec (repr : Aeneas.Std.Repr U32)
     (pointerRepr : Aeneas.Std.Repr (MutRawPtr U32)) (initial replacement : U32)
     (noPointers : ∀ q, ¬ repr.Carries replacement q)
     (hsize : 0 < repr.size) (hptr : 0 < pointerRepr.size)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [initial] true s p s')
-    (slotFeasible : ∀ target s₁, State.newBlock repr [initial] true s target s₁ →
-      ∃ slot s₂, State.newBlock pointerRepr [target] true s₁ slot s₂) :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (stored_pointer repr pointerRepr initial replacement)
       (fun value s' => value = replacement ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold stored_pointer
-  have first := HeapWP.Spec.checkedModify.mp
-    (HeapWP.intoRaw_return.spec repr initial s F hi hm feasible)
-  have observed : HeapWP.Spec (alloc.boxed.Box.into_raw repr initial)
-      (fun target s₁ => State.newBlock repr [initial] true s target s₁ ∧
-        RootReturn s₁ target.provenance ∧ ∃ a, a.Disjoint F ∧
-          Fragment.Matches s₁ (a ∪ F) ∧ s₁.Inv ∧
-          sep (alloc repr target target.address 1 true)
-            (pointsTo repr target target.address initial) a) s := by
-    apply HeapWP.Spec.checkedModify.mpr
-    refine ⟨first.1, ?_⟩
-    intro target s₁ run
-    obtain ⟨authority, _, rest⟩ := first.2 target s₁ run
-    exact ⟨run, authority, rest⟩
-  apply HeapWP.Spec.bind observed
-  rintro target s₁ ⟨allocated, targetAuthority, a, haF, hm₁, hi₁, hp⟩
+  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr initial s F hi hm)
+  rintro target s₁ ⟨targetAuthority, _, a, haF, hm₁, hi₁, hp⟩
   have second := HeapWP.intoRaw_preserving.spec pointerRepr target s₁ (a ∪ F)
-    hi₁ hm₁ (slotFeasible target s₁ allocated)
+    hi₁ hm₁
   apply HeapWP.Spec.bind second
   rintro slot s₂ ⟨preserve, slotAuthority, _, b, hd, hm₂, hi₂, hq⟩
   have owned := hp
@@ -272,7 +255,7 @@ theorem replace_pair_tail.spec (repr : Aeneas.Std.Repr (U32 × U32))
       (do let (i, _) ← RawPtr.read repr p
           MutRawPtr.write repr p (i, replacement)
           alloc.boxed.Box.from_raw repr p)
-      (fun value h => value = (first, replacement) ∧ emp h) := by
+      (fun value h => value = (first, replacement) ∧ empty h) := by
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.read_owned repr p bptr (first, second) true hsize)
   intro value
   apply HeapWP.RootTriple.pure_pre
@@ -287,12 +270,11 @@ theorem replace_pair_tail.spec (repr : Aeneas.Std.Repr (U32 × U32))
 theorem replace_pair.spec (repr : Aeneas.Std.Repr (U32 × U32))
     (first second replacement : U32) (hsize : 0 < repr.size)
     (noPointers : ∀ q, ¬ repr.Carries (first, replacement) q)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [(first, second)] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (replace_pair repr first second replacement)
       (fun value s' => value = (first, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold replace_pair
-  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr (first, second) s F hi hm feasible)
+  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr (first, second) s F hi hm)
   rintro p s' ⟨authority, _, h, hd, hm', hi', hp⟩
   apply HeapWP.Spec.mono
     (replace_pair_tail.spec repr p p.address first second replacement noPointers hsize
@@ -309,7 +291,7 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
           let result ← RawPtr.read repr start
           let _ ← alloc.boxed.Box.from_raw repr p
           pure result)
-      (fun result h => result = value ∧ emp h) := by
+      (fun result h => result = value ∧ empty h) := by
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq (fun _ h => h)
     (fun start h hs => (sep_and_left (start.provenance = p.provenance)
       (fun h => start.address.val = p.address.val + (0#usize).val * repr.size ∧
@@ -348,18 +330,17 @@ theorem one_past_end_tail.spec (repr : Aeneas.Std.Repr U32)
     (fun _ hp => hp) (fun _ _ hp => hp.2)
     (HeapWP.RootTriple.fromRaw repr p bptr value hsize (by simp)))
   intro _
-  exact HeapWP.RootTriple.pure emp value
+  exact HeapWP.RootTriple.pure empty value
 
 /-- Forming a one-past pointer does not authorize dereferencing it. The example
 reads the original start pointer and then consumes the allocation. -/
 theorem one_past_end.spec (repr : Aeneas.Std.Repr U32) (value : U32)
     (hsize : 0 < repr.size)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (one_past_end repr value)
       (fun result s' => result = value ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold one_past_end
-  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr value s F hi hm feasible)
+  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr value s F hi hm)
   rintro p s' ⟨authority, _, h, hd, hm', hi', hp⟩
   apply HeapWP.Spec.mono
     (one_past_end_tail.spec repr p p.address value hsize h F s' hp hd hm' hi'
@@ -369,27 +350,24 @@ theorem one_past_end.spec (repr : Aeneas.Std.Repr U32) (value : U32)
 
 /-- Concrete byte semantics, with no representation hypothesis left to the caller. -/
 theorem round_trip_u32.spec (initial replacement : U32)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock u32Repr [initial] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (round_trip u32Repr initial replacement)
       (fun value s' => value = replacement ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   exact round_trip.spec u32Repr initial replacement (u32Repr_noPointers replacement)
-    (by decide) s F hi hm feasible
+    (by decide) s F hi hm
 
 theorem replace_pair_u32.spec (first second replacement : U32)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock pairRepr [(first, second)] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (replace_pair pairRepr first second replacement)
       (fun value s' => value = (first, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   exact replace_pair.spec pairRepr first second replacement (by decide)
-    (pairRepr_noPointers (first, replacement)) s F hi hm feasible
+    (pairRepr_noPointers (first, replacement)) s F hi hm
 
 theorem one_past_end_u32.spec (value : U32)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock u32Repr [value] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (one_past_end u32Repr value)
       (fun result s' => result = value ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
-  exact one_past_end.spec u32Repr value (by decide) s F hi hm feasible
+  exact one_past_end.spec u32Repr value (by decide) s F hi hm
 
 end raw_box
 

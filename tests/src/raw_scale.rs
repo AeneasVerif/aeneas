@@ -15,6 +15,29 @@
 //! This is a Rust fixture, not a claim of completed extraction or Lean proofs.
 //! See tests/lean/EXTRACTION.md for the current extraction blockers.
 
+/// One multiplication, with the same disjoint-or-equal convention as the vector kernel.
+///
+/// # Safety
+/// src must permit reading one initialized u32 and dst must permit writing one u32.
+/// They must be disjoint or equal, with no conflicting accesses.
+pub unsafe fn scale_one_raw(k: u32, src: *const u32, dst: *mut u32) {
+    unsafe {
+        let value = src.read();
+        dst.write(k.wrapping_mul(value));
+    }
+}
+
+/// Disjoint scalar mode, preserving the source.
+pub fn scale_one_into(k: u32, src: &u32, dst: &mut u32) {
+    unsafe { scale_one_raw(k, core::ptr::from_ref(src), core::ptr::from_mut(dst)) };
+}
+
+/// Equal scalar mode, using a single exclusive borrow.
+pub fn scale_one_in_place(k: u32, value: &mut u32) {
+    let p = core::ptr::from_mut(value);
+    unsafe { scale_one_raw(k, p, p) };
+}
+
 /// A logical [u32; 13], backed by sixteen initialized, 256-bit-aligned lanes.
 /// The three hidden zero lanes are fields, not compiler padding.
 #[repr(C, align(32))]
@@ -51,9 +74,7 @@ impl Row13 {
 pub unsafe fn scale_raw<const N: usize>(k: u32, src: *const u32, dst: *mut u32) {
     for i in 0..N {
         unsafe {
-            // Read before writing: in-place execution preserves the unread suffix.
-            let value = src.add(i).read();
-            dst.add(i).write(k.wrapping_mul(value));
+            scale_one_raw(k, src.add(i), dst.add(i));
         }
     }
 }
@@ -132,6 +153,21 @@ pub fn scale_via_borrow(k: u32, buf: &mut Row13) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scalar_modes() {
+        for value in [0, 1, 17, u32::MAX, 0x8000_0000] {
+            for k in [0, 1, 2, 19, u32::MAX] {
+                let expected = ((u64::from(k) * u64::from(value)) % (1u64 << 32)) as u32;
+                let mut dst = 91;
+                scale_one_into(k, &value, &mut dst);
+                assert_eq!(dst, expected);
+                let mut same = value;
+                scale_one_in_place(k, &mut same);
+                assert_eq!(same, expected);
+            }
+        }
+    }
 
     fn expected(k: u32, values: &[u32]) -> Vec<u32> {
         values

@@ -217,7 +217,7 @@ resource disjointness, while the checked invariant gives physical compatibility.
 theorem createRepr.spec (s : Heap) (blk : Block)
     (valid : (Heap.mk (update s.allocations s.next (some blk)) (s.next + 1)).check = true)
     (live : (Heap.mk (update s.allocations s.next (some blk)) (s.next + 1)).live blk = true) :
-    TripleAt emp (fun s base s' => s.createRepr blk = some (base, s'))
+    TripleAt empty (fun s base s' => s.createRepr blk = some (base, s'))
       (fun base h => base = s.next ∧
         h = Fragment.single (.cleanup base blk.repr.length blk.bptr blk.owned) ∪
           cellsHeap blk.bptr base 0 blk.repr) s := by
@@ -347,7 +347,7 @@ theorem retire.spec (s : Heap) (base : Nat) (blk : Block)
       (fun h => h = Fragment.single (.cleanup base blk.repr.length blk.bptr blk.owned) ∪
         cellsHeap blk.bptr base 0 blk.repr)
       (fun s (_ : Unit) s' => Heap.commit (s.retire base) = some s')
-      (fun _ => emp) s := by
+      (fun _ => empty) s := by
   rintro h F rfl hd hm hinv
   have old := (Fragment.matches_union _ _ _).mp hm |>.2
   have preserved := Heap.retire_Inv hinv base
@@ -650,7 +650,7 @@ theorem returnView.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
     TripleAt (sep (alloc repr p bptr 1 own) (readable repr p bptr value))
       (fun s (_ : Unit) s' =>
         (if own then Heap.returnOwned repr p 1 s else Heap.endExposureAt repr p 1 0 s) = some s')
-      (fun _ => emp) s := by
+      (fun _ => empty) s := by
   intro h F hp hd hm hinv
   obtain ⟨blk, hl, hlive, haddr, ha, hown, hlen, hdepth, hh⟩ :=
     whole_readable hsize hp ((Fragment.matches_union _ _ _).mp hm).1

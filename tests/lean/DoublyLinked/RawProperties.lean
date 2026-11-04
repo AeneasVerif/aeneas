@@ -279,20 +279,20 @@ theorem remove.last_spec (node root : Ptr) (nv sv : U32) :
 theorem remove.detached_spec (node : Ptr) (value : U32) :
     HeapWP.RootTriple roots (nodeAt repr node node node value) (remove repr node)
       (fun _ => nodeAt repr node node node value) := by
-  apply HeapWP.RootTriple.conseq (fun h hp => (sep_emp_right _ h).mpr hp)
-    (fun _ h hp => (sep_emp_right _ h).mp hp)
+  apply HeapWP.RootTriple.conseq (fun h hp => (sep_empty_right _ h).mpr hp)
+    (fun _ h hp => (sep_empty_right _ h).mp hp)
   unfold remove
   apply HeapWP.RootTriple.bind (framePure (ext.read_node.spec repr hsize node (.mk node node value)))
   intro old
   apply HeapWP.RootTriple.pure_pre
   intro equal
   subst old
-  have known := nodeAt_knows repr layout node node node value hsize |>.1.left (R := emp)
-  apply HeapWP.RootTriple.bind (set_next.spec (roots := roots) repr layout hsize node node (.mk node node value) emp known)
+  have known := nodeAt_knows repr layout node node node value hsize |>.1.left (R := empty)
+  apply HeapWP.RootTriple.bind (set_next.spec (roots := roots) repr layout hsize node node (.mk node node value) empty known)
   intro _
-  apply HeapWP.RootTriple.bind (set_prev.spec (roots := roots) repr layout hsize node node (.mk node node value) emp known)
+  apply HeapWP.RootTriple.bind (set_prev.spec (roots := roots) repr layout hsize node node (.mk node node value) empty known)
   intro _
-  exact init.spec (roots := roots) repr layout hsize node (.mk node node value) value emp
+  exact init.spec (roots := roots) repr layout hsize node (.mk node node value) value empty
 
 /-- info: 'doubly_linked.insert_after.distinct_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in

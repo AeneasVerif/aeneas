@@ -13,8 +13,10 @@ cd tests/lean && lake build RawBox RawBoxProofs RawBoxManual RawReadWriteRead Ra
 
 Box lifecycles, range returns, the four-byte array callback, all five raw
 linked-list alias cases and the safe owning-list API are restored. Public
-contracts retain arbitrary matching frames, enabledness and every permitted
-successor, without client heap-check/overlap proofs. Owned lifecycles retain
+contracts retain arbitrary matching frames and every permitted successor,
+without client heap-check/overlap proofs. Accesses and returns retain checked
+enabledness; allocation and exposure accept OOM without placement-existence
+premises. Owned lifecycles retain
 lexical root authority; `ListState` encapsulates it for the safe list API.
 Pointer writes use local provenance evidence, including already-stored pointers
 to retired views. Generic node proofs take an explicit `NodeLayout` calibration.
@@ -30,6 +32,20 @@ sixteen-byte update, allocation/deallocation lifecycle, and nested Box client no
 have proved, explicitly adapted Lean clients. The nested client uses a composable
 return-authority protocol, not an exact-final-state callback assumption.
 Current extraction blockers are recorded below. Dated results below are historical.
+
+**Relational WP migration:** `WP.spec` and `HeapWP.Spec` accept the explicit
+abort `Result.oom`, but still reject panic, undefined behavior, and divergence.
+Allocation/exposure specifications quantify over all compatible successors;
+unavailable placement reports OOM instead of requiring a client existential.
+Read/write/borrow/return operations remain checked, so an invalid access cannot
+be excused by the universal WP. OOM does not run later continuations or produce
+a value satisfying the successful-return postcondition.
+
+All heap examples, including the safe owning-list API and nested exposures,
+use this policy. Their client proofs no longer contain `unseal Result`;
+pure-to-heap reasoning uses `HeapWP.Spec.of_spec`. The full default backend and
+test-library builds pass, including the OOM, rejected-error, disabled-access,
+and universal-choice regressions in `Aeneas.Std.HeapTests`.
 
 ## Scalar-vector paper example and complementary views
 
@@ -59,32 +75,33 @@ opaque Rust wrappers to conceal an unsupported primitive.
 
 | Layer | Result |
 |---|---|
-| Rust debug/release, warnings denied | All twelve tests pass: five scaling, three matrix, four memory-view tests. |
-| Miri, default settings | All twelve tests pass. This is finite execution evidence, not a proof of all safe API calls. |
+| Rust debug/release, warnings denied | All twelve pre-zeroization tests pass: five scaling, three matrix, four memory-view tests. |
+| Miri, default settings | All twelve pre-zeroization tests pass. This is finite execution evidence, not a proof of all safe API calls. |
 | AVX2 code generation | An optimized `Row13` disjoint wrapper uses two 256-bit `vpmulld` instructions and two aligned stores, without a scalar tail. This is a target-specific observation, not a compiler-correctness theorem. |
 | Current heap model | `RawPointerOps/Checks.lean` passes, including new scaling checks for disjoint shared-source ranges within one allocation, identical pointers, framing, overflow, zero length, and pure safe-update return followed by raw observation. |
 | Whole-file Charon | All three files translate with the pinned Charon. |
 | Whole-file Aeneas | All three are registered known failures. `RawMatrixView`, `RawScale`, and `RawMemoryViews` contain marked manual adaptations, not successful whole-file extraction. |
 | Matrix proof | `RawMatrixView.lean` checks the concrete descriptor, extracted safe loop/helper, patched raw kernel, and reconstructed safe wrapper, for all wrapping inputs. Exact axiom guards allow only `propext`, `Classical.choice`, and `Quot.sound`. |
-| Scaling proof | `RawScale.lean` checks the shared disjoint-or-equal raw kernel for every length, with exact wrapping results, source preservation in the disjoint case, and arbitrary frames. Same-allocation disjoint subranges are covered. `scale_into.spec`, `scale_in_place.spec`, and `scale_via_borrow.spec` prove the safe row wrappers with explicit exposure-placement feasibility. The reverse-boundary kernel and wrapper also cover every wrapping input. |
+| Scaling proof | `RawScale.lean` checks the shared disjoint-or-equal raw kernel for every length, with exact wrapping results, source preservation in the disjoint case, and arbitrary frames. Same-allocation disjoint subranges are covered. `scale_into.spec`, `scale_in_place.spec`, and `scale_via_borrow.spec` prove the safe row wrappers without exposure-placement premises, accepting OOM. The reverse-boundary kernel and wrapper also cover every wrapping input. |
 | Memory-view proofs | `RawMemoryViews.lean` checks stored-pointer observation/reuse, the eight-u16/sixteen-u8 update and safe wrapper, first write/read/deallocation, nested Box return, and pointer-copy clients. Exact axiom guards allow only `propext`, `Classical.choice`, and `Quot.sound`. See the adaptation boundaries below. |
-| Integration | `cd backends/lean && lake build` and `cd tests/lean && lake build RawMemoryViews RawMatrixView RawScale` pass. This is not a complete default build of all test libraries. |
+| Integration | `cd backends/lean && lake build` and `cd tests/lean && lake build` pass after the relational WP migration. |
 | Remaining universal contracts | The outer row loop and its wrappers remain parked. `copy_after_deallocation` has a proved raw tail, not a complete allocation/stack-exposure wrapper theorem. |
 
 The model checks are explicitly handwritten counterparts, with the existing
 four-byte little-endian `raw_box.u32Repr`. They do not validate extraction,
 establish the row-loop theorem, or derive target ABI layouts. Safe exposure
-wrappers explicitly require a feasible placement at each reached forward
-boundary; the proofs cover every permitted successor and derive backward
-return enabledness.
+wrappers cover every permitted forward successor, accepting OOM if placement
+is unavailable, and derive backward-return enabledness on continuing paths.
 
 ### Checked lifecycle, nested views, and provenance
 
 `RawMemoryViews/Initialization.lean` proves a real uninitialized allocation,
 first typed write, exact read, and physical deallocation with arbitrary frames.
 The external allocator outcome is an explicit `available : Bool` in the
-adaptation. The failure branch has a separate non-success theorem: it is not a
-successful initialized allocation, nor a model of the OS allocator's behavior.
+adaptation. Its null/`handle_alloc_error` branch is modelled by `Result.oom`,
+not panic. `first_heap_write.spec` covers either allocator outcome: successful
+returns have the exact initialized value; OOM aborts without fabricating one.
+This is not a model of the OS allocator's behavior.
 `Aeneas/Std/Heap/Lifecycle.lean` proves that deallocation marks the root dead,
 preserves disjoint frames, and prevents further reads.
 
@@ -113,6 +130,135 @@ not the complete surrounding Rust allocation and stack-exposure wrapper.
 uninitialized bytes and symbolic pointer lanes, without reading an old typed
 value. The nested-view client uses this loop to fill the inner exposure.
 
+### Standalone zeroization
+
+`tests/src/raw_zeroize.rs` is a dependency-free adaptation of RustCrypto
+**zeroize 1.9.1**, not a verification of the whole crate:
+[MaybeUninit slice implementation](https://docs.rs/zeroize/1.9.1/src/zeroize/lib.rs.html#419-442)
+and [volatile_set](https://docs.rs/zeroize/1.9.1/src/zeroize/lib.rs.html#740-765).
+The inspected crate checksum is
+`e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879`.
+
+The standalone source changes are deliberately small:
+
+- The safe interface is `zeroize<T>(storage: &mut [MaybeUninit<T>])`, as in the
+  upstream slice implementation. Raw pointers occur only inside the body;
+  no initialized T is read. An arbitrary `&mut [T]` would be unsound when zero
+  is invalid for T, so the interface deliberately retains MaybeUninit.
+- The volatile helper is inlined and specialized to u8 zero stores instead of
+  MaybeUninit<u8>. Both initialize exactly the same bytes.
+- The `isize::try_from(size).is_ok()` check is expressed as
+  `size <= isize::MAX as usize`. Checked multiplication and the Range loop remain.
+- The safe u32 wrapper uses explicit `ptr::from_mut` and a temporary one-element
+  MaybeUninit slice. Its return is safe because all-zero u32 is valid. No fence
+  is added: the inspected upstream slice path and helper do not use one.
+
+Whole-file Charon and Aeneas emission succeed, including the safe wrapper.
+The checked `RawZeroize/Funs.lean` is an **adapted emission**, not untouched output.
+`RawZeroize/adaptation.patch` records the exact Types.lean and Funs.lean diffs
+from fresh emission:
+
+1. Supply `Repr.u8` to pointer addition.
+2. Replace the generated volatile external with `write_volatile := MutRawPtr.write
+   Repr.u8`. This is a definition, not an axiom.
+3. Replace the generated cast external with a transparent provenance-preserving
+   `RawPtr.cast`.
+4. Make target layout explicit as `elementSize : Usize`; `size_of` returns it.
+   The emitted checked multiplication, Option.expect, isize cast, assertion,
+   iterator, and store sequence are retained. The u32 caller supplies four.
+5. Replace the emitted pure `Slice (MaybeUninit T)` with local `UninitSlice T`
+   metadata (pointer and length). The storage remains in the heap under
+   `writableBytes`; it is never decoded into a T or copied into a pure slice.
+   The type parameter indexes layout, so the wrapper's cast to MaybeUninit<u32>
+   keeps U32 as its pointer index.
+6. Model `as_mut_ptr` and the wrapper's temporary `from_raw_parts_mut` as local
+   metadata views of the existing exclusive heap region. Ending that temporary
+   slice is a no-op: it neither re-encodes stale contents nor creates/retires
+   a second exposure. This is a deliberately specialized boundary adaptation,
+   not a general model or proof of arbitrary Rust reference aliasing or slicing.
+   In particular, the raw-parts model does not itself enforce Rust's non-null,
+   alignment, extent, or exclusivity requirements. The actual Rust wrapper
+   establishes them from its one-element u32 borrow; the heap proof uses the
+   corresponding exclusive resource and layout descriptor.
+7. Use the existing `core.ptr.from_mut raw_box.u32Repr` model and execute its
+   effectful `back`, instead of returning the stale value saved by the emitter.
+8. Remove generated linter/recursion-limit/noncomputable boilerplate and the
+   unused TypesExternal import; no generated external axioms are imported.
+
+`RawZeroize/Properties.lean` proves that every byte in `storage.len * elementSize`
+becomes numerical zero and the returned storage handle is unchanged, with
+arbitrary frames and heap invariant preserved. It proves
+the emitted Range loop directly using the existing single-byte access lemmas;
+it does not replace the loop with `fill_raw`. The numeric precondition is that
+the mathematical byte count fits isize, which also makes checked multiplication
+succeed. Empty/ZST ranges have a pure no-access theorem for the adapted model.
+This does not license null or otherwise invalid safe Rust slices: Rust's
+reference validity requirements still apply even when no bytes are accessed.
+Typed restoration requires a witness that the zero bytes encode the requested
+value; initialized bytes alone do **not** imply a valid T or T::default().
+The safe u32 theorem supplies the zero witness and proves exposure return on
+success, without a placement-feasibility precondition; OOM is accepted.
+
+`zeroize.post_read_eq` proves that the exact-zero byte postcondition implies
+`Heap.read repr q s = repr.decode (Vector.replicate repr.size (.data 0#u8))`
+for every aligned, positive-sized read wholly inside that region, with the
+region's provenance. `zeroize.post_read_independent` consequently equates
+corresponding reads in any two heaps satisfying that postcondition, even with
+different allocation identities and surrounding heaps. Thus any successfully
+read value is independent of the initial contents. No zero-value witness is
+assumed: if the zero representation is invalid, both reads return none.
+This concerns contents while the postcondition holds, not pointer addresses,
+lengths, subsequent writes, or secrets retained outside the zeroized region.
+
+This is a heap-effects proof. Rust uses volatile stores, but compiler non-elision,
+event ordering, registers, old copies, swap, and physical secret destruction
+are outside the theorem. Standard `write_bytes` is not a secure-erasure API.
+Typed `Zeroize` need not mean zero bits (NonZero integers become one).
+Drop-based `Zeroizing`/`ZeroizeOnDrop` only help when Drop runs; neither leaks,
+`forget`, nor abort imply unconditional cleanup.
+
+Reproduce without overwriting the checked adaptation:
+
+```bash
+"$CHARON_EXE" rustc --preset=aeneas --dest-file "$OUT/raw_zeroize.llbc" \
+  -- --edition=2021 --crate-type=lib tests/src/raw_zeroize.rs
+"$AENEAS_EXE" -backend lean -loops-to-rec -split-files -abort-on-error \
+  -dest "$OUT" "$OUT/raw_zeroize.llbc"
+patch --dry-run -d "$OUT" -p0 < tests/lean/RawZeroize/adaptation.patch
+patch -d "$OUT" -p0 < tests/lean/RawZeroize/adaptation.patch
+cmp "$OUT/Types.lean" tests/lean/RawZeroize/Types.lean
+cmp "$OUT/Funs.lean" tests/lean/RawZeroize/Funs.lean
+cd tests/lean && lake build RawZeroize
+```
+
+`OUT` must be a fresh disposable directory. `FunsExternal.lean` is the checked-in
+primitive and local slice-view model; the raw external templates are not part
+of the proof.
+The normal `gmake test-raw_zeroize.rs` target also emits successfully, but like
+the other adapted fixtures it overwrites Types.lean and Funs.lean: regenerate into a disposable
+test-runner destination instead when preserving the proof tree.
+
+Validation of this standalone example:
+
+- Whole-file extraction and patch round-trip pass for Types.lean and Funs.lean.
+- `cd tests/lean && lake build RawZeroize RawMemoryViews RawMatrixView RawScale`
+  passes. The six exact axiom guards allow only `propext`, `Classical.choice`,
+  and `Quot.sound`; no sorry or new axiom is used.
+- A temporary Cargo manifest with a `[[test]]` target pointing to
+  `tests/src/raw_zeroize.rs` passes `RUSTFLAGS='-D warnings' cargo test`,
+  `cargo test --release`, and `cargo miri test` (each with that manifest).
+  All three tests pass in each mode: padding/uninitialized and NonZero storage,
+  typed zero plus neighboring values, and empty/ZST ranges. Oversized raw calls
+  are not tests of this safe API: they cannot be supplied by a valid safe slice.
+  The checked multiplication and isize assertion remain in the emitted body
+  and their successful path is justified by the theorem's numeric precondition.
+- `rustc --edition=2021 --crate-type=lib --emit=llvm-ir -O -D warnings
+  tests/src/raw_zeroize.rs -o "$OUT/raw_zeroize.ll"` retains four volatile i8
+  stores in zeroize_word on the current toolchain. This is target-specific
+  evidence, not a proof of optimizer behavior.
+- `gmake format` runs Rust formatting successfully; its ignored OCaml steps
+  still report missing ocamlformat. No OCaml code was changed.
+
 ### Extraction blockers
 
 Using the rebuilt compiler and Charon pinned by `charon-pin`:
@@ -129,6 +275,7 @@ Using the rebuilt compiler and Charon pinned by `charon-pin`:
 | `stored_pointer_address` | Emission succeeds; Lean rejects the missing `Repr` argument to `RawPtr.read`. |
 | `nested_views` | Emission succeeds; Lean rejects missing descriptors for pointer/Box operations. Generated slice boundary types also use obsolete, pure backward functions. |
 | `copy_stored_pointer` (isolated root) | Emission succeeds with opaque copy/cast/size externals; Lean rejects the missing `Repr` on the final pointer read. |
+| `raw_zeroize` (whole file) | Emission succeeds. The exact descriptor, primitive, layout, and backward-call adaptations are documented above. |
 
 The byte-view case is particularly important: typechecking alone is insufficient.
 The generated `from_raw_parts_mut` has an opaque `Slice T → Unit` callback,
@@ -218,8 +365,8 @@ client-supplied return-validity assumption.
 
 `Wrappers.lean` proves `scale.spec`: the safe wrapper returns the updated matrix
 and its last logical element, executes both backward computations, and preserves
-the external frame. Placement feasibility remains explicit, as in the scaling
-wrappers.
+the external frame on success. Like the scaling wrappers, it accepts OOM
+without requiring a placement-existence premise.
 
 Validation passed, without refreshing shared backend build artifacts:
 
@@ -277,6 +424,9 @@ casts rather than exchanging one extraction blocker for another.
 
 The checked proofs are:
 
+- `Scalar.lean`: the loop-free `scale_one_raw` with equal/disjoint/combined
+  contracts, plus `scale_one_into.spec` and `scale_one_in_place.spec`. The safe
+  contracts use `empty`, hiding the arbitrary frame without losing it.
 - `RangeAccess.lean`: framed indexed reads and pointer addition from range
   resources alone, without allocation-cleanup ownership.
 - `RangeWrite.lean`: an indexed write updates exactly one element while framing
@@ -320,17 +470,126 @@ Here `∗` is separating conjunction, and the complete expression expands to
 tuple decomposition, and an explicit postcondition function are supported.
 The existing pure notation `c ⦃ result => proposition ⦄` is unchanged.
 This is concrete syntax only, not registration with the `step` tactic.
-`Kernel.lean` uses it for the scalar-step and complete raw-kernel contracts.
+`Scalar.lean`, `Kernel.lean`, and `Wrappers.lean` use it for the scalar, vector,
+and safe-wrapper contracts.
 
-The safe-wrapper contracts are heap-interpreted (`HeapWP.Spec`), not ordinary
+### Opening example: one scalar multiplication
+
+`tests/src/raw_scale.rs` starts with `scale_one_raw`, `scale_one_into`, and
+`scale_one_in_place`. The vector loop now computes its two indexed pointers and
+calls the scalar kernel. Reading still precedes writing; pointer addition for
+the destination now precedes the read, as emitted from that Rust call.
+
+Fresh emission with Charon `de8736f7c995ac54dc490345cef9ea5143c06c62` and the
+current Aeneas binary produces all three scalar bodies and that factored loop.
+The whole-file command still fails on the aggregate mut-to-const cast and
+duplicate builtin pointer names (five reported errors, three unique).
+The scalar bodies below are actual partial emission, **not** a successful
+end-to-end extraction:
+
+```lean
+def scale_one_raw
+  (k : Std.U32) (src : ConstRawPtr Std.U32) (dst : MutRawPtr Std.U32) :
+  Result Unit
+  := do
+  let value ← RawPtr.read src
+  let i ← lift (core.num.U32.wrapping_mul k value)
+  MutRawPtr.write dst i
+
+def scale_one_into
+  (k : Std.U32) (src : Std.U32) (dst : Std.U32) : Result Std.U32 := do
+  let p ← core.ptr.from_ref src
+  let (p1, dst1) ← core.ptr.from_mut dst
+  scale_one_raw k p p1
+  ok dst1
+
+def scale_one_in_place (k : Std.U32) (value : Std.U32) : Result Std.U32 := do
+  let (p, value1) ← core.ptr.from_mut value
+  let p1 ← RawPtr.cast_scalar Std.U32 .Const p
+  scale_one_raw k p1 p
+  ok value1
+```
+
+The checked adaptation in `RawScale/Funs.lean` is:
+
+```lean
+def scale_one_raw (k : U32) (src : ConstRawPtr U32) (dst : MutRawPtr U32) :
+    Result Unit := do
+  let value ← RawPtr.read raw_box.u32Repr src
+  let i ← lift (core.num.U32.wrapping_mul k value)
+  MutRawPtr.write raw_box.u32Repr dst i
+
+def scale_one_into (k : U32) (src dst : U32) : Result U32 := do
+  let (p, src_back) ← core.ptr.from_ref raw_box.u32Repr src
+  let (p1, dst_back) ← core.ptr.from_mut raw_box.u32Repr dst
+  scale_one_raw k p p1
+  let dst ← dst_back
+  src_back
+  ok dst
+
+def scale_one_in_place (k : U32) (value : U32) : Result U32 := do
+  let (p, back) ← core.ptr.from_mut raw_box.u32Repr value
+  let p1 ← ext.cast U32 p
+  scale_one_raw k p1 p
+  back
+```
+
+For the kernel, the only semantic patch is supplying the concrete four-byte
+little-endian representation to read/write. For the wrappers, `from_ref` now
+returns the pointer and its matching shared backward computation; `from_mut`
+receives the same representation, and the mutable return executes the actual
+effectful backward computation rather than returning the emitted stale value.
+The equal-mode cast preserves address and provenance. All those changes are
+manual model adaptations, not compiler-correctness results.
+
+For the paper, the progression is **scalar kernel → unsafe vector loop → safe
+disjoint and in-place wrappers**. Show the scalar translation above, then the
+Rust `scale_raw` loop (without its recursive Lean translation), then the two
+row wrappers. Both wrappers call the same `scale_raw`, which calls
+`scale_one_raw` for each lane. The scalar-only safe wrappers remain small
+boundary examples, rather than the main vector API.
+
+The adapted vector wrappers in `Funs.lean` expose both return paths explicitly:
+
+```lean
+def scale_into (k : U32) (src : Row13) (dst : Row13) : Result Row13 := do
+  let (p, src_back) ← ext.row_as_ptr src
+  let (p1, dst_back) ← ext.row_as_mut_ptr dst
+  scale_raw 16#usize k p p1
+  let dst ← dst_back
+  src_back
+  ok dst
+
+def scale_in_place (k : U32) (buf : Row13) : Result Row13 := do
+  let (p, back) ← ext.row_as_mut_ptr buf
+  let p1 ← ext.cast U32 p
+  scale_raw 16#usize k p1 p
+  back
+```
+
+`row_as_ptr` obtains its callback from `core.ptr.from_ref rowRepr`;
+`row_as_mut_ptr` obtains its callback from `core.ptr.from_mut rowRepr`.
+Both cast only the exposed pointer to the first word, retaining the callback
+for the containing row. Equal mode exposes one mutable borrow and runs one
+callback, not two overlapping exposures.
+
+The scalar raw contracts start from `readable` resources, including symbolic
+bytes that decode to the input. A write establishes the stronger `pointsTo`
+encoding. At depth zero the resource is exclusive; no representability or
+allocation-placement existence assumption is added to the safe contracts.
+The root `RawScale.lean` checks their exact axiom dependencies and demonstrates
+adding an arbitrary assertion with `HeapWP.frame`.
+
+The safe-wrapper contracts are framed heap triples (`HeapWP.Triple`), not ordinary
 effect-free `WP.spec`: their bodies still expose and retire temporary heap views.
 Their value postconditions are simply `result = scaledRow k src` and
-`result = scaledRow k buf`. They impose no product-overflow condition.
-The finite-address model requires exposure-placement feasibility, independently
-of kernel execution. For `scale_into`, destination placement must be feasible
-after every permitted source placement, not just one favorable choice.
-These obligations remain explicit; they are not an assumed kernel contract or
-an axiom asserting that allocation always succeeds.
+`result = scaledRow k buf`, with `empty` before and after the call. Here `empty h`
+means `h = ∅`, not an empty global heap: the frame and its matching invariant are
+implicit in the triple. They impose no product-overflow condition.
+The finite-address model can report OOM at either exposure. No placement-existence
+premise remains, including no nested destination-feasibility premise after source
+placement. Continuing paths cover every permitted placement, not just a favorable
+choice. This does not assert that allocation always succeeds.
 
 The shared-source proof permits decodable symbolic pointer lanes, which a
 read-only scalar exposure can legally retain in this model. It does not silently
@@ -360,7 +619,7 @@ its proof coverage is narrower than its source-code coverage:
 
 | Draft point | Example coverage | Remaining paper obligation |
 |---|---|---|
-| One disjoint-or-equal kernel, two safe interfaces | `raw_scale` | Shared raw loop and both safe row wrappers are proved on the marked adaptation; wrapper placement feasibility remains explicit. |
+| One disjoint-or-equal kernel, two safe interfaces | `raw_scale` | Shared raw loop and both safe row wrappers are proved on the marked adaptation; OOM is accepted without placement-existence premises. |
 | Compositional outer computation | Shared raw matrix loop in `raw_scale` | Row-wise theorem; a safe outer caller would separately illustrate heap-free composition. |
 | Pure safe baseline | In-place `scale_slice` and matrix `scale_safe` | A direct disjoint safe scaling baseline would mirror the draft more closely. |
 | Raw-to-safe borrow, update, then raw observation | Both scaling files | Both patched raw kernels and their safe wrappers are proved; automated backward plumbing remains open. |
@@ -419,7 +678,8 @@ word resource. `update_word_bytes.spec` also runs the outer backward computation
 and returns the safe array. Both specify exactly
 `updatedWords words first last`: word 0 becomes `first`, word 7 becomes `last`,
 and words 1 through 6 remain unchanged (`updatedWords_get`). Arbitrary disjoint
-frames are preserved. The safe wrapper retains explicit exposure feasibility.
+frames are preserved on success. The safe wrapper accepts OOM without an
+exposure-feasibility premise.
 
 Validation passed using existing dependencies:
 
@@ -550,7 +810,7 @@ prototype returning a pointer and a `Unit → Result T` restoration callback.
 This prototype models borrowing via `ptr::from_mut`, not Rust's consuming
 `Box::into_raw`. Its callback requires both the full cell and the temporary
 exposure-cleanup resource; it reads the updated value, removes the exposure, and returns
-the safe value with `emp`. The caller cannot regain a safe value by retaining
+the safe value with `empty`. The caller cannot regain a safe value by retaining
 the original functional value. The callback contract applies to any subsequently
 written value, not just its initial contents.
 

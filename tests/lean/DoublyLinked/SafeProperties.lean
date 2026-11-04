@@ -32,13 +32,12 @@ include layout hsize
 
 /-- Construction creates an empty owned list, preserving the external frame. -/
 theorem LinkedList.new.spec (s : Heap) (F : Fragment) (hi : s.Inv)
-    (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [ext.blankNode 0#u32] true s p s') :
+    (hm : Fragment.Matches s F) :
     HeapWP.Spec (LinkedList.new repr) (fun self s' => ListState repr self [] F s') s := by
   /- intoRaw.spec allocates a blank sentinel with its cleanup token.
   Frame that token around init.spec, then use listState_intro. -/
   unfold LinkedList.new
-  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr (ext.blankNode 0#u32) s F hi hm feasible)
+  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr (ext.blankNode 0#u32) s F hi hm)
   rintro root s' ⟨authority, _, h, hd, hm', hi', hp⟩
   have hinit := HeapWP.RootTriple.conseq (fun h hp => (sep_comm _ _ h).mp hp)
     (fun _ _ hp => hp)
@@ -52,10 +51,9 @@ theorem LinkedList.new.spec (s : Heap) (F : Fragment) (hi : s.Inv)
   exact HeapWP.Spec.pure _ _ _ |>.mpr
     (listState_intro repr hsize s'' ⟨root, 0#usize⟩ [] h' F hd' hm'' hi'' ho authority')
 
-/-- Push implements plain-list cons, subject to placement feasibility and the length bound. -/
+/-- Push implements plain-list cons on return, subject only to the length bound. -/
 theorem LinkedList.push_front.spec (self : LinkedList) (values : List U32) (value : U32)
     (F : Fragment) (s : Heap) (hs : ListState repr self values F s)
-    (feasible : ∃ p s', State.newBlock repr [ext.blankNode value] true s p s')
     (hlen : values.length + 1 < 2 ^ UScalarTy.numBits .Usize) :
     HeapWP.Spec (LinkedList.push_front repr self value)
       (fun self' s' => ListState repr self' (value :: values) F s') s := by
@@ -71,7 +69,7 @@ theorem LinkedList.push_front.spec (self : LinkedList) (values : List U32) (valu
   rw [hadd]
   simp only [lift_ok, bind_ok, expect_some]
   apply HeapWP.Spec.bind
-    (HeapWP.intoRaw_preserving.spec repr (ext.blankNode value) s (h ∪ F) hi hm feasible)
+    (HeapWP.intoRaw_preserving.spec repr (ext.blankNode value) s (h ∪ F) hi hm)
   rintro p s' ⟨preserve, fresh, _, a, had, ham, hai, hap⟩
   have authority' : ∀ root ∈ p.provenance :: rootIds self entries, RootReturn s' root := by
     intro root member

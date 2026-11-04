@@ -167,17 +167,6 @@ theorem filledFrom_step (bytes : Vector Aeneas.Std.Byte n) (value : U8) (i : Fin
   · have boundary : (i.val + 1 ≤ j) = (i.val ≤ j) := by agrind
     simp [Ne.symm eq, boundary]
 
-unseal Result in
-theorem pure_heap_spec {α : Type} {c : Result α} {P : α → Prop}
-    (hc : WP.spec c P) (s : Heap) :
-    HeapWP.Spec c (fun result s' => P result ∧ s' = s) s := by
-  cases c
-  · rename_i result
-    exact (HeapWP.Spec.pure result _ s).mpr ⟨(WP.spec_ok result).mp hc, rfl⟩
-  · exact (WP.spec_vis _ _ |>.mp hc).elim
-  · exact (WP.spec_div.mp hc).elim
-
-unseal Result in
 /-- Each byte is written without reading its old representation. All other
     views and the fresh-ID counter remain unchanged throughout the loop. -/
 theorem fill_raw_loop.spec (p : RawPtr U8) (length : Usize) (value : U8) (i : Usize)
@@ -216,7 +205,7 @@ theorem fill_raw_loop.spec (p : RawPtr U8) (length : Usize) (value : U8) (i : Us
     rintro _ s₂ ⟨stable, h₂, hd₂, hm₂, hi₂, hp₂⟩
     have increment : i + 1#usize ⦃ (next : Usize) => next.val = i.val + 1 ⦄ := by
       step*
-    apply HeapWP.Spec.bind (pure_heap_spec increment s₂)
+    apply HeapWP.Spec.bind (HeapWP.Spec.of_spec increment s₂)
     rintro next s₃ ⟨nextEq, same⟩
     subst s₃
     have loop := fill_raw_loop.spec p length value next base (bytes.set i.val (.data value))

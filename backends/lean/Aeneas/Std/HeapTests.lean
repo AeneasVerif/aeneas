@@ -17,6 +17,53 @@ Native checks are not premises of the generic, kernel-checked core laws. -/
 
 namespace Aeneas.Std.HeapTests
 
+/- OOM is an accepted abort, never a successful return or an excuse for UB. -/
+example : WP.spec (Result.oom : Result Unit) (fun _ => False) := WP.spec_oom
+
+example (s : Heap) : HeapWP.Spec (Result.oom : Result Unit) (fun _ _ => False) s :=
+  HeapWP.Spec.oom
+
+example : (do
+    let _ ← (Result.oom : Result Unit)
+    Result.fail .panic : Result Unit) = Result.oom := by
+  simp [Result.oom]
+
+example (s : Heap) (Q : Unit → Heap → Prop) :
+    ¬ HeapWP.Spec (Result.fail .panic) Q s := by
+  simp [HeapWP.Spec.fail]
+
+example (s : Heap) (Q : Unit → Heap → Prop) :
+    ¬ HeapWP.Spec (Result.fail .undef) Q s := by
+  simp [HeapWP.Spec.fail]
+
+example (s : Heap) (Q : Unit → Heap → Prop) :
+    ¬ HeapWP.Spec Result.div Q s := HeapWP.Spec.div
+
+example (s : Heap) :
+    HeapWP.Spec (Result.allocatingModify (fun _ (_ : Unit) _ => False))
+      (fun _ _ => False) s := by
+  apply HeapWP.Spec.allocatingModify.mpr
+  exact fun _ _ h => h.elim
+
+example (s : Heap) (Q : Unit → Heap → Prop) :
+    ¬ HeapWP.Spec (Result.checkedModify (fun _ (_ : Unit) _ => False)) Q s := by
+  intro h
+  obtain ⟨_, _, impossible⟩ := (HeapWP.Spec.checkedModify.mp h).1
+  exact impossible
+
+example (s : Heap) (Q : Unit → Heap → Prop) :
+    ¬ HeapWP.Spec (Result.require False) Q s := by
+  intro h
+  obtain ⟨_, _, impossible, _⟩ := (HeapWP.Spec.checkedModify.mp h).1
+  exact impossible
+
+example (s : Heap) :
+    ¬ HeapWP.Spec (Result.allocatingModify (fun start (_ : Bool) stop => stop = start))
+      (fun b _ => b = true) s := by
+  intro h
+  have impossible := HeapWP.Spec.allocatingModify.mp h false s rfl
+  cases impossible
+
 def addr (n : Nat) : Usize := ⟨BitVec.ofNat _ n⟩
 def byte (n : Nat) : U8 := ⟨BitVec.ofNat _ n⟩
 def enc (values : List U8) : List (Vector Byte 1) :=

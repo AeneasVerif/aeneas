@@ -12,6 +12,14 @@ permission does not mean that the physical byte or allocation is absent.
 Safe allocation, aliasing, and return authority are abstract boundary assumptions,
 relying on what safe Rust promises; this model does not enumerate safe memory.
 
+The separation assertion `empty h` means `h = ∅`: the computation's **owned
+explicit footprint** is empty, not that the whole heap is empty. `HeapWP.Triple`
+implicitly quantifies over arbitrary disjoint frames and preserves them.
+Consequently, a safe wrapper that exposes and then retires its raw view can
+have precondition `empty` and postcondition `result = expected ∧ empty h`,
+without explicit heap, frame, or resource-matching parameters. `HeapWP.frame`
+adds a caller's assertion to such a contract.
+
 Exposure brings a compatible contribution into the explicit heap. Borrowing
 returns permissions to safe Rust. Neither operation necessarily allocates or
 deallocates physical storage. Numerical compatibility alone does not authorize
@@ -151,6 +159,14 @@ Independent shared exposures retire their baseline contribution at depth one.
 They do **not** decrement it into a writer. Local nested shares decrement
 separately; exclusive access cannot resume until conflicting views retire.
 
+`core.ptr.from_ref repr value` returns a raw pointer and a `Result Unit`
+backward computation capturing that pointer and the original value. Executing
+it checks the original value and retires the shared exposure.
+`core.ptr.from_mut repr value` instead returns a pointer and a `Result T`
+backward computation that reads the updated value and retires the exclusive
+exposure. Translated callers execute the matching callbacks when the borrows
+end; obtaining a callback alone does not run it.
+
 ## Concrete heap and lifecycle
 
 `Model.lean` stores one map `Nat → Option Block` and a fresh Nat counter.
@@ -200,16 +216,34 @@ layout or allocation-size/isize policy.
 `Std/Heap.lean` specifies transitions relationally. Placement, root relationship,
 and admissible encoding are chosen **jointly**, subject to compatibility.
 Rust wrappers in `Core/Ptr.lean` and `Alloc/Boxed.lean` use these relations
-through `Result.checkedModify`. The demonic interpretation admits every
+through `Result.allocatingModify` for allocation/exposure and
+`Result.checkedModify` for accesses and returns. The demonic interpretation admits every
 compatible witness; choosing an incompatible padding encoding first cannot
 cause spurious intermediate failure.
 
-If no successor exists, the checked boundary explicitly fails at the unchanged
-input heap. Earlier operations are not rolled back.
-Fresh Nat IDs cannot exhaust cumulatively. Nevertheless, `Box::into_raw` and
-borrowed `to_raw` exposure can still fail if no compatible placement exists.
-Failure-freedom requires **boundary feasibility**, not `Heap.Inv` alone.
-This remaining model limitation is not a Rust precondition.
+The heap WP is universal: every permitted successor must satisfy the
+continuation, without requiring that a placement exists. If allocation or
+exposure has no successor, `allocatingModify` reports `Result.oom`
+(`fail Error.oom`). Both ordinary `WP.spec` and `HeapWP.Spec` accept OOM as
+an abort, without a return value or continuation. Thus `Box::into_raw` and
+borrowed `to_raw` contracts no longer require placement-feasibility premises.
+Fresh Nat IDs cannot exhaust cumulatively; finite addresses or compatibility
+can still prevent placement. This abstract OOM allowance is not a claim that
+Rust's pointer conversion invokes an allocator.
+
+In contrast, disabled `checkedModify` operations produce `fail Error.undef`,
+which the WP rejects. Reads, writes, borrowing, returns, and `Result.require`
+still require their safety conditions. Panics and other errors remain rejected,
+as does divergence by `WP.spec` and `HeapWP.Spec`; the separate partial
+`WP.dspec` retains its existing divergence allowance. Failure preserves the
+input heap of that operation, not earlier states: there is no rollback.
+
+An accepted specification alone no longer implies successful-return existence
+or the excluded-miracle law: OOM satisfies even a false success postcondition.
+`WP.spec_exists` therefore requires an explicit no-OOM premise. Client proofs
+can use `HeapWP.Spec.of_spec`, `Spec.bind`, and `Spec.pure` without
+`unseal Result`; the implementation stays opaque. Use `bind_ok` for `Std.bind`,
+or normalize typeclass bind with `bind_tc_eq` when refolding code.
 
 Safe `Box<T>` is still represented by pure `T`, without a place identity.
 `into_raw` materializes an owned record; `from_raw` reads it and calls
@@ -331,8 +365,8 @@ new writer. `allocExposure_encoded.spec` combines this fact with a static
 descriptor calibration law to obtain an admissible representation, rather than
 assuming every numerically readable value is writable. The array callback
 example uses this distinction to recover all four updated bytes as a safe word.
-Allocation explicitly requires compatible placement feasibility and covers every
-permitted successor. `RawPtr.borrowWithBack` now pairs a raw-to-safe borrow with
+Allocation covers every permitted successor and accepts OOM if none exists.
+`RawPtr.borrowWithBack` now pairs a raw-to-safe borrow with
 its effectful backward computation. Its scoped contract derives restoration
 enabledness from the original exclusive footprint, covers every encoding
 successor, and retains arbitrary original frames. `RawPtr.withBorrow` packages

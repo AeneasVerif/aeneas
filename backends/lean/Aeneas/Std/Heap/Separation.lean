@@ -180,7 +180,7 @@ end Fragment
 
 abbrev Assertion := Fragment → Prop
 
-def emp : Assertion := fun h => h = ∅
+def empty : Assertion := fun h => h = ∅
 
 def sep (P Q : Assertion) : Assertion :=
   fun h => ∃ a b, a.Disjoint b ∧ h = a ∪ b ∧ P a ∧ Q b
@@ -218,8 +218,8 @@ theorem sep_and_left (A : Prop) (P Q : Assertion) (h : Fragment) :
   · rintro ⟨ha, a, b, hd, he, hp, hq⟩
     exact ⟨a, b, hd, he, ⟨ha, hp⟩, hq⟩
 
-theorem sep_emp_left (P : Assertion) (h : Fragment) :
-    sep emp P h ↔ P h := by
+theorem sep_empty_left (P : Assertion) (h : Fragment) :
+    sep empty P h ↔ P h := by
   constructor
   · rintro ⟨a, b, _, he, rfl, hp⟩
     have he' : h = b := by simpa using he
@@ -227,9 +227,9 @@ theorem sep_emp_left (P : Assertion) (h : Fragment) :
   · intro hp
     exact ⟨∅, h, Fragment.disjoint_empty_left h, by simp, rfl, hp⟩
 
-theorem sep_emp_right (P : Assertion) (h : Fragment) :
-    sep P emp h ↔ P h :=
-  (sep_comm P emp h).trans (sep_emp_left P h)
+theorem sep_empty_right (P : Assertion) (h : Fragment) :
+    sep P empty h ↔ P h :=
+  (sep_comm P empty h).trans (sep_empty_left P h)
 
 abbrev Cmd (α : Type w) := Heap → α → Heap → Prop
 

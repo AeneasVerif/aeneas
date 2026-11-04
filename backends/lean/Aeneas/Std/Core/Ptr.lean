@@ -180,7 +180,7 @@ def RawPtr.readRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List
 
 /-- Jointly choose an admissible encoding and compatible concrete placement. -/
 def RawPtr.newBlock (repr : Repr T) (values : List T) (own : Bool) : Result (RawPtr T) :=
-  Result.checkedModify (State.newBlock repr values own)
+  Result.allocatingModify (State.newBlock repr values own)
 
 /-- Exposes a safe mutable place, represented functionally without an address, as raw memory.
 Used by `from_mut` and `as_mut_ptr`. The fresh block holds `values` with full access
@@ -191,13 +191,19 @@ def RawPtr.allocExposure (repr : Repr T) (values : List T) : Result (MutRawPtr T
 /-- Exposes a shared safe borrow with read-only cells (`shared 1`), as used by `as_ptr`.
 Casting the returned pointer to mutable does not change those permissions. -/
 def RawPtr.allocSharedExposure (repr : Repr T) (values : List T) : Result (ConstRawPtr T) :=
-  Result.checkedModify (State.newSharedExposure repr values)
+  Result.allocatingModify (State.newSharedExposure repr values)
 
 def RawPtr.endExposure (repr : Repr T) (q : RawPtr T) (count : Nat) : Result Unit :=
   Result.checkedModify (State.removeExposure repr q count)
 
 def RawPtr.endSharedExposure (repr : Repr T) (q : RawPtr T) (original : List T) : Result Unit :=
   Result.checkedModify (State.endSharedExposure repr q original)
+
+/-- Exposes a shared borrow and returns its matching backward computation.
+The backward computation checks the original value and retires the exposure. -/
+def core.ptr.from_ref (repr : Repr T) (r : T) : Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.allocSharedExposure repr [r]) fun p =>
+    .ok (p, p.endSharedExposure repr [r])
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the exposure, so that the pointer can't be used anymore. -/

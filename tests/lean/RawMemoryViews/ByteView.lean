@@ -43,7 +43,6 @@ def updatedBytes (bytes : Vector U8 16) (first last : U16) : Vector U8 16 :=
 def updatedWords (words : Words) (first last : U16) : Words :=
   ofWordVector (((wordVector words).set 0 first).set 7 last)
 
-unseal Result in
 /-- **Spec theorem for `raw_memory_views::update_word_bytes`'s safe byte updates.**
     All four assignments succeed and every other byte is unchanged. -/
 theorem updateByteEnds.spec (bytes : Slice U8) (initial : Vector U8 16)
@@ -93,17 +92,6 @@ def update_word_bytes_raw (p : MutRawPtr Words) (first last : U16) : Result Unit
 open SepLogic
 open scoped Aeneas.Std.HeapWP
 
-unseal Result in
-private theorem pure_spec_heap {α : Type} {c : Result α} {P : α → Prop}
-    (hc : WP.spec c P) (s : Heap) :
-    HeapWP.Spec c (fun result s' => P result ∧ s' = s) s := by
-  cases c
-  · rename_i result
-    exact (HeapWP.Spec.pure result _ s).mpr ⟨(WP.spec_ok result).mp hc, rfl⟩
-  · exact (WP.spec_vis _ _ |>.mp hc).elim
-  · exact (WP.spec_div.mp hc).elim
-
-unseal Result in
 /-- A mixed-width mutable borrow updates exactly the first and last u16 words,
     restores their two-byte-aligned representation, and preserves every frame. -/
 theorem update_word_bytes_raw.spec (p : MutRawPtr Words) (base : BasePtr)
@@ -132,7 +120,7 @@ theorem update_word_bytes_raw.spec (p : MutRawPtr Words) (base : BasePtr)
   rw [he]
   simp only [dite_eq_left fits, bind_ok]
   apply HeapWP.Spec.bind
-    (pure_spec_heap (updateByteEnds.spec _ initial first last (by simp)) s₁)
+    (HeapWP.Spec.of_spec (updateByteEnds.spec _ initial first last (by simp)) s₁)
   rintro result s₂ ⟨hr, rfl⟩
   have hlen : result.length = (16#usize).val := by
     change result.val.length = (16#usize).val
@@ -154,12 +142,11 @@ def update_word_bytes (words : Words) (first last : U16) : Result Words := do
   update_word_bytes_raw p first last
   back
 
-unseal Result in
 theorem update_word_bytes_tail.spec (p : RawPtr Words) (words : Words) (first last : U16) :
     ⦃ alloc wordsRepr p p.address 1 false ∗ pointsTo wordsRepr p p.address words ⦄
     (do update_word_bytes_raw p first last
         core.ptr.end_from_mut wordsRepr p)
-    ⦃ (result : Words) => fun h => result = updatedWords words first last ∧ emp h ⦄ := by
+    ⦃ (result : Words) => fun h => result = updatedWords words first last ∧ empty h ⦄ := by
   intro h F s₀ hp hd hm hi
   have kernel := HeapWP.frame (R := alloc wordsRepr p p.address 1 false)
     (update_word_bytes_raw.spec p p.address words first last)
@@ -170,19 +157,17 @@ theorem update_word_bytes_tail.spec (p : RawPtr Words) (words : Words) (first la
   exact HeapWP.end_from_mut.spec wordsRepr p p.address
     (updatedWords words first last) (by decide) h₁ F s₁ restored hd₁ hm₁ hi₁
 
-unseal Result in
 /-- **Spec theorem for `raw_memory_views::update_word_bytes`**
     The safe array returns with precisely its first and last words replaced.
     Both backward computations execute, and the external heap frame is preserved. -/
 theorem update_word_bytes.spec (words : Words) (first last : U16) (s₀ : Heap) (F : Fragment)
-    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F)
-    (feasible : ∃ p s₁, State.newBlock wordsRepr [words] false s₀ p s₁) :
+    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F) :
     HeapWP.Spec (update_word_bytes words first last)
       (fun result s₁ => result = updatedWords words first last ∧
         Fragment.Matches s₁ F ∧ s₁.Inv) s₀ := by
   simp only [update_word_bytes, core.ptr.from_mut, Aeneas.Std.bind_assoc, bind_ok]
   apply HeapWP.Spec.bind (HeapWP.allocExposure_encoded.spec wordsRepr words
-    (wordsRepr_calibrated words) s₀ F hi hm feasible)
+    (wordsRepr_calibrated words) s₀ F hi hm)
   rintro p s₁ ⟨_, h, hd, hm₁, hi₁, hp⟩
   apply HeapWP.Spec.mono (update_word_bytes_tail.spec p words first last h F s₁ hp hd hm₁ hi₁)
   rintro result s₂ ⟨h₂, _, hm₂, hi₂, hr, rfl⟩

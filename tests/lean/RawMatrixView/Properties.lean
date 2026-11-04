@@ -85,7 +85,6 @@ theorem scale_slice.spec (k : U32) (values : Slice U32)
     have hi : j < values.val.length := by simpa using hj'
     simpa [Slice.getElem!_Nat_eq, hr, hi] using hv
 
-unseal Result in
 theorem scale_slice_loop.wrapping_spec (k : U32) (values : Slice U32) (i : Usize)
     (hi : i.val ≤ values.length) :
     scale_slice_loop k values i ⦃ (result : Slice U32) =>
@@ -133,17 +132,6 @@ theorem scale_slice.values (k : U32) (values : Slice U32) :
   · intro j hr hj
     have hv : j < values.val.length := by simpa using hj
     simpa [Slice.getElem!_Nat_eq, hr, hv] using hvalues j (by simpa using hr)
-
-unseal Result
-
-private theorem pure_spec_heap {α : Type} {c : Result α} {P : α → Prop}
-    (hc : WP.spec c P) (s : Heap) :
-    HeapWP.Spec c (fun result s' => P result ∧ s' = s) s := by
-  cases c
-  · rename_i result
-    exact (HeapWP.Spec.pure result _ s).mpr ⟨(WP.spec_ok result).mp hc, rfl⟩
-  · exact (WP.spec_vis _ _ |>.mp hc).elim
-  · exact (WP.spec_div.mp hc).elim
 
 private theorem last_spec (m : Matrix) :
     (do
@@ -214,7 +202,7 @@ theorem scale_raw.spec (k : U32) (p : MutRawPtr Matrix) (base : BasePtr)
   obtain ⟨hvalues, returns⟩ := hborrow
   rw [hvalues]
   simp only [dite_eq_left fits, bind_ok]
-  apply HeapWP.Spec.bind (pure_spec_heap (scale_slice.values k _) s₁)
+  apply HeapWP.Spec.bind (HeapWP.Spec.of_spec (scale_slice.values k _) s₁)
   rintro scaled s₂ ⟨hscaled, rfl⟩
   have hs : scaled.val = updated.toList := by
     simpa only [updated, Vector.toList_map, Slice.from_val] using hscaled
@@ -231,7 +219,7 @@ theorem scale_raw.spec (k : U32) (p : MutRawPtr Matrix) (base : BasePtr)
     (HeapWP.read.spec matrixRepr p base (ofWords updated) 0 (by decide)
       h₂ F s₂ restored hd₂ hm₂ hi₂)
   rintro m s₃ ⟨h₃, hd₃, hm₃, hi₃, rfl, hp₃⟩
-  apply HeapWP.Spec.mono (pure_spec_heap (last_spec _) s₃)
+  apply HeapWP.Spec.mono (HeapWP.Spec.of_spec (last_spec _) s₃)
   rintro result s₄ ⟨hr, rfl⟩
   exact ⟨h₃, hd₃, hm₃, hi₃, hr, hp₃⟩
 

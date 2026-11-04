@@ -16,8 +16,8 @@ def cast {T : Type} (U : Type) (p : RawPtr T) : Result (RawPtr U) :=
 /- Expose the containing row, not a fresh alignment-four u32 slice. This retains
    the source Row13's alignment and all sixteen initialized physical elements. -/
 def row_as_ptr (row : Row13) : Result (ConstRawPtr U32 × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocSharedExposure rowRepr [row]) fun p =>
-    .ok (p.cast U32, p.endSharedExposure rowRepr [row])
+  Aeneas.Std.bind (core.ptr.from_ref rowRepr row) fun (p, back) =>
+    .ok (p.cast U32, back)
 
 def row_as_mut_ptr (row : Row13) : Result (MutRawPtr U32 × Result Row13) :=
   Aeneas.Std.bind (core.ptr.from_mut rowRepr row) fun (p, back) =>

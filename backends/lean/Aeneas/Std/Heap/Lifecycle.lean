@@ -226,15 +226,13 @@ namespace HeapWP
 /-- A successful physical allocation supplies uninitialized writable bytes,
     cleanup ownership, and root-return authority, but no readable value. -/
 theorem allocUninitialized.spec (repr : Repr T) (s₀ : Heap) (F : Fragment)
-    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F)
-    (feasible : ∃ p s₁, State.allocUninitialized repr 1 s₀ p s₁) :
-    Spec (Result.checkedModify (State.allocUninitialized repr 1))
+    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F) :
+    Spec (Result.allocatingModify (State.allocUninitialized repr 1))
       (fun p s₁ => RootReturn s₁ p.provenance ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s₁ (h ∪ F) ∧ s₁.Inv ∧
           sep (alloc repr p p.address 1 true)
             (block repr p p.address (List.replicate repr.size (.shared 0 .uninit))) h) s₀ := by
-  apply Spec.checkedModify.mpr
-  refine ⟨feasible, ?_⟩
+  apply Spec.allocatingModify.mpr
   rintro p s₁ ⟨bptr, run⟩
   rw [Heap.alloc_single_eq] at run
   obtain ⟨_, h, hd, hm₁, hi₁, hp⟩ := newBlock_single.resources repr
@@ -247,7 +245,7 @@ theorem dealloc.spec (repr : Repr T) (p : RawPtr T) (base : BasePtr) (value : T)
     (s₀ : Heap) (hsize : 0 < repr.size) (authority : RootReturn s₀ p.provenance) :
     TripleAt (sep (alloc repr p base 1 true) (pointsTo repr p base value))
       (Result.checkedModify (State.dealloc repr p 1))
-      (fun _ => emp) s₀ := by
+      (fun _ => empty) s₀ := by
   intro h F hp hd hm hi
   have hpRead := sep_mono (fun _ hp => hp) (fun _ => pointsTo_readable) hp
   obtain ⟨blk, hl, live, address, aligned, owned, len, depths, shape⟩ :=

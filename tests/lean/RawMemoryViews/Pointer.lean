@@ -29,7 +29,6 @@ private theorem pointer_address_readable (h64 : UScalarTy.numBits .Usize = 64)
   subst bytes
   exact ⟨_, usizeRepr_pointer h64 target, lower, aligned, cells⟩
 
-unseal Result in
 /-- **Spec theorem for `raw_memory_views::stored_pointer_address`**
     Numerical observation preserves the complete symbolic pointer encoding.
     No pointee permission is required, and no integer-to-pointer reconstruction occurs. -/
@@ -51,7 +50,6 @@ theorem stored_pointer_address.spec (h64 : UScalarTy.numBits .Usize = 64)
   rintro result s₁ ⟨read, rfl⟩
   exact ⟨h, hd, hm, hi, Option.some.inj (read.symm.trans hr), hp⟩
 
-unseal Result in
 /-- The native test's continuation, generalized to arbitrary values and frames:
     reload the stored pointer after observing its address, then write/read its target. -/
 theorem stored_pointer_address.use_spec (h64 : UScalarTy.numBits .Usize = 64)

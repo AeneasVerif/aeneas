@@ -45,37 +45,22 @@ theorem scale_raw_zero (k : U32) (src : ConstRawPtr U32) (dst : MutRawPtr U32) :
   unfold scale_raw scale_raw_loop
   step*
 
-unseal Result in
-private theorem pure_spec_heap {α : Type} {c : Result α} {P : α → Prop}
-    (hc : WP.spec c P) (s : Heap) :
-    HeapWP.Spec c (fun result s' => P result ∧ s' = s) s := by
-  cases c
-  · rename_i result
-    exact (HeapWP.Spec.pure result _ s).mpr ⟨(WP.spec_ok result).mp hc, rfl⟩
-  · exact (WP.spec_vis _ _ |>.mp hc).elim
-  · exact (WP.spec_div.mp hc).elim
-
 def scaleStep (k : U32) (src : ConstRawPtr U32) (dst : MutRawPtr U32)
     (i : Usize) : Result Unit := do
   let p ← RawPtr.add raw_box.u32Repr src i
-  let value ← RawPtr.read raw_box.u32Repr p
   let p1 ← RawPtr.add raw_box.u32Repr dst i
-  let i1 ← lift (core.num.U32.wrapping_mul k value)
-  MutRawPtr.write raw_box.u32Repr p1 i1
+  scale_one_raw k p p1
 
 private theorem fold_scaleStep (k : U32) (src : ConstRawPtr U32) (dst : MutRawPtr U32)
     (i : Usize) (next : Result Unit) :
     (do
       let p ← RawPtr.add raw_box.u32Repr src i
-      let value ← RawPtr.read raw_box.u32Repr p
       let p1 ← RawPtr.add raw_box.u32Repr dst i
-      let i1 ← lift (core.num.U32.wrapping_mul k value)
-      MutRawPtr.write raw_box.u32Repr p1 i1
+      scale_one_raw k p p1
       next) =
     (do scaleStep k src dst i; next) := by
   simp only [scaleStep, bind_tc_eq, Aeneas.Std.bind_assoc]
 
-unseal Result in
 /-- Framed loop rule for the actual extracted iterator and scalar operations.
     A concrete disjoint/equal invariant must still discharge `body`. -/
 theorem scale_raw_loop.rule (N : Usize) (k : U32)
@@ -90,7 +75,7 @@ theorem scale_raw_loop.rule (N : Usize) (k : U32)
   unfold scale_raw_loop
   by_cases hlt : iter.start.val < iter.end.val
   · apply HeapWP.Spec.bind
-      (pure_spec_heap (core.iter.range.IteratorRange.next_Usize_some_spec iter hlt) s)
+      (HeapWP.Spec.of_spec (core.iter.range.IteratorRange.next_Usize_some_spec iter hlt) s)
     intro result s₁ hnext
     obtain ⟨o, iter₁⟩ := result
     obtain ⟨⟨ho, hstart, hend₁⟩, hs⟩ := hnext
@@ -98,12 +83,12 @@ theorem scale_raw_loop.rule (N : Usize) (k : U32)
     subst s₁
     change HeapWP.Spec (do
       let p ← RawPtr.add raw_box.u32Repr src iter.start
-      let value ← RawPtr.read raw_box.u32Repr p
       let p1 ← RawPtr.add raw_box.u32Repr dst iter.start
-      let i1 ← lift (core.num.U32.wrapping_mul k value)
-      MutRawPtr.write raw_box.u32Repr p1 i1
+      scale_one_raw k p p1
       scale_raw_loop iter₁ k src dst) _ s
-    rw [fold_scaleStep k src dst iter.start (scale_raw_loop iter₁ k src dst)]
+    have folded := fold_scaleStep k src dst iter.start (scale_raw_loop iter₁ k src dst)
+    simp only [bind_tc_eq] at folded
+    rw [folded]
     have ih := scale_raw_loop.rule N k src dst iter₁ I
       (hend₁.trans hend) (by agrind) body
     have rest : HeapWP.Triple (I (iter.start.val + 1))
@@ -112,7 +97,7 @@ theorem scale_raw_loop.rule (N : Usize) (k : U32)
     exact HeapWP.Triple.bind (body iter.start (by agrind)) (fun _ => rest)
       h F s hp hd hm hinv
   · apply HeapWP.Spec.bind
-      (pure_spec_heap (core.iter.range.IteratorRange.next_Usize_none_spec iter (by agrind)) s)
+      (HeapWP.Spec.of_spec (core.iter.range.IteratorRange.next_Usize_none_spec iter (by agrind)) s)
     intro result s₁ hnext
     obtain ⟨o, iter₁⟩ := result
     obtain ⟨⟨ho, _⟩, hs⟩ := hnext
@@ -154,7 +139,6 @@ theorem scaledWords_zero (k : U32) (initial : Vector U32 count) (j : Fin count)
   apply UScalar.eq_of_val_eq
   simp [core.num.U32.wrapping_mul_val_eq]
 
-unseal Result in
 /-- **Spec theorem for `raw_scale::scale_via_borrow_raw`**
     The matching backward function restores all sixteen updated words before
     the final raw read. The complete range and an arbitrary frame survive. -/
@@ -182,7 +166,7 @@ theorem scale_via_borrow_raw.spec (k : U32) (p : MutRawPtr U32) (base : BasePtr)
   obtain ⟨hvalues, returns⟩ := hborrow
   rw [hvalues]
   simp only [dite_eq_left fits, bind_ok]
-  apply HeapWP.Spec.bind (pure_spec_heap (scale_slice.values k _) s₁)
+  apply HeapWP.Spec.bind (HeapWP.Spec.of_spec (scale_slice.values k _) s₁)
   rintro scaled s₂ ⟨hscaled, rfl⟩
   have hs : scaled.val = (scaledWords k initial).toList := by
     simpa only [scaledWords, Vector.toList_map, Slice.from_val] using hscaled

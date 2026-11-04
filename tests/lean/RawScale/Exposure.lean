@@ -50,14 +50,12 @@ private theorem shared_resources (repr : Aeneas.Std.Repr T) (data : Vector Aenea
   · contradiction
 
 theorem shared_exposure.spec (repr : Aeneas.Std.Repr T) (value : T)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newSharedExposure repr [value] s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (RawPtr.allocSharedExposure repr [value])
       (fun p s' => State.newSharedExposure repr [value] s p s' ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           (alloc repr p p.address 1 false ∗ readable repr p p.address value 1) h) s := by
-  apply HeapWP.Spec.checkedModify.mpr
-  refine ⟨feasible, ?_⟩
+  apply HeapWP.Spec.allocatingModify.mpr
   intro p s' run
   refine ⟨run, ?_⟩
   obtain ⟨data, bptr, root, exposed, created⟩ := run
@@ -74,7 +72,7 @@ theorem shared_end.spec (repr : Aeneas.Std.Repr T) (p : RawPtr T) (value : T)
     (hsize : 0 < repr.size) :
     ⦃ alloc repr p p.address 1 false ∗ readable repr p p.address value 1 ⦄
     p.endSharedExposure repr [value]
-    ⦃ _ => emp ⦄ := by
+    ⦃ _ => empty ⦄ := by
   apply HeapWP.Triple.checkedModify
   intro h F s hp hd hm hi
   have localMatch := ((Fragment.matches_union _ _ _).mp hm).1

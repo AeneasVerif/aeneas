@@ -25,7 +25,7 @@ theorem alias_write_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
           let after ← RawPtr.read repr p
           let _ ← alloc.boxed.Box.from_raw repr p
           pure (before, after))
-      (fun result h => result = (initial, replacement) ∧ emp h) := by
+      (fun result h => result = (initial, replacement) ∧ empty h) := by
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.read_owned repr p bptr initial true hsize)
   intro before
   apply HeapWP.RootTriple.pure_pre
@@ -42,17 +42,16 @@ theorem alias_write_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
   apply HeapWP.RootTriple.bind (HeapWP.RootTriple.conseq (fun _ hp => hp)
     (fun _ _ hp => hp.2) (HeapWP.RootTriple.fromRaw repr p bptr replacement hsize (by simp)))
   intro _
-  exact HeapWP.RootTriple.pure emp (initial, replacement)
+  exact HeapWP.RootTriple.pure empty (initial, replacement)
 
 /-- The corrected alias example observes the write and releases its allocation. -/
 theorem alias_write.spec (repr : Aeneas.Std.Repr U32) (initial replacement : U32)
     (noPointers : ∀ q, ¬ repr.Carries replacement q) (hsize : 0 < repr.size)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [initial] true s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (alias_write repr initial replacement)
       (fun result s' => result = (initial, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold alias_write
-  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr initial s F hi hm feasible)
+  apply HeapWP.Spec.bind (HeapWP.intoRaw_return.spec repr initial s F hi hm)
   rintro p s' ⟨authority, _, h, hd, hm', hi', hp⟩
   apply HeapWP.Spec.mono (alias_write_tail.spec repr p p.address initial replacement noPointers hsize
     h F s' hp hd hm' hi' (by simpa using authority))
@@ -89,18 +88,17 @@ def borrowed_pair (repr : Aeneas.Std.Repr (U32 × U32))
 /-- The callback recovers any subsequently written value, not just the initial one. -/
 theorem to_raw.spec (repr : Aeneas.Std.Repr T) (value : T)
     (hsize : 0 < repr.size)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [value] false s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (to_raw repr value)
       (fun (p, back) s' =>
         (∀ updated, HeapWP.Triple
           (sep (alloc repr p p.address 1 false) (readable repr p p.address updated))
-          (back ()) (fun result h => result = updated ∧ emp h)) ∧
+          (back ()) (fun result h => result = updated ∧ empty h)) ∧
         s'.next = s.next + 1 ∧
         ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧
           sep (alloc repr p p.address 1 false) (readable repr p p.address value) h) s := by
   unfold to_raw
-  apply HeapWP.Spec.bind (HeapWP.allocExposure.spec repr value s F hi hm feasible)
+  apply HeapWP.Spec.bind (HeapWP.allocExposure.spec repr value s F hi hm)
   intro p s' hp
   apply HeapWP.Spec.pure _ _ _ |>.mpr
   exact ⟨fun updated => HeapWP.end_from_mut.spec repr p p.address updated hsize, hp⟩
@@ -110,13 +108,13 @@ theorem borrowed_box_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
     (noPointers : ∀ q, ¬ repr.Carries replacement q) (hsize : 0 < repr.size)
     (hback : ∀ updated, HeapWP.Triple
       (sep (alloc repr p bptr 1 false) (readable repr p bptr updated))
-      (back ()) (fun result h => result = updated ∧ emp h)) :
+      (back ()) (fun result h => result = updated ∧ empty h)) :
     HeapWP.Triple (sep (alloc repr p bptr 1 false) (readable repr p bptr initial))
       (do let before ← RawPtr.read repr p
           MutRawPtr.write repr p replacement
           let b ← back ()
           pure (before, alloc.boxed.Box.deref b))
-      (fun result h => result = (initial, replacement) ∧ emp h) := by
+      (fun result h => result = (initial, replacement) ∧ empty h) := by
   apply HeapWP.Triple.bind (HeapWP.read_view.spec repr p bptr initial false hsize)
   intro before
   apply HeapWP.Triple.pure_pre
@@ -130,17 +128,16 @@ theorem borrowed_box_tail.spec (repr : Aeneas.Std.Repr U32) (p : MutRawPtr U32)
   apply HeapWP.Triple.pure_pre
   intro hb
   subst b
-  exact HeapWP.Triple.pure emp (initial, replacement)
+  exact HeapWP.Triple.pure empty (initial, replacement)
 
 /-- Raw writes reach the safe Box through the matching callback, leaving no exposure. -/
 theorem borrowed_box.spec (repr : Aeneas.Std.Repr U32) (initial replacement : U32)
     (noPointers : ∀ q, ¬ repr.Carries replacement q) (hsize : 0 < repr.size)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [initial] false s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (borrowed_box repr initial replacement)
       (fun result s' => result = (initial, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold borrowed_box
-  apply HeapWP.Spec.bind (to_raw.spec repr initial hsize s F hi hm feasible)
+  apply HeapWP.Spec.bind (to_raw.spec repr initial hsize s F hi hm)
   rintro ⟨p, back⟩ s' ⟨hback, _, h, hd, hm', hi', hp⟩
   apply HeapWP.Spec.mono
     (borrowed_box_tail.spec repr p p.address back initial replacement noPointers hsize
@@ -154,13 +151,13 @@ theorem borrowed_pair_tail.spec (repr : Aeneas.Std.Repr (U32 × U32))
     (noPointers : ∀ q, ¬ repr.Carries (first, replacement) q) (hsize : 0 < repr.size)
     (hback : ∀ updated, HeapWP.Triple
       (sep (alloc repr p bptr 1 false) (readable repr p bptr updated))
-      (back ()) (fun result h => result = updated ∧ emp h)) :
+      (back ()) (fun result h => result = updated ∧ empty h)) :
     HeapWP.Triple (sep (alloc repr p bptr 1 false) (readable repr p bptr (first, second)))
       (do let (old_first, _) ← RawPtr.read repr p
           MutRawPtr.write repr p (old_first, replacement)
           let b ← back ()
           pure (alloc.boxed.Box.deref b))
-      (fun result h => result = (first, replacement) ∧ emp h) := by
+      (fun result h => result = (first, replacement) ∧ empty h) := by
   apply HeapWP.Triple.bind (HeapWP.read_view.spec repr p bptr (first, second) false hsize)
   intro value
   apply HeapWP.Triple.pure_pre
@@ -174,18 +171,17 @@ theorem borrowed_pair_tail.spec (repr : Aeneas.Std.Repr (U32 × U32))
   apply HeapWP.Triple.pure_pre
   intro hb
   subst b
-  exact HeapWP.Triple.pure emp (first, replacement)
+  exact HeapWP.Triple.pure empty (first, replacement)
 
 /-- Safe access after the backward call observes the aggregate written through the alias. -/
 theorem borrowed_pair.spec (repr : Aeneas.Std.Repr (U32 × U32))
     (first second replacement : U32) (hsize : 0 < repr.size)
     (noPointers : ∀ q, ¬ repr.Carries (first, replacement) q)
-    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock repr [(first, second)] false s p s') :
+    (s : Heap) (F : Fragment) (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (borrowed_pair repr first second replacement)
       (fun result s' => result = (first, replacement) ∧ Fragment.Matches s' F ∧ s'.Inv) s := by
   unfold borrowed_pair
-  apply HeapWP.Spec.bind (to_raw.spec repr (first, second) hsize s F hi hm feasible)
+  apply HeapWP.Spec.bind (to_raw.spec repr (first, second) hsize s F hi hm)
   rintro ⟨p, back⟩ s' ⟨hback, _, h, hd, hm', hi', hp⟩
   apply HeapWP.Spec.mono
     (borrowed_pair_tail.spec repr p p.address back first second replacement noPointers hsize

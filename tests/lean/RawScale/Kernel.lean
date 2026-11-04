@@ -13,7 +13,6 @@ namespace raw_scale
 
 set_option maxHeartbeats 1000000
 
-unseal Result in
 theorem scaleStep.in_place_spec (k : U32) (p : RawPtr U32) (base : BasePtr)
     (values : Vector U32 count) (i : Usize) (hlt : i.val < count)
     (hfit : p.address.val + i.val * raw_box.u32Repr.size < 2 ^ UScalarTy.numBits .Usize) :
@@ -22,19 +21,19 @@ theorem scaleStep.in_place_spec (k : U32) (p : RawPtr U32) (base : BasePtr)
     ⦃ _ => pointsToRange raw_box.u32Repr p base
       (values.set i.val (core.num.U32.wrapping_mul k values[i.val]) hlt) ⦄ := by
   intro h F s hp hd hm hi
-  unfold scaleStep
+  unfold scaleStep scale_one_raw
   apply HeapWP.Spec.bind
     (add_range.spec raw_box.u32Repr p base values 0 i (by agrind) (by decide)
       (by agrind) hfit h F s hp hd hm hi)
   rintro q s₁ ⟨h₁, hd₁, hm₁, hi₁, hprov, haddr, hp₁⟩
   apply HeapWP.Spec.bind
-    (read_range.spec raw_box.u32Repr p q base values 0 ⟨i.val, hlt⟩
-      (by decide) hprov haddr h₁ F s₁ hp₁ hd₁ hm₁ hi₁)
-  rintro value s₂ ⟨h₂, hd₂, hm₂, hi₂, rfl, hp₂⟩
-  apply HeapWP.Spec.bind
     (add_range.spec raw_box.u32Repr p base values 0 i (by agrind) (by decide)
-      (by agrind) hfit h₂ F s₂ hp₂ hd₂ hm₂ hi₂)
-  rintro q₁ s₃ ⟨h₃, hd₃, hm₃, hi₃, hprov₁, haddr₁, hp₃⟩
+      (by agrind) hfit h₁ F s₁ hp₁ hd₁ hm₁ hi₁)
+  rintro q₁ s₂ ⟨h₂, hd₂, hm₂, hi₂, hprov₁, haddr₁, hp₂⟩
+  apply HeapWP.Spec.bind
+    (read_range.spec raw_box.u32Repr p q base values 0 ⟨i.val, hlt⟩
+      (by decide) hprov haddr h₂ F s₂ hp₂ hd₂ hm₂ hi₂)
+  rintro value s₃ ⟨h₃, hd₃, hm₃, hi₃, rfl, hp₃⟩
   simp only [lift, bind_ok]
   exact write_range.spec raw_box.u32Repr p q₁ base values ⟨i.val, hlt⟩ _
     (by decide) hprov₁ haddr₁ (raw_box.u32Repr_noPointers _) h₃ F s₃ hp₃ hd₃ hm₃ hi₃
@@ -91,7 +90,6 @@ theorem scale_raw.in_place_spec (N : Usize) (k : U32) (p : RawPtr U32)
     simp [scaledPrefix]
   simpa only [current, scaledPrefix_next k initial initial ⟨i.val, hlt⟩] using body
 
-unseal Result in
 theorem scaleStep.disjoint_readable_spec (k : U32) (src dst : RawPtr U32)
     (srcBase dstBase : BasePtr) (source target : Vector U32 count) (depth : Nat)
     (sourceView : Assertion)
@@ -106,7 +104,7 @@ theorem scaleStep.disjoint_readable_spec (k : U32) (src dst : RawPtr U32)
       pointsToRange raw_box.u32Repr dst dstBase
         (target.set i.val (core.num.U32.wrapping_mul k source[i.val]) hlt) ⦄ := by
   intro h F s hp hd hm hi
-  unfold scaleStep
+  unfold scaleStep scale_one_raw
   have srcAdd := HeapWP.frame (R := pointsToRange raw_box.u32Repr dst dstBase target)
     (add_range_with.spec raw_box.u32Repr src srcBase source depth sourceView view i (by agrind) (by decide)
       (by agrind) srcFit)
@@ -117,32 +115,32 @@ theorem scaleStep.disjoint_readable_spec (k : U32) (src dst : RawPtr U32)
       sep sourceView
         (pointsToRange raw_box.u32Repr dst dstBase target) h₁ := by
     simpa only [sep_and_left] using hp₁
-  have srcRead := HeapWP.frame (R := pointsToRange raw_box.u32Repr dst dstBase target)
-    (read_range_with.spec raw_box.u32Repr src q srcBase source depth sourceView view ⟨i.val, hlt⟩
-      (by decide) hprov haddr)
-  apply HeapWP.Spec.bind (srcRead h₁ F s₁ hp₁ hd₁ hm₁ hi₁)
-  rintro value s₂ ⟨h₂, hd₂, hm₂, hi₂, hp₂⟩
-  obtain ⟨hvalue, ranges₂⟩ :
-      value = source[i.val] ∧ sep sourceView
-        (pointsToRange raw_box.u32Repr dst dstBase target) h₂ := by
-    simpa only [sep_and_left] using hp₂
-  subst value
   have dstAdd := HeapWP.frame (R := sourceView)
     (add_range.spec raw_box.u32Repr dst dstBase target 0 i (by agrind) (by decide)
       (by agrind) dstFit)
-  apply HeapWP.Spec.bind (dstAdd h₂ F s₂ ((sep_comm _ _ _).mp ranges₂) hd₂ hm₂ hi₂)
-  rintro q₁ s₃ ⟨h₃, hd₃, hm₃, hi₃, hp₃⟩
-  obtain ⟨hprov₁, haddr₁, hp₃⟩ :
+  apply HeapWP.Spec.bind (dstAdd h₁ F s₁ ((sep_comm _ _ _).mp hp₁) hd₁ hm₁ hi₁)
+  rintro q₁ s₂ ⟨h₂, hd₂, hm₂, hi₂, hp₂⟩
+  obtain ⟨hprov₁, haddr₁, hp₂⟩ :
       q₁.provenance = dst.provenance ∧ q₁.address.val = dst.address.val + i.val * raw_box.u32Repr.size ∧
       sep (pointsToRange raw_box.u32Repr dst dstBase target)
-        sourceView h₃ := by
+        sourceView h₂ := by
+    simpa only [sep_and_left] using hp₂
+  have srcRead := HeapWP.frame (R := pointsToRange raw_box.u32Repr dst dstBase target)
+    (read_range_with.spec raw_box.u32Repr src q srcBase source depth sourceView view ⟨i.val, hlt⟩
+      (by decide) hprov haddr)
+  apply HeapWP.Spec.bind (srcRead h₂ F s₂ ((sep_comm _ _ _).mp hp₂) hd₂ hm₂ hi₂)
+  rintro value s₃ ⟨h₃, hd₃, hm₃, hi₃, hp₃⟩
+  obtain ⟨hvalue, ranges₃⟩ :
+      value = source[i.val] ∧ sep sourceView
+        (pointsToRange raw_box.u32Repr dst dstBase target) h₃ := by
     simpa only [sep_and_left] using hp₃
+  subst value
   simp only [lift, bind_ok]
   have dstWrite := HeapWP.frame (R := sourceView)
     (write_range.spec raw_box.u32Repr dst q₁ dstBase target ⟨i.val, hlt⟩
       (core.num.U32.wrapping_mul k source[i.val]) (by decide) hprov₁ haddr₁
       (raw_box.u32Repr_noPointers _))
-  apply HeapWP.Spec.mono (dstWrite h₃ F s₃ hp₃ hd₃ hm₃ hi₃)
+  apply HeapWP.Spec.mono (dstWrite h₃ F s₃ ((sep_comm _ _ _).mp ranges₃) hd₃ hm₃ hi₃)
   rintro _ s₄ ⟨h₄, hd₄, hm₄, hi₄, hp₄⟩
   exact ⟨h₄, hd₄, hm₄, hi₄, (sep_comm _ _ _).mp hp₄⟩
 

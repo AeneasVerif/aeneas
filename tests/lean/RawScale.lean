@@ -23,6 +23,28 @@ example (P : Assertion) (x : U32) :
 example (x : U32) : Result.ok x ⦃ (result : U32) => result = x ⦄ :=
   (WP.spec_ok x).mpr rfl
 
+/- Framing a safe scalar call needs no heap or resource-match parameters. -/
+example (k value : U32) (R : Assertion) :
+    ⦃ R ⦄ raw_scale.scale_one_in_place k value
+    ⦃ (result : U32) => fun h =>
+      result = core.num.U32.wrapping_mul k value ∧ R h ⦄ := by
+  have framed := HeapWP.frame (R := R) (raw_scale.scale_one_in_place.spec k value)
+  exact HeapWP.Triple.conseq
+    (fun h hp => (sep_empty_left R h).mpr hp)
+    (fun _ _ hp => by simpa only [sep_and_left, sep_empty_left] using hp) framed
+
+/-- info: 'raw_scale.scale_one_raw.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_one_raw.spec
+
+/-- info: 'raw_scale.scale_one_in_place.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_one_in_place.spec
+
+/-- info: 'raw_scale.scale_one_into.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_one_into.spec
+
 /-- info: 'raw_scale.scale_in_place.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_scale.scale_in_place.spec

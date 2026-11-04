@@ -14,6 +14,30 @@ namespace raw_scale
    their effectful backward functions. Constructors, prefix accessors, and derived
    traits are outside this module. See EXTRACTION.md for the complete patch ledger. -/
 
+/-- Loop-free scalar kernel: the emitted body with explicit read/write descriptors. -/
+def scale_one_raw (k : U32) (src : ConstRawPtr U32) (dst : MutRawPtr U32) :
+    Result Unit := do
+  let value ← RawPtr.read raw_box.u32Repr src
+  let i ← lift (core.num.U32.wrapping_mul k value)
+  MutRawPtr.write raw_box.u32Repr dst i
+
+/- Restore the shared cleanup and effectful mutable backward call omitted by
+   extraction. The emitted `ok dst1` does not execute the updated model's callback. -/
+def scale_one_into (k : U32) (src dst : U32) : Result U32 := do
+  let (p, src_back) ← core.ptr.from_ref raw_box.u32Repr src
+  let (p1, dst_back) ← core.ptr.from_mut raw_box.u32Repr dst
+  scale_one_raw k p p1
+  let dst ← dst_back
+  src_back
+  ok dst
+
+/- The mut-to-const cast preserves provenance and address; return runs the callback. -/
+def scale_one_in_place (k : U32) (value : U32) : Result U32 := do
+  let (p, back) ← core.ptr.from_mut raw_box.u32Repr value
+  let p1 ← ext.cast U32 p
+  scale_one_raw k p1 p
+  back
+
 @[rust_loop]
 def scale_raw_loop
     (iter : core.ops.range.Range Usize) (k : U32)
@@ -23,10 +47,8 @@ def scale_raw_loop
   | none => ok ()
   | some i =>
     let p ← RawPtr.add raw_box.u32Repr src i
-    let value ← RawPtr.read raw_box.u32Repr p
     let p1 ← RawPtr.add raw_box.u32Repr dst i
-    let i1 ← lift (core.num.U32.wrapping_mul k value)
-    MutRawPtr.write raw_box.u32Repr p1 i1
+    scale_one_raw k p p1
     scale_raw_loop iter1 k src dst
 partial_fixpoint
 

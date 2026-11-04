@@ -45,6 +45,7 @@ inductive Error where
    | maximumSizeExceeded: Error
    | panic: Error
    | undef: Error
+   | oom: Error
 deriving _root_.Repr, BEq
 
 open Error
@@ -83,6 +84,16 @@ def Result.vis {α} (eff : RustEffect.Input) (k : RustEffect.Output eff → Resu
    never gets unfolded to a `Result.vis`. All the reasoning about `fail` should go through the
    dedicated lemmas below (`bind_fail`, `spec_fail`, ...). -/
 def Result.fail {α} (e : Error) : Result α := Result.vis (.fail e) PEmpty.elim
+
+/-- Resource exhaustion aborts without a return value; unlike panic or UB,
+    it is accepted by the verification WP. -/
+def Result.oom {α} : Result α := Result.fail .oom
+
+theorem Result.vis_fail {α} (e : Error) (k : RustEffect.Output (.fail e) → Result α) :
+    Result.vis (.fail e) k = Result.fail e := by
+  apply congrArg (Result.vis (.fail e))
+  funext x
+  exact PEmpty.elim x
 
 theorem Result.fail_eq_vis {α} (e : Error) :
   (Result.fail e : Result α) = Result.vis (.fail e) PEmpty.elim := rfl
@@ -467,8 +478,8 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.done x => ok x
 partial_fixpoint
 
-/-- An operation on the memory, given as a relation `modify s x s'` between the initial state `s`,
-the result `x` and the final state `s'`. It is undefined behaviour if `s` has no successor. -/
+/-- Raw relational choice, interpreted universally by the heap WP. Use checkedModify
+for accesses that must be enabled, or allocatingModify for OOM on unavailable placement. -/
 def Result.guardedModify {α : Type} (modify : State → α → State → Prop) : Result α :=
   Result.vis (.guardedModify α modify) fun answer =>
     Result.ok answer.down
@@ -488,6 +499,12 @@ def Result.checkedModify {α : Type} (modify : State → α → State → Prop) 
   Result.vis (.guardedModify (Option α) (State.checked modify)) fun answer =>
     Result.ofOption answer.down .undef
 
+/-- Placement/allocation requests report exhaustion when there is no admissible
+    successor. Ordinary accesses must use checkedModify, which rejects UB. -/
+def Result.allocatingModify {α : Type} (modify : State → α → State → Prop) : Result α :=
+  Result.vis (.guardedModify (Option α) (State.checked modify)) fun answer =>
+    Result.ofOption answer.down .oom
+
 /-- Choose an admissible encoding of `value`, without changing the state.
 `repr.encode_complete` guarantees that the set of permitted results is nonempty. -/
 def Repr.choose (repr : Repr ty) (value : ty) :
@@ -500,7 +517,7 @@ def Repr.chooseList (repr : Repr ty) (values : List ty) :
   Result.guardedModify fun s _ s' => s' = s
 
 def Result.require (p : Prop) : Result Unit :=
-  Result.guardedModify fun s _ s' => p ∧ s' = s
+  Result.checkedModify fun s _ s' => p ∧ s' = s
 
 end
 

@@ -2,6 +2,7 @@ module
 
 public import Aeneas.Std.Heap.Specs
 public import Aeneas.Std.Primitives
+public import Aeneas.Std.WP
 public import Aeneas.Data.Coinductive.ITreeWP.DWP
 import all Aeneas.Std.Heap.Separation
 import all Aeneas.Std.Primitives
@@ -14,46 +15,37 @@ open Aeneas.Data.Coinductive SepLogic
 
 unseal Result
 
-/-- Heap effects require an enabled transition and accept every possible successor.
-Failure is rejected; the ordinary effect-free WP is unchanged. -/
+/-- All admissible successors must satisfy the continuation. OOM is an accepted
+    abort; other failures are rejected. Checked accesses still enforce enabledness. -/
 def effectWP : EffectWP RustEffect where
   State := State
   wp effect C s :=
     match effect with
     | .guardedModify _ modify =>
-      (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → C ⟨x⟩ s'
-    | .fail _ => False
+      ∀ x s', modify s x s' → C ⟨x⟩ s'
+    | .fail e => e = .oom
 
 instance : effectWP.Monotonic where
   wp_monotonic := by
     intro effect C C' h s he
     cases effect
-    · exact ⟨he.1, fun x s' hx => h _ _ (he.2 x s' hx)⟩
+    · exact fun x s' hx => h _ _ (he x s' hx)
     · exact he
 
 instance : effectWP.Conjunctive where
   wp_conj := by
     intro effect s demands hne hall
     cases effect
-    · obtain ⟨C, hC⟩ := hne
-      exact ⟨(hall C hC).1, fun x s' hx C' hC' => (hall C' hC').2 x s' hx⟩
+    · exact fun x s' hx C' hC' => hall C' hC' x s' hx
     · obtain ⟨C, hC⟩ := hne
       exact hall C hC
 
-instance : effectWP.ExcludedMiracle where
-  wp_excludedMiracle := by
-    intro effect s he
-    cases effect
-    · obtain ⟨x, s', hx⟩ := he.1
-      exact he.2 x s' hx
-    · exact he
-
-/-- Successful termination of an actual `Result` computation with a heap postcondition. -/
+/-- Correctness of all returns, allowing OOM but not panic, UB, or divergence. -/
 def Spec (c : Result α) (Q : α → State → Prop) (s : State) : Prop :=
   DWP effectWP c Q s
 
 theorem Spec.pure (x : α) (Q : α → State → Prop) (s : State) :
-    Spec (pure x) Q s ↔ Q x s :=
+    Spec (Result.ok x) Q s ↔ Q x s :=
   DWP.ret_iff
 
 theorem Spec.bind {α : Type u} {β : Type v} {c : Result α} {k : α → Result β}
@@ -62,29 +54,35 @@ theorem Spec.bind {α : Type u} {β : Type v} {c : Result α} {k : α → Result
     Spec (Aeneas.Std.bind c k) R s :=
   DWP.bind hc hk
 
-theorem Spec.exists (hc : Spec c Q s) : ∃ x s', Q x s' :=
-  DWP.exists hc
-
 theorem Spec.mono (hc : Spec c Q s) (hq : ∀ x s', Q x s' → R x s') :
     Spec c R s :=
   DWP.mono hc hq
 
-theorem Spec.fail (e : Error) : ¬ Spec (Result.fail e : Result α) Q s := by
-  intro h
-  exact DWP.vis_view h
+theorem Spec.fail (e : Error) : Spec (Result.fail e : Result α) Q s ↔ e = .oom :=
+  ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
+
+theorem Spec.oom : Spec (Result.oom : Result α) Q s :=
+  (Spec.fail .oom).mpr rfl
+
+/-- Lift an effect-free specification without exposing Result's representation
+    in client proofs. An OOM abort has no continuation or final-value obligation. -/
+theorem Spec.of_spec {c : Result α} {P : α → Prop} (hc : WP.spec c P) (s : State) :
+    Spec c (fun result s' => P result ∧ s' = s) s := by
+  rcases WP.spec_ok_or_oom hc with ⟨value, rfl, hp⟩ | rfl
+  · exact (Spec.pure _ _ _).mpr ⟨hp, rfl⟩
+  · exact Spec.oom
 
 theorem Spec.div : ¬ Spec (Result.div : Result α) Q s :=
   DWP.div_false
 
 theorem Spec.guardedModify {modify : State → α → State → Prop} :
     Spec (Result.guardedModify modify) Q s ↔
-      (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → Q x s' := by
+      ∀ x s', modify s x s' → Q x s' := by
   constructor
   · intro h
-    obtain ⟨hsafe, hpost⟩ := DWP.vis_view h
-    exact ⟨hsafe, fun x s' hx => DWP.ret_iff.mp (hpost x s' hx)⟩
-  · rintro ⟨hsafe, hpost⟩
-    exact DWP.vis ⟨hsafe, fun x s' hx => DWP.ret_iff.mpr (hpost x s' hx)⟩
+    exact fun x s' hx => DWP.ret_iff.mp (DWP.vis_view h x s' hx)
+  · intro hpost
+    exact DWP.vis (fun x s' hx => DWP.ret_iff.mpr (hpost x s' hx))
 
 theorem checked.enabled (modify : State → α → State → Prop) (s : State) :
     ∃ answer s', State.checked modify s answer s' := by
@@ -108,7 +106,8 @@ theorem checked.failure {modify : State → α → State → Prop}
     · rintro ⟨h, _⟩
       cases h
 
-/-- Explicit failure has exactly the same success obligations as the old partial request. -/
+/-- Invalid accesses cannot become vacuously correct: a disabled checked request
+    produces undef, so its WP still requires a successful transition. -/
 theorem Spec.checkedModify {modify : State → α → State → Prop} :
     Spec (Result.checkedModify modify) Q s ↔
       (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → Q x s' := by
@@ -119,44 +118,56 @@ theorem Spec.checkedModify {modify : State → α → State → Prop} :
     constructor
     · by_cases hn : ∃ x s', modify s x s'
       · exact hn
-      · exact (Spec.fail .undef (ht.2 none s ⟨hn, rfl⟩)).elim
+      · exact Error.noConfusion ((Spec.fail .undef).mp (ht none s ⟨hn, rfl⟩))
     · intro x s' hx
-      exact DWP.ret_iff.mp (ht.2 (some x) s' hx)
+      exact DWP.ret_iff.mp (ht (some x) s' hx)
   · rintro ⟨henabled, hpost⟩
     apply DWP.vis
-    refine ⟨checked.enabled modify s, ?_⟩
     intro answer s' ht
     cases answer
     · exact (ht.1 henabled).elim
     · rename_i value
       exact DWP.ret_iff.mpr (hpost value s' ht)
 
+/-- Allocation/exposure has only universal success obligations. An unavailable
+    placement returns OOM, unlike an invalid checked access. -/
+theorem Spec.allocatingModify {modify : State → α → State → Prop} :
+    Spec (Result.allocatingModify modify) Q s ↔
+      ∀ x s', modify s x s' → Q x s' := by
+  constructor
+  · intro h x s' hx
+    exact DWP.ret_iff.mp (DWP.vis_view h (some x) s' hx)
+  · intro hpost
+    apply DWP.vis
+    intro answer s' ht
+    cases answer
+    · exact (Spec.fail .oom).mpr rfl
+    · rename_i value
+      exact DWP.ret_iff.mpr (hpost value s' ht)
+
 /-- Every admissible encoding must satisfy the continuation.
-Completeness discharges enabling, rather than leaving it to callers. -/
+    Encoding completeness is independent of this universal obligation. -/
 theorem Spec.choose (repr : Repr ty) (value : ty)
     (Q : {data : Vector Byte repr.size // repr.encode value data} → State → Prop)
     (s : State) :
     Spec (repr.choose value) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
   rw [Repr.choose, Spec.guardedModify]
   constructor
-  · rintro ⟨_, h⟩ data decoded
+  · intro h data decoded
     exact h ⟨data, decoded⟩ s rfl
   · intro h
-    obtain ⟨data, decoded⟩ := repr.encode_complete value
-    exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
+    exact fun ⟨data, decoded⟩ _ he => he ▸ h data decoded
 
 theorem Spec.chooseList (repr : Repr ty) (values : List ty)
     (Q : {data : List (Vector Byte repr.size) //
       repr.encodeList values data} → State → Prop) (s : State) :
     Spec (repr.chooseList values) Q s ↔ ∀ data decoded, Q ⟨data, decoded⟩ s := by
-  have hex := Repr.encodeList_complete repr values
   rw [Repr.chooseList, Spec.guardedModify]
   constructor
-  · rintro ⟨_, h⟩ data decoded
+  · intro h data decoded
     exact h ⟨data, decoded⟩ s rfl
   · intro h
-    obtain ⟨data, decoded⟩ := hex
-    exact ⟨⟨⟨data, decoded⟩, s, rfl⟩, fun ⟨data, decoded⟩ _ he => he ▸ h data decoded⟩
+    exact fun ⟨data, decoded⟩ _ he => he ▸ h data decoded
 
 /-- Choice always terminates with admissible bytes for the requested value, and
 neither reads nor changes the heap. -/
@@ -200,7 +211,7 @@ theorem Triple.guardedModify {modify : State → α → State → Prop}
     (ht : SepLogic.Triple P modify Q) :
     Triple P (Result.guardedModify modify) Q := by
   intro h F s hp hd hm hi
-  exact Spec.guardedModify.mpr (ht h F s hp hd hm hi)
+  exact Spec.guardedModify.mpr (ht h F s hp hd hm hi).2
 
 theorem Triple.checkedModify {modify : State → α → State → Prop}
     (ht : SepLogic.Triple P modify Q) :
@@ -222,7 +233,7 @@ theorem Triple.chooseList (P : Assertion) (repr : Repr ty) (values : List ty) :
   exact fun _ _ => ⟨h, hd, hm, hi, hp⟩
 
 theorem Triple.pure (P : Assertion) (x : α) :
-    Triple P (pure x) (fun y h => y = x ∧ P h) := by
+    Triple P (Result.ok x) (fun y h => y = x ∧ P h) := by
   intro h F s hp hd hm hi
   exact Spec.pure _ _ _ |>.mpr ⟨h, hd, hm, hi, rfl, hp⟩
 

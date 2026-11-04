@@ -198,10 +198,10 @@ theorem write.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
     (noPointers : ∀ q, ¬ repr.Carries value q) (hsize : 0 < repr.size) :
     Triple (block repr p bptr (old.map (Cell.shared 0)).toList)
       (State.write repr p value) (fun _ => pointsTo repr p bptr value) := by
-  have ht := write_supported.spec repr p bptr old value emp
+  have ht := write_supported.spec repr p bptr old value empty
     (fun h _ => supportsValue_noPointers repr value noPointers h) hsize
-  apply Triple.conseq (fun h hp => (sep_emp_right _ h).mpr hp)
-    (fun _ h hp => (sep_emp_right _ h).mp hp) ht
+  apply Triple.conseq (fun h hp => (sep_empty_right _ h).mpr hp)
+    (fun _ h hp => (sep_empty_right _ h).mp hp) ht
 
 theorem write_pointsTo_supported.spec (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
     (old value : ty) (R : Assertion)

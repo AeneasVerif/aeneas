@@ -114,8 +114,7 @@ theorem ext.borrow_four.spec (p : MutRawPtr U32) (bptr : BasePtr) (word : U32)
 /-- Exact forward bytes and restoration of every replacement, consuming the
 temporary exposure before returning the complete safe word. -/
 theorem bytes_view.spec (word : U32) (s : Heap) (F : Fragment)
-    (hi : s.Inv) (hm : Fragment.Matches s F)
-    (feasible : ∃ p s', State.newBlock raw_box.u32Repr [word] false s p s') :
+    (hi : s.Inv) (hm : Fragment.Matches s F) :
     HeapWP.Spec (bytes_view word)
       (fun (bytes, back) s' => bytes = toLittleBytes word ∧
         ∀ updated, HeapWP.Spec (back updated)
@@ -125,7 +124,7 @@ theorem bytes_view.spec (word : U32) (s : Heap) (F : Fragment)
   simp only [Std.bind_assoc, bind_ok]
   apply HeapWP.Spec.bind
     (HeapWP.allocExposure_encoded.spec raw_box.u32Repr word (word_exposure_encoding word)
-      s F hi hm feasible)
+      s F hi hm)
   rintro p s₁ ⟨_, h, hd, hm₁, hi₁, a, b, hab, rfl, ha, hp⟩
   simp only [ext.transmute_mut, bind_ok]
   have hdf := Fragment.disjoint_union_right.mpr

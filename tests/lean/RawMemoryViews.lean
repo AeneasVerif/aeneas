@@ -64,6 +64,6 @@ import RawMemoryViews.NestedBox
 #guard_msgs in
 #print axioms Aeneas.Std.Heap.dealloc_read_rejected
 
-/-- info: 'raw_memory_views.first_heap_write.failure_not_success' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'raw_memory_views.first_heap_write.failure_accepted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
-#print axioms raw_memory_views.first_heap_write.failure_not_success
+#print axioms raw_memory_views.first_heap_write.failure_accepted

@@ -64,17 +64,14 @@ def nested_views_tail (outer : RawPtr (Vector U8 16)) (middle : RawPtr U8) :
   update_middle_raw middle
   alloc.boxed.Box.from_raw (byteVectorRepr 16) outer
 
-unseal Result in
 theorem nested_views_tail.spec (p : RawPtr (Vector U8 16)) (q : RawPtr U8)
     (qprov : q.provenance = p.provenance) (qaddr : q.address.val = p.address.val + 2)
-    (s₀ : Heap) (authority : RootReturn s₀ p.provenance)
-    (feasible : ∀ values s₁, State.borrowRange Aeneas.Std.Repr.u8 q 12 s₀ values s₁ →
-      ∃ inner s₂, State.newBlock (byteVectorRepr 4) [Vector.replicate 4 2#u8] false s₁ inner s₂) :
+    (s₀ : Heap) (authority : RootReturn s₀ p.provenance) :
     HeapWP.TripleAt
       (alloc (byteVectorRepr 16) p p.address 1 true ∗
         pointsTo (byteVectorRepr 16) p p.address (outerValues (Vector.replicate 12 1#u8)))
       (nested_views_tail p q)
-      (fun result h => result = outerValues middleResult ∧ emp h) s₀ := by
+      (fun result h => result = outerValues middleResult ∧ empty h) s₀ := by
   rintro h F ⟨owned, whole, disjoint, joined, owner, point⟩ hd hm hi
   have wholeMatch : Fragment.Matches s₀ whole := by
     simp only [joined, Fragment.matches_union] at hm
@@ -106,7 +103,7 @@ theorem nested_views_tail.spec (p : RawPtr (Vector U8 16)) (q : RawPtr U8)
     tauto
   unfold nested_views_tail
   apply HeapWP.Spec.bind (update_middle_raw.spec q p.address (Vector.replicate 12 1#u8)
-    middle frame s₀ middleCells middleFrame middleMatch hi (qprov ▸ authority) feasible)
+    middle frame s₀ middleCells middleFrame middleMatch hi (qprov ▸ authority))
   rintro _ s₁ ⟨authority₁, middle₁, hd₁, hm₁, hi₁, middleCells₁⟩
   have middleApart₁ := hd₁
   simp only [frame, Fragment.disjoint_union_right] at middleApart₁
@@ -136,32 +133,20 @@ def nested_views : Result (Vector U8 16) := do
   let middle ← RawPtr.add Aeneas.Std.Repr.u8 (outer.cast U8) 2#usize
   nested_views_tail outer middle
 
-unseal Result in
 /-- **Spec theorem for `raw_memory_views::nested_views`**
     Both nested backward computations run before reclaiming the original Box.
     The first and last two bytes remain one; all twelve middle bytes have
-    their exact specified values. Feasibility is required only at the two
-    reached exposure boundaries, not assumed for the backward returns. -/
+    their exact specified values on success. Either exposure may abort with OOM;
+    enabledness of the backward returns is proved on continuing paths. -/
 theorem nested_views.spec (s₀ : Heap) (F : Fragment)
-    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F)
-    (outerFeasible : ∃ p s₁, State.newBlock (byteVectorRepr 16)
-      [outerValues (Vector.replicate 12 1#u8)] true s₀ p s₁)
-    (innerFeasible : ∀ p s₁, State.newBlock (byteVectorRepr 16)
-      [outerValues (Vector.replicate 12 1#u8)] true s₀ p s₁ →
-      ∀ q, Heap.offset Aeneas.Std.Repr.u8 (p.cast U8) 2 s₁ = some q →
-        ∀ values s₂, State.borrowRange Aeneas.Std.Repr.u8 q 12 s₁ values s₂ →
-          ∃ inner s₃, State.newBlock (byteVectorRepr 4)
-            [Vector.replicate 4 2#u8] false s₂ inner s₃) :
+    (hi : s₀.Inv) (hm : Fragment.Matches s₀ F) :
     HeapWP.Spec nested_views
       (fun result s₁ => result = outerValues middleResult ∧ Fragment.Matches s₁ F ∧ s₁.Inv) s₀ := by
   unfold nested_views
   have exposed := HeapWP.intoRaw_return.spec (byteVectorRepr 16)
-    (outerValues (Vector.replicate 12 1#u8)) s₀ F hi hm outerFeasible
-  obtain ⟨enabled, post⟩ := HeapWP.Spec.checkedModify.mp exposed
-  have exposure := HeapWP.Spec.checkedModify.mpr
-    ⟨enabled, fun p s₁ run => And.intro run (post p s₁ run)⟩
-  apply HeapWP.Spec.bind exposure
-  rintro p s₁ ⟨created, authority, _, h₁, hd₁, hm₁, hi₁, a, b, apart, joined, owner, point⟩
+    (outerValues (Vector.replicate 12 1#u8)) s₀ F hi hm
+  apply HeapWP.Spec.bind exposed
+  rintro p s₁ ⟨authority, _, h₁, hd₁, hm₁, hi₁, a, b, apart, joined, owner, point⟩
   have bytes := (byteVector_pointsTo p p.address _ b).mp point
   have byteMatch : Fragment.Matches s₁ b := by
     simp only [joined, Fragment.matches_union] at hm₁
@@ -190,7 +175,7 @@ theorem nested_views.spec (s₀ : Heap) (F : Fragment)
     exact sep_mono (fun f hf => (byteVector_pointsTo p p.address _ f).mpr hf)
       (fun _ hf => hf) hp₂
   apply HeapWP.Spec.mono (nested_views_tail.spec p q qprov qaddr s₁ authority
-    (innerFeasible p s₁ created q offset) h₂ F typed hd₂ hm₂ hi₂)
+ h₂ F typed hd₂ hm₂ hi₂)
   rintro result s₃ ⟨empty, _, frame, inv, resultEq, rfl⟩
   exact ⟨resultEq, by simpa using frame, inv⟩
 

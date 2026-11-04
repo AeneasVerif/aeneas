@@ -116,7 +116,13 @@ All translated functions return `Result T` to model potential runtime failures:
 |-------------|----------------------------------------------------------------|
 | `ok v`      | Success with value `v`                                         |
 | `fail e`    | Error (panic, overflow, out-of-bounds, division by zero, etc.) |
+| `oom`       | Resource-exhaustion abort (`fail Error.oom`)                     |
 | `div`       | Divergence (non-termination)                                   |
+
+`WP.spec` accepts OOM without a returned value; its postcondition constrains
+successful returns. Other errors and divergence remain rejected. Heap WPs use
+the same policy: unavailable allocation/exposure may abort with OOM, while
+invalid memory accesses still produce rejected undefined behavior.
 
 Monadic combinators:
 - **`do` notation** — monadic bind for sequencing computations

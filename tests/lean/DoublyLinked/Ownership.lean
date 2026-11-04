@@ -14,25 +14,16 @@ namespace doubly_linked
 
 variable {roots : List Nat}
 
-unseal Result
-
-theorem pure_result {c : Result α} {P : α → Prop} (hc : WP.spec c P) :
-    ∃ value, c = Result.ok value ∧ P value := by
-  exact Aeneas.Data.Coinductive.DWP.induction
-    (P := fun c _ => ∃ value, c = Result.ok value ∧ P value)
-    (fun value _ hp => ⟨value, rfl, hp⟩)
-    (fun _ _ _ h => False.elim h) hc
-
 theorem pure_triple (R : Assertion) {c : Result α} {P : α → Prop} (hc : WP.spec c P) :
     HeapWP.RootTriple roots R c (fun value h => P value ∧ R h) := by
-  obtain ⟨value, rfl, hp⟩ := pure_result hc
-  apply HeapWP.RootTriple.conseq (fun _ h => h) ?_ (HeapWP.RootTriple.pure R value)
-  rintro _ _ ⟨rfl, hr⟩
-  exact ⟨hp, hr⟩
+  intro h F s hr hd hm hi authority
+  apply HeapWP.Spec.mono (HeapWP.Spec.of_spec hc s)
+  rintro value _ ⟨hp, rfl⟩
+  exact ⟨authority, h, hd, hm, hi, hp, hr⟩
 
 /-- Cleanup authority for every payload node, independently of its current links. -/
 def cleanup (repr : Aeneas.Std.Repr Node) : Entries → Assertion
-  | [] => emp
+  | [] => empty
   | (p, _) :: rest => sep (alloc repr p p.address 1 true) (cleanup repr rest)
 
 /-- The private length is exact, and the list owns its sentinel and every node. -/
@@ -117,9 +108,9 @@ theorem sepMiddle (A B C D : Assertion) :
   rw [sepAssoc A B (sep C D), sepRotate A B (sep C D),
     sepRotate A C D, ← sepAssoc B C (sep A D)]
 
-theorem sepEmpLeft (P : Assertion) : sep emp P = P := by
+theorem sepEmpLeft (P : Assertion) : sep empty P = P := by
   funext h
-  exact propext (sep_emp_left P h)
+  exact propext (sep_empty_left P h)
 
 theorem sepDetach (N R A B C : Assertion) :
     sep (sep N R) (sep A (sep B C)) = sep (sep B N) (sep R (sep A C)) := by
@@ -179,7 +170,7 @@ theorem listState_intro (s : Heap) (self : LinkedList) (entries : Entries) (h F 
 
 theorem ext.take_node.spec (p : Ptr) (node : Node) (member : p.provenance ∈ roots) :
     HeapWP.RootTriple roots (sep (alloc repr p p.address 1 true) (pointsTo repr p p.address node))
-      (ext.take_node repr p) (fun result h => result = node ∧ emp h) :=
+      (ext.take_node repr p) (fun result h => result = node ∧ empty h) :=
   HeapWP.RootTriple.fromRaw repr p p.address node hsize member
 
 include layout
@@ -427,7 +418,7 @@ theorem LinkedList.drop_owned (self : LinkedList) (entries : Entries)
     (members : ∀ entry ∈ entries, entry.1.provenance ∈ roots)
     (sentinel : self.root.provenance ∈ roots) :
     HeapWP.RootTriple roots (owned repr self entries) (LinkedList.Insts.CoreOpsDropDrop.drop repr self)
-      (fun _ => emp) := by
+      (fun _ => empty) := by
   /- clear_owned leaves only the sentinel and its cleanup authority.
   take_node.spec consumes both, so no list resources remain. -/
   unfold LinkedList.Insts.CoreOpsDropDrop.drop
@@ -448,6 +439,6 @@ theorem LinkedList.drop_owned (self : LinkedList) (entries : Entries)
         (root'.symm ▸ sentinel)))
   intro _
   exact HeapWP.RootTriple.conseq (fun _ hp => hp) (fun _ _ hp => hp.2)
-    (HeapWP.RootTriple.pure emp self')
+    (HeapWP.RootTriple.pure empty self')
 
 end doubly_linked
