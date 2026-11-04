@@ -23,15 +23,17 @@ namespace curve25519
 /-- [curve25519::Scalar52]
     Source: 'tests/src/curve25519.rs', lines 7:0-7:34
     Visibility: public -/
-@[reducible]
-def Scalar52 := Array Std.U64 5#usize
+structure Scalar52 where
+  _0 : Array Std.U64 5#usize
 
 /-- [curve25519::{impl core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
     Source: 'tests/src/curve25519.rs', lines 11:4-13:5
     Visibility: public -/
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
-  (self : Scalar52) (_index : Std.Usize) : Result Std.U64 := do
-  Array.index_usize self _index
+  (self : SharedBorrow Scalar52) (_index : Std.Usize) :
+  Result (SharedBorrow Std.U64)
+  := do
+  Array.index_usize (SharedBorrow.mk self.val._0) _index
 
 /-- Trait implementation: [curve25519::{impl core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
     Source: 'tests/src/curve25519.rs', lines 9:0-14:1 -/
@@ -52,67 +54,69 @@ def m (x : Std.U64) (y : Std.U64) : Result Std.U128 := do
     Source: 'tests/src/curve25519.rs', lines 20:0-34:1
     Visibility: public -/
 def mul_internal
-  (a : Scalar52) (b : Scalar52) : Result (Array Std.U128 9#usize) := do
+  (a : SharedBorrow Scalar52) (b : SharedBorrow Scalar52) :
+  Result (Array Std.U128 9#usize)
+  := do
   let z := Array.repeat 9#usize 0#u128
   let i ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 0#usize
   let i1 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 0#usize
-  let i2 ← m i i1
+  let i2 ← m i.val i1.val
   let z1 ← Array.update z 0#usize i2
   let i3 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
-  let i4 ← m i i3
+  let i4 ← m i.val i3.val
   let i5 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
-  let i6 ← m i5 i1
+  let i6 ← m i5.val i1.val
   let i7 ← i4 + i6
   let z2 ← Array.update z1 1#usize i7
   let i8 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
-  let i9 ← m i i8
-  let i10 ← m i5 i3
+  let i9 ← m i.val i8.val
+  let i10 ← m i5.val i3.val
   let i11 ← i9 + i10
   let i12 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
-  let i13 ← m i12 i1
+  let i13 ← m i12.val i1.val
   let i14 ← i11 + i13
   let z3 ← Array.update z2 2#usize i14
   let i15 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
-  let i16 ← m i i15
-  let i17 ← m i5 i8
+  let i16 ← m i.val i15.val
+  let i17 ← m i5.val i8.val
   let i18 ← i16 + i17
-  let i19 ← m i12 i3
+  let i19 ← m i12.val i3.val
   let i20 ← i18 + i19
   let i21 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
-  let i22 ← m i21 i1
+  let i22 ← m i21.val i1.val
   let i23 ← i20 + i22
   let z4 ← Array.update z3 3#usize i23
   let i24 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
-  let i25 ← m i i24
-  let i26 ← m i5 i15
+  let i25 ← m i.val i24.val
+  let i26 ← m i5.val i15.val
   let i27 ← i25 + i26
-  let i28 ← m i12 i8
+  let i28 ← m i12.val i8.val
   let i29 ← i27 + i28
-  let i30 ← m i21 i3
+  let i30 ← m i21.val i3.val
   let i31 ← i29 + i30
   let i32 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
-  let i33 ← m i32 i1
+  let i33 ← m i32.val i1.val
   let i34 ← i31 + i33
   let z5 ← Array.update z4 4#usize i34
-  let i35 ← m i5 i24
-  let i36 ← m i12 i15
+  let i35 ← m i5.val i24.val
+  let i36 ← m i12.val i15.val
   let i37 ← i35 + i36
-  let i38 ← m i21 i8
+  let i38 ← m i21.val i8.val
   let i39 ← i37 + i38
-  let i40 ← m i32 i3
+  let i40 ← m i32.val i3.val
   let i41 ← i39 + i40
   let z6 ← Array.update z5 5#usize i41
-  let i42 ← m i12 i24
-  let i43 ← m i21 i15
+  let i42 ← m i12.val i24.val
+  let i43 ← m i21.val i15.val
   let i44 ← i42 + i43
-  let i45 ← m i32 i8
+  let i45 ← m i32.val i8.val
   let i46 ← i44 + i45
   let z7 ← Array.update z6 6#usize i46
-  let i47 ← m i21 i24
-  let i48 ← m i32 i15
+  let i47 ← m i21.val i24.val
+  let i48 ← m i32.val i15.val
   let i49 ← i47 + i48
   let z8 ← Array.update z7 7#usize i49
-  let i50 ← m i32 i24
+  let i50 ← m i32.val i24.val
   Array.update z8 8#usize i50
 
 end curve25519

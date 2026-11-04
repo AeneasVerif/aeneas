@@ -172,6 +172,12 @@ let passes :
     ( None,
       "simplify_aggregates_unchanged_fields",
       simplify_aggregates_unchanged_fields );
+    (* If we preserve the boxes and borrows, [simplify_aggregates] simplifies
+       expressions like [(Box.mk x).val], which can unlock simplifications for
+       [flatten_struct_updates] *)
+    ( Some (fun _ -> not !Config.erase_boxes_and_borrows),
+      "flatten_struct_updates (pass 2)",
+      flatten_struct_updates );
     (* Simplify the lambdas again *)
     (None, "simplify_lambdas (pass 2)", simplify_lambdas);
     (* Simplify the let-bindings - some simplifications may have been unlocked by

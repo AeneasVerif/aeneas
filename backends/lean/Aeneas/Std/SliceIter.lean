@@ -32,45 +32,49 @@ structure core.slice.iter.IterMut (T : Type _) where
   i : Nat := 0
 
 @[rust_fun "core::slice::{[@T]}::iter"]
-def core.slice.Slice.iter {T : Type _} (s : Slice T) : Result (core.slice.iter.Iter T) :=
-  ok ⟨ s, 0 ⟩
+def core.slice.Slice.iter {T : Type _} (s : SharedBorrow (Slice T)) :
+  Result (core.slice.iter.Iter T) :=
+  ok ⟨ s.val, 0 ⟩
 
 @[rust_fun "core::slice::{[@T]}::contains"]
 def core.slice.Slice.contains {T : Type _} (partialEqInst : core.cmp.PartialEq T T)
-  (s : Slice T) (x : T) : Result Bool :=
-  List.anyM (partialEqInst.eq x) s.val
+  (s : SharedBorrow (Slice T)) (x : SharedBorrow T) : Result Bool :=
+  List.anyM (fun y => partialEqInst.eq x ⟨ y ⟩) s.val.val
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::IterMut<'a, @T>, &'a mut @T>}::next"]
 def core.slice.iter.IteratorIterMut.next
   {T : Type _}
-  (it : core.slice.iter.IterMut T) :
-  Result ((Option T) × (core.slice.iter.IterMut T) ×
-          (core.slice.iter.IterMut T → Option T → core.slice.iter.IterMut T)) :=
-  if h: it.i < it.slice.len then
+  (it : MutBorrow (core.slice.iter.IterMut T)) :
+  Result ((Option (MutBorrow T)) × (core.slice.iter.IterMut T) ×
+          (core.slice.iter.IterMut T → Option (MutBorrow T) → core.slice.iter.IterMut T)) :=
+  let it := it.val
+  if h: it.i < it.slice.val.length then
     let x := it.slice[it.i]
     let i := it.i
     let it := { it with i := i + 1 }
-    let back it' x :=
+    let back (it' : core.slice.iter.IterMut T) (x : Option (MutBorrow T)) :=
       match x with
       | none => it'
-      | some x => { it' with slice := it'.slice.setAtNat i x }
-    ok (some x, it, back)
+      | some x => { it' with slice := it'.slice.setAtNat i x.val }
+    ok (some ⟨ x ⟩, it, back)
   else ok (none, it, fun it _ => it)
 
 @[rust_fun "core::slice::{[@T]}::iter_mut"]
-def core.slice.Slice.iter_mut {T : Type _} (slice : Slice T) :
+def core.slice.Slice.iter_mut {T : Type _} (slice : MutBorrow (Slice T)) :
   Result ((core.slice.iter.IterMut T) × (core.slice.iter.IterMut T → Slice T)) :=
-  ok ({slice}, fun it => it.slice)
+  ok ({ slice := slice.val }, fun it => it.slice)
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::next"]
 def core.slice.iter.IteratorSliceIter.next
-  {T : Type _} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
-  if h : it.i < it.slice.len then
+  {T : Type _} (it : MutBorrow (core.slice.iter.Iter T)) :
+  Result ((Option (SharedBorrow T)) × (core.slice.iter.Iter T)) :=
+  let it := it.val
+  if h : it.i < it.slice.val.length then
     let x := it.slice[it.i]
     let it := { it with i := it.i + 1}
-    ok (some x, it)
+    ok (some ⟨ x ⟩, it)
   else ok (none, it)
 
 /-- `DoubleEndedIterator::next_back` on `slice::Iter`.
@@ -91,21 +95,23 @@ one, and `i` is left untouched, as `ptr` is. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>}::next_back"]
 def core.slice.iter.IteratorSliceIter.next_back
-  {T : Type} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
+  {T : Type} (it : MutBorrow (core.slice.iter.Iter T)) :
+  Result ((Option (SharedBorrow T)) × (core.slice.iter.Iter T)) :=
+  let it := it.val
   if h : it.i < it.slice.val.length then
     let n := it.slice.val.length - 1
     let x := it.slice[n]'(by scalar_tac)
     let s := Slice.from (it.slice.val.take n) (by scalar_tac)
-    ok (some x, { it with slice := s })
+    ok (some ⟨ x ⟩, { it with slice := s })
   else ok (none, it)
 
 @[step]
 theorem core.slice.iter.IteratorSliceIter.next_back.spec
-    {T : Type} (it : core.slice.iter.Iter T) (h : it.i < it.slice.val.length) :
+    {T : Type} (it : MutBorrow (core.slice.iter.Iter T)) (h : it.val.i < it.val.slice.val.length) :
     core.slice.iter.IteratorSliceIter.next_back it
-    ⦃ r => r.1 = it.slice.val.getLast? ∧
-           r.2.slice.val = it.slice.val.take (it.slice.val.length - 1) ∧
-           r.2.i = it.i ⦄ := by
+    ⦃ r => r.1.map SharedBorrow.val = it.val.slice.val.getLast? ∧
+           r.2.slice.val = it.val.slice.val.take (it.val.slice.val.length - 1) ∧
+           r.2.i = it.val.i ⦄ := by
   unfold core.slice.iter.IteratorSliceIter.next_back
   simp [h, WP.spec_ok, List.getLast?_eq_getElem?]
   rw [List.getElem?_eq_getElem (by scalar_tac), Slice.getElem_Nat_eq]
@@ -114,7 +120,7 @@ theorem core.slice.iter.IteratorSliceIter.next_back.spec
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
 impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type _) :
-  core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
+  core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) (SharedBorrow T) := {
   next := core.slice.iter.IteratorSliceIter.next
   step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
     (core.iter.traits.iterator.IteratorSliceIter T)
@@ -134,14 +140,15 @@ viewed as a slice. -/
 @[rust_fun
   "core::array::{core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
-    {T : Type _} {N : Usize} (a : Array T N) : Result (core.slice.iter.Iter T) :=
-  ok ⟨ .from a.val (by scalar_tac), 0 ⟩
+    {T : Type _} {N : Usize} (a : SharedBorrow (Array T N)) : Result (core.slice.iter.Iter T) :=
+  ok ⟨ .from a.val.val (by scalar_tac), 0 ⟩
 
 @[reducible, rust_trait_impl
   "core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>"]
 def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter
     (T : Type _) (N : Usize) :
-    core.iter.traits.collect.IntoIterator (Array T N) T (core.slice.iter.Iter T) := {
+    core.iter.traits.collect.IntoIterator (SharedBorrow (Array T N)) (SharedBorrow T)
+      (core.slice.iter.Iter T) := {
   iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
   into_iter := SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
 }
@@ -155,14 +162,15 @@ Mirrors Rust: `(&[T]).into_iter()` returns an `Iter<T>` starting at index 0. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 def SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
-    {T : Type _} (s : Slice T) : Result (core.slice.iter.Iter T) :=
-  ok ⟨ s, 0 ⟩
+    {T : Type _} (s : SharedBorrow (Slice T)) : Result (core.slice.iter.Iter T) :=
+  ok ⟨ s.val, 0 ⟩
 
 @[reducible, rust_trait_impl
   "core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, core::slice::iter::Iter<'a, @T>>"]
 def SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter
     (T : Type _) :
-    core.iter.traits.collect.IntoIterator (Slice T) T (core.slice.iter.Iter T) := {
+    core.iter.traits.collect.IntoIterator (SharedBorrow (Slice T)) (SharedBorrow T)
+      (core.slice.iter.Iter T) := {
   iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
   into_iter := SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
 }
@@ -175,22 +183,24 @@ structure core.slice.iter.ChunksExact (T : Type _) where
 @[rust_fun
   "core::slice::iter::{core::slice::iter::ChunksExact<'a, @T>}::remainder"]
 def core.slice.iter.ChunksExact.getRemainder
-  {T : Type _} (self : core.slice.iter.ChunksExact T) : Result (Slice T) :=
-  ok self.remainder
+  {T : Type _} (self : SharedBorrow (core.slice.iter.ChunksExact T)) :
+  Result (SharedBorrow (Slice T)) :=
+  ok ⟨ self.val.remainder ⟩
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
 def core.slice.iter.IteratorChunksExact.next
-  {T : Type _} (self : core.slice.iter.ChunksExact T) :
-  Result ((Option (Slice T)) × (core.slice.iter.ChunksExact T)) :=
+  {T : Type _} (self : MutBorrow (core.slice.iter.ChunksExact T)) :
+  Result ((Option (SharedBorrow (Slice T))) × (core.slice.iter.ChunksExact T)) :=
+  let self := self.val
   match self.chunks with
   | [] => ok (none, self)
-  | chunk :: chunks => ok (some chunk, { chunks, remainder := self.remainder })
+  | chunk :: chunks => ok (some ⟨ chunk ⟩, { chunks, remainder := self.remainder })
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>"]
 impl_def core.iter.traits.iterator.IteratorChunksExact (T : Type _) :
-  core.iter.traits.iterator.Iterator (core.slice.iter.ChunksExact T) (Slice T)
+  core.iter.traits.iterator.Iterator (core.slice.iter.ChunksExact T) (SharedBorrow (Slice T))
   := {
   next := core.slice.iter.IteratorChunksExact.next
   step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
@@ -240,8 +250,9 @@ termination_by l.length
 decreasing_by simp [List.length_drop]; omega
 
 @[rust_fun "core::slice::{[@T]}::chunks_exact"]
-def core.slice.Slice.chunks_exact {T : Type _} (s : Slice T) (chunk_size : Std.Usize) :
-  Result (core.slice.iter.ChunksExact T) :=
+def core.slice.Slice.chunks_exact {T : Type _} (s : SharedBorrow (Slice T))
+  (chunk_size : Std.Usize) : Result (core.slice.iter.ChunksExact T) :=
+  let s := s.val
   if hcs : chunk_size.val > 0 then
     let result := List.toChunksExact chunk_size.val hcs s.val
     let sliceChunks := result.1.attach.map fun ⟨c, hc⟩ => .from c (by
@@ -269,12 +280,12 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
   | fuel + 1 => do
     let (opt, sbi) ←
       core.iter.adapters.step_by.IteratorStepBy.next
-        (core.iter.traits.iterator.IteratorSliceIter Nat) sbi
+        (core.iter.traits.iterator.IteratorSliceIter Nat) ⟨ sbi ⟩
     match opt with
     | none => .ok []
     | some x => do
       let rest ← collectStepBy sbi fuel
-      .ok (x :: rest)
+      .ok (x.val :: rest)
 
 -- step_by(0) panics
 #guard
@@ -360,12 +371,12 @@ private def collectNestedStepBy
     let (opt, sbi) ←
       (core.iter.traits.iterator.IteratorStepBy
         (core.iter.traits.iterator.IteratorStepBy
-          (core.iter.traits.iterator.IteratorSliceIter Nat))).next sbi
+          (core.iter.traits.iterator.IteratorSliceIter Nat))).next ⟨ sbi ⟩
     match opt with
     | none => .ok []
     | some x => do
       let rest ← collectNestedStepBy sbi fuel
-      .ok (x :: rest)
+      .ok (x.val :: rest)
 
 #guard (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default
@@ -378,16 +389,16 @@ private def collectNestedStepBy
 -- ============================================================================
 
 @[step]
-theorem SharedArray.into_iter.spec {T : Type _} {N : Usize} (a : Array T N) :
+theorem SharedArray.into_iter.spec {T : Type _} {N : Usize} (a : SharedBorrow (Array T N)) :
     SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter a
     ⦃ (iter : core.slice.iter.Iter T) =>
-      iter.slice.val = a.val ∧ iter.i = 0 ⦄ := by
+      iter.slice.val = a.val.val ∧ iter.i = 0 ⦄ := by
   simp [SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
 
 @[step]
-theorem SharedSlice.into_iter.spec {T : Type _} (s : Slice T) :
+theorem SharedSlice.into_iter.spec {T : Type _} (s : SharedBorrow (Slice T)) :
     SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter s
     ⦃ (iter : core.slice.iter.Iter T) =>
-      iter.slice = s ∧ iter.i = 0 ⦄ := by
+      iter.slice = s.val ∧ iter.i = 0 ⦄ := by
   simp [SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
 end Aeneas.Std

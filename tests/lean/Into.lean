@@ -22,15 +22,21 @@ namespace into
 
 /-- [into::slice_to_array]:
     Source: 'tests/src/into.rs', lines 4:0-6:1 -/
-def slice_to_array (s : Slice Std.U8) : Result (Array Std.U8 32#usize) := do
+def slice_to_array
+  (s : SharedBorrow (Slice Std.U8)) :
+  Result (SharedBorrow (Array Std.U8 32#usize))
+  := do
   let r ← core.array.TryFromSharedArraySlice.try_from 32#usize s
   core.result.Result.unwrap core.fmt.DebugTryFromSliceError r
 
 /-- [into::slice_to_array1]:
     Source: 'tests/src/into.rs', lines 8:0-10:1 -/
-def slice_to_array1 (s : Slice Std.U8) : Result (Array Std.U8 32#usize) := do
+def slice_to_array1
+  (s : SharedBorrow (Slice Std.U8)) :
+  Result (SharedBorrow (Array Std.U8 32#usize))
+  := do
   let r ← core.array.TryFromSharedArraySlice.try_from 32#usize s
-  core.result.Result.expect core.fmt.DebugTryFromSliceError r (toStr
-    "Expected a slice of length 32")
+  core.result.Result.expect core.fmt.DebugTryFromSliceError r (SharedBorrow.mk
+    (toStr "Expected a slice of length 32"))
 
 end into

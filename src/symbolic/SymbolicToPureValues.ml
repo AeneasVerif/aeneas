@@ -52,18 +52,150 @@ let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
   (* If the type is unit, directly return unit *)
   if ty_is_unit ty then mk_unit_texpr
   else
-    (* Otherwise lookup the variable *)
-    match lookup_var_for_symbolic_value sv.sv_id ctx with
-    | Some var -> mk_texpr_from_fvar var
-    | None ->
-        {
-          e =
-            EError
-              ( None,
-                "Could not find var for symbolic value: "
-                ^ V.SymbolicValueId.to_string sv.sv_id );
-          ty;
-        }
+    match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_expr with
+    | Some e -> e
+    | None -> (
+        (* Otherwise lookup the variable *)
+        match lookup_var_for_symbolic_value sv.sv_id ctx with
+        | Some var -> mk_texpr_from_fvar var
+        | None ->
+            {
+              e =
+                EError
+                  ( None,
+                    "Could not find var for symbolic value: "
+                    ^ V.SymbolicValueId.to_string sv.sv_id );
+              ty;
+            })
+
+(** Should we erase the boxes and borrows? See
+    {!Config.erase_boxes_and_borrows}. *)
+let erase_boxes_and_borrows () : bool = !Config.erase_boxes_and_borrows
+
+(** Wrap an expression, unless we erase the boxes and the borrows *)
+let wrap_texpr (span : Meta.span) (k : wrapper_kind) (e : texpr) : texpr =
+  if erase_boxes_and_borrows () then e else mk_wrapper_texpr span k e
+
+(** Wrap a pattern, unless we erase the boxes and the borrows *)
+let wrap_pat (k : wrapper_kind) (p : tpat) : tpat =
+  if erase_boxes_and_borrows () then p else mk_wrapper_pat k p
+
+(** Check if the representation of the values of type [ty] is not the same in
+    the forward functions and in the backward functions.
+
+    The values consumed and given back by the backward functions are the values
+    of the mutably borrowed values: whenever we see a mutable borrow [&mut T] at
+    the top of a type, or below a tuple or a box, the backward function
+    manipulates a value of type [T] instead of a value of type [MutBorrow T].
+    Similarly, the boxes are transparent. However, the values inside ADTs (for
+    instance [Option<&mut T>]) keep their forward representation, as the types
+    of the fields are fixed. See {!SymbolicToPureTypes.translate_back_ty_aux}.
+*)
+let rec ty_has_different_back_repr (ctx : bs_ctx) (ty : T.ty) : bool =
+  if erase_boxes_and_borrows () then false
+  else
+    match ty with
+    | TRef (_, _, RMut) -> true
+    | TAdt { builtin = Some TBox; generics = { types = [ ty ]; _ }; _ } ->
+        (* The boxes which contain mutable borrows are transparent (see
+           {!SymbolicToPureTypes.translate_back_ty_aux}). Note that the boxes
+           which don't contain mutable borrows keep their forward
+           representation: they are filtered by
+           {!SymbolicToPureTypes.translate_back_ty_aux} if they are not below
+           a mutable borrow, in which case they use the forward
+           representation. *)
+        TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos ty
+    | TAdt { builtin = Some TTuple; generics; _ } ->
+        List.exists (ty_has_different_back_repr ctx) generics.types
+    | _ -> false
+
+(** Translate a type to the representation used by the backward functions (see
+    {!ty_has_different_back_repr}). *)
+let rec translate_back_repr_ty (ctx : bs_ctx) (ty : T.ty) : ty =
+  if not (ty_has_different_back_repr ctx ty) then ctx_translate_fwd_ty ctx ty
+  else
+    match ty with
+    | TRef (_, rty, RMut) -> ctx_translate_fwd_ty ctx rty
+    | TAdt { builtin = Some TBox; generics = { types = [ ty ]; _ }; _ } ->
+        translate_back_repr_ty ctx ty
+    | TAdt { builtin = Some TTuple; generics; _ } ->
+        mk_simpl_tuple_ty (List.map (translate_back_repr_ty ctx) generics.types)
+    | _ -> [%internal_error] ctx.span
+
+(** Destruct a tuple expression, if it is a tuple literal *)
+let opt_destruct_tuple_literal_texpr (e : texpr) : texpr list option =
+  let cons, fields = destruct_apps e in
+  match cons.e with
+  | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } -> Some fields
+  | _ -> None
+
+(** Convert an expression from its forward representation to its backward
+    representation (see {!ty_has_different_back_repr}). *)
+let rec fwd_to_back_repr_texpr (ctx : bs_ctx) (ty : T.ty) (e : texpr) : texpr =
+  if not (ty_has_different_back_repr ctx ty) then e
+  else
+    match ty with
+    | TRef (_, _, RMut) -> mk_wrapper_proj ctx.span e
+    | TAdt { builtin = Some TBox; generics = { types = [ ty ]; _ }; _ } ->
+        fwd_to_back_repr_texpr ctx ty (mk_wrapper_proj ctx.span e)
+    | TAdt { builtin = Some TTuple; generics = { types = [ ty ]; _ }; _ } ->
+        (* Tuples with exactly one field are simplified *)
+        fwd_to_back_repr_texpr ctx ty e
+    | TAdt { builtin = Some TTuple; generics; _ } -> (
+        match opt_destruct_tuple_literal_texpr e with
+        | Some fields when List.length fields = List.length generics.types ->
+            mk_simpl_tuple_texpr ctx.span
+              (List.map2 (fwd_to_back_repr_texpr ctx) generics.types fields)
+        | _ ->
+            [%craise] ctx.span
+              "Unimplemented: tuple containing mutable borrows or boxes")
+    | _ -> [%internal_error] ctx.span
+
+(** Convert an expression from its backward representation to its forward
+    representation (see {!ty_has_different_back_repr}). *)
+let rec back_to_fwd_repr_texpr (ctx : bs_ctx) (ty : T.ty) (e : texpr) : texpr =
+  if not (ty_has_different_back_repr ctx ty) then e
+  else
+    match ty with
+    | TRef (_, _, RMut) -> mk_wrapper_texpr ctx.span WMut e
+    | TAdt { builtin = Some TBox; generics = { types = [ ty ]; _ }; _ } ->
+        mk_wrapper_texpr ctx.span WBox (back_to_fwd_repr_texpr ctx ty e)
+    | TAdt { builtin = Some TTuple; generics = { types = [ ty ]; _ }; _ } ->
+        (* Tuples with exactly one field are simplified *)
+        back_to_fwd_repr_texpr ctx ty e
+    | TAdt { builtin = Some TTuple; generics; _ } -> (
+        match opt_destruct_tuple_literal_texpr e with
+        | Some fields when List.length fields = List.length generics.types ->
+            mk_simpl_tuple_texpr ctx.span
+              (List.map2 (back_to_fwd_repr_texpr ctx) generics.types fields)
+        | _ ->
+            [%craise] ctx.span
+              "Unimplemented: tuple containing mutable borrows or boxes")
+    | _ -> [%internal_error] ctx.span
+
+(** Convert a pattern from its backward representation to its forward
+    representation (see {!ty_has_different_back_repr}). *)
+let rec back_to_fwd_repr_pat (ctx : bs_ctx) (ty : T.ty) (p : tpat) : tpat =
+  if not (ty_has_different_back_repr ctx ty) then p
+  else
+    match ty with
+    | TRef (_, _, RMut) -> mk_wrapper_pat WMut p
+    | TAdt { builtin = Some TBox; generics = { types = [ ty ]; _ }; _ } ->
+        mk_wrapper_pat WBox (back_to_fwd_repr_pat ctx ty p)
+    | TAdt { builtin = Some TTuple; generics = { types = [ ty ]; _ }; _ } ->
+        (* Tuples with exactly one field are simplified *)
+        back_to_fwd_repr_pat ctx ty p
+    | TAdt { builtin = Some TTuple; generics; _ } -> (
+        match p.pat with
+        | PAdt { variant_id = None; fields }
+          when List.length fields = List.length generics.types ->
+            mk_simpl_tuple_pat
+              (List.map2 (back_to_fwd_repr_pat ctx) generics.types fields)
+        | PIgnored -> mk_ignored_pat (ctx_translate_fwd_ty ctx ty)
+        | _ ->
+            [%craise] ctx.span
+              "Unimplemented: tuple containing mutable borrows or boxes")
+    | _ -> [%internal_error] ctx.span
 
 (** Translate a typed value.
 
@@ -82,8 +214,11 @@ let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
     - return *)
 let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
     texpr =
-  (* We need to ignore boxes *)
-  let v = ValuesUtils.unbox_tvalue ctx.span v in
+  (* We need to ignore boxes, if we erase them *)
+  let v =
+    if erase_boxes_and_borrows () then ValuesUtils.unbox_tvalue ctx.span v
+    else v
+  in
   let translate = tvalue_to_texpr ctx ectx in
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx v.ty in
@@ -126,7 +261,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
             let sv =
               InterpBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
             in
-            translate sv
+            wrap_texpr ctx.span WShared (translate sv)
         | VReservedMutBorrow (bid, _) ->
             (* Same as for shared borrows. However, note that we use reserved borrows
              * only in *meta-data*: a value *actually used* in the translation can't come
@@ -134,10 +269,10 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
             let sv =
               InterpBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
             in
-            translate sv
+            wrap_texpr ctx.span WShared (translate sv)
         | VMutBorrow (_, v) ->
-            (* Borrows are the identity in the extraction *)
-            translate v)
+            (* Borrows are either the identity in the extraction, or wrappers *)
+            wrap_texpr ctx.span WMut (translate v))
     | VSymbolic sv -> symbolic_value_to_texpr ctx sv
   in
   (* Debugging *)
@@ -299,13 +434,28 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.region_set)
   else UnknownProj
 
 (** A smaller helper which allows us to isolate the logic by which we handle
-    ADTs. *)
+    ADTs.
+
+    The translated values use the backward representation (see
+    {!ty_has_different_back_repr}), except for the fields of the "regular" ADTs
+    which use the forward representation (because the types of the fields are
+    fixed): [back_to_fwd ty v] converts a value [v] of type [ty] from the
+    backward representation to the forward representation.
+
+    Remark: the avalues/evalues introduced to convert values to abstractions
+    (see {!InterpAbs.convert_value_to_input_avalues}) are not well-typed: a loan
+    inside an ADT has type [&mut T] while the type of the corresponding field is
+    [T]. In this case, the loan stands for the borrowed value: its backward
+    representation is the forward representation of the field and we don't need
+    to convert it. *)
 let gtranslate_adt_fields ~(project_borrows : bool)
     (input_to_string : 'v -> string) (output_to_string : 'o -> string)
     (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
     (compute_proj_kind : 'v -> proj_kind) (mk_adt : 'o list -> 'o)
-    (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
-    (av_ty : T.ty) (fields : 'v list) : bs_ctx * ('info list * 'o) option =
+    (mk_tuple : 'o list -> 'o) (mk_box : 'o -> 'o) (get_ty : 'v -> T.ty)
+    (back_to_fwd : T.ty -> 'o -> 'o) ~(filter : bool)
+    ~(variant_id : VariantId.id option) (ctx : bs_ctx) (av : 'v) (av_ty : T.ty)
+    (fields : 'v list) : bs_ctx * ('info list * 'o) option =
   let span = ctx.span in
   (* We do not do the same thing depending on whether we visit a tuple
      or a "regular" ADT *)
@@ -362,16 +512,51 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             (ctx, None))
           else
             (* We should preserve all the fields *)
-            let infos, fields =
+            let infos, out_fields =
               List.split (List.map ([%try_unwrap] span) info_fields)
             in
-            let pat = mk_adt fields in
+            (* Convert the fields to the forward representation *)
+            let out_fields =
+              if erase_boxes_and_borrows () then out_fields
+              else
+                let def =
+                  [%silent_unwrap] span
+                    (T.TypeDeclId.Map.find_opt adt.id
+                       ctx.decls_ctx.type_ctx.type_decls)
+                in
+                let field_tys =
+                  Substitute.type_decl_get_instantiated_field_types def
+                    variant_id adt.generics
+                in
+                [%sanity_check] span (List.length field_tys = List.length fields);
+                List.map2
+                  (fun (field_ty, v) o ->
+                    match (field_ty, get_ty v) with
+                    | T.TRef _, _ -> back_to_fwd field_ty o
+                    | _, T.TRef _ ->
+                        (* See the remark in the documentation *)
+                        o
+                    | _ -> back_to_fwd field_ty o)
+                  (List.combine field_tys fields)
+                  out_fields
+            in
+            let pat = mk_adt out_fields in
             (ctx, Some (infos, pat))
       | Some TBox -> begin
-          (* The box type becomes the identity in the translation *)
+          (* The box type is the identity in the backward representation,
+             unless it doesn't contain mutable borrows (see
+             {!ty_has_different_back_repr}) *)
           match info_fields with
           | [ None ] -> (ctx, None)
-          | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
+          | [ Some (info, v) ] ->
+              let v =
+                if
+                  erase_boxes_and_borrows ()
+                  || ty_has_different_back_repr ctx av_ty
+                then v
+                else mk_box v
+              in
+              (ctx, Some ([ info ], v))
           | _ -> [%craise] span "Unreachable"
         end
       | Some TStr ->
@@ -439,7 +624,9 @@ let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
              is the meta-value. *)
           match mv with
           | None -> [%craise] ctx.span "Unreachable"
-          | Some mv -> Some (tvalue_to_texpr ctx ectx mv))
+          | Some mv ->
+              let e = tvalue_to_texpr ctx ectx mv in
+              Some (fwd_to_back_repr_texpr ctx av.ty e))
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
@@ -470,7 +657,10 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
         let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_texpr ctx.span ty adt_v.variant_id fields)
       (mk_simpl_tuple_texpr ctx.span)
-      ~filter ctx av av.ty adt_v.fields
+      (mk_wrapper_texpr ctx.span WBox)
+      (fun (v : V.tavalue) -> v.ty)
+      (back_to_fwd_repr_texpr ctx)
+      ~filter ~variant_id:adt_v.variant_id ctx av av.ty adt_v.fields
   in
   Option.map snd out
 
@@ -506,7 +696,8 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
          inside (note that there could be a mutable borrow in the shared
          value, pointing to a mutable loan in the child avalue, but this
          borrow is in practice immutable) *)
-      if filter then None else Some (tvalue_to_texpr ctx ectx sv)
+      if filter then None
+      else Some (wrap_texpr ctx.span WShared (tvalue_to_texpr ctx ectx sv))
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* non ended mutable loans, but not outer ones *)
       [%craise] ctx.span "Unreachable"
@@ -573,7 +764,8 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.region_set)
            We're using the projection type as the type of the symbolic value -
            it doesn't really matter. *)
         let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
-        Some (symbolic_value_to_texpr ctx msv)
+        let e = symbolic_value_to_texpr ctx msv in
+        Some (fwd_to_back_repr_texpr ctx ty e)
       else None
   | V.AEndedProjLoans
       { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
@@ -595,7 +787,8 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.region_set)
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
         let mnv : V.symbolic_value = { sv_id = mnv.sv_id; sv_ty = ty } in
-        Some (symbolic_value_to_texpr ctx mnv))
+        let e = symbolic_value_to_texpr ctx mnv in
+        Some (fwd_to_back_repr_texpr ctx ty e))
       else [%craise] ctx.span "Unimplemented"
   | V.AEndedProjLoans _ ->
       (* The symbolic value was updated, and the given back values come from several
@@ -688,6 +881,53 @@ type borrow_or_symbolic_id =
   | Symbolic of V.SymbolicValueId.id
 [@@deriving show, ord]
 
+(** Introduce a pattern for a symbolic value given back by a backward function.
+
+    - [consumed]: the expression which was consumed by the backward function (it
+      uses the forward representation): we use it as the default value (see
+      [bs_ctx.var_id_to_default]).
+    - [ty]: the type of the symbolic value. *)
+let given_back_symbolic_value_to_pat (ctx : bs_ctx) (mp : mplace option)
+    (given_back : V.symbolic_value) (consumed : texpr) (ty : T.ty) :
+    bs_ctx * tpat option =
+  if not (ty_has_different_back_repr ctx ty) then
+    (* Return the meta-value *)
+    let ctx, var = fresh_var_for_symbolic_value given_back ctx in
+    let pat = mk_tpat_from_fvar mp var in
+    (* Register the default value *)
+    let ctx =
+      {
+        ctx with
+        var_id_to_default = FVarId.Map.add var.id consumed ctx.var_id_to_default;
+      }
+    in
+    (ctx, Some pat)
+  else
+    (* The backward function gives back a value which uses the backward
+       representation (e.g., a value of type [T] for a symbolic value of
+       type [&mut T]): we introduce a variable with the backward
+       representation, and map the given back symbolic value to the
+       expression which converts this variable to the forward
+       representation (e.g., [MutBorrow.mk x]). *)
+    let back_ty = translate_back_repr_ty ctx ty in
+    let ctx, var = fresh_var None back_ty ctx in
+    let pat = mk_tpat_from_fvar mp var in
+    let var_e = mk_texpr_from_fvar var in
+    let ctx =
+      {
+        ctx with
+        sv_to_expr =
+          V.SymbolicValueId.Map.add given_back.sv_id
+            (back_to_fwd_repr_texpr ctx ty var_e)
+            ctx.sv_to_expr;
+        var_id_to_default =
+          FVarId.Map.add var.id
+            (fwd_to_back_repr_texpr ctx ty consumed)
+            ctx.var_id_to_default;
+      }
+    in
+    (ctx, Some pat)
+
 (** Explore an abstraction value which we know **was generated by a borrow
     projection** (this means we won't find loans or loan projectors inside it)
     and convert it to a given back value by collecting all the meta-values from
@@ -742,7 +982,7 @@ let rec tavalue_to_given_back_aux ~(filter : bool) (abs_regions : T.region_set)
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else
-          let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
+          let ty = translate_back_repr_ty ctx av.ty in
           (ctx, Some (mk_ignored_pat ty))
   in
   (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
@@ -772,7 +1012,10 @@ and adt_avalue_to_given_back_aux ~(filter : bool) (abs_regions : T.region_set)
       (fun fields ->
         let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_pat ty adt_v.variant_id fields)
-      mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
+      mk_simpl_tuple_pat (mk_wrapper_pat WBox)
+      (fun (v : V.tavalue) -> v.ty)
+      (back_to_fwd_repr_pat ctx) ~filter ~variant_id:adt_v.variant_id ctx av
+      av.ty adt_v.fields
   in
   (ctx, Option.map snd out)
 
@@ -832,7 +1075,6 @@ and aborrow_content_to_given_back_aux ~(filter : bool)
                   FVarId.Map.add var.id e ctx.var_id_to_default;
               }
         in
-        (* *)
         (ctx, Some pat)
       else
         tavalue_to_given_back_aux ~filter abs_regions abs_level current_level mp
@@ -868,23 +1110,13 @@ and aproj_to_given_back_aux (_abs_level : abs_level)
       (ctx, None)
   | AEndedProjBorrows { mvalues = mv; loans } ->
       [%cassert] ctx.span (loans = []) "Unreachable";
-      (* Return the meta-value *)
-      let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
-      let pat = mk_tpat_from_fvar mp var in
-      (* Register the default value *)
-      let ctx =
-        (* Using the projection type as the type of the symbolic value - it
-           doesn't really matter *)
-        let sv : V.symbolic_value = { sv_id = mv.consumed; sv_ty = ty } in
-        {
-          ctx with
-          var_id_to_default =
-            FVarId.Map.add var.id
-              (symbolic_value_to_texpr ctx sv)
-              ctx.var_id_to_default;
-        }
+      (* Using the projection type as the type of the symbolic value - it
+         doesn't really matter *)
+      let consumed_sv : V.symbolic_value =
+        { sv_id = mv.consumed; sv_ty = ty }
       in
-      (ctx, Some pat)
+      let consumed = symbolic_value_to_texpr ctx consumed_sv in
+      given_back_symbolic_value_to_pat ctx mp mv.given_back consumed ty
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let tavalue_to_given_back (abs_regions : T.region_set) (abs_level : abs_level)

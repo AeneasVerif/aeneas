@@ -24,7 +24,7 @@ namespace Aeneas.Std
 structure core.iter.range.Step (Self : Type _) where
   cloneInst : core.clone.Clone Self
   partialOrdInst : core.cmp.PartialOrd Self Self
-  steps_between : Self → Self → Result (Usize × (Option Usize))
+  steps_between : SharedBorrow Self → SharedBorrow Self → Result (Usize × (Option Usize))
   forward_checked : Self → Usize → Result (Option Self)
   backward_checked : Self → Usize → Result (Option Self)
 
@@ -85,7 +85,7 @@ def core.iter.traits.iterator.Iterator.take.default
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _)
   where
-  next : Self → Result ((Option Self_Item) × Self)
+  next : MutBorrow Self → Result ((Option Self_Item) × Self)
   step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self) := core.iter.traits.iterator.Iterator.step_by.default
   enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self) := core.iter.traits.iterator.Iterator.enumerate.default
   take : Self → Usize → Result (core.iter.adapters.take.Take Self) := core.iter.traits.iterator.Iterator.take.default
@@ -128,7 +128,7 @@ def core.iter.adapters.step_by.skipN
     (iter : I) : (n : Nat) → Result I
   | 0 => .ok iter
   | n + 1 => do
-    let (opt, iter) ← iterInst.next iter
+    let (opt, iter) ← iterInst.next (MutBorrow.mk iter)
     match opt with
     | none => .ok iter
     | some _ => core.iter.adapters.step_by.skipN iterInst iter n
@@ -138,10 +138,11 @@ def core.iter.adapters.step_by.skipN
 def core.iter.adapters.step_by.IteratorStepBy.next
   {I : Type _} {Item : Type _}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
-  core.iter.adapters.step_by.StepBy I →
+  MutBorrow (core.iter.adapters.step_by.StepBy I) →
   Result ((Option Item) × (core.iter.adapters.step_by.StepBy I)) :=
   fun self => do
-    let (opt, iter) ← IteratorInst.next self.iter
+    let self := self.val
+    let (opt, iter) ← IteratorInst.next (MutBorrow.mk self.iter)
     match opt with
     | none => .ok (none, { self with iter })
     | some item => do
@@ -212,13 +213,13 @@ def core.iter.traits.iterator.Iterator.collect.default
 @[rust_trait "core::iter::traits::collect::Extend"]
 structure core.iter.traits.collect.Extend (Self : Type _) (A : Type _) where
   extend : forall {T : Type} {IntoIter : Type}
-    (_ : core.iter.traits.collect.IntoIterator T A IntoIter), Self → T → Result Self
+    (_ : core.iter.traits.collect.IntoIterator T A IntoIter), MutBorrow Self → T → Result Self
 
 @[rust_trait "core::iter::traits::double_ended::DoubleEndedIterator"
   (parentClauses := ["iteratorInst"])]
 structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
-  next_back : Self → Result ((Option Item) × Self)
+  next_back : MutBorrow Self → Result ((Option Item) × Self)
 
 @[rust_trait "core::iter::traits::exact_size::ExactSizeIterator"
   (parentClauses := ["iteratorInst"])]
@@ -233,7 +234,9 @@ structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type _) (Item : 
     Conservatively checks that `diff ≤ Usize.max` (always true for small types,
     needed for U64/U128). -/
 def core.iter.range.UScalarStep.steps_between {ty : UScalarTy}
-    (start end_ : UScalar ty) : Result (Usize × (Option Usize)) :=
+    (start end_ : SharedBorrow (UScalar ty)) : Result (Usize × (Option Usize)) :=
+  let start := start.val
+  let end_ := end_.val
   if h: start.val > end_.val then ok ⟨ 0#usize, none ⟩
   else
     let diff := end_.val - start.val
@@ -246,7 +249,9 @@ def core.iter.range.UScalarStep.steps_between {ty : UScalarTy}
 
 /-- Generic `steps_between` for all signed scalar types. -/
 def core.iter.range.IScalarStep.steps_between {ty : IScalarTy}
-    (start end_ : IScalar ty) : Result (Usize × (Option Usize)) :=
+    (start end_ : SharedBorrow (IScalar ty)) : Result (Usize × (Option Usize)) :=
+  let start := start.val
+  let end_ := end_.val
   if h: start.val > end_.val then ok ⟨ 0#usize, none ⟩
   else
     let diff := end_.val - start.val
@@ -536,9 +541,10 @@ abbrev core.iter.range.StepI128 := IScalarStep .I128 core.clone.CloneI128 core.c
 def core.iter.adapters.enumerate.IteratorEnumerate.next
     {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
-    (self : core.iter.adapters.enumerate.Enumerate I) :
+    (self : MutBorrow (core.iter.adapters.enumerate.Enumerate I)) :
     Result ((Option (Usize × Item)) × (core.iter.adapters.enumerate.Enumerate I)) := do
-  let (opt, iter') ← IteratorInst.next self.iter
+  let self := self.val
+  let (opt, iter') ← IteratorInst.next (MutBorrow.mk self.iter)
   match opt with
   | none => ok (none, { iter := iter', count := self.count })
   | some a => do
@@ -569,13 +575,14 @@ impl_def core.iter.traits.iterator.IteratorEnumerate {I : Type _} {Item : Type _
 def core.iter.adapters.take.IteratorTake.next
     {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
-    (self : core.iter.adapters.take.Take I) :
+    (self : MutBorrow (core.iter.adapters.take.Take I)) :
     Result ((Option Item) × (core.iter.adapters.take.Take I)) :=
+  let self := self.val
   if self.n.val = 0 then
     ok (none, self)
   else do
     let n' ← self.n - 1#usize
-    let (opt, iter') ← IteratorInst.next self.iter
+    let (opt, iter') ← IteratorInst.next (MutBorrow.mk self.iter)
     ok (opt, { iter := iter', n := n' })
 
 @[reducible, rust_trait_impl
@@ -596,11 +603,12 @@ impl_def core.iter.traits.iterator.IteratorTake {I : Type _} {Item : Type _}
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::next"]
 def core.iter.range.IteratorRange.next
    {A : Type _} (StepInst : core.iter.range.Step A) :
-  core.ops.range.Range A → Result ((Option A) × (core.ops.range.Range A)) :=
+  MutBorrow (core.ops.range.Range A) → Result ((Option A) × (core.ops.range.Range A)) :=
   λ range => do
-    let cmp ← StepInst.partialOrdInst.lt range.start range.end;
+    let range := range.val
+    let cmp ← StepInst.partialOrdInst.lt (SharedBorrow.mk range.start) (SharedBorrow.mk range.end);
     if cmp then
-      let range' ← StepInst.cloneInst.clone range.start;
+      let range' ← StepInst.cloneInst.clone (SharedBorrow.mk range.start);
       let n ← StepInst.forward_checked range' 1#usize;
       match n with
       | none => fail .panic -- Step invariants not upheld
@@ -634,13 +642,14 @@ def core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
   {A B Item_A Item_B : Type _}
   (IA : core.iter.traits.iterator.Iterator A Item_A)
   (IB : core.iter.traits.iterator.Iterator B Item_B)
-  (z : core.iter.adapters.zip.Zip A B) :
+  (z : MutBorrow (core.iter.adapters.zip.Zip A B)) :
   Result ((Option (Item_A × Item_B)) × core.iter.adapters.zip.Zip A B) := do
-  let (oa, a') ← IA.next z.fst
+  let z := z.val
+  let (oa, a') ← IA.next (MutBorrow.mk z.fst)
   match oa with
   | none => ok (none, ⟨a', z.snd⟩)
   | some a => do
-      let (ob, b') ← IB.next z.snd
+      let (ob, b') ← IB.next (MutBorrow.mk z.snd)
       match ob with
       | none => ok (none, ⟨a', b'⟩)
       | some b => ok (some (a, b), ⟨a', b'⟩)
@@ -652,10 +661,11 @@ def core.ops.range.RangeInclusive.new {Idx : Type _}
 
 @[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"]
 def core.ops.range.RangeInclusive.is_empty {Idx : Type _} (inst : core.cmp.PartialOrd Idx Idx)
-  (self : core.ops.range.RangeInclusive Idx) : Result Bool := do
+  (self : SharedBorrow (core.ops.range.RangeInclusive Idx)) : Result Bool := do
+  let self := self.val
   if self.exhausted then ok true
   else
-    let startLeEnd ← inst.le self.start self.«end»
+    let startLeEnd ← inst.le (SharedBorrow.mk self.start) (SharedBorrow.mk self.«end»)
     pure (not startLeEnd)
 
 /-- `RangeInclusive<A>::next` (`range.rs:1396`):
@@ -679,19 +689,21 @@ def core.ops.range.RangeInclusive.is_empty {Idx : Type _} (inst : core.cmp.Parti
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::next"]
 def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
   {A : Type _} (StepInst : core.iter.range.Step A)
-  (self : core.ops.range.RangeInclusive A) :
+  (self : MutBorrow (core.ops.range.RangeInclusive A)) :
   Result ((Option A) × core.ops.range.RangeInclusive A) := do
-  let empty ← self.is_empty StepInst.partialOrdInst
+  let self := self.val
+  let empty ← core.ops.range.RangeInclusive.is_empty StepInst.partialOrdInst (SharedBorrow.mk self)
   if empty then .ok (none, self)
   else
-    let is_iterating ← StepInst.partialOrdInst.lt self.start self.«end»
+    let is_iterating ←
+      StepInst.partialOrdInst.lt (SharedBorrow.mk self.start) (SharedBorrow.mk self.«end»)
     if is_iterating then
       let n ← StepInst.forward_checked self.start 1#usize
       match n with
       | none => .fail .panic
       | some n => ok (some self.start, ⟨n, self.«end», self.exhausted⟩)
     else
-      let n ← StepInst.cloneInst.clone self.start
+      let n ← StepInst.cloneInst.clone (SharedBorrow.mk self.start)
       ok (some n, ⟨self.start, self.«end», true⟩)
 
 -- ============================================================================
@@ -832,10 +844,10 @@ theorem core.iter.traits.iterator.Iterator.zip.trait_default.spec
 def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
   {I Item : Type _}
   (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item) :
-  core.iter.adapters.rev.Rev I →
+  MutBorrow (core.iter.adapters.rev.Rev I) →
     Result ((Option Item) × core.iter.adapters.rev.Rev I) :=
   fun self => do
-    let (o, it) ← DEInst.next_back self.iter
+    let (o, it) ← DEInst.next_back (MutBorrow.mk self.val.iter)
     ok (o, ⟨it⟩)
 
 /-- `Range<A>::next_back` (`DoubleEndedIterator`): if `start < end`, decrement
@@ -844,9 +856,10 @@ def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
   "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>}::next_back"]
 def core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back
   {A : Type _} (StepInst : core.iter.range.Step A) :
-  core.ops.range.Range A → Result ((Option A) × core.ops.range.Range A) :=
+  MutBorrow (core.ops.range.Range A) → Result ((Option A) × core.ops.range.Range A) :=
   fun r => do
-    let lt ← StepInst.partialOrdInst.lt r.start r.«end»
+    let r := r.val
+    let lt ← StepInst.partialOrdInst.lt (SharedBorrow.mk r.start) (SharedBorrow.mk r.«end»)
     if lt then do
       let b ← StepInst.backward_checked r.«end» 1#usize
       match b with
@@ -878,19 +891,21 @@ fn spec_next_back(&mut self) -> Option<A> {
   "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, @A>}::next_back"]
 def core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_back
   {A : Type _} (StepInst : core.iter.range.Step A)
-  (self : core.ops.range.RangeInclusive A) :
+  (self : MutBorrow (core.ops.range.RangeInclusive A)) :
   Result ((Option A) × core.ops.range.RangeInclusive A) := do
-  let empty ← self.is_empty StepInst.partialOrdInst
+  let self := self.val
+  let empty ← core.ops.range.RangeInclusive.is_empty StepInst.partialOrdInst (SharedBorrow.mk self)
   if empty then .ok (none, self)
   else
-    let is_iterating ← StepInst.partialOrdInst.lt self.start self.«end»
+    let is_iterating ←
+      StepInst.partialOrdInst.lt (SharedBorrow.mk self.start) (SharedBorrow.mk self.«end»)
     if is_iterating then
       let n ← StepInst.backward_checked self.«end» 1#usize
       match n with
       | none => .fail .panic
       | some e' => ok (some self.«end», ⟨self.start, e', self.exhausted⟩)
     else
-      let n ← StepInst.cloneInst.clone self.end
+      let n ← StepInst.cloneInst.clone (SharedBorrow.mk self.end)
       ok (some n, ⟨self.start, self.«end», true⟩)
 
 @[rust_type "core::iter::adapters::map::Map"]

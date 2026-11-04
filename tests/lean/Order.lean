@@ -24,7 +24,8 @@ namespace order
     Source: 'tests/src/order.rs', lines 7:0-9:1
     Visibility: public -/
 def compare
-  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
+  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (x : SharedBorrow T)
+  (y : SharedBorrow T) :
   Result Ordering
   := do
   corecmpOrdInst.cmp x y
@@ -33,20 +34,21 @@ def compare
     Source: 'tests/src/order.rs', lines 11:0-13:1
     Visibility: public -/
 def u32_compare (x : Std.U32) (y : Std.U32) : Result Ordering := do
-  ok (core.cmp.impls.OrdU32.cmp x y)
+  ok (core.cmp.impls.OrdU32.cmp (SharedBorrow.mk x) (SharedBorrow.mk y))
 
 /-- [order::u64_partial_cmp]:
     Source: 'tests/src/order.rs', lines 15:0-17:1
     Visibility: public -/
 def u64_partial_cmp
   (x : Std.U64) (y : Std.U64) : Result (Option Ordering) := do
-  ok (core.cmp.impls.PartialOrdU64.partial_cmp x y)
+  ok (core.cmp.impls.PartialOrdU64.partial_cmp (SharedBorrow.mk x)
+    (SharedBorrow.mk y))
 
 /-- [order::Wrap]
     Source: 'tests/src/order.rs', lines 24:0-24:21
     Visibility: public -/
-@[reducible]
-def Wrap := Std.U64
+structure Wrap where
+  _0 : Std.U64
 
 /-- Trait implementation: [order::{impl core::marker::StructuralPartialEq for order::Wrap}]
     Source: 'tests/src/order.rs', lines 23:9-23:18 -/
@@ -59,8 +61,8 @@ def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
     Source: 'tests/src/order.rs', lines 23:9-23:18
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialEqWrap.eq
-  (self : Wrap) (other : Wrap) : Result Bool := do
-  ok (self = other)
+  (self : SharedBorrow Wrap) (other : SharedBorrow Wrap) : Result Bool := do
+  ok (self.val._0 = other.val._0)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 23:9-23:18 -/
@@ -72,7 +74,8 @@ def Wrap.Insts.CoreCmpPartialEqWrap : core.cmp.PartialEq Wrap Wrap := {
 /-- [order::{impl core::cmp::Eq for order::Wrap}::assert_fields_are_eq]:
     Source: 'tests/src/order.rs', lines 23:20-23:22
     Visibility: public -/
-def Wrap.Insts.CoreCmpEq.assert_fields_are_eq (self : Wrap) : Result Unit := do
+def Wrap.Insts.CoreCmpEq.assert_fields_are_eq
+  (self : SharedBorrow Wrap) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [order::{impl core::cmp::Eq for order::Wrap}]
@@ -87,14 +90,19 @@ def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
     Source: 'tests/src/order.rs', lines 23:36-23:39
     Visibility: public -/
 def Wrap.Insts.CoreCmpOrd.cmp
-  (self : Wrap) (other : Wrap) : Result Ordering := do
-  ok (core.cmp.impls.OrdU64.cmp self other)
+  (self : SharedBorrow Wrap) (other : SharedBorrow Wrap) :
+  Result Ordering
+  := do
+  ok (core.cmp.impls.OrdU64.cmp (SharedBorrow.mk self.val._0) (SharedBorrow.mk
+    other.val._0))
 
 /-- [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}::partial_cmp]:
     Source: 'tests/src/order.rs', lines 23:24-23:34
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
-  (self : Wrap) (other : Wrap) : Result (Option Ordering) := do
+  (self : SharedBorrow Wrap) (other : SharedBorrow Wrap) :
+  Result (Option Ordering)
+  := do
   let o ← Wrap.Insts.CoreCmpOrd.cmp self other
   ok (some o)
 
@@ -125,13 +133,17 @@ impl_def Wrap.Insts.CoreCmpOrd : core.cmp.Ord Wrap := {
 /-- [order::wrap_partial_cmp]:
     Source: 'tests/src/order.rs', lines 26:0-28:1
     Visibility: public -/
-def wrap_partial_cmp (x : Wrap) (y : Wrap) : Result (Option Ordering) := do
+def wrap_partial_cmp
+  (x : SharedBorrow Wrap) (y : SharedBorrow Wrap) :
+  Result (Option Ordering)
+  := do
   Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp x y
 
 /-- [order::wrap_cmp]:
     Source: 'tests/src/order.rs', lines 30:0-32:1
     Visibility: public -/
-def wrap_cmp (x : Wrap) (y : Wrap) : Result Ordering := do
+def wrap_cmp
+  (x : SharedBorrow Wrap) (y : SharedBorrow Wrap) : Result Ordering := do
   Wrap.Insts.CoreCmpOrd.cmp x y
 
 /-- [order::test_wrap_lt]:
@@ -139,16 +151,16 @@ def wrap_cmp (x : Wrap) (y : Wrap) : Result Ordering := do
     Visibility: public -/
 def test_wrap_lt : Result Unit := do
   let b ←
-    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 1#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert b
   let b1 ←
-    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      2#u64
+    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert (¬ b1)
   let b2 ←
-    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 1#u64 })
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_lt] -/
@@ -159,16 +171,16 @@ def test_wrap_lt : Result Unit := do
     Visibility: public -/
 def test_wrap_le : Result Unit := do
   let b ←
-    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 1#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert b
   let b1 ←
-    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      2#u64
+    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert b1
   let b2 ←
-    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 1#u64 })
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_le] -/
@@ -179,16 +191,16 @@ def test_wrap_le : Result Unit := do
     Visibility: public -/
 def test_wrap_gt : Result Unit := do
   let b ←
-    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 1#u64 })
   massert b
   let b1 ←
-    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      2#u64
+    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert (¬ b1)
   let b2 ←
-    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 1#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_gt] -/
@@ -199,16 +211,16 @@ def test_wrap_gt : Result Unit := do
     Visibility: public -/
 def test_wrap_ge : Result Unit := do
   let b ←
-    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 1#u64 })
   massert b
   let b1 ←
-    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      2#u64
+    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 2#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert b1
   let b2 ←
-    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk { _0 := 1#u64 }) (SharedBorrow.mk { _0 := 2#u64 })
   massert (¬ b2)
 
 /- Unit test for [order::test_wrap_ge] -/
@@ -218,14 +230,26 @@ def test_wrap_ge : Result Unit := do
     Source: 'tests/src/order.rs', lines 67:0-71:1
     Visibility: public -/
 def test_wrap_max : Result Unit := do
-  let w ← core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd 1#u64 2#u64
-  let b ← Wrap.Insts.CoreCmpPartialEqWrap.eq w 2#u64
+  let w ←
+    core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd { _0 := 1#u64 }
+      { _0 := 2#u64 }
+  let b ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w) (SharedBorrow.mk
+      { _0 := 2#u64 })
   massert b
-  let w1 ← core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd 2#u64 1#u64
-  let b1 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w1 2#u64
+  let w1 ←
+    core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd { _0 := 2#u64 }
+      { _0 := 1#u64 }
+  let b1 ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w1) (SharedBorrow.mk
+      { _0 := 2#u64 })
   massert b1
-  let w2 ← core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd 2#u64 2#u64
-  let b2 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w2 2#u64
+  let w2 ←
+    core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd { _0 := 2#u64 }
+      { _0 := 2#u64 }
+  let b2 ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w2) (SharedBorrow.mk
+      { _0 := 2#u64 })
   massert b2
 
 /- Unit test for [order::test_wrap_max] -/
@@ -235,14 +259,26 @@ def test_wrap_max : Result Unit := do
     Source: 'tests/src/order.rs', lines 74:0-78:1
     Visibility: public -/
 def test_wrap_min : Result Unit := do
-  let w ← core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd 1#u64 2#u64
-  let b ← Wrap.Insts.CoreCmpPartialEqWrap.eq w 1#u64
+  let w ←
+    core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd { _0 := 1#u64 }
+      { _0 := 2#u64 }
+  let b ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w) (SharedBorrow.mk
+      { _0 := 1#u64 })
   massert b
-  let w1 ← core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd 2#u64 1#u64
-  let b1 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w1 1#u64
+  let w1 ←
+    core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd { _0 := 2#u64 }
+      { _0 := 1#u64 }
+  let b1 ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w1) (SharedBorrow.mk
+      { _0 := 1#u64 })
   massert b1
-  let w2 ← core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd 2#u64 2#u64
-  let b2 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w2 2#u64
+  let w2 ←
+    core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd { _0 := 2#u64 }
+      { _0 := 2#u64 }
+  let b2 ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w2) (SharedBorrow.mk
+      { _0 := 2#u64 })
   massert b2
 
 /- Unit test for [order::test_wrap_min] -/
@@ -253,16 +289,25 @@ def test_wrap_min : Result Unit := do
     Visibility: public -/
 def test_wrap_clamp : Result Unit := do
   let w ←
-    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd 0#u64 1#u64 3#u64
-  let b ← Wrap.Insts.CoreCmpPartialEqWrap.eq w 1#u64
+    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd { _0 := 0#u64 }
+      { _0 := 1#u64 } { _0 := 3#u64 }
+  let b ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w) (SharedBorrow.mk
+      { _0 := 1#u64 })
   massert b
   let w1 ←
-    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd 2#u64 1#u64 3#u64
-  let b1 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w1 2#u64
+    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd { _0 := 2#u64 }
+      { _0 := 1#u64 } { _0 := 3#u64 }
+  let b1 ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w1) (SharedBorrow.mk
+      { _0 := 2#u64 })
   massert b1
   let w2 ←
-    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd 4#u64 1#u64 3#u64
-  let b2 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w2 3#u64
+    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd { _0 := 4#u64 }
+      { _0 := 1#u64 } { _0 := 3#u64 }
+  let b2 ←
+    Wrap.Insts.CoreCmpPartialEqWrap.eq (SharedBorrow.mk w2) (SharedBorrow.mk
+      { _0 := 3#u64 })
   massert b2
 
 /- Unit test for [order::test_wrap_clamp] -/
@@ -288,10 +333,10 @@ def Rank.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
     Source: 'tests/src/order.rs', lines 87:9-87:18
     Visibility: public -/
 def Rank.Insts.CoreCmpPartialEqRank.eq
-  (self : Rank) (other : Rank) : Result Bool := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  ok (self1 = other1)
+  (self : SharedBorrow Rank) (other : SharedBorrow Rank) : Result Bool := do
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  ok (__self_discr = __arg1_discr)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Rank> for order::Rank}]
     Source: 'tests/src/order.rs', lines 87:9-87:18 -/
@@ -313,16 +358,21 @@ impl_def Rank.Insts.CoreCmpEq : core.cmp.Eq Rank := {
     Source: 'tests/src/order.rs', lines 87:36-87:39
     Visibility: public -/
 def Rank.Insts.CoreCmpOrd.cmp
-  (self : Rank) (other : Rank) : Result Ordering := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  ok (core.cmp.impls.OrdIsize.cmp self1 other1)
+  (self : SharedBorrow Rank) (other : SharedBorrow Rank) :
+  Result Ordering
+  := do
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  ok (core.cmp.impls.OrdIsize.cmp (SharedBorrow.mk __self_discr)
+    (SharedBorrow.mk __arg1_discr))
 
 /-- [order::{impl core::cmp::PartialOrd<order::Rank> for order::Rank}::partial_cmp]:
     Source: 'tests/src/order.rs', lines 87:24-87:34
     Visibility: public -/
 def Rank.Insts.CoreCmpPartialOrdRank.partial_cmp
-  (self : Rank) (other : Rank) : Result (Option Ordering) := do
+  (self : SharedBorrow Rank) (other : SharedBorrow Rank) :
+  Result (Option Ordering)
+  := do
   let o ← Rank.Insts.CoreCmpOrd.cmp self other
   ok (some o)
 
@@ -356,15 +406,15 @@ impl_def Rank.Insts.CoreCmpOrd : core.cmp.Ord Rank := {
 def test_rank_lt : Result Unit := do
   let b ←
     core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
-      Rank.Low Rank.High
+      (SharedBorrow.mk Rank.Low) (SharedBorrow.mk Rank.High)
   massert b
   let b1 ←
     core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
-      Rank.Mid Rank.Mid
+      (SharedBorrow.mk Rank.Mid) (SharedBorrow.mk Rank.Mid)
   massert (¬ b1)
   let b2 ←
     core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
-      Rank.High Rank.Low
+      (SharedBorrow.mk Rank.High) (SharedBorrow.mk Rank.Low)
   massert (¬ b2)
 
 /- Unit test for [order::test_rank_lt] -/
@@ -382,11 +432,13 @@ inductive Num where
     Source: 'tests/src/order.rs', lines 111:4-116:5
     Visibility: public -/
 def Num.Insts.CoreCmpPartialEqNum.eq
-  (self : Num) (other : Num) : Result Bool := do
-  match self with
+  (self : SharedBorrow Num) (other : SharedBorrow Num) : Result Bool := do
+  match self.val with
   | Num.Val a =>
-    match other with
-    | Num.Val b => lift (core.cmp.impls.PartialEqU8.eq a b)
+    match other.val with
+    | Num.Val b =>
+      lift (core.cmp.impls.PartialEqU8.eq (SharedBorrow.mk a) (SharedBorrow.mk
+        b))
     | Num.Nan => ok false
   | Num.Nan => ok false
 
@@ -401,11 +453,15 @@ def Num.Insts.CoreCmpPartialEqNum : core.cmp.PartialEq Num Num := {
     Source: 'tests/src/order.rs', lines 120:4-125:5
     Visibility: public -/
 def Num.Insts.CoreCmpPartialOrdNum.partial_cmp
-  (self : Num) (other : Num) : Result (Option Ordering) := do
-  match self with
+  (self : SharedBorrow Num) (other : SharedBorrow Num) :
+  Result (Option Ordering)
+  := do
+  match self.val with
   | Num.Val a =>
-    match other with
-    | Num.Val b => ok (core.cmp.impls.PartialOrdU8.partial_cmp a b)
+    match other.val with
+    | Num.Val b =>
+      ok (core.cmp.impls.PartialOrdU8.partial_cmp (SharedBorrow.mk a)
+        (SharedBorrow.mk b))
     | Num.Nan => ok none
   | Num.Nan => ok none
 
@@ -426,24 +482,24 @@ impl_def Num.Insts.CoreCmpPartialOrdNum : core.cmp.PartialOrd Num Num := {
     Visibility: public -/
 def test_num_incomparable : Result Unit := do
   let b ←
-    core.cmp.PartialOrd.lt.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
-      (Num.Val 1#u8)
+    core.cmp.PartialOrd.lt.trait_default Num.Insts.CoreCmpPartialOrdNum
+      (SharedBorrow.mk Num.Nan) (SharedBorrow.mk (Num.Val 1#u8))
   massert (¬ b)
   let b1 ←
-    core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
-      (Num.Val 1#u8)
+    core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum
+      (SharedBorrow.mk Num.Nan) (SharedBorrow.mk (Num.Val 1#u8))
   massert (¬ b1)
   let b2 ←
-    core.cmp.PartialOrd.gt.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
-      (Num.Val 1#u8)
+    core.cmp.PartialOrd.gt.trait_default Num.Insts.CoreCmpPartialOrdNum
+      (SharedBorrow.mk Num.Nan) (SharedBorrow.mk (Num.Val 1#u8))
   massert (¬ b2)
   let b3 ←
-    core.cmp.PartialOrd.ge.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
-      (Num.Val 1#u8)
+    core.cmp.PartialOrd.ge.trait_default Num.Insts.CoreCmpPartialOrdNum
+      (SharedBorrow.mk Num.Nan) (SharedBorrow.mk (Num.Val 1#u8))
   massert (¬ b3)
   let b4 ←
-    core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
-      Num.Nan
+    core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum
+      (SharedBorrow.mk Num.Nan) (SharedBorrow.mk Num.Nan)
   massert (¬ b4)
 
 /- Unit test for [order::test_num_incomparable] -/
@@ -454,12 +510,14 @@ def test_num_incomparable : Result Unit := do
     Visibility: public -/
 def test_wrap_ref_lt : Result Unit := do
   let b ←
-    core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 1#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 2#u64 }))
   massert b
   let b1 ←
-    core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 2#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 1#u64 }))
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_lt] -/
@@ -470,12 +528,14 @@ def test_wrap_ref_lt : Result Unit := do
     Visibility: public -/
 def test_wrap_ref_le : Result Unit := do
   let b ←
-    core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 1#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 2#u64 }))
   massert b
   let b1 ←
-    core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 2#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 1#u64 }))
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_le] -/
@@ -486,12 +546,14 @@ def test_wrap_ref_le : Result Unit := do
     Visibility: public -/
 def test_wrap_ref_gt : Result Unit := do
   let b ←
-    core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 2#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 1#u64 }))
   massert b
   let b1 ←
-    core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 1#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 2#u64 }))
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_gt] -/
@@ -502,12 +564,14 @@ def test_wrap_ref_gt : Result Unit := do
     Visibility: public -/
 def test_wrap_ref_ge : Result Unit := do
   let b ←
-    core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
-      1#u64
+    core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 2#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 1#u64 }))
   massert b
   let b1 ←
-    core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
-      2#u64
+    core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap
+      (SharedBorrow.mk (SharedBorrow.mk { _0 := 1#u64 })) (SharedBorrow.mk
+      (SharedBorrow.mk { _0 := 2#u64 }))
   massert (¬ b1)
 
 /- Unit test for [order::test_wrap_ref_ge] -/
@@ -519,7 +583,8 @@ def test_wrap_ref_ge : Result Unit := do
 def test_wrap_ref_partial_cmp : Result Unit := do
   let o ←
     core.cmp.impls.PartialOrdShared.partial_cmp
-      Wrap.Insts.CoreCmpPartialOrdWrap 1#u64 2#u64
+      Wrap.Insts.CoreCmpPartialOrdWrap (SharedBorrow.mk (SharedBorrow.mk
+      { _0 := 1#u64 })) (SharedBorrow.mk (SharedBorrow.mk { _0 := 2#u64 }))
   let b ←
     match o with
     | none => ok false
@@ -544,8 +609,8 @@ structure Keyed where
     Source: 'tests/src/order.rs', lines 194:4-196:5
     Visibility: public -/
 def Keyed.Insts.CoreCmpPartialEqKeyed.eq
-  (self : Keyed) (other : Keyed) : Result Bool := do
-  ok (self.key = other.key)
+  (self : SharedBorrow Keyed) (other : SharedBorrow Keyed) : Result Bool := do
+  ok (self.val.key = other.val.key)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Keyed> for order::Keyed}]
     Source: 'tests/src/order.rs', lines 193:0-197:1 -/
@@ -567,14 +632,19 @@ impl_def Keyed.Insts.CoreCmpEq : core.cmp.Eq Keyed := {
     Source: 'tests/src/order.rs', lines 208:4-210:5
     Visibility: public -/
 def Keyed.Insts.CoreCmpOrd.cmp
-  (self : Keyed) (other : Keyed) : Result Ordering := do
-  ok (core.cmp.impls.OrdU8.cmp self.key other.key)
+  (self : SharedBorrow Keyed) (other : SharedBorrow Keyed) :
+  Result Ordering
+  := do
+  ok (core.cmp.impls.OrdU8.cmp (SharedBorrow.mk self.val.key) (SharedBorrow.mk
+    other.val.key))
 
 /-- [order::{impl core::cmp::PartialOrd<order::Keyed> for order::Keyed}::partial_cmp]:
     Source: 'tests/src/order.rs', lines 202:4-204:5
     Visibility: public -/
 def Keyed.Insts.CoreCmpPartialOrdKeyed.partial_cmp
-  (self : Keyed) (other : Keyed) : Result (Option Ordering) := do
+  (self : SharedBorrow Keyed) (other : SharedBorrow Keyed) :
+  Result (Option Ordering)
+  := do
   let o ← Keyed.Insts.CoreCmpOrd.cmp self other
   ok (some o)
 

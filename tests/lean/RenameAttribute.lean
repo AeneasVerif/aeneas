@@ -24,21 +24,22 @@ namespace rename_attribute
     Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1
     Visibility: public -/
 structure BoolTest (Self : Type _) where
-  getTest : Self → Result Bool
-  retTest : Self → Result Bool
+  getTest : SharedBorrow Self → Result Bool
+  retTest : SharedBorrow Self → Result Bool
 
 /-- [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5
     Visibility: public -/
 @[trait_default]
-def BoolTrait.retTest.default {Self : Type _} (self : Self) : Result Bool := do
+def BoolTrait.retTest.default
+  {Self : Type _} (self : SharedBorrow Self) : Result Bool := do
   ok true
 
 /-- [rename_attribute::{impl rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
     Visibility: public -/
-def BoolImpl.getTest (self : Bool) : Result Bool := do
-  ok self
+def BoolImpl.getTest (self : SharedBorrow Bool) : Result Bool := do
+  ok self.val
 
 /-- Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
@@ -52,9 +53,9 @@ def BoolImpl : BoolTest Bool := {
     Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
     Visibility: public -/
 def BoolFn (T : Type _) (x : Bool) : Result Bool := do
-  let b ← BoolImpl.getTest x
+  let b ← BoolImpl.getTest (SharedBorrow.mk x)
   if b
-  then BoolTrait.retTest.default x
+  then BoolTrait.retTest.default (SharedBorrow.mk x)
   else ok false
 
 /-- [rename_attribute::SimpleEnum]

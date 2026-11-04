@@ -146,23 +146,24 @@ iscalar @[step] theorem «%S».add_spec {x y : «%S»}
 -/
 
 def SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add
-  {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
-  x + y
+  {ty : UScalarTy} (x : SharedBorrow (UScalar ty)) (y : UScalar ty) : Result (UScalar ty) :=
+  x.val + y
 
 /-- Generic theorem - shouldn't be used much -/
 @[step]
 theorem SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add_spec
-  {ty} {x y : UScalar ty} (hmax : ↑x + ↑y ≤ UScalar.max ty) :
+  {ty} {x : SharedBorrow (UScalar ty)} {y : UScalar ty} (hmax : ↑x.val + ↑y ≤ UScalar.max ty) :
   SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add x y
-    ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
+    ⦃ z => (↑z : Nat) = ↑x.val + ↑y ⦄ :=
   UScalar.add_spec hmax
 
-uscalar @[expose] def «Shared'S».Insts.«CoreOpsArithAdd'S'S».add (x y : «%S») : Result «%S» :=
+uscalar @[expose] def «Shared'S».Insts.«CoreOpsArithAdd'S'S».add (x : SharedBorrow «%S») (y : «%S») :
+  Result «%S» :=
   SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add x y
 
 uscalar @[step] theorem «Shared'S».Insts.«CoreOpsArithAdd'S'S».add_spec
-  {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
-  «Shared'S».Insts.«CoreOpsArithAdd'S'S».add x y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
+  {x : SharedBorrow «%S»} {y : «%S»} (hmax : x.val.val + y.val ≤ «%S».max) :
+  «Shared'S».Insts.«CoreOpsArithAdd'S'S».add x y ⦃ z => (↑z : Nat) = ↑x.val + ↑y ⦄ :=
   SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add_spec (by scalar_tac)
 
 attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 u8, u8, u8>}::add"]

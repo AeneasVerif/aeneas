@@ -336,8 +336,12 @@ and value_aggregate =
   | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the
           interpreter, we introduce a fresh symbolic value. *)
-  | VaTraitConstValue of trait_ref * assoc_const_id
-      (** A trait constant value *)
+  | VaTraitConstValue of trait_ref * assoc_const_id * bool
+      (** A trait constant value.
+
+          The boolean is [true] if the constant is a static shared reference, in
+          which case the symbolic value we introduce is the borrowed value (and
+          not the reference itself). *)
   | VaDiscriminant of symbolic_value  (** A discriminant read *)
   | VaDynTrait of tvalue * trait_ref
       (** A dynamic trait. This gets inserted when we convert a box of an

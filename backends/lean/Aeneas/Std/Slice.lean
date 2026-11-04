@@ -50,11 +50,11 @@ example {a: Type u} (v : Slice a) : v.length ≤ Usize.max := by
 theorem Slice.new_val (α : Type u) : (Slice.new α).val = [] := rfl
 
 @[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
-abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
-  Usize.ofNatCore v.val.length (by scalar_tac)
+abbrev Slice.len {α : Type u} (v : SharedBorrow (Slice α)) : Usize :=
+  Usize.ofNatCore v.val.val.length (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
-theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
+theorem Slice.len_val {α : Type u} (v : SharedBorrow (Slice α)) : (Slice.len v).val = v.val.length :=
   by simp
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
@@ -115,24 +115,26 @@ theorem Slice.getElem!_val_drop {T} (s : Slice T) (i : Usize) :
 abbrev Slice.slice {α : Type u} [Inhabited α] (s : Slice α) (i j : Nat) : List α :=
   s.val.slice i j
 
-@[expose] def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
-  match v[i]? with
+@[expose] def Slice.index_usize {α : Type u} (v: SharedBorrow (Slice α)) (i: Usize) :
+  Result (SharedBorrow α) :=
+  match v.val[i]? with
   | none => fail .arrayOutOfBounds
-  | some x => ok x
+  | some x => ok (.mk x)
 
 @[expose, rust_fun "core::slice::{[@T]}::is_empty", simp]
-def core.slice.Slice.is_empty {T : Type _} (s : Slice T) : Result Bool := ok (s.length = 0)
+def core.slice.Slice.is_empty {T : Type _} (s : SharedBorrow (Slice T)) : Result Bool :=
+  ok (s.val.length = 0)
 
 @[step]
-theorem core.slice.Slice.is_empty_spec {T : Type _} (s : Slice T) :
-  core.slice.Slice.is_empty s ⦃ b => b = (s.length = 0) ⦄ := by
+theorem core.slice.Slice.is_empty_spec {T : Type _} (s : SharedBorrow (Slice T)) :
+  core.slice.Slice.is_empty s ⦃ b => b = (s.val.length = 0) ⦄ := by
   simp only [is_empty, Slice.length, List.length_eq_zero_iff, eq_iff_iff, spec_ok,
     decide_eq_true_eq]
 
 @[step]
-theorem Slice.index_usize_spec {α : Type u} (v: Slice α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
+theorem Slice.index_usize_spec {α : Type u} (v: SharedBorrow (Slice α)) (i: Usize)
+  (hbound : i.val < v.val.length) :
+  Slice.index_usize v i ⦃ x => x.val = v.val[i.val] ⦄ := by
   grind [index_usize]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
@@ -272,17 +274,17 @@ theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   simp at *
   simp [*]
 
-@[expose] def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
-  Result (α × (α → Slice α)) := do
-  let x ← Slice.index_usize v i
-  ok (x, Slice.set v i)
+@[expose] def Slice.index_mut_usize {α : Type u} (v: MutBorrow (Slice α)) (i: Usize) :
+  Result (MutBorrow α × (α → Slice α)) := do
+  let x ← Slice.index_usize (.mk v.val) i
+  ok (.mk x.val, Slice.set v.val i)
 
 @[step]
-theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = Slice.set v i ⦄ := by
+theorem Slice.index_mut_usize_spec {α : Type u} (v: MutBorrow (Slice α)) (i: Usize)
+  (hbound : i.val < v.val.length) :
+  Slice.index_mut_usize v i ⦃ x back => x.val = v.val[i.val] ∧ back = Slice.set v.val i ⦄ := by
   simp only [index_mut_usize, Bind.bind]
-  apply spec_bind (Slice.index_usize_spec v i hbound)
+  apply spec_bind (Slice.index_usize_spec (.mk v.val) i hbound)
   intro x hx
   simp [hx]
 
@@ -332,63 +334,65 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
   simp_lists
 
 @[expose, rust_fun "core::slice::{[@T]}::reverse" -canFail]
-def core.slice.Slice.reverse {T : Type _} (s : Slice T) : Slice T :=
-  .from (s.val.reverse) (by simp)
+def core.slice.Slice.reverse {T : Type _} (s : MutBorrow (Slice T)) : Slice T :=
+  .from (s.val.val.reverse) (by simp)
 
 @[rust_trait "core::slice::index::SliceIndex"]
 structure core.slice.index.SliceIndex (Self T Output : Type _) where
-  get : Self → T → Result (Option Output)
-  get_mut : Self → T → Result (Option Output × (Option Output → T))
+  get : Self → SharedBorrow T → Result (Option (SharedBorrow Output))
+  get_mut : Self → MutBorrow T → Result (Option (MutBorrow Output) × (Option (MutBorrow Output) → T))
   get_unchecked : Self → ConstRawPtr T → Result (ConstRawPtr Output)
   get_unchecked_mut : Self → MutRawPtr T → Result (MutRawPtr Output)
-  index : Self → T → Result Output
-  index_mut : Self → T → Result (Output × (Output → T))
+  index : Self → SharedBorrow T → Result (SharedBorrow Output)
+  index_mut : Self → MutBorrow T → Result (MutBorrow Output × (Output → T))
 
 @[expose, rust_fun "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"]
 def core.slice.index.Slice.index
   {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
-  (slice : Slice T) (i : I) : Result Output :=
+  (slice : SharedBorrow (Slice T)) (i : I) : Result (SharedBorrow Output) :=
   inst.index i slice
 
 @[expose, rust_fun "core::slice::{[@T]}::get"]
 def core.slice.Slice.get
   {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : Slice T) (i : I) : Result (Option Output) :=
+  (s : SharedBorrow (Slice T)) (i : I) : Result (Option (SharedBorrow Output)) :=
   inst.get i s
 
 @[rust_fun "core::slice::{[@T]}::get_unchecked"]
 opaque core.slice.Slice.get_unchecked
   {T : Type _} {I : Type _} {Output : Type _}
   (SliceIndexInst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : Slice T) (i : I) : Result Output
+  (s : SharedBorrow (Slice T)) (i : I) : Result (SharedBorrow Output)
   -- TODO: we need to model the heap to call `SliceIndexInst.get_unchecked`
 
 @[expose, rust_fun "core::slice::{[@T]}::get_mut"]
 def core.slice.Slice.get_mut
   {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : Slice T) (i : I) : Result ((Option Output) × (Option Output → Slice T)) :=
+  (s : MutBorrow (Slice T)) (i : I) :
+  Result ((Option (MutBorrow Output)) × (Option (MutBorrow Output) → Slice T)) :=
   inst.get_mut i s
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get"]
-def core.slice.index.SliceIndexRangeUsizeSlice.get {T : Type _} (r : Range Usize) (s : Slice T) :
-  Result (Option (Slice T)) :=
-  if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (some (.from (s.val.slice r.start r.end) (by scalar_tac)))
+def core.slice.index.SliceIndexRangeUsizeSlice.get {T : Type _} (r : Range Usize)
+  (s : SharedBorrow (Slice T)) : Result (Option (SharedBorrow (Slice T))) :=
+  if r.start ≤ r.end ∧ r.end ≤ s.val.length then
+    ok (some (.mk (.from (s.val.val.slice r.start r.end) (by scalar_tac))))
   else ok none
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get_mut
-  {T : Type _} (r : Range Usize) (s : Slice T) : Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
-  if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (some (.from ( s.val.slice r.start r.end) (by scalar_tac)),
+  {T : Type _} (r : Range Usize) (s : MutBorrow (Slice T)) :
+  Result (Option (MutBorrow (Slice T)) × (Option (MutBorrow (Slice T)) → Slice T)) :=
+  if r.start ≤ r.end ∧ r.end ≤ s.val.length then
+    ok (some (.mk (.from ( s.val.val.slice r.start r.end) (by scalar_tac))),
         fun s' =>
         match s' with
-        | none => s
+        | none => s.val
         | some s' =>
-          if h: s'.length = r.end - r.start then
-            .from (List.setSlice! s.val r.start s'.val) (by simp)
-          else s )
-  else ok (none, fun _ => s)
+          if h: s'.val.length = r.end - r.start then
+            .from (List.setSlice! s.val.val r.start s'.val.val) (by simp)
+          else s.val )
+  else ok (none, fun _ => s.val)
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get_unchecked"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked {T : Type _} :
@@ -403,28 +407,29 @@ def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked_mut {T : Type _} :
   fun _ _ => fail .undef
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index"]
-def core.slice.index.SliceIndexRangeUsizeSlice.index {T : Type _} (r : Range Usize) (s : Slice T) : Result (Slice T) :=
-  if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (.from (s.val.slice r.start r.end) (by scalar_tac))
+def core.slice.index.SliceIndexRangeUsizeSlice.index {T : Type _} (r : Range Usize)
+  (s : SharedBorrow (Slice T)) : Result (SharedBorrow (Slice T)) :=
+  if r.start ≤ r.end ∧ r.end ≤ s.val.length then
+    ok (.mk (.from (s.val.val.slice r.start r.end) (by scalar_tac)))
   else fail .panic
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index_mut"]
-def core.slice.index.SliceIndexRangeUsizeSlice.index_mut {T : Type _} (r : Range Usize) (s : Slice T) :
-  Result (Slice T × (Slice T → Slice T)) :=
-  if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (.from (s.val.slice r.start r.end) (by scalar_tac),
+def core.slice.index.SliceIndexRangeUsizeSlice.index_mut {T : Type _} (r : Range Usize)
+  (s : MutBorrow (Slice T)) : Result (MutBorrow (Slice T) × (Slice T → Slice T)) :=
+  if r.start ≤ r.end ∧ r.end ≤ s.val.length then
+    ok (.mk (.from (s.val.val.slice r.start r.end) (by scalar_tac)),
         /- The back function expects a slice of the same length as the returned subslice.
            We don't enforce this with a guard because we want totality; `setSlice!` handles
            any length gracefully. The model is correct when this condition holds, which is
            always the case for code generated by Aeneas. -/
-        fun s' => .from (List.setSlice! s.val r.start s') (by simp))
+        fun s' => .from (List.setSlice! s.val.val r.start s') (by simp))
   else fail .panic
 
 /- [core::slice::index::[T]::index_mut] -/
 @[expose, rust_fun "core::slice::index::{core::ops::index::IndexMut<[@T], @I, @O>}::index_mut"]
 def core.slice.index.Slice.index_mut
   {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : Slice T) (i : I) : Result (Output × (Output → Slice T)) :=
+  (s : MutBorrow (Slice T)) (i : I) : Result (MutBorrow Output × (Output → Slice T)) :=
   inst.index_mut i s
 
 @[expose, reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>"]
@@ -440,25 +445,26 @@ def core.slice.index.SliceIndexRangeUsizeSlice (T : Type _) :
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
-  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
-  if r.end ≤ s.length then
-    ok (some (.from (s.val.slice 0 r.end) (by scalar_tac)))
+  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : SharedBorrow (Slice T)) :
+  Result (Option (SharedBorrow (Slice T))) :=
+  if r.end ≤ s.val.length then
+    ok (some (.mk (.from (s.val.val.slice 0 r.end) (by scalar_tac))))
   else ok none
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
-  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
-  Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
-  if r.end ≤ s.length then
-    ok (some (.from (s.val.slice 0 r.end) (by scalar_tac)),
+  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : MutBorrow (Slice T)) :
+  Result ((Option (MutBorrow (Slice T))) × (Option (MutBorrow (Slice T)) → Slice T)) :=
+  if r.end ≤ s.val.length then
+    ok (some (.mk (.from (s.val.val.slice 0 r.end) (by scalar_tac))),
         fun s' =>
         match s' with
-        | none => s
+        | none => s.val
         | some s' =>
-          if h: s'.length = r.end then
-            .from (List.setSlice! s.val 0 s'.val) (by simp)
-          else s )
-  else ok (none, fun _ => s)
+          if h: s'.val.length = r.end then
+            .from (List.setSlice! s.val.val 0 s'.val.val) (by simp)
+          else s.val )
+  else ok (none, fun _ => s.val)
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
@@ -475,22 +481,23 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
-  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
-  if r.end ≤ s.length then
-    ok (.from (s.val.slice 0 r.end) (by scalar_tac))
+  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : SharedBorrow (Slice T)) :
+  Result (SharedBorrow (Slice T)) :=
+  if r.end ≤ s.val.length then
+    ok (.mk (.from (s.val.val.slice 0 r.end) (by scalar_tac)))
   else fail .panic
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
-  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
-  Result ((Slice T) × (Slice T → Slice T)) :=
-  if r.end ≤ s.length then
-    ok (.from (s.val.slice 0 r.end) (by scalar_tac),
+  {T : Type _} (r : core.ops.range.RangeTo Usize) (s : MutBorrow (Slice T)) :
+  Result ((MutBorrow (Slice T)) × (Slice T → Slice T)) :=
+  if r.end ≤ s.val.length then
+    ok (.mk (.from (s.val.val.slice 0 r.end) (by scalar_tac)),
         /- The back function expects a slice of the same length as the returned subslice.
            We don't enforce this with a guard because we want totality; `setSlice!` handles
            any length gracefully. The model is correct when this condition holds, which is
            always the case for code generated by Aeneas. -/
-        fun s' => .from (List.setSlice! s.val 0 s'.val) (by simp))
+        fun s' => .from (List.setSlice! s.val.val 0 s'.val) (by simp))
   else fail .panic
 
 @[expose, reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>"]
@@ -511,14 +518,15 @@ Indexing a slice with `RangeFull` yields the whole slice. -/
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get"]
 abbrev core.slice.index.SliceIndexRangeFullSlice.get
-  {T : Type _} (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Option (Slice T)) :=
+  {T : Type _} (_ : core.ops.range.RangeFull) (s : SharedBorrow (Slice T)) :
+  Result (Option (SharedBorrow (Slice T))) :=
   ok (some s)
 
 @[expose, simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeFullSlice.get_mut
-  {T : Type _} (_ : core.ops.range.RangeFull) (s : Slice T) :
-  Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
-  ok (some s, fun s' => match s' with | some updated => updated | none => s)
+  {T : Type _} (_ : core.ops.range.RangeFull) (s : MutBorrow (Slice T)) :
+  Result (Option (MutBorrow (Slice T)) × (Option (MutBorrow (Slice T)) → Slice T)) :=
+  ok (some s, fun s' => match s' with | some updated => updated.val | none => s.val)
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked"]
 opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked
@@ -534,13 +542,14 @@ opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
 
 @[expose, simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeFullSlice.index
-  {T : Type _} (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Slice T) :=
+  {T : Type _} (_ : core.ops.range.RangeFull) (s : SharedBorrow (Slice T)) :
+  Result (SharedBorrow (Slice T)) :=
   ok s
 
 @[expose, simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeFullSlice.index_mut
-  {T : Type _} (_ : core.ops.range.RangeFull) (s : Slice T) :
-  Result (Slice T × (Slice T → Slice T)) :=
+  {T : Type _} (_ : core.ops.range.RangeFull) (s : MutBorrow (Slice T)) :
+  Result (MutBorrow (Slice T) × (Slice T → Slice T)) :=
   ok (s, fun updated => updated)
 
 @[expose, reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>"]
@@ -571,13 +580,14 @@ def core.ops.index.IndexMutSlice {T I Output : Type _}
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get"]
 abbrev core.slice.index.Usize.get
-  {T : Type _} (i : Usize) (s : Slice T) : Result (Option T) :=
-  ok s[i]?
+  {T : Type _} (i : Usize) (s : SharedBorrow (Slice T)) : Result (Option (SharedBorrow T)) :=
+  ok (s.val[i]?.map SharedBorrow.mk)
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_mut"]
 abbrev core.slice.index.Usize.get_mut
-  {T : Type _} (i : Usize) (s : Slice T) : Result (Option T × (Option T → Slice T)) :=
-  ok (s[i]?, s.set_opt i)
+  {T : Type _} (i : Usize) (s : MutBorrow (Slice T)) :
+  Result (Option (MutBorrow T) × (Option (MutBorrow T) → Slice T)) :=
+  ok (s.val[i]?.map MutBorrow.mk, fun x => s.val.set_opt i (x.map MutBorrow.val))
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_unchecked"]
 def core.slice.index.Usize.get_unchecked
@@ -592,12 +602,13 @@ def core.slice.index.Usize.get_unchecked_mut
   fun _ _ => fail .undef
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index"]
-abbrev core.slice.index.Usize.index {T : Type _} (i : Usize) (s : Slice T) : Result T :=
+abbrev core.slice.index.Usize.index {T : Type _} (i : Usize) (s : SharedBorrow (Slice T)) :
+  Result (SharedBorrow T) :=
   Slice.index_usize s i
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index_mut"]
 abbrev core.slice.index.Usize.index_mut {T : Type _}
-  (i : Usize) (s : Slice T) : Result (T × (T → (Slice T))) :=
+  (i : Usize) (s : MutBorrow (Slice T)) : Result (MutBorrow T × (T → (Slice T))) :=
   Slice.index_mut_usize s i
 
 @[expose, reducible, rust_trait_impl "core::slice::index::SliceIndex<usize, [@T], @T>"]
@@ -613,36 +624,37 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type _) :
 
 @[step]
 axiom core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
-  (h : i.val < s.length) :
+  (h : i.val < s.val.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
-  ⦃ x => x = s[i] ⦄
+  ⦃ x => x.val = s.val[i] ⦄
   -- TODO: awaiting a full definition for `core.slice.Slice.get_unchecked`
 
 @[expose, rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type _} (_ : core.marker.Copy T)
-  (s : Slice T) (src: Slice T) : Result (Slice T) :=
-  if s.len = src.len then ok src
+  (s : MutBorrow (Slice T)) (src: SharedBorrow (Slice T)) : Result (Slice T) :=
+  if Slice.len (.mk s.val) = Slice.len src then ok src.val
   else fail panic
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get"]
-def core.slice.index.SliceIndexRangeFromUsizeSlice.get {T : Type _} (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Option (Slice T)) :=
-  if  r.start ≤ s.length then
-    ok (some (s.drop r.start))
+def core.slice.index.SliceIndexRangeFromUsizeSlice.get {T : Type _} (r : core.ops.range.RangeFrom Usize)
+  (s : SharedBorrow (Slice T)) : Result (Option (SharedBorrow (Slice T))) :=
+  if  r.start ≤ s.val.length then
+    ok (some (.mk (s.val.drop r.start)))
   else ok none
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
-  {T : Type _} (r : core.ops.range.RangeFrom Usize) (s : Slice T) :
-  Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
-  if r.start ≤ s.length then
-    ok (some (s.drop r.start),
+  {T : Type _} (r : core.ops.range.RangeFrom Usize) (s : MutBorrow (Slice T)) :
+  Result ((Option (MutBorrow (Slice T))) × (Option (MutBorrow (Slice T)) → Slice T)) :=
+  if r.start ≤ s.val.length then
+    ok (some (.mk (s.val.drop r.start)),
         fun s' => match s' with
-        | none => s
+        | none => s.val
         | some s' =>
-          if h: s'.length + s.length - r.start.val ≤ Usize.max then
-            .from (s'.val ++ s.val.drop r.start.val) (by grind)
-          else s)
-  else ok (none, fun _ => s)
+          if h: s'.val.length + s.val.length - r.start.val ≤ Usize.max then
+            .from (s'.val.val ++ s.val.val.drop r.start.val) (by grind)
+          else s.val)
+  else ok (none, fun _ => s.val)
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get_unchecked"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked {T : Type _} :
@@ -658,28 +670,29 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked_mut {T : Type _
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index {T : Type _}
-  (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Slice T) :=
-  if r.start.val ≤ s.length then
-    ok (s.drop r.start)
+  (r : core.ops.range.RangeFrom Usize) (s : SharedBorrow (Slice T)) : Result (SharedBorrow (Slice T)) :=
+  if r.start.val ≤ s.val.length then
+    ok (.mk (s.val.drop r.start))
   else fail .undef
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type _}
-  (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result ((Slice T) × (Slice T → Slice T)) :=
-  if r.start ≤ s.length then
-    let s1 := s.drop r.start
-    ok ( s1,
+  (r : core.ops.range.RangeFrom Usize) (s : MutBorrow (Slice T)) :
+  Result ((MutBorrow (Slice T)) × (Slice T → Slice T)) :=
+  if r.start ≤ s.val.length then
+    let s1 := s.val.drop r.start
+    ok ( .mk s1,
          /- The back function expects a slice of the same length as the returned subslice.
             We don't enforce this with a guard because we want totality; `setSlice!` handles
             any length gracefully. The model is correct when this condition holds, which is
             always the case for code generated by Aeneas. -/
-         fun s2 => .from (s.val.setSlice! r.start s2) (by simp))
+         fun s2 => .from (s.val.val.setSlice! r.start s2) (by simp))
   else fail .panic
 
-theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : core.ops.range.RangeFrom Usize) (h : r.start ≤ s.length) :
+theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : MutBorrow (Slice T)) (r : core.ops.range.RangeFrom Usize) (h : r.start ≤ s.val.length) :
   match (core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s).match with
   | .ok (s1, back) =>
-    back s1 = s
+    back s1.val = s.val
   | _ => False := by
   unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
   simp [h]
@@ -718,42 +731,42 @@ theorem Slice.clone_spec {T : Type _} {clone : T → Result T} {s : Slice T} (h 
   simp [hl']
 
 @[expose, rust_fun "core::slice::{[@T]}::split_at"]
-def core.slice.Slice.split_at {T : Type _} (s : Slice T) (n : Usize) :
-  Result ((Slice T) × (Slice T)) :=
-  if h0 : n ≤ s.length then
-    let s0 := (s.val.splitAt n.val).fst
-    let s1 := (s.val.splitAt n.val).snd
+def core.slice.Slice.split_at {T : Type _} (s : SharedBorrow (Slice T)) (n : Usize) :
+  Result ((SharedBorrow (Slice T)) × (SharedBorrow (Slice T))) :=
+  if h0 : n ≤ s.val.length then
+    let s0 := (s.val.val.splitAt n.val).fst
+    let s1 := (s.val.val.splitAt n.val).snd
     let s0 : Slice T := .from s0 (by scalar_tac)
     let s1 : Slice T := .from s1 (by scalar_tac)
-    ok (s0, s1)
+    ok (.mk s0, .mk s1)
   else fail .panic
 
 @[expose, rust_fun "core::slice::{[@T]}::split_at_mut"]
-def core.slice.Slice.split_at_mut {T : Type _} (s : Slice T) (n : Usize) :
-  Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T)) :=
-  if h0 : n ≤ s.length then
-    let s0 := (s.val.splitAt n.val).fst
-    let s1 := (s.val.splitAt n.val).snd
+def core.slice.Slice.split_at_mut {T : Type _} (s : MutBorrow (Slice T)) (n : Usize) :
+  Result (((MutBorrow (Slice T)) × (MutBorrow (Slice T))) × (((Slice T) × (Slice T)) → Slice T)) :=
+  if h0 : n ≤ s.val.length then
+    let s0 := (s.val.val.splitAt n.val).fst
+    let s1 := (s.val.val.splitAt n.val).snd
     let back (s' : Slice T × Slice T) : Slice T :=
       let s0' := s'.fst
       let s1' := s'.snd
       if h1 : s0'.length = s0.length ∧ s1'.length = s1.length then
         -- TODO: scalar_tac is super slow below
-        .from (s0'.val ++ s1'.val) (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; grind)
-      else s
+        .from (s0'.val ++ s1'.val) (by have := List.splitAt_length n.val s.val.val; have := s.val.property; simp +zetaDelta at *; grind)
+      else s.val
     let s0 : Slice T := .from s0 (by scalar_tac)
     let s1 : Slice T := .from s1 (by scalar_tac)
-    ok ((s0, s1), back)
+    ok ((.mk s0, .mk s1), back)
   else fail .panic
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at`** -/
 @[step]
-theorem core.slice.Slice.split_at.spec {T : Type _} (s : Slice T) (n : Usize)
-    (h : n ≤ s.length) :
+theorem core.slice.Slice.split_at.spec {T : Type _} (s : SharedBorrow (Slice T)) (n : Usize)
+    (h : n ≤ s.val.length) :
     core.slice.Slice.split_at s n
-      ⦃ (s0 : Slice T) (s1 : Slice T) =>
-        s0.length = n.val ∧ s1.length = s.length - n.val ∧
-        s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
+      ⦃ (s0 : SharedBorrow (Slice T)) (s1 : SharedBorrow (Slice T)) =>
+        s0.val.length = n.val ∧ s1.val.length = s.val.length - n.val ∧
+        s0.val.val = s.val.val.take n.val ∧ s1.val.val = s.val.val.drop n.val ⦄ := by
   unfold core.slice.Slice.split_at
   simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
   refine ⟨?_, ?_, ?_, ?_⟩ <;>
@@ -766,15 +779,15 @@ theorem core.slice.Slice.split_at.spec {T : Type _} (s : Slice T) (n : Usize)
 -- `((Slice T × Slice T) × BackFn)` return type cannot be split into three
 -- separate binders. We keep projectors for now.
 @[step]
-theorem core.slice.Slice.split_at_mut.spec {T : Type _} (s : Slice T) (n : Usize)
-    (h : n ≤ s.length) :
+theorem core.slice.Slice.split_at_mut.spec {T : Type _} (s : MutBorrow (Slice T)) (n : Usize)
+    (h : n ≤ s.val.length) :
     core.slice.Slice.split_at_mut s n
-      ⦃ (res : Slice T × Slice T) (back : (Slice T × Slice T) → Slice T) =>
-        res.1.length = n.val ∧ res.2.length = s.length - n.val ∧
-        res.1.val = s.val.take n.val ∧ res.2.val = s.val.drop n.val ∧
-        (∀ s0' s1', s0'.length = n.val → s1'.length = s.length - n.val →
+      ⦃ (res : MutBorrow (Slice T) × MutBorrow (Slice T)) (back : (Slice T × Slice T) → Slice T) =>
+        res.1.val.length = n.val ∧ res.2.val.length = s.val.length - n.val ∧
+        res.1.val.val = s.val.val.take n.val ∧ res.2.val.val = s.val.val.drop n.val ∧
+        (∀ s0' s1', s0'.length = n.val → s1'.length = s.val.length - n.val →
           (back (s0', s1')).val = s0'.val ++ s1'.val ∧
-          (back (s0', s1')).length = s.length) ⦄ := by
+          (back (s0', s1')).length = s.val.length) ⦄ := by
   unfold core.slice.Slice.split_at_mut
   simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
   refine ⟨?_, ?_, ?_, ?_, fun s0' s1' hs0' hs1' => ?_⟩
@@ -789,27 +802,29 @@ theorem core.slice.Slice.split_at_mut.spec {T : Type _} (s : Slice T) (n : Usize
       exact ⟨by scalar_tac, by scalar_tac⟩
 
 @[expose, rust_fun "core::slice::{[@T]}::swap"]
-def core.slice.Slice.swap {T : Type _} (s : Slice T) (a b : Usize) : Result (Slice T) := do
-  let av ← Slice.index_usize s a
-  let bv ← Slice.index_usize s b
-  let s1 ← Slice.update s a bv
-  Slice.update s1 b av
+def core.slice.Slice.swap {T : Type _} (s : MutBorrow (Slice T)) (a b : Usize) : Result (Slice T) := do
+  let av ← Slice.index_usize (.mk s.val) a
+  let bv ← Slice.index_usize (.mk s.val) b
+  let s1 ← Slice.update s.val a bv.val
+  Slice.update s1 b av.val
 
 @[step]
-theorem core.slice.Slice.swap_spec {T : Type _} [Inhabited T] (s : Slice T) (a b : Usize)
-    (ha : a.val < s.length) (hb : b.val < s.length) :
+theorem core.slice.Slice.swap_spec {T : Type _} [Inhabited T] (s : MutBorrow (Slice T)) (a b : Usize)
+    (ha : a.val < s.val.length) (hb : b.val < s.val.length) :
     core.slice.Slice.swap s a b ⦃ s' =>
-      s'.length = s.length ∧
-      s'.val[a.val]! = s.val[b.val]! ∧
-      s'.val[b.val]! = s.val[a.val]! ∧
-      ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val[i]! ⦄ := by
+      s'.length = s.val.length ∧
+      s'.val[a.val]! = s.val.val[b.val]! ∧
+      s'.val[b.val]! = s.val.val[a.val]! ∧
+      ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val.val[i]! ⦄ := by
+  rcases s with ⟨s⟩
   simp only [core.slice.Slice.swap, Bind.bind]
-  apply spec_bind (Slice.index_usize_spec s a ha); intro av hav
-  apply spec_bind (Slice.index_usize_spec s b hb); intro bv hbv
-  apply spec_bind (Slice.update_spec s a bv ha); intro s1 hs1
+  apply spec_bind (Slice.index_usize_spec (.mk s) a ha); intro av hav
+  apply spec_bind (Slice.index_usize_spec (.mk s) b hb); intro bv hbv
+  apply spec_bind (Slice.update_spec s a bv.val ha); intro s1 hs1
   have hlen1 : b.val < s1.length := by rw [hs1, Slice.set_length]; exact hb
-  apply spec_mono (Slice.update_spec s1 b av hlen1); intro s' hs'
-  subst hav hbv hs1 hs'
+  apply spec_mono (Slice.update_spec s1 b av.val hlen1); intro s' hs'
+  rw [hav] at hs'; rw [hbv] at hs1
+  subst hs1 hs'
   simp only [Slice.length, ne_eq]
   refine ⟨?_, ?_, ?_, ?_⟩
   · simp only [Slice.set_val_eq, List.length_set]
@@ -823,12 +838,12 @@ theorem core.slice.Slice.swap_spec {T : Type _} [Inhabited T] (s : Slice T) (a b
     grind
 
 @[simp, step_simps]
-theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
+theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : MutBorrow (Slice α)) (r : core.ops.range.Range Usize) :
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s := by
   rfl
 
 @[simp, step_simps]
-theorem Slice.index_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
+theorem Slice.index_SliceIndexRangeUsizeSliceInst (s : SharedBorrow (Slice α)) (r : core.ops.range.Range Usize) :
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index r s := by
   rfl
 
@@ -905,12 +920,13 @@ theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
   simp [setSlice!]
 
 @[step]
-theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core.ops.range.Range Usize) (s : Slice α)
-  (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
-  core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1 : Slice α) (index_mut_back : Slice α → Slice α) =>
-  s1.val = s.val.slice r.start r.end ∧
-  s1.length = r.end - r.start ∧
-  ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
+theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core.ops.range.Range Usize)
+  (s : MutBorrow (Slice α))
+  (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.val.length) :
+  core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1 : MutBorrow (Slice α)) (index_mut_back : Slice α → Slice α) =>
+  s1.val.val = s.val.val.slice r.start r.end ∧
+  s1.val.length = r.end - r.start ∧
+  ∀ s2, index_mut_back s2 = s.val.setSlice! r.start.val s2 ⦄ := by
   simp [index_mut, UScalar.le_equiv, Slice.length]
   split
   . simp [spec_ok, Std.WP.uncurry', true_and]
@@ -920,10 +936,11 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core
 
 @[step]
 theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type _}
-    (r : core.ops.range.Range Usize) (s : Slice α) (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
-    core.slice.index.SliceIndexRangeUsizeSlice.index r s ⦃ (s1 : Slice α) =>
-      s1.val = s.val.slice r.start r.end ∧
-      s1.length = r.end - r.start ⦄ := by
+    (r : core.ops.range.Range Usize) (s : SharedBorrow (Slice α)) (h0 : r.start ≤ r.end)
+    (h1 : r.end ≤ s.val.length) :
+    core.slice.index.SliceIndexRangeUsizeSlice.index r s ⦃ (s1 : SharedBorrow (Slice α)) =>
+      s1.val.val = s.val.val.slice r.start r.end ∧
+      s1.val.length = r.end - r.start ⦄ := by
   simp only [core.slice.index.SliceIndexRangeUsizeSlice.index, UScalar.le_equiv, Slice.length]
   split
   · simp only [spec_ok]
@@ -935,23 +952,23 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type _}
 -- RangeTo step specs
 
 @[simp, step_simps]
-theorem Slice.index_mut_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeTo Usize) :
+theorem Slice.index_mut_SliceIndexRangeToUsizeSliceInst (s : MutBorrow (Slice α)) (r : core.ops.range.RangeTo Usize) :
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s := by rfl
 
 @[simp, step_simps]
-theorem Slice.index_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeTo Usize) :
+theorem Slice.index_SliceIndexRangeToUsizeSliceInst (s : SharedBorrow (Slice α)) (r : core.ops.range.RangeTo Usize) :
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeToUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeToUsizeSlice.index r s := by rfl
 
 @[step]
 theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
-    (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
+    (r : core.ops.range.RangeTo Usize) (s : MutBorrow (Slice α)) (h : r.end ≤ s.val.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s
-    ⦃ (s1 : Slice α) (back : Slice α → Slice α) =>
-      s1.val = s.val.slice 0 r.end ∧
-      s1.length = r.«end» ∧
-      ∀ s', (back s').val = s.val.setSlice! 0 s'.val ⦄ := by
+    ⦃ (s1 : MutBorrow (Slice α)) (back : Slice α → Slice α) =>
+      s1.val.val = s.val.val.slice 0 r.end ∧
+      s1.val.length = r.«end» ∧
+      ∀ s', (back s').val = s.val.val.setSlice! 0 s'.val ⦄ := by
   simp only [index_mut]
   split
   · grind [Std.WP.uncurry']
@@ -959,11 +976,11 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
 
 @[step]
 theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec
-    (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
+    (r : core.ops.range.RangeTo Usize) (s : SharedBorrow (Slice α)) (h : r.end ≤ s.val.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index r s
-    ⦃ s1 =>
-      s1.val = s.val.slice 0 r.end ∧
-      s1.length = r.end ⦄ := by
+    ⦃ (s1 : SharedBorrow (Slice α)) =>
+      s1.val.val = s.val.val.slice 0 r.end ∧
+      s1.val.length = r.end ⦄ := by
   simp only [index]
   split
   · simp only [spec_ok, Slice.length]
@@ -973,23 +990,23 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec
 -- RangeFrom step specs
 
 @[simp, step_simps]
-theorem Slice.index_mut_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeFrom Usize) :
+theorem Slice.index_mut_SliceIndexRangeFromUsizeSliceInst (s : MutBorrow (Slice α)) (r : core.ops.range.RangeFrom Usize) :
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s := by rfl
 
 @[simp, step_simps]
-theorem Slice.index_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeFrom Usize) :
+theorem Slice.index_SliceIndexRangeFromUsizeSliceInst (s : SharedBorrow (Slice α)) (r : core.ops.range.RangeFrom Usize) :
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeFromUsizeSlice.index r s := by rfl
 
 @[step]
 theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
-    (r : core.ops.range.RangeFrom Usize) (s : Slice α) (h : r.start ≤ s.length) :
+    (r : core.ops.range.RangeFrom Usize) (s : MutBorrow (Slice α)) (h : r.start ≤ s.val.length) :
   core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s
-    ⦃ (s1 : Slice α) (back : Slice α → Slice α) =>
-      s1.val = s.val.drop r.start ∧
-      s1.length = s.length - r.start.val ∧
-      ∀ s', (back s').val = s.val.setSlice! r.start.val s'.val ⦄ := by
+    ⦃ (s1 : MutBorrow (Slice α)) (back : Slice α → Slice α) =>
+      s1.val.val = s.val.val.drop r.start ∧
+      s1.val.length = s.val.length - r.start.val ∧
+      ∀ s', (back s').val = s.val.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [index_mut, Slice.drop]
   split
   · simp [spec_ok, Std.WP.uncurry']
@@ -997,11 +1014,11 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
 
 @[step]
 theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
-    (r : core.ops.range.RangeFrom Usize) (s : Slice α) (h : r.start ≤ s.length) :
+    (r : core.ops.range.RangeFrom Usize) (s : SharedBorrow (Slice α)) (h : r.start ≤ s.val.length) :
   core.slice.index.SliceIndexRangeFromUsizeSlice.index r s
-    ⦃ s1 =>
-      s1.val = s.val.drop r.start ∧
-      s1.length = s.length - r.start.val ⦄ := by
+    ⦃ (s1 : SharedBorrow (Slice α)) =>
+      s1.val.val = s.val.val.drop r.start ∧
+      s1.val.length = s.val.length - r.start.val ⦄ := by
   simp only [index]
   split
   · simp only [spec_ok, Slice.drop]
@@ -1009,9 +1026,10 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
   · scalar_tac
 
 @[step]
-theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
-  (h : s0.length = s1.length) :
-  core.slice.Slice.copy_from_slice copyInst s0 s1 ⦃ s1' => s1' = s1 ⦄ := by
+theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy α)
+  (s0 : MutBorrow (Slice α)) (s1 : SharedBorrow (Slice α))
+  (h : s0.val.length = s1.val.length) :
+  core.slice.Slice.copy_from_slice copyInst s0 s1 ⦃ s1' => s1' = s1.val ⦄ := by
   simp only [copy_from_slice]
   simp at h
   simp only [Slice.len]
@@ -1023,8 +1041,9 @@ theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy 
 
 @[step]
 theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
-    (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
-    s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
+    (hf : ∀ i (hi : i < Slice.len (.mk s)), f s[i] ⦃ post i ⦄) :
+    s.mapM f ⦃ s' => Slice.len (.mk s') = Slice.len (.mk s) ∧
+      ∀ i (hi : i < Slice.len (.mk s')), post i s'[i] ⦄ := by
   simp only [mapM]
   apply spec_bind (List.mapM_with_length_spec (post := post) (f := f) (l := s.val) (by
     intros i hi
@@ -1046,8 +1065,8 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
     element is obtained by calling `clone(v)`. Mirrors Rust stdlib. -/
 @[expose, rust_fun "core::slice::{[@T]}::fill"]
 def core.slice.Slice.fill {T : Type _} (cloneInst : core.clone.Clone T)
-    (s : Slice T) (v : T) : Result (Slice T) :=
-  do let ⟨l, p⟩ ← List.mapM_with_length (fun _ => cloneInst.clone v) s.val
+    (s : MutBorrow (Slice T)) (v : T) : Result (Slice T) :=
+  do let ⟨l, p⟩ ← List.mapM_with_length (fun _ => cloneInst.clone (.mk v)) s.val.val
      ok (.from l (by grind))
 
 private theorem List.mapM_const_ok {T : Type _} (l : List T)
@@ -1062,15 +1081,15 @@ private theorem List.mapM_const_ok {T : Type _} (l : List T)
 
 @[step]
 theorem core.slice.Slice.fill.spec {T : Type _} (cloneInst : core.clone.Clone T)
-    (s : Slice T) (v : T)
-    (hclone : cloneInst.clone v ⦃ fun v' => v' = v ⦄) :
+    (s : MutBorrow (Slice T)) (v : T)
+    (hclone : cloneInst.clone (.mk v) ⦃ fun v' => v' = v ⦄) :
     core.slice.Slice.fill cloneInst s v
     ⦃ (s' : Slice T) =>
-      s'.length = s.length ∧
-      s'.val = List.replicate s.length v ⦄ := by
+      s'.length = s.val.length ∧
+      s'.val = List.replicate s.val.length v ⦄ := by
   simp only [fill]
   apply spec_bind (List.mapM_with_length_spec (post := fun _ v' => v' = v)
-    (f := fun _ => cloneInst.clone v) (l := s.val) (by intros i hi; exact hclone))
+    (f := fun _ => cloneInst.clone (.mk v)) (l := s.val.val) (by intros i hi; exact hclone))
   intro l' hl'
   simp only [spec_ok]
   have hlen := l'.property

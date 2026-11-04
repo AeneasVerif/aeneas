@@ -12,21 +12,21 @@ open Result
 
 @[rust_trait "core::ops::index::Index"]
 structure core.ops.index.Index (Self Idx Output : Type _) where
-  index : Self → Idx → Result Output
+  index : SharedBorrow Self → Idx → Result (SharedBorrow Output)
 
 @[rust_trait "core::ops::index::IndexMut" (parentClauses := ["indexInst"])]
 structure core.ops.index.IndexMut (Self Idx Output : Type _) where
   indexInst : Index Self Idx Output
-  index_mut : Self → Idx → Result (Output × (Output → Self))
+  index_mut : MutBorrow Self → Idx → Result (MutBorrow Output × (Output → Self))
 
 @[rust_trait "core::ops::deref::Deref"]
 structure core.ops.deref.Deref (Self Target : Type _) where
-  deref : Self → Result Target
+  deref : SharedBorrow Self → Result (SharedBorrow Target)
 
 @[rust_trait "core::ops::deref::DerefMut" (parentClauses := ["derefInst"])]
 structure core.ops.deref.DerefMut (Self Target : Type _) where
   derefInst : Deref Self Target
-  deref_mut : Self → Result (Target × (Target → Self))
+  deref_mut : MutBorrow Self → Result (MutBorrow Target × (Target → Self))
 
 @[rust_trait "core::ops::bit::BitAnd"]
 structure core.ops.bit.BitAnd (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
@@ -34,11 +34,11 @@ structure core.ops.bit.BitAnd (Self : Type _) (Rhs : Type _) (Self_Output : Type
 
 @[rust_trait "core::ops::drop::Drop"]
 structure core.ops.drop.Drop (Self : Type _) where
-  drop : Self → Result Self
+  drop : MutBorrow Self → Result Self
 
 @[expose, rust_fun "core::ops::drop::Drop::drop"]
 def core.ops.drop.Drop.drop.default {Self : Type _}
-    (DropInst : core.ops.drop.Drop Self) : Self → Result Self :=
+    (DropInst : core.ops.drop.Drop Self) : MutBorrow Self → Result Self :=
   fun s => DropInst.drop s
 
 @[rust_trait "core::ops::function::FnOnce"]
@@ -48,12 +48,12 @@ structure core.ops.function.FnOnce (Self : Type u) (Args : Type v) (Output : Typ
 @[rust_trait "core::ops::function::FnMut" (parentClauses := ["FnOnceInst"])]
 structure core.ops.function.FnMut (Self : Type u) (Args : Type v) (Output : Type w) where
   FnOnceInst : core.ops.function.FnOnce Self Args Output
-  call_mut : Self → Args → Result (Output × Self)
+  call_mut : MutBorrow Self → Args → Result (Output × Self)
 
 @[rust_trait "core::ops::function::Fn" (parentClauses := ["FnMutInst"])]
 structure core.ops.function.Fn (Self : Type u) (Args : Type v) (Output : Type w) where
   FnMutInst : core.ops.function.FnMut Self Args Output
-  call : Self → Args → Result Output
+  call : SharedBorrow Self → Args → Result Output
 
 def BuiltinFnOnce (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnOnce (Inputs → Result Outputs) Inputs Outputs := {
   call_once f x := f x
@@ -62,13 +62,13 @@ def BuiltinFnOnce (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnOnc
 def BuiltinFnMut (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnMut (Inputs → Result Outputs) Inputs Outputs := {
   FnOnceInst := BuiltinFnOnce Inputs Outputs
   call_mut f x := do
-    bind (f x) λ v =>
-    ok (v, f)
+    bind (f.val x) λ v =>
+    ok (v, f.val)
 }
 
 def BuiltinFn (Inputs : Type u) (Outputs : Type v) : core.ops.function.Fn (Inputs → Result Outputs) Inputs Outputs := {
   FnMutInst := BuiltinFnMut Inputs Outputs
-  call f x := f x
+  call f x := f.val x
 }
 
 @[rust_trait "core::ops::try_trait::FromResidual"]

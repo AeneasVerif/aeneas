@@ -62,25 +62,25 @@ theorem toDualOrderingIdempotency (o: _root_.Ordering): o.toDualOrdering.toDualO
 -- raw bundling: hypothesis with Rust extracted objects.
 -- refined bundling: lifted hypothesis with Lean native objects.
 class OrdSpec [_root_.Ord T] where
-  infallible: ∀ a b, H.cmp a b ⦃ o => compare a b = o.toLeanOrdering ⦄
+  infallible: ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ ⦃ o => compare a b = o.toLeanOrdering ⦄
 
 class OrdSpecSymmetry [O: _root_.Ord T] extends OrdSpec H where
   symmetry: ∀ a b, O.compare a b = (O.opposite.compare a b).toDualOrdering
 
 -- Must be R decidableRel and an equivalence relationship?
 class OrdSpecRel [O: _root_.Ord T] (R: outParam (T -> T -> Prop)) extends OrdSpec H where
-  equivalence: ∀ a b, H.cmp a b = .ok .Equal -> R a b
+  equivalence: ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ = .ok .Equal -> R a b
 
 class OrdSpecLinearOrderEq [O: _root_.Ord T] extends OrdSpecSymmetry H, OrdSpecRel H Eq
 
-theorem infallible [_root_.Ord T] [OrdSpec H]: ∀ a b, H.cmp a b ⦃ _ => True ⦄ := fun a b => by
+theorem infallible [_root_.Ord T] [OrdSpec H]: ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ ⦃ _ => True ⦄ := fun a b => by
   step with OrdSpec.infallible
 
 instance: Coe (avl.Ordering) (_root_.Ordering) where
   coe a := a.toLeanOrdering
 
 theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]:
-    H.cmp a b ⦃ o' => o' = o ⦄ <-> compare a b = o.toLeanOrdering := by
+    H.cmp ⟨a⟩ ⟨b⟩ ⦃ o' => o' = o ⦄ <-> compare a b = o.toLeanOrdering := by
   apply Iff.intro
   . intro Hcmp
     obtain ⟨ o', Ho', Hcompare ⟩ :=
@@ -95,13 +95,13 @@ theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]:
 theorem oppositeOfOpposite {x y: _root_.Ordering}: x.toDualOrdering = y ↔ x = y.toDualOrdering := by
   cases x <;> cases y <;> simp
 theorem oppositeRustOrder [_root_.Ord T] [Spec: OrdSpecSymmetry H] {a b}:
-    H.cmp b a ⦃ o' => o' = o ⦄ ↔ H.cmp a b ⦃ o' => o' = o.toDualOrdering ⦄ := by
+    H.cmp ⟨b⟩ ⟨a⟩ ⦃ o' => o' = o ⦄ ↔ H.cmp ⟨a⟩ ⟨b⟩ ⦃ o' => o' = o.toDualOrdering ⦄ := by
   rw [rustCmpEq, Spec.symmetry, compare, Ord.opposite, oppositeOfOpposite, rustCmpEq, toDualOrderingOfToLeanOrdering]
 
 theorem ltOfRustOrder
   [LO: LinearOrder T]
   [Spec: OrdSpec H]:
-  ∀ a b, H.cmp a b ⦃ o => o = .Less ⦄ -> a < b := by
+  ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ ⦃ o => o = .Less ⦄ -> a < b := by
   intro a b Hcmp
   -- why the typeclass search doesn't work here?
   refine' (@compare_lt_iff_lt T LO).1 _
@@ -111,7 +111,7 @@ theorem ltOfRustOrder
 theorem gtOfRustOrder
   [LinearOrder T]
   [Spec: OrdSpecSymmetry H]:
-  ∀ a b, H.cmp a b ⦃ o => o = .Greater ⦄ -> b < a := by
+  ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ ⦃ o => o = .Greater ⦄ -> b < a := by
   intro a b Hcmp
   refine' @ltOfRustOrder _ H _ Spec.toOrdSpec _ _ _
   rewrite [oppositeRustOrder]

@@ -24,17 +24,16 @@ namespace const_shadow
     Source: 'tests/src/const-shadow.rs', lines 11:0-15:1 -/
 structure HasConst (Self : Type _) (N1 : Std.Usize) where
   N : Result Std.Usize
-  get : Self → Result (Array Std.U8 N1)
+  get : SharedBorrow Self → Result (Array Std.U8 N1)
 
 /-- [const_shadow::Foo]
     Source: 'tests/src/const-shadow.rs', lines 18:0-18:11 -/
-@[reducible]
-def Foo := Unit
+structure Foo where
 
 /-- [const_shadow::{impl const_shadow::HasConst<4usize> for const_shadow::Foo}::get]:
     Source: 'tests/src/const-shadow.rs', lines 23:4-25:5 -/
 def Foo.Insts.Const_shadowHasConst4.get
-  (self : Foo) : Result (Array Std.U8 4#usize) := do
+  (self : SharedBorrow Foo) : Result (Array Std.U8 4#usize) := do
   ok (Array.repeat 4#usize 0#u8)
 
 /-- [const_shadow::{impl const_shadow::HasConst<4usize> for const_shadow::Foo}::N]
@@ -53,7 +52,8 @@ def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {
 /-- [const_shadow::use_has_const]:
     Source: 'tests/src/const-shadow.rs', lines 30:0-34:1 -/
 def use_has_const
-  {T : Type _} {N : Std.Usize} (HasConstInst : HasConst T N) (x : T) :
+  {T : Type _} {N : Std.Usize} (HasConstInst : HasConst T N)
+  (x : SharedBorrow T) :
   Result ((Array Std.U8 N) × Std.Usize)
   := do
   let arr ← HasConstInst.get x

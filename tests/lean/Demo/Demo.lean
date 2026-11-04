@@ -24,13 +24,13 @@ namespace demo
     Source: 'tests/src/demo.rs', lines 8:0-14:1
     Visibility: public -/
 def choose
-  {T : Type _} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → (T × T)))
+  {T : Type _} (b : Bool) (x : MutBorrow T) (y : MutBorrow T) :
+  Result ((MutBorrow T) × (T → (T × T)))
   := do
   if b
-  then let back := fun x1 => (x1, y)
+  then let back := fun x1 => (x1, y.val)
        ok (x, back)
-  else let back := fun y1 => (x, y1)
+  else let back := fun y1 => (x.val, y1)
        ok (y, back)
 
 /-- [demo::mul2_add1]:
@@ -50,16 +50,16 @@ def use_mul2_add1 (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
 /-- [demo::incr]:
     Source: 'tests/src/demo.rs', lines 24:0-26:1
     Visibility: public -/
-def incr (x : Std.U32) : Result Std.U32 := do
-  x + 1#u32
+def incr (x : MutBorrow Std.U32) : Result Std.U32 := do
+  x.val + 1#u32
 
 /-- [demo::use_incr]:
     Source: 'tests/src/demo.rs', lines 28:0-33:1
     Visibility: public -/
 def use_incr : Result Unit := do
-  let x ← incr 0#u32
-  let x1 ← incr x
-  let _ ← incr x1
+  let x ← incr (MutBorrow.mk 0#u32)
+  let x1 ← incr (MutBorrow.mk x)
+  let _ ← incr (MutBorrow.mk x1)
   ok ()
 
 /-- [demo::CList]
@@ -67,19 +67,22 @@ def use_incr : Result Unit := do
     Visibility: public -/
 @[discriminant isize]
 inductive CList (T : Type _) where
-| CCons : T → CList T → CList T
+| CCons : T → Box (CList T) → CList T
 | CNil : CList T
 
 /-- [demo::list_nth]:
     Source: 'tests/src/demo.rs', lines 42:0-55:1
     Visibility: public -/
-def list_nth {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
-  match l with
+def list_nth
+  {T : Type _} (l : SharedBorrow (CList T)) (i : Std.U32) :
+  Result (SharedBorrow T)
+  := do
+  match l.val with
   | CList.CCons x tl =>
     if i = 0#u32
-    then ok x
+    then ok (SharedBorrow.mk x)
     else let i1 ← i - 1#u32
-         list_nth tl i1
+         list_nth (SharedBorrow.mk tl.val) i1
   | CList.CNil => fail panic
 partial_fixpoint
 
@@ -93,35 +96,39 @@ def list_nth1_loop {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
     if i = 0#u32
     then ok x
     else let i1 ← i - 1#u32
-         list_nth1_loop tl i1
+         list_nth1_loop tl.val i1
   | CList.CNil => fail panic
 partial_fixpoint
 
 /-- [demo::list_nth1]:
     Source: 'tests/src/demo.rs', lines 57:0-66:1
     Visibility: public -/
-@[reducible]
-def list_nth1 {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
-  list_nth1_loop l i
+def list_nth1
+  {T : Type _} (l : SharedBorrow (CList T)) (i : Std.U32) :
+  Result (SharedBorrow T)
+  := do
+  let t ← list_nth1_loop l.val i
+  ok (SharedBorrow.mk t)
 
 /-- [demo::list_nth_mut]:
     Source: 'tests/src/demo.rs', lines 68:0-81:1
     Visibility: public -/
 def list_nth_mut
-  {T : Type _} (l : CList T) (i : Std.U32) :
-  Result (T × (T → CList T))
+  {T : Type _} (l : MutBorrow (CList T)) (i : Std.U32) :
+  Result ((MutBorrow T) × (T → CList T))
   := do
-  match l with
+  match l.val with
   | CList.CCons x tl =>
     if i = 0#u32
     then let back := fun t => CList.CCons t tl
-         ok (x, back)
+         ok (MutBorrow.mk x, back)
     else
       let i1 ← i - 1#u32
-      let (x1, list_nth_mut_back) ← list_nth_mut tl i1
-      let back := fun t => let tl1 := list_nth_mut_back t
-                           CList.CCons x tl1
-      ok (x1, back)
+      let (t, list_nth_mut_back) ← list_nth_mut (MutBorrow.mk tl.val) i1
+      let back :=
+        fun t1 => let c := list_nth_mut_back t1
+                  CList.CCons x (Box.mk c)
+      ok (t, back)
   | CList.CNil => fail panic
 partial_fixpoint
 
@@ -140,31 +147,31 @@ partial_fixpoint
     Source: 'tests/src/demo.rs', lines 91:0-96:1
     Visibility: public -/
 def list_tail
-  {T : Type _} (l : CList T) :
-  Result ((CList T) × (CList T → CList T))
+  {T : Type _} (l : MutBorrow (CList T)) :
+  Result ((MutBorrow (CList T)) × (CList T → CList T))
   := do
-  match l with
+  match l.val with
   | CList.CCons t tl =>
-    let (c, list_tail_back) ← list_tail tl
-    let back := fun c1 => let tl1 := list_tail_back c1
-                          CList.CCons t tl1
+    let (c, list_tail_back) ← list_tail (MutBorrow.mk tl.val)
+    let back := fun c1 => let c2 := list_tail_back c1
+                          CList.CCons t (Box.mk c2)
     ok (c, back)
-  | CList.CNil => ok (CList.CNil, fun l1 => l1)
+  | CList.CNil => ok (MutBorrow.mk CList.CNil, fun l1 => l1)
 partial_fixpoint
 
 /-- Trait declaration: [demo::Counter]
     Source: 'tests/src/demo.rs', lines 100:0-102:1
     Visibility: public -/
 structure Counter (Self : Type _) where
-  incr : Self → Result (Std.Usize × Self)
+  incr : MutBorrow Self → Result (Std.Usize × Self)
 
 /-- [demo::{impl demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5
     Visibility: public -/
 def Usize.Insts.DemoCounter.incr
-  (self : Std.Usize) : Result (Std.Usize × Std.Usize) := do
-  let self1 ← self + 1#usize
-  ok (self, self1)
+  (self : MutBorrow Std.Usize) : Result (Std.Usize × Std.Usize) := do
+  let self1 ← self.val + 1#usize
+  ok (self.val, self1)
 
 /-- Trait implementation: [demo::{impl demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 -/
@@ -177,7 +184,7 @@ def Usize.Insts.DemoCounter : Counter Std.Usize := {
     Source: 'tests/src/demo.rs', lines 112:0-114:1
     Visibility: public -/
 def use_counter
-  {T : Type _} (CounterInst : Counter T) (cnt : T) :
+  {T : Type _} (CounterInst : Counter T) (cnt : MutBorrow T) :
   Result (Std.Usize × T)
   := do
   CounterInst.incr cnt

@@ -13,7 +13,8 @@ namespace Aeneas.Std
 inductive alloc.alloc.Global where | mk
 
 @[expose, rust_fun "alloc::alloc::{core::clone::Clone<alloc::alloc::Global>}::clone"]
-def alloc.alloc.CloneGlobal.clone (_ : alloc.alloc.Global) : Result alloc.alloc.Global := .ok .mk
+def alloc.alloc.CloneGlobal.clone (_ : SharedBorrow alloc.alloc.Global) : Result alloc.alloc.Global :=
+  .ok .mk
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
 def core.clone.CloneGlobal : core.clone.Clone alloc.alloc.Global := {

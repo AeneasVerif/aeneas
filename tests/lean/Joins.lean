@@ -81,11 +81,13 @@ def use_enum (e : Enum) (x : Std.U32) : Result Std.U32 := do
 /-- [joins::call_choose]:
     Source: 'tests/src/joins.rs', lines 53:0-56:1 -/
 def call_choose
-  (b : Bool) (x : Std.U32) (y : Std.U32) : Result (Std.U32 × Std.U32) := do
+  (b : Bool) (x : MutBorrow Std.U32) (y : MutBorrow Std.U32) :
+  Result (Std.U32 × Std.U32)
+  := do
   let (z, back) ←
     if b
-    then ok (x, fun i => (i, y))
-    else ok (y, fun i => (x, i))
+    then ok (x.val, fun i => (i, y.val))
+    else ok (y.val, fun i => (x.val, i))
   let z1 ← z + 1#u32
   ok (back z1)
 
@@ -97,8 +99,10 @@ structure SharedBool where
 /-- [joins::shared_bool_scrutinee]:
     Source: 'tests/src/joins.rs', lines 62:0-69:1 -/
 def shared_bool_scrutinee
-  (k : SharedBool) (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  let f ← if k.value
+  (k : SharedBorrow SharedBool) (x : Std.U32) (y : Std.U32) :
+  Result Std.U32
+  := do
+  let f ← if k.val.value
             then ok x
             else ok y
   if x >= f
@@ -108,8 +112,8 @@ def shared_bool_scrutinee
 /-- [joins::shared_integer_scrutinee]:
     Source: 'tests/src/joins.rs', lines 71:0-82:1 -/
 def shared_integer_scrutinee
-  (n : Std.U8) (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  let f ← match n with
+  (n : SharedBorrow Std.U8) (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
+  let f ← match n.val with
             | 0#uscalar => ok x
             | _ => ok y
   if x >= f

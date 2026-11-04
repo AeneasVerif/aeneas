@@ -38,9 +38,9 @@ structure Inner where
 /-- [builtin_auto::make]:
     Source: 'tests/src/builtin-auto.rs', lines 11:0-15:1
     Visibility: public -/
-def make : Result Inner := do
+def make : Result (Box Inner) := do
   let p ← core.ptr.null Std.U8
-  ok { ptr := p }
+  ok (Box.mk { ptr := p })
 
 /-- Trait declaration: [builtin_auto::SuperPointee]
     Source: 'tests/src/builtin-auto.rs', lines 17:0-17:30 -/

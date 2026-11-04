@@ -10,10 +10,11 @@ open Result
 
 @[expose, simp, rust_fun "core::array::{core::fmt::Debug<[@T; @N]>}::fmt"]
 def core.array.DebugArray.fmt
-  {T : Type _} {N : Usize} (_ : core.fmt.Debug T) (_ : Array T N) (fmt : core.fmt.Formatter) :
+  {T : Type _} {N : Usize} (_ : core.fmt.Debug T) (_ : SharedBorrow (Array T N))
+  (fmt : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: this model is simplistic
-  ok (.Ok (), fmt)
+  ok (.Ok (), fmt.val)
 
 @[expose, reducible, rust_trait_impl "core::fmt::Debug<[@T; @N]>"]
 def Array.Insts.CoreFmtDebug {T : Type _} (N : Std.Usize)

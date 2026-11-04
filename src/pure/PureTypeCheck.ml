@@ -66,6 +66,9 @@ let get_adt_field_types (span : Meta.span)
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
           else [%craise] span "Unreachable: improper variant id for fuel type"
+      | TBox | TSharedBorrow | TMutBorrow ->
+          [%sanity_check] span (variant_id = None);
+          [ Collections.List.to_cons_nil generics.types ]
       | TArray | TSlice | TStr | TRawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)

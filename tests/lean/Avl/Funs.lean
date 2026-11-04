@@ -25,10 +25,12 @@ namespace avl
     Source: 'src/avl.rs', lines 7:4-15:5
     Visibility: public -/
 def I32.Insts.AvlOrd.cmp
-  (self : Std.I32) (other : Std.I32) : Result Ordering := do
-  if self < other
+  (self : SharedBorrow Std.I32) (other : SharedBorrow Std.I32) :
+  Result Ordering
+  := do
+  if self.val < other.val
   then ok Ordering.Less
-  else if self = other
+  else if self.val = other.val
        then ok Ordering.Equal
        else ok Ordering.Greater
 
@@ -42,163 +44,213 @@ def I32.Insts.AvlOrd : Ord Std.I32 := {
 /-- [avl::{avl::Node<T>}::rotate_left]:
     Source: 'src/avl.rs', lines 40:4-87:5 -/
 def Node.rotate_left
-  {T : Type _} (root : Node T) (z : Node T) : Result (Node T) := do
-  let (b, o) := core.mem.replace z.left none
+  {T : Type _} (root : MutBorrow (Box (Node T))) (z : Box (Node T)) :
+  Result (Box (Node T))
+  := do
+  let (b, o) := core.mem.replace (MutBorrow.mk z.val.left) none
   let (x, root1) :=
-    core.mem.replace (Node.mk root.value root.left b root.balance_factor)
-      (Node.mk z.value o z.right z.balance_factor)
-  if root1.balance_factor = 0#i8
+    core.mem.replace (MutBorrow.mk (Box.mk (Node.mk root.val.val.value
+      root.val.val.left b root.val.val.balance_factor))) (Box.mk (Node.mk
+      z.val.value o z.val.right z.val.balance_factor))
+  if root1.val.balance_factor = 0#i8
   then
-    ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 1#i8))
-      root1.right (-1)#i8)
+    ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk x.val.value
+      x.val.left x.val.right 1#i8))) root1.val.right (-1)#i8))
   else
-    ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
-      root1.right 0#i8)
+    ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk x.val.value
+      x.val.left x.val.right 0#i8))) root1.val.right 0#i8))
 
 /-- [avl::{avl::Node<T>}::rotate_right]:
     Source: 'src/avl.rs', lines 89:4-131:5 -/
 def Node.rotate_right
-  {T : Type _} (root : Node T) (z : Node T) : Result (Node T) := do
-  let (b, o) := core.mem.replace z.right none
+  {T : Type _} (root : MutBorrow (Box (Node T))) (z : Box (Node T)) :
+  Result (Box (Node T))
+  := do
+  let (b, o) := core.mem.replace (MutBorrow.mk z.val.right) none
   let (x, root1) :=
-    core.mem.replace (Node.mk root.value b root.right root.balance_factor)
-      (Node.mk z.value z.left o z.balance_factor)
-  if root1.balance_factor = 0#i8
+    core.mem.replace (MutBorrow.mk (Box.mk (Node.mk root.val.val.value b
+      root.val.val.right root.val.val.balance_factor))) (Box.mk (Node.mk
+      z.val.value z.val.left o z.val.balance_factor))
+  if root1.val.balance_factor = 0#i8
   then
-    ok (Node.mk root1.value root1.left (some (Node.mk x.value x.left 
-      x.right (-1)#i8)) 1#i8)
+    ok (Box.mk (Node.mk root1.val.value root1.val.left (some (Box.mk (Node.mk
+      x.val.value x.val.left x.val.right (-1)#i8))) 1#i8))
   else
-    ok (Node.mk root1.value root1.left (some (Node.mk x.value x.left 
-      x.right 0#i8)) 0#i8)
+    ok (Box.mk (Node.mk root1.val.value root1.val.left (some (Box.mk (Node.mk
+      x.val.value x.val.left x.val.right 0#i8))) 0#i8))
 
 /-- [avl::{avl::Node<T>}::rotate_left_right]:
     Source: 'src/avl.rs', lines 133:4-181:5 -/
 def Node.rotate_left_right
-  {T : Type _} (root : Node T) (z : Node T) : Result (Node T) := do
-  let (o, _) := core.mem.replace z.right none
+  {T : Type _} (root : MutBorrow (Box (Node T))) (z : Box (Node T)) :
+  Result (Box (Node T))
+  := do
+  let (o, _) := core.mem.replace (MutBorrow.mk z.val.right) none
   let y ← core.option.Option.unwrap o
-  let (a, o1) := core.mem.replace y.left none
-  let (b, o2) := core.mem.replace y.right none
+  let (a, o1) := core.mem.replace (MutBorrow.mk y.val.left) none
+  let (b, o2) := core.mem.replace (MutBorrow.mk y.val.right) none
   let (x, root1) :=
-    core.mem.replace (Node.mk root.value b root.right root.balance_factor)
-      (Node.mk y.value o1 o2 y.balance_factor)
-  if root1.balance_factor = 0#i8
+    core.mem.replace (MutBorrow.mk (Box.mk (Node.mk root.val.val.value b
+      root.val.val.right root.val.val.balance_factor))) (Box.mk (Node.mk
+      y.val.value o1 o2 y.val.balance_factor))
+  if root1.val.balance_factor = 0#i8
   then
-    ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
-      (Node.mk x.value x.left x.right 0#i8)) 0#i8)
+    ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk z.val.value
+      z.val.left a 0#i8))) (some (Box.mk (Node.mk x.val.value x.val.left
+      x.val.right 0#i8))) 0#i8))
   else
-    if root1.balance_factor < 0#i8
+    if root1.val.balance_factor < 0#i8
     then
-      ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
-        (Node.mk x.value x.left x.right 1#i8)) 0#i8)
+      ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk z.val.value
+        z.val.left a 0#i8))) (some (Box.mk (Node.mk x.val.value x.val.left
+        x.val.right 1#i8))) 0#i8))
     else
-      ok (Node.mk root1.value (some (Node.mk z.value z.left a (-1)#i8)) (some
-        (Node.mk x.value x.left x.right 0#i8)) 0#i8)
+      ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk z.val.value
+        z.val.left a (-1)#i8))) (some (Box.mk (Node.mk x.val.value x.val.left
+        x.val.right 0#i8))) 0#i8))
 
 /-- [avl::{avl::Node<T>}::rotate_right_left]:
     Source: 'src/avl.rs', lines 183:4-231:5 -/
 def Node.rotate_right_left
-  {T : Type _} (root : Node T) (z : Node T) : Result (Node T) := do
-  let (o, _) := core.mem.replace z.left none
+  {T : Type _} (root : MutBorrow (Box (Node T))) (z : Box (Node T)) :
+  Result (Box (Node T))
+  := do
+  let (o, _) := core.mem.replace (MutBorrow.mk z.val.left) none
   let y ← core.option.Option.unwrap o
-  let (b, o1) := core.mem.replace y.left none
-  let (a, o2) := core.mem.replace y.right none
+  let (b, o1) := core.mem.replace (MutBorrow.mk y.val.left) none
+  let (a, o2) := core.mem.replace (MutBorrow.mk y.val.right) none
   let (x, root1) :=
-    core.mem.replace (Node.mk root.value root.left b root.balance_factor)
-      (Node.mk y.value o1 o2 y.balance_factor)
-  if root1.balance_factor = 0#i8
+    core.mem.replace (MutBorrow.mk (Box.mk (Node.mk root.val.val.value
+      root.val.val.left b root.val.val.balance_factor))) (Box.mk (Node.mk
+      y.val.value o1 o2 y.val.balance_factor))
+  if root1.val.balance_factor = 0#i8
   then
-    ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8)) (some
-      (Node.mk z.value a z.right 0#i8)) 0#i8)
+    ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk x.val.value
+      x.val.left x.val.right 0#i8))) (some (Box.mk (Node.mk z.val.value a
+      z.val.right 0#i8))) 0#i8))
   else
-    if root1.balance_factor > 0#i8
+    if root1.val.balance_factor > 0#i8
     then
-      ok (Node.mk root1.value (some (Node.mk x.value x.left x.right (-1)#i8))
-        (some (Node.mk z.value a z.right 0#i8)) 0#i8)
+      ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk x.val.value
+        x.val.left x.val.right (-1)#i8))) (some (Box.mk (Node.mk z.val.value a
+        z.val.right 0#i8))) 0#i8))
     else
-      ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
-        (some (Node.mk z.value a z.right 1#i8)) 0#i8)
+      ok (Box.mk (Node.mk root1.val.value (some (Box.mk (Node.mk x.val.value
+        x.val.left x.val.right 0#i8))) (some (Box.mk (Node.mk z.val.value a
+        z.val.right 1#i8))) 0#i8))
 
 mutual
 
 /-- [avl::{avl::Node<T>}::insert_in_left]:
     Source: 'src/avl.rs', lines 235:4-267:5 -/
 def Node.insert_in_left
-  {T : Type _} (OrdInst : Ord T) (node : Node T) (value : T) :
-  Result (Bool × (Node T))
+  {T : Type _} (OrdInst : Ord T) (node : MutBorrow (Box (Node T))) (value : T)
+  :
+  Result (Bool × (Box (Node T)))
   := do
-  let (b, o) ← Tree.insert_in_opt_node OrdInst node.left value
+  let (b, o) ←
+    Tree.insert_in_opt_node OrdInst (MutBorrow.mk node.val.val.left) value
   if b
   then
-    let i ← node.balance_factor - 1#i8
+    let i ← node.val.val.balance_factor - 1#i8
     if i = (-2)#i8
     then
-      let (o1, o2) := core.mem.replace o none
+      let (o1, o2) := core.mem.replace (MutBorrow.mk o) none
       let left ← core.option.Option.unwrap o1
-      if left.balance_factor <= 0#i8
+      if left.val.balance_factor <= 0#i8
       then
         let node1 ←
-          Node.rotate_right (Node.mk node.value o2 node.right i) left
+          Node.rotate_right (MutBorrow.mk (Box.mk (Node.mk node.val.val.value
+            o2 node.val.val.right i))) (Box.mk (Node.mk left.val.value
+            left.val.left left.val.right left.val.balance_factor))
         ok (false, node1)
       else
         let node1 ←
-          Node.rotate_left_right (Node.mk node.value o2 node.right i) left
+          Node.rotate_left_right (MutBorrow.mk (Box.mk (Node.mk
+            node.val.val.value o2 node.val.val.right i))) (Box.mk (Node.mk
+            left.val.value left.val.left left.val.right
+            left.val.balance_factor))
         ok (false, node1)
-    else ok (i != 0#i8, Node.mk node.value o node.right i)
-  else ok (false, Node.mk node.value o node.right node.balance_factor)
+    else
+      ok (i != 0#i8, Box.mk (Node.mk node.val.val.value o node.val.val.right
+        i))
+  else
+    ok (false, Box.mk (Node.mk node.val.val.value o node.val.val.right
+      node.val.val.balance_factor))
 partial_fixpoint
 
 /-- [avl::{avl::Node<T>}::insert_in_right]:
     Source: 'src/avl.rs', lines 269:4-304:5 -/
 def Node.insert_in_right
-  {T : Type _} (OrdInst : Ord T) (node : Node T) (value : T) :
-  Result (Bool × (Node T))
+  {T : Type _} (OrdInst : Ord T) (node : MutBorrow (Box (Node T))) (value : T)
+  :
+  Result (Bool × (Box (Node T)))
   := do
-  let (b, o) ← Tree.insert_in_opt_node OrdInst node.right value
+  let (b, o) ←
+    Tree.insert_in_opt_node OrdInst (MutBorrow.mk node.val.val.right) value
   if b
   then
-    let i ← node.balance_factor + 1#i8
+    let i ← node.val.val.balance_factor + 1#i8
     if i = 2#i8
     then
-      let (o1, o2) := core.mem.replace o none
+      let (o1, o2) := core.mem.replace (MutBorrow.mk o) none
       let right ← core.option.Option.unwrap o1
-      if right.balance_factor >= 0#i8
+      if right.val.balance_factor >= 0#i8
       then
         let node1 ←
-          Node.rotate_left (Node.mk node.value node.left o2 i) right
+          Node.rotate_left (MutBorrow.mk (Box.mk (Node.mk node.val.val.value
+            node.val.val.left o2 i))) (Box.mk (Node.mk right.val.value
+            right.val.left right.val.right right.val.balance_factor))
         ok (false, node1)
       else
         let node1 ←
-          Node.rotate_right_left (Node.mk node.value node.left o2 i) right
+          Node.rotate_right_left (MutBorrow.mk (Box.mk (Node.mk
+            node.val.val.value node.val.val.left o2 i))) (Box.mk (Node.mk
+            right.val.value right.val.left right.val.right
+            right.val.balance_factor))
         ok (false, node1)
-    else ok (i != 0#i8, Node.mk node.value node.left o i)
-  else ok (false, Node.mk node.value node.left o node.balance_factor)
+    else
+      ok (i != 0#i8, Box.mk (Node.mk node.val.val.value node.val.val.left o i))
+  else
+    ok (false, Box.mk (Node.mk node.val.val.value node.val.val.left o
+      node.val.val.balance_factor))
 partial_fixpoint
 
 /-- [avl::{avl::Node<T>}::insert]:
     Source: 'src/avl.rs', lines 307:4-319:5 -/
 def Node.insert
-  {T : Type _} (OrdInst : Ord T) (node : Node T) (value : T) :
-  Result (Bool × (Node T))
+  {T : Type _} (OrdInst : Ord T) (node : MutBorrow (Box (Node T))) (value : T)
+  :
+  Result (Bool × (Box (Node T)))
   := do
-  let ordering ← OrdInst.cmp value node.value
+  let ordering ←
+    OrdInst.cmp (SharedBorrow.mk value) (SharedBorrow.mk node.val.val.value)
   match ordering with
-  | Ordering.Less => Node.insert_in_left OrdInst node value
-  | Ordering.Equal => ok (false, node)
-  | Ordering.Greater => Node.insert_in_right OrdInst node value
+  | Ordering.Less =>
+    Node.insert_in_left OrdInst (MutBorrow.mk (Box.mk (Node.mk
+      node.val.val.value node.val.val.left node.val.val.right
+      node.val.val.balance_factor))) value
+  | Ordering.Equal =>
+    ok (false, Box.mk (Node.mk node.val.val.value node.val.val.left
+      node.val.val.right node.val.val.balance_factor))
+  | Ordering.Greater =>
+    Node.insert_in_right OrdInst (MutBorrow.mk (Box.mk (Node.mk
+      node.val.val.value node.val.val.left node.val.val.right
+      node.val.val.balance_factor))) value
 partial_fixpoint
 
 /-- [avl::{avl::Tree<T>}::insert_in_opt_node]:
     Source: 'src/avl.rs', lines 341:4-354:5 -/
 def Tree.insert_in_opt_node
-  {T : Type _} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
-  Result (Bool × (Option (Node T)))
+  {T : Type _} (OrdInst : Ord T) (node : MutBorrow (Option (Box (Node T))))
+  (value : T) :
+  Result (Bool × (Option (Box (Node T))))
   := do
-  match node with
-  | none => ok (true, some (Node.mk value none none 0#i8))
+  match node.val with
+  | none => ok (true, some (Box.mk (Node.mk value none none 0#i8)))
   | some node1 =>
-    let (b, node2) ← Node.insert OrdInst node1 value
-    ok (b, some node2)
+    let (b, n) ← Node.insert OrdInst (MutBorrow.mk node1) value
+    ok (b, some n)
 partial_fixpoint
 
 end
@@ -209,42 +261,58 @@ end
 def Tree.new {T : Type _} (OrdInst : Ord T) : Result (Tree T) := do
   ok { root := none }
 
+/-- [avl::{avl::Tree<T>}::find]: loop body 0:
+    Source: 'src/avl.rs', lines 330:8-339:5
+    Visibility: public -/
+@[rust_loop_body]
+def Tree.find_loop.body
+  {T : Type _} (OrdInst : Ord T) (value : T)
+  (current_tree : Option (Box (Node T))) :
+  Result (ControlFlow (Option (Box (Node T))) Bool)
+  := do
+  match current_tree with
+  | none => ok (done false)
+  | some current_node =>
+    let o ←
+      OrdInst.cmp (SharedBorrow.mk current_node.val.value) (SharedBorrow.mk
+        value)
+    match o with
+    | Ordering.Less => ok (cont current_node.val.right)
+    | Ordering.Equal => ok (done true)
+    | Ordering.Greater => ok (cont current_node.val.left)
+
 /-- [avl::{avl::Tree<T>}::find]: loop 0:
     Source: 'src/avl.rs', lines 330:8-339:5
     Visibility: public -/
 @[rust_loop]
 def Tree.find_loop
-  {T : Type _} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type _} (OrdInst : Ord T) (current_tree : Option (Box (Node T)))
+  (value : T) :
   Result Bool
   := do
-  match current_tree with
-  | none => ok false
-  | some current_node =>
-    let o ← OrdInst.cmp current_node.value value
-    match o with
-    | Ordering.Less => Tree.find_loop OrdInst value current_node.right
-    | Ordering.Equal => ok true
-    | Ordering.Greater => Tree.find_loop OrdInst value current_node.left
-partial_fixpoint
+  loop
+    (fun current_tree1 => Tree.find_loop.body OrdInst value current_tree1)
+    current_tree
 
 /-- [avl::{avl::Tree<T>}::find]:
     Source: 'src/avl.rs', lines 327:4-339:5
     Visibility: public -/
 @[reducible]
 def Tree.find
-  {T : Type _} (OrdInst : Ord T) (self : Tree T) (value : T) :
+  {T : Type _} (OrdInst : Ord T) (self : SharedBorrow (Tree T)) (value : T) :
   Result Bool
   := do
-  Tree.find_loop OrdInst value self.root
+  Tree.find_loop OrdInst self.val.root value
 
 /-- [avl::{avl::Tree<T>}::insert]:
     Source: 'src/avl.rs', lines 357:4-359:5
     Visibility: public -/
 def Tree.insert
-  {T : Type _} (OrdInst : Ord T) (self : Tree T) (value : T) :
+  {T : Type _} (OrdInst : Ord T) (self : MutBorrow (Tree T)) (value : T) :
   Result (Bool × (Tree T))
   := do
-  let (b, o) ← Tree.insert_in_opt_node OrdInst self.root value
+  let (b, o) ←
+    Tree.insert_in_opt_node OrdInst (MutBorrow.mk self.val.root) value
   ok (b, { root := o })
 
 end avl

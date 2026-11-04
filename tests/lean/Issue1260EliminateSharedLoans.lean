@@ -47,7 +47,8 @@ def f_loop (x : Std.U32) (s : Std.U32) (i : Std.U32) : Result Std.U32 := do
     Source: 'tests/src/issue-1260-eliminate-shared-loans.rs', lines 8:0-19:1
     Visibility: public -/
 @[reducible]
-def f (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  f_loop y x 0#u32
+def f
+  (x : SharedBorrow Std.U32) (y : SharedBorrow Std.U32) : Result Std.U32 := do
+  f_loop y.val x.val 0#u32
 
 end issue_1260_eliminate_shared_loans

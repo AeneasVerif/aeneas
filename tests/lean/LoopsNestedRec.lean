@@ -158,11 +158,11 @@ def ntt_layer_loop0_loop0
   if j < len
   then
     let i ← start + j
-    let i1 ← Array.index_usize a i
-    let c0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i1
+    let i1 ← Array.index_usize (SharedBorrow.mk a) i
+    let c0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i1.val
     let i2 ← i + len
-    let i3 ← Array.index_usize a i2
-    let c1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i3
+    let i3 ← Array.index_usize (SharedBorrow.mk a) i2
+    let c1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i3.val
     let c1_factor ← c1 * factor
     let c11 ← mod_sub c0 c1_factor
     let c01 ← mod_add c0 c1_factor
@@ -186,8 +186,8 @@ def ntt_layer_loop0
   := do
   if start < 256#usize
   then
-    let i ← Array.index_usize FACTORS k
-    let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i
+    let i ← Array.index_usize (SharedBorrow.mk FACTORS) k
+    let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i.val
     let k1 ← k + 1#usize
     let a1 ← ntt_layer_loop0_loop0 a len start factor 0#usize
     let i1 ← 2#usize * len
@@ -200,10 +200,10 @@ partial_fixpoint
     Source: 'tests/src/loops-nested-rec.rs', lines 60:0-82:1 -/
 @[reducible]
 def ntt_layer
-  (a : Array Std.U16 256#usize) (k : Std.Usize) (len : Std.Usize) :
+  (a : MutBorrow (Array Std.U16 256#usize)) (k : Std.Usize) (len : Std.Usize) :
   Result (Array Std.U16 256#usize)
   := do
-  ntt_layer_loop0 a k len 0#usize
+  ntt_layer_loop0 a.val k len 0#usize
 
 /-- [loops_nested_rec::Key]
     Source: 'tests/src/loops-nested-rec.rs', lines 84:0-87:1 -/
@@ -214,41 +214,46 @@ structure Key where
 /-- [loops_nested_rec::{loops_nested_rec::Key}::atranspose_mut]:
     Source: 'tests/src/loops-nested-rec.rs', lines 90:4-92:5 -/
 def Key.atranspose_mut
-  (self : Key) :
-  Result ((Array Std.U16 32#usize) × (Array Std.U16 32#usize → Key))
+  (self : MutBorrow Key) :
+  Result ((MutBorrow (Array Std.U16 32#usize)) × (Array Std.U16 32#usize →
+    Key))
   := do
-  let back := fun a => { self with atranspose := a }
-  ok (self.atranspose, back)
+  let back := fun a => { self.val with atranspose := a }
+  ok (MutBorrow.mk self.val.atranspose, back)
 
 /-- [loops_nested_rec::shake_init]:
     Source: 'tests/src/loops-nested-rec.rs', lines 97:0-97:40 -/
 def shake_init
-  (_state : Array Std.U8 8#usize) : Result (Array Std.U8 8#usize) := do
-  ok _state
+  (_state : MutBorrow (Array Std.U8 8#usize)) :
+  Result (Array Std.U8 8#usize)
+  := do
+  ok _state.val
 
 /-- [loops_nested_rec::shake_append]:
     Source: 'tests/src/loops-nested-rec.rs', lines 98:0-98:56 -/
 def shake_append
-  (_state : Array Std.U8 8#usize) (_data : Slice Std.U8) :
+  (_state : MutBorrow (Array Std.U8 8#usize))
+  (_data : SharedBorrow (Slice Std.U8)) :
   Result (Array Std.U8 8#usize)
   := do
-  ok _state
+  ok _state.val
 
 /-- [loops_nested_rec::shake_state_copy]:
     Source: 'tests/src/loops-nested-rec.rs', lines 99:0-99:62 -/
 def shake_state_copy
-  (_src : Array Std.U8 8#usize) (_dst : Array Std.U8 8#usize) :
+  (_src : SharedBorrow (Array Std.U8 8#usize))
+  (_dst : MutBorrow (Array Std.U8 8#usize)) :
   Result (Array Std.U8 8#usize)
   := do
-  ok _dst
+  ok _dst.val
 
 /-- [loops_nested_rec::sample_ntt]:
     Source: 'tests/src/loops-nested-rec.rs', lines 100:0-100:56 -/
 def sample_ntt
-  (_state : Array Std.U8 8#usize) (_dst : Std.U16) :
+  (_state : MutBorrow (Array Std.U8 8#usize)) (_dst : MutBorrow Std.U16) :
   Result ((Array Std.U8 8#usize) × Std.U16)
   := do
-  ok (_state, _dst)
+  ok (_state.val, _dst.val)
 
 /-- [loops_nested_rec::generate_matrix_inner]: loop 0:
     Source: 'tests/src/loops-nested-rec.rs', lines 105:4-109:5 -/
@@ -259,9 +264,10 @@ def generate_matrix_inner_loop
   := do
   if j < 4#usize
   then
-    let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
+    let (a_transpose, atranspose_mut_back) ←
+      Key.atranspose_mut (MutBorrow.mk key)
     let (i, index_mut_back) ← Array.index_mut_usize a_transpose j
-    let (state1, i1) ← sample_ntt state i
+    let (state1, i1) ← sample_ntt (MutBorrow.mk state) i
     let j1 ← j + 1#usize
     let a := index_mut_back i1
     let k := atranspose_mut_back a
@@ -273,10 +279,10 @@ partial_fixpoint
     Source: 'tests/src/loops-nested-rec.rs', lines 103:0-110:1 -/
 @[reducible]
 def generate_matrix_inner
-  (key : Key) (state : Array Std.U8 8#usize) :
+  (key : MutBorrow Key) (state : MutBorrow (Array Std.U8 8#usize)) :
   Result (Key × (Array Std.U8 8#usize))
   := do
-  generate_matrix_inner_loop key state 0#usize
+  generate_matrix_inner_loop key.val state.val 0#usize
 
 /-- [loops_nested_rec::generate_matrix]: loop 1:
     Source: 'tests/src/loops-nested-rec.rs', lines 124:8-132:9 -/
@@ -290,15 +296,17 @@ def generate_matrix_loop0_loop0
   if j < 4#u8
   then
     let coordinates1 ← Array.update coordinates 0#usize j
-    let state_work1 ← shake_state_copy state_base state_work
-    let s ← lift (Array.to_slice coordinates1)
-    let state_work2 ← shake_append state_work1 s
-    let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
+    let state_work1 ←
+      shake_state_copy (SharedBorrow.mk state_base) (MutBorrow.mk state_work)
+    let s ← lift (Array.as_slice (SharedBorrow.mk coordinates1))
+    let state_work2 ← shake_append (MutBorrow.mk state_work1) s
+    let (a_transpose, atranspose_mut_back) ←
+      Key.atranspose_mut (MutBorrow.mk key)
     let i1 ← i * 4#u8
     let i2 ← i1 + j
     let i3 ← lift (UScalar.cast .Usize i2)
     let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
-    let (state_work3, i5) ← sample_ntt state_work2 i4
+    let (state_work3, i5) ← sample_ntt (MutBorrow.mk state_work2) i4
     let j1 ← j + 1#u8
     let a := index_mut_back i5
     let k := atranspose_mut_back a
@@ -328,63 +336,67 @@ partial_fixpoint
 /-- [loops_nested_rec::generate_matrix]:
     Source: 'tests/src/loops-nested-rec.rs', lines 113:0-135:1 -/
 def generate_matrix
-  (key : Key) (state_base : Array Std.U8 8#usize)
-  (state_work : Array Std.U8 8#usize) :
+  (key : MutBorrow Key) (state_base : MutBorrow (Array Std.U8 8#usize))
+  (state_work : MutBorrow (Array Std.U8 8#usize)) :
   Result (Key × (Array Std.U8 8#usize) × (Array Std.U8 8#usize))
   := do
   let coordinates := Array.repeat 2#usize 0#u8
   let state_base1 ← shake_init state_base
-  let s ← lift (Array.to_slice key.seed)
-  let state_base2 ← shake_append state_base1 s
+  let s ← lift (Array.as_slice (SharedBorrow.mk key.val.seed))
+  let state_base2 ← shake_append (MutBorrow.mk state_base1) s
   let (key1, state_work1) ←
-    generate_matrix_loop0 key state_base2 state_work coordinates 0#u8
+    generate_matrix_loop0 key.val state_base2 state_work.val coordinates 0#u8
   ok (key1, state_base2, state_work1)
 
 /-- [loops_nested_rec::mul_add_as_plus_e]: loop 1:
     Source: 'tests/src/loops-nested-rec.rs', lines 144:8-146:9 -/
 @[rust_loop]
 def mul_add_as_plus_e_loop0_loop0
-  (iter1 : core.ops.range.Range Std.Usize) (a_row_temp : alloc.vec.Vec Std.U8)
-  (j : Std.Usize) :
+  (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
+  (iter1 : core.ops.range.Range Std.Usize) :
   Result (alloc.vec.Vec Std.U8)
   := do
   let (o, iter2) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize (MutBorrow.mk
+      iter1)
   match o with
   | none => ok a_row_temp
   | some _ =>
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U8)
-        a_row_temp j
+        (MutBorrow.mk a_row_temp) j
     let a_row_temp1 := index_mut_back 0#u8
-    mul_add_as_plus_e_loop0_loop0 iter2 a_row_temp1 j
+    mul_add_as_plus_e_loop0_loop0 a_row_temp1 j iter2
 partial_fixpoint
 
 /-- [loops_nested_rec::mul_add_as_plus_e]: loop 0:
     Source: 'tests/src/loops-nested-rec.rs', lines 143:4-147:5 -/
 @[rust_loop]
 def mul_add_as_plus_e_loop0
+  (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
-  (a_row_temp : alloc.vec.Vec Std.U8) :
+  :
   Result Unit
   := do
-  let (o, iter2) ←
+  let (o, sb) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize) iter1
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
+      (MutBorrow.mk iter1)
   match o with
   | none => ok ()
   | some j =>
     let a_row_temp1 ←
-      mul_add_as_plus_e_loop0_loop0 { start := 0#usize, «end» := 4#usize }
-        a_row_temp j
-    mul_add_as_plus_e_loop0 iter2 a_row_temp1
+      mul_add_as_plus_e_loop0_loop0 a_row_temp j
+        { start := 0#usize, «end» := 4#usize }
+    mul_add_as_plus_e_loop0 a_row_temp1 sb
 partial_fixpoint
 
 /-- [loops_nested_rec::mul_add_as_plus_e]:
     Source: 'tests/src/loops-nested-rec.rs', lines 138:0-148:1 -/
 def mul_add_as_plus_e
-  (N : Std.Usize) (out : Slice Std.U16) (s : Slice Std.U16)
-  (seed_a : Array Std.U8 16#usize) :
+  (N : Std.Usize) (out : MutBorrow (Slice Std.U16))
+  (s : SharedBorrow (Slice Std.U16))
+  (seed_a : SharedBorrow (Array Std.U8 16#usize)) :
   Result (Slice Std.U16)
   := do
   let i ← 4#usize * N
@@ -396,7 +408,7 @@ def mul_add_as_plus_e
     core.iter.traits.iterator.Iterator.step_by.trait_default
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, «end» := N } 8#usize
-  mul_add_as_plus_e_loop0 iter1 a_row_temp
-  ok out
+  mul_add_as_plus_e_loop0 a_row_temp iter1
+  ok out.val
 
 end loops_nested_rec

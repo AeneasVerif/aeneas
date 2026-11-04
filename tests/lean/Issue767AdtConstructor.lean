@@ -22,13 +22,13 @@ namespace issue_767_adt_constructor
 
 /-- [issue_767_adt_constructor::Struct]
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
-@[reducible]
-def Struct := Std.U32
+structure Struct where
+  _0 : Std.U32
 
 /-- [issue_767_adt_constructor::Struct]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
 def Struct.constructor (i : Std.U32) : Result Struct := do
-  ok i
+  ok { _0 := i }
 
 /-- [issue_767_adt_constructor::{impl core::ops::function::FnOnce<(u32,), issue_767_adt_constructor::Struct> for issue_767_adt_constructor::Struct}::call_once]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/

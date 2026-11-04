@@ -23,12 +23,12 @@ namespace builtin
 /-- [builtin::clone_bool]:
     Source: 'tests/src/builtin.rs', lines 6:0-8:1 -/
 def clone_bool (x : Bool) : Result Bool := do
-  ok (core.clone.impls.CloneBool.clone x)
+  ok (core.clone.impls.CloneBool.clone (SharedBorrow.mk x))
 
 /-- [builtin::clone_u32]:
     Source: 'tests/src/builtin.rs', lines 10:0-12:1 -/
 def clone_u32 (x : Std.U32) : Result Std.U32 := do
-  ok (core.clone.impls.CloneU32.clone x)
+  ok (core.clone.impls.CloneU32.clone (SharedBorrow.mk x))
 
 /-- [builtin::into_from]:
     Source: 'tests/src/builtin.rs', lines 14:0-16:1 -/
@@ -52,10 +52,10 @@ def from_same {T : Type _} (x : T) : Result T := do
 /-- [builtin::copy]:
     Source: 'tests/src/builtin.rs', lines 26:0-28:1 -/
 def copy
-  {T : Type _} (coremarkerCopyInst : core.marker.Copy T) (x : T) :
+  {T : Type _} (coremarkerCopyInst : core.marker.Copy T) (x : SharedBorrow T) :
   Result T
   := do
-  ok x
+  ok x.val
 
 /-- [builtin::u32_from_le_bytes]:
     Source: 'tests/src/builtin.rs', lines 30:0-32:1 -/

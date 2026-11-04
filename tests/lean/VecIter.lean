@@ -31,240 +31,249 @@ namespace vec_iter
   "alloc::vec::{core::iter::traits::collect::IntoIterator<&'a alloc::vec::Vec<@T>, &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 axiom SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
   {T : Type _} (A : Type _) :
-  alloc.vec.Vec T → Result (core.slice.iter.Iter T)
+  SharedBorrow (alloc.vec.Vec T) → Result (core.slice.iter.Iter T)
 
 /-- [vec_iter::sum_by_value]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 6:4-8:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_by_value_loop.body
-  (iter : alloc.vec.into_iter.IntoIter Std.U32) (acc : Std.U32) :
-  Result (ControlFlow ((alloc.vec.into_iter.IntoIter Std.U32) × Std.U32)
+  (acc : Std.U32) (iter : alloc.vec.into_iter.IntoIter Std.U32) :
+  Result (ControlFlow (Std.U32 × (alloc.vec.into_iter.IntoIter Std.U32))
     Std.U32)
   := do
-  let (o, iter1) ← alloc.vec.into_iter.IteratorIntoIter.next iter
+  let (o, iter1) ←
+    alloc.vec.into_iter.IteratorIntoIter.next (MutBorrow.mk iter)
   match o with
   | none => ok (done acc)
   | some x =>
     let acc1 ← lift (core.num.U32.wrapping_add acc x)
-    ok (cont (iter1, acc1))
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_by_value]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 6:4-8:5
     Visibility: public -/
 @[rust_loop]
 def sum_by_value_loop
-  (iter : alloc.vec.into_iter.IntoIter Std.U32) (acc : Std.U32) :
+  (acc : Std.U32) (iter : alloc.vec.into_iter.IntoIter Std.U32) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_by_value_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_by_value_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_by_value]:
     Source: 'tests/src/vec-iter.rs', lines 4:0-10:1
     Visibility: public -/
 def sum_by_value (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
   let iter ← alloc.vec.IntoIteratorVec.into_iter v
-  sum_by_value_loop iter 0#u32
+  sum_by_value_loop 0#u32 iter
 
 /-- [vec_iter::sum_by_ref]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 15:4-17:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_by_ref_loop.body
-  (iter : core.slice.iter.Iter Std.U32) (acc : Std.U32) :
-  Result (ControlFlow ((core.slice.iter.Iter Std.U32) × Std.U32) Std.U32)
+  (acc : Std.U32) (iter : core.slice.iter.Iter Std.U32) :
+  Result (ControlFlow (Std.U32 × (core.slice.iter.Iter Std.U32)) Std.U32)
   := do
-  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
+  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk iter)
   match o with
   | none => ok (done acc)
-  | some x =>
-    let acc1 ← lift (core.num.U32.wrapping_add acc x)
-    ok (cont (iter1, acc1))
+  | some i =>
+    let acc1 ← lift (core.num.U32.wrapping_add acc i.val)
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_by_ref]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 15:4-17:5
     Visibility: public -/
 @[rust_loop]
 def sum_by_ref_loop
-  (iter : core.slice.iter.Iter Std.U32) (acc : Std.U32) : Result Std.U32 := do
+  (acc : Std.U32) (iter : core.slice.iter.Iter Std.U32) : Result Std.U32 := do
   loop
-    (fun (iter1, acc1) => sum_by_ref_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_by_ref_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_by_ref]:
     Source: 'tests/src/vec-iter.rs', lines 13:0-19:1
     Visibility: public -/
-def sum_by_ref (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
+def sum_by_ref
+  (v : SharedBorrow (alloc.vec.Vec Std.U32)) : Result Std.U32 := do
   let iter ←
     SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
       alloc.alloc.Global v
-  sum_by_ref_loop iter 0#u32
+  sum_by_ref_loop 0#u32 iter
 
 /-- [vec_iter::sum_step_by]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 24:4-26:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_step_by_loop.body
-  (iter : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Std.U32))
-  (acc : Std.U32) :
-  Result (ControlFlow ((core.iter.adapters.step_by.StepBy (core.slice.iter.Iter
-    Std.U32)) × Std.U32) Std.U32)
+  (acc : Std.U32)
+  (iter : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Std.U32)) :
+  Result (ControlFlow (Std.U32 × (core.iter.adapters.step_by.StepBy
+    (core.slice.iter.Iter Std.U32))) Std.U32)
   := do
   let (o, iter1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk iter)
   match o with
   | none => ok (done acc)
-  | some x =>
-    let acc1 ← lift (core.num.U32.wrapping_add acc x)
-    ok (cont (iter1, acc1))
+  | some i =>
+    let acc1 ← lift (core.num.U32.wrapping_add acc i.val)
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_step_by]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 24:4-26:5
     Visibility: public -/
 @[rust_loop]
 def sum_step_by_loop
-  (iter : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Std.U32))
-  (acc : Std.U32) :
+  (acc : Std.U32)
+  (iter : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Std.U32)) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_step_by_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_step_by_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_step_by]:
     Source: 'tests/src/vec-iter.rs', lines 22:0-28:1
     Visibility: public -/
-def sum_step_by (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
+def sum_step_by
+  (v : SharedBorrow (alloc.vec.Vec Std.U32)) : Result Std.U32 := do
   let s := alloc.vec.Vec.deref v
   let i ← core.slice.Slice.iter s
   let iter ←
     core.iter.traits.iterator.Iterator.step_by.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 2#usize
-  sum_step_by_loop iter 0#u32
+  sum_step_by_loop 0#u32 iter
 
 /-- [vec_iter::sum_enumerate]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 33:4-35:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_enumerate_loop.body
+  (acc : Std.U32)
   (iter : core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter
-  Std.U32)) (acc : Std.U32) :
-  Result (ControlFlow ((core.iter.adapters.enumerate.Enumerate
-    (core.slice.iter.Iter Std.U32)) × Std.U32) Std.U32)
+  Std.U32)) :
+  Result (ControlFlow (Std.U32 × (core.iter.adapters.enumerate.Enumerate
+    (core.slice.iter.Iter Std.U32))) Std.U32)
   := do
   let (o, iter1) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk iter)
   match o with
   | none => ok (done acc)
   | some p =>
-    let (i, x) := p
-    let i1 ← lift (core.num.U32.wrapping_add acc x)
-    let i2 ← lift (UScalar.cast .U32 i)
-    let acc1 ← lift (core.num.U32.wrapping_add i1 i2)
-    ok (cont (iter1, acc1))
+    let (i, i1) := p
+    let i2 ← lift (core.num.U32.wrapping_add acc i1.val)
+    let i3 ← lift (UScalar.cast .U32 i)
+    let acc1 ← lift (core.num.U32.wrapping_add i2 i3)
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_enumerate]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 33:4-35:5
     Visibility: public -/
 @[rust_loop]
 def sum_enumerate_loop
+  (acc : Std.U32)
   (iter : core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter
-  Std.U32)) (acc : Std.U32) :
+  Std.U32)) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_enumerate_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_enumerate_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_enumerate]:
     Source: 'tests/src/vec-iter.rs', lines 31:0-37:1
     Visibility: public -/
-def sum_enumerate (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
+def sum_enumerate
+  (v : SharedBorrow (alloc.vec.Vec Std.U32)) : Result Std.U32 := do
   let s := alloc.vec.Vec.deref v
   let i ← core.slice.Slice.iter s
   let iter ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
-  sum_enumerate_loop iter 0#u32
+  sum_enumerate_loop 0#u32 iter
 
 /-- [vec_iter::sum_take]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 42:4-44:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_take_loop.body
-  (iter : core.iter.adapters.take.Take (core.slice.iter.Iter Std.U32))
-  (acc : Std.U32) :
-  Result (ControlFlow ((core.iter.adapters.take.Take (core.slice.iter.Iter
-    Std.U32)) × Std.U32) Std.U32)
+  (acc : Std.U32)
+  (iter : core.iter.adapters.take.Take (core.slice.iter.Iter Std.U32)) :
+  Result (ControlFlow (Std.U32 × (core.iter.adapters.take.Take
+    (core.slice.iter.Iter Std.U32))) Std.U32)
   := do
   let (o, iter1) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk iter)
   match o with
   | none => ok (done acc)
-  | some x =>
-    let acc1 ← lift (core.num.U32.wrapping_add acc x)
-    ok (cont (iter1, acc1))
+  | some i =>
+    let acc1 ← lift (core.num.U32.wrapping_add acc i.val)
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_take]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 42:4-44:5
     Visibility: public -/
 @[rust_loop]
 def sum_take_loop
-  (iter : core.iter.adapters.take.Take (core.slice.iter.Iter Std.U32))
-  (acc : Std.U32) :
+  (acc : Std.U32)
+  (iter : core.iter.adapters.take.Take (core.slice.iter.Iter Std.U32)) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_take_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_take_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_take]:
     Source: 'tests/src/vec-iter.rs', lines 40:0-46:1
     Visibility: public -/
-def sum_take (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
+def sum_take (v : SharedBorrow (alloc.vec.Vec Std.U32)) : Result Std.U32 := do
   let s := alloc.vec.Vec.deref v
   let i ← core.slice.Slice.iter s
   let iter ←
     core.iter.traits.iterator.Iterator.take.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 3#usize
-  sum_take_loop iter 0#u32
+  sum_take_loop 0#u32 iter
 
 /-- [vec_iter::sum_into_step_by]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 51:4-53:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_into_step_by_loop.body
+  (acc : Std.U32)
   (iter : core.iter.adapters.step_by.StepBy (alloc.vec.into_iter.IntoIter
-  Std.U32)) (acc : Std.U32) :
-  Result (ControlFlow ((core.iter.adapters.step_by.StepBy
-    (alloc.vec.into_iter.IntoIter Std.U32)) × Std.U32) Std.U32)
+  Std.U32)) :
+  Result (ControlFlow (Std.U32 × (core.iter.adapters.step_by.StepBy
+    (alloc.vec.into_iter.IntoIter Std.U32))) Std.U32)
   := do
   let (o, iter1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done acc)
   | some x =>
     let acc1 ← lift (core.num.U32.wrapping_add acc x)
-    ok (cont (iter1, acc1))
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_into_step_by]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 51:4-53:5
     Visibility: public -/
 @[rust_loop]
 def sum_into_step_by_loop
+  (acc : Std.U32)
   (iter : core.iter.adapters.step_by.StepBy (alloc.vec.into_iter.IntoIter
-  Std.U32)) (acc : Std.U32) :
+  Std.U32)) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_into_step_by_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_into_step_by_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_into_step_by]:
     Source: 'tests/src/vec-iter.rs', lines 49:0-55:1
@@ -274,21 +283,23 @@ def sum_into_step_by (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
   let iter ←
     core.iter.traits.iterator.Iterator.step_by.trait_default
       (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) ii 2#usize
-  sum_into_step_by_loop iter 0#u32
+  sum_into_step_by_loop 0#u32 iter
 
 /-- [vec_iter::sum_into_enumerate]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 60:4-62:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_into_enumerate_loop.body
+  (acc : Std.U32)
   (iter : core.iter.adapters.enumerate.Enumerate (alloc.vec.into_iter.IntoIter
-  Std.U32)) (acc : Std.U32) :
-  Result (ControlFlow ((core.iter.adapters.enumerate.Enumerate
-    (alloc.vec.into_iter.IntoIter Std.U32)) × Std.U32) Std.U32)
+  Std.U32)) :
+  Result (ControlFlow (Std.U32 × (core.iter.adapters.enumerate.Enumerate
+    (alloc.vec.into_iter.IntoIter Std.U32))) Std.U32)
   := do
   let (o, iter1) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done acc)
   | some p =>
@@ -296,20 +307,21 @@ def sum_into_enumerate_loop.body
     let i1 ← lift (core.num.U32.wrapping_add acc x)
     let i2 ← lift (UScalar.cast .U32 i)
     let acc1 ← lift (core.num.U32.wrapping_add i1 i2)
-    ok (cont (iter1, acc1))
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_into_enumerate]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 60:4-62:5
     Visibility: public -/
 @[rust_loop]
 def sum_into_enumerate_loop
+  (acc : Std.U32)
   (iter : core.iter.adapters.enumerate.Enumerate (alloc.vec.into_iter.IntoIter
-  Std.U32)) (acc : Std.U32) :
+  Std.U32)) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_into_enumerate_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_into_enumerate_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_into_enumerate]:
     Source: 'tests/src/vec-iter.rs', lines 58:0-64:1
@@ -319,39 +331,42 @@ def sum_into_enumerate (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
   let iter ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
       (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) ii
-  sum_into_enumerate_loop iter 0#u32
+  sum_into_enumerate_loop 0#u32 iter
 
 /-- [vec_iter::sum_into_take]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 69:4-71:5
     Visibility: public -/
 @[rust_loop_body]
 def sum_into_take_loop.body
+  (acc : Std.U32)
   (iter : core.iter.adapters.take.Take (alloc.vec.into_iter.IntoIter Std.U32))
-  (acc : Std.U32) :
-  Result (ControlFlow ((core.iter.adapters.take.Take
-    (alloc.vec.into_iter.IntoIter Std.U32)) × Std.U32) Std.U32)
+  :
+  Result (ControlFlow (Std.U32 × (core.iter.adapters.take.Take
+    (alloc.vec.into_iter.IntoIter Std.U32))) Std.U32)
   := do
   let (o, iter1) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done acc)
   | some x =>
     let acc1 ← lift (core.num.U32.wrapping_add acc x)
-    ok (cont (iter1, acc1))
+    ok (cont (acc1, iter1))
 
 /-- [vec_iter::sum_into_take]: loop 0:
     Source: 'tests/src/vec-iter.rs', lines 69:4-71:5
     Visibility: public -/
 @[rust_loop]
 def sum_into_take_loop
+  (acc : Std.U32)
   (iter : core.iter.adapters.take.Take (alloc.vec.into_iter.IntoIter Std.U32))
-  (acc : Std.U32) :
+  :
   Result Std.U32
   := do
   loop
-    (fun (iter1, acc1) => sum_into_take_loop.body iter1 acc1)
-    (iter, acc)
+    (fun (acc1, iter1) => sum_into_take_loop.body acc1 iter1)
+    (acc, iter)
 
 /-- [vec_iter::sum_into_take]:
     Source: 'tests/src/vec-iter.rs', lines 67:0-73:1
@@ -361,17 +376,19 @@ def sum_into_take (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
   let iter ←
     core.iter.traits.iterator.Iterator.take.trait_default
       (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) ii 3#usize
-  sum_into_take_loop iter 0#u32
+  sum_into_take_loop 0#u32 iter
 
 /-- [vec_iter::for_over_vec_of_slices]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 78:4-78:23
     Visibility: public -/
 @[rust_loop_body]
 def for_over_vec_of_slices_loop.body
-  (iter : alloc.vec.into_iter.IntoIter (Slice Bool)) :
-  Result (ControlFlow (alloc.vec.into_iter.IntoIter (Slice Bool)) Unit)
+  (iter : alloc.vec.into_iter.IntoIter (SharedBorrow (Slice Bool))) :
+  Result (ControlFlow (alloc.vec.into_iter.IntoIter (SharedBorrow (Slice
+    Bool))) Unit)
   := do
-  let (o, iter1) ← alloc.vec.into_iter.IteratorIntoIter.next iter
+  let (o, iter1) ←
+    alloc.vec.into_iter.IteratorIntoIter.next (MutBorrow.mk iter)
   match o with
   | none => ok (done ())
   | some _ => ok (cont iter1)
@@ -381,7 +398,9 @@ def for_over_vec_of_slices_loop.body
     Visibility: public -/
 @[rust_loop]
 def for_over_vec_of_slices_loop
-  (iter : alloc.vec.into_iter.IntoIter (Slice Bool)) : Result Unit := do
+  (iter : alloc.vec.into_iter.IntoIter (SharedBorrow (Slice Bool))) :
+  Result Unit
+  := do
   loop
     (fun iter1 => for_over_vec_of_slices_loop.body iter1)
     iter
@@ -390,7 +409,7 @@ def for_over_vec_of_slices_loop
     Source: 'tests/src/vec-iter.rs', lines 77:0-79:1
     Visibility: public -/
 def for_over_vec_of_slices
-  (chunks : alloc.vec.Vec (Slice Bool)) : Result Unit := do
+  (chunks : alloc.vec.Vec (SharedBorrow (Slice Bool))) : Result Unit := do
   let iter ← alloc.vec.IntoIteratorVec.into_iter chunks
   for_over_vec_of_slices_loop iter
 

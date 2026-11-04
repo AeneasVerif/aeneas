@@ -29,49 +29,56 @@ structure Key where
 /-- [loops_sequences::{loops_sequences::Key}::t_mut]:
     Source: 'tests/src/loops-sequences.rs', lines 9:4-11:5 -/
 def Key.t_mut
-  (self : Key) :
-  Result ((Array Std.U16 32#usize) × (Array Std.U16 32#usize → Key))
+  (self : MutBorrow Key) :
+  Result ((MutBorrow (Array Std.U16 32#usize)) × (Array Std.U16 32#usize →
+    Key))
   := do
-  let back := fun a => { self with t := a }
-  ok (self.t, back)
+  let back := fun a => { self.val with t := a }
+  ok (MutBorrow.mk self.val.t, back)
 
 /-- [loops_sequences::shake_init]:
     Source: 'tests/src/loops-sequences.rs', lines 16:0-16:40 -/
 def shake_init
-  (_state : Array Std.U8 8#usize) : Result (Array Std.U8 8#usize) := do
-  ok _state
+  (_state : MutBorrow (Array Std.U8 8#usize)) :
+  Result (Array Std.U8 8#usize)
+  := do
+  ok _state.val
 
 /-- [loops_sequences::shake_append]:
     Source: 'tests/src/loops-sequences.rs', lines 17:0-17:56 -/
 def shake_append
-  (_state : Array Std.U8 8#usize) (_data : Slice Std.U8) :
+  (_state : MutBorrow (Array Std.U8 8#usize))
+  (_data : SharedBorrow (Slice Std.U8)) :
   Result (Array Std.U8 8#usize)
   := do
-  ok _state
+  ok _state.val
 
 /-- [loops_sequences::shake_state_copy]:
     Source: 'tests/src/loops-sequences.rs', lines 18:0-18:62 -/
 def shake_state_copy
-  (_src : Array Std.U8 8#usize) (_dst : Array Std.U8 8#usize) :
+  (_src : SharedBorrow (Array Std.U8 8#usize))
+  (_dst : MutBorrow (Array Std.U8 8#usize)) :
   Result (Array Std.U8 8#usize)
   := do
-  ok _dst
+  ok _dst.val
 
 /-- [loops_sequences::shake_extract]:
     Source: 'tests/src/loops-sequences.rs', lines 19:0-19:54 -/
 def shake_extract
-  (_src : Array Std.U8 8#usize) (_dst : Slice Std.U8) :
+  (_src : SharedBorrow (Array Std.U8 8#usize))
+  (_dst : MutBorrow (Slice Std.U8)) :
   Result (Slice Std.U8)
   := do
-  ok _dst
+  ok _dst.val
 
 /-- [loops_sequences::sample_cbd]:
     Source: 'tests/src/loops-sequences.rs', lines 21:0-21:51 -/
 def sample_cbd
-  (_src : Slice Std.U8) (_dst : Array Std.U16 32#usize) :
+  (_src : SharedBorrow (Slice Std.U8))
+  (_dst : MutBorrow (Array Std.U16 32#usize)) :
   Result (Array Std.U16 32#usize)
   := do
-  ok _dst
+  ok _dst.val
 
 /-- [loops_sequences::key_expand]: loop body 0:
     Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
@@ -87,17 +94,19 @@ def key_expand_loop0.body
   then
     let i1 ← lift (IScalar.hcast .U8 i)
     let sample_buffer1 ← Array.update sample_buffer 0#usize i1
-    let state_work1 ← shake_state_copy state_base state_work
-    let s ← lift (Array.to_slice sample_buffer1)
-    let state_work2 ← shake_append state_work1 s
-    let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut sample_buffer1)
-    let s2 ← shake_extract state_work2 s1
-    let s3 ← lift (Array.to_slice state_work2)
-    let (a, t_mut_back) ← Key.t_mut key
+    let state_work1 ←
+      shake_state_copy (SharedBorrow.mk state_base) (MutBorrow.mk state_work)
+    let s ← lift (Array.as_slice (SharedBorrow.mk sample_buffer1))
+    let state_work2 ← shake_append (MutBorrow.mk state_work1) s
+    let (s1, as_mut_slice_back) ←
+      lift (Array.as_mut_slice (MutBorrow.mk sample_buffer1))
+    let s2 ← shake_extract (SharedBorrow.mk state_work2) s1
+    let s3 ← lift (Array.as_slice (SharedBorrow.mk state_work2))
+    let (a, t_mut_back) ← Key.t_mut (MutBorrow.mk key)
     let a1 ← sample_cbd s3 a
     let i2 ← i + 1#i32
     let key1 := t_mut_back a1
-    let sample_buffer2 := to_slice_mut_back s2
+    let sample_buffer2 := as_mut_slice_back s2
     ok (cont (key1, state_work2, sample_buffer2, i2))
   else ok (done (key, state_work, sample_buffer))
 
@@ -129,17 +138,19 @@ def key_expand_loop1.body
   then
     let i1 ← lift (IScalar.hcast .U8 i)
     let sample_buffer1 ← Array.update sample_buffer 0#usize i1
-    let state_work1 ← shake_state_copy state_base state_work
-    let s ← lift (Array.to_slice sample_buffer1)
-    let state_work2 ← shake_append state_work1 s
-    let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut sample_buffer1)
-    let s2 ← shake_extract state_work2 s1
-    let s3 ← lift (Array.to_slice state_work2)
-    let (a, t_mut_back) ← Key.t_mut key
+    let state_work1 ←
+      shake_state_copy (SharedBorrow.mk state_base) (MutBorrow.mk state_work)
+    let s ← lift (Array.as_slice (SharedBorrow.mk sample_buffer1))
+    let state_work2 ← shake_append (MutBorrow.mk state_work1) s
+    let (s1, as_mut_slice_back) ←
+      lift (Array.as_mut_slice (MutBorrow.mk sample_buffer1))
+    let s2 ← shake_extract (SharedBorrow.mk state_work2) s1
+    let s3 ← lift (Array.as_slice (SharedBorrow.mk state_work2))
+    let (a, t_mut_back) ← Key.t_mut (MutBorrow.mk key)
     let a1 ← sample_cbd s3 a
     let i2 ← i + 1#i32
     let key1 := t_mut_back a1
-    let sample_buffer2 := to_slice_mut_back s2
+    let sample_buffer2 := as_mut_slice_back s2
     ok (cont (key1, state_work2, sample_buffer2, i2))
   else ok (done (key, state_work))
 
@@ -160,16 +171,16 @@ def key_expand_loop1
 /-- [loops_sequences::key_expand]:
     Source: 'tests/src/loops-sequences.rs', lines 23:0-47:1 -/
 def key_expand
-  (key : Key) (state_base : Array Std.U8 8#usize)
-  (state_work : Array Std.U8 8#usize) :
+  (key : MutBorrow Key) (state_base : MutBorrow (Array Std.U8 8#usize))
+  (state_work : MutBorrow (Array Std.U8 8#usize)) :
   Result (Key × (Array Std.U8 8#usize) × (Array Std.U8 8#usize))
   := do
   let state_base1 ← shake_init state_base
-  let s ← lift (Array.to_slice key.seed)
-  let state_base2 ← shake_append state_base1 s
+  let s ← lift (Array.as_slice (SharedBorrow.mk key.val.seed))
+  let state_base2 ← shake_append (MutBorrow.mk state_base1) s
   let (key1, state_work1, sample_buffer) ←
-    key_expand_loop0 key state_base2 state_work (Array.make 1#usize [ 0#u8 ])
-      0#i32
+    key_expand_loop0 key.val state_base2 state_work.val
+      (Array.make 1#usize [ 0#u8 ]) 0#i32
   let (key2, state_work2) ←
     key_expand_loop1 key1 state_base2 state_work1 sample_buffer 0#i32
   ok (key2, state_base2, state_work2)

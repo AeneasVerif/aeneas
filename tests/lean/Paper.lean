@@ -23,14 +23,14 @@ namespace paper
 /-- [paper::ref_incr]:
     Source: 'tests/src/paper.rs', lines 7:0-9:1
     Visibility: public -/
-def ref_incr (x : Std.I32) : Result Std.I32 := do
-  x + 1#i32
+def ref_incr (x : MutBorrow Std.I32) : Result Std.I32 := do
+  x.val + 1#i32
 
 /-- [paper::test_incr]:
     Source: 'tests/src/paper.rs', lines 12:0-16:1
     Visibility: public -/
 def test_incr : Result Unit := do
-  let x ← ref_incr 0#i32
+  let x ← ref_incr (MutBorrow.mk 0#i32)
   massert (x = 1#i32)
 
 /- Unit test for [paper::test_incr] -/
@@ -40,21 +40,22 @@ def test_incr : Result Unit := do
     Source: 'tests/src/paper.rs', lines 19:0-25:1
     Visibility: public -/
 def choose
-  {T : Type _} (b : Bool) (x : T) (y : T) :
-  Result (T × (T → (T × T)))
+  {T : Type _} (b : Bool) (x : MutBorrow T) (y : MutBorrow T) :
+  Result ((MutBorrow T) × (T → (T × T)))
   := do
   if b
-  then let back := fun x1 => (x1, y)
+  then let back := fun x1 => (x1, y.val)
        ok (x, back)
-  else let back := fun y1 => (x, y1)
+  else let back := fun y1 => (x.val, y1)
        ok (y, back)
 
 /-- [paper::test_choose]:
     Source: 'tests/src/paper.rs', lines 28:0-36:1
     Visibility: public -/
 def test_choose : Result Unit := do
-  let (z, choose_back) ← choose true 0#i32 0#i32
-  let z1 ← z + 1#i32
+  let (z, choose_back) ←
+    choose true (MutBorrow.mk 0#i32) (MutBorrow.mk 0#i32)
+  let z1 ← z.val + 1#i32
   massert (z1 = 1#i32)
   let (x, y) := choose_back z1
   massert (x = 1#i32)
@@ -68,34 +69,37 @@ def test_choose : Result Unit := do
     Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type _) where
-| Cons : T → List T → List T
+| Cons : T → Box (List T) → List T
 | Nil : List T
 
 /-- [paper::list_nth_mut]:
     Source: 'tests/src/paper.rs', lines 47:0-60:1
     Visibility: public -/
 def list_nth_mut
-  {T : Type _} (l : List T) (i : Std.U32) : Result (T × (T → List T)) := do
-  match l with
+  {T : Type _} (l : MutBorrow (List T)) (i : Std.U32) :
+  Result ((MutBorrow T) × (T → List T))
+  := do
+  match l.val with
   | List.Cons x tl =>
     if i = 0#u32
     then let back := fun t => List.Cons t tl
-         ok (x, back)
+         ok (MutBorrow.mk x, back)
     else
       let i1 ← i - 1#u32
-      let (x1, list_nth_mut_back) ← list_nth_mut tl i1
-      let back := fun t => let tl1 := list_nth_mut_back t
-                           List.Cons x tl1
-      ok (x1, back)
+      let (t, list_nth_mut_back) ← list_nth_mut (MutBorrow.mk tl.val) i1
+      let back :=
+        fun t1 => let l1 := list_nth_mut_back t1
+                  List.Cons x (Box.mk l1)
+      ok (t, back)
   | List.Nil => fail panic
 partial_fixpoint
 
 /-- [paper::sum]:
     Source: 'tests/src/paper.rs', lines 62:0-71:1
     Visibility: public -/
-def sum (l : List Std.I32) : Result Std.I32 := do
-  match l with
-  | List.Cons x tl => let i ← sum tl
+def sum (l : SharedBorrow (List Std.I32)) : Result Std.I32 := do
+  match l.val with
+  | List.Cons x tl => let i ← sum (SharedBorrow.mk tl.val)
                       x + i
   | List.Nil => ok 0#i32
 partial_fixpoint
@@ -105,11 +109,11 @@ partial_fixpoint
     Visibility: public -/
 def test_nth : Result Unit := do
   let (x, list_nth_mut_back) ←
-    list_nth_mut (List.Cons 1#i32 (List.Cons 2#i32 (List.Cons 3#i32 List.Nil)))
-      2#u32
-  let x1 ← x + 1#i32
+    list_nth_mut (MutBorrow.mk (List.Cons 1#i32 (Box.mk (List.Cons 2#i32
+      (Box.mk (List.Cons 3#i32 (Box.mk List.Nil))))))) 2#u32
+  let x1 ← x.val + 1#i32
   let l := list_nth_mut_back x1
-  let i ← sum l
+  let i ← sum (SharedBorrow.mk l)
   massert (i = 7#i32)
 
 /- Unit test for [paper::test_nth] -/
@@ -120,8 +124,8 @@ def test_nth : Result Unit := do
     Visibility: public -/
 def call_choose (p : (Std.U32 × Std.U32)) : Result Std.U32 := do
   let (px, py) := p
-  let (pz, choose_back) ← choose true px py
-  let pz1 ← pz + 1#u32
+  let (pz, choose_back) ← choose true (MutBorrow.mk px) (MutBorrow.mk py)
+  let pz1 ← pz.val + 1#u32
   let (px1, _) := choose_back pz1
   ok px1
 

@@ -24,7 +24,7 @@ namespace issue_1138_slice_positivity
     Source: 'tests/src/issue-1138-slice-positivity.rs', lines 5:0-7:1 -/
 @[discriminant isize]
 inductive E1 where
-| V : Array E1 1#usize → E1
+| V : Array (Box E1) 1#usize → E1
 
 /-- [issue_1138_slice_positivity::E2]
     Source: 'tests/src/issue-1138-slice-positivity.rs', lines 9:0-11:1 -/
@@ -36,6 +36,6 @@ inductive E2 where
     Source: 'tests/src/issue-1138-slice-positivity.rs', lines 13:0-15:1 -/
 @[discriminant isize]
 inductive E3 where
-| V : Slice E3 → E3
+| V : SharedBorrow (Slice E3) → E3
 
 end issue_1138_slice_positivity

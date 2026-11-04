@@ -161,17 +161,17 @@ impl<'a> BitReader<'a> {
     fn refill(&mut self) {}
 }
 
-pub struct MutBorrow<'a> {
+pub struct MutBorrowWrapper<'a> {
     p: &'a mut u32,
 }
 
-impl<'a> MutBorrow<'a> {
+impl<'a> MutBorrowWrapper<'a> {
     pub fn store(&mut self, v: u32) {
         *self.p = v
     }
 }
 
-pub fn use_mut_borrow(mut b: MutBorrow<'_>, n: usize) {
+pub fn use_mut_borrow(mut b: MutBorrowWrapper<'_>, n: usize) {
     let mut i = 0usize;
     while i < n {
         b.store(0);

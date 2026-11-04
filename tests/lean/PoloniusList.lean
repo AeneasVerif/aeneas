@@ -25,26 +25,27 @@ namespace polonius_list
     Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type _) where
-| Cons : T → List T → List T
+| Cons : T → Box (List T) → List T
 | Nil : List T
 
 /-- [polonius_list::get_list_at_x]:
     Source: 'tests/src/polonius_list.rs', lines 15:0-29:1
     Visibility: public -/
 def get_list_at_x
-  (ls : List Std.U32) (x : Std.U32) :
-  Result ((List Std.U32) × (List Std.U32 → List Std.U32))
+  (ls : MutBorrow (List Std.U32)) (x : Std.U32) :
+  Result ((MutBorrow (List Std.U32)) × (List Std.U32 → List Std.U32))
   := do
-  match ls with
+  match ls.val with
   | List.Cons hd tl =>
     if hd = x
-    then ok (ls, fun ls1 => ls1)
+    then ok (MutBorrow.mk ls.val, fun ls1 => ls1)
     else
-      let (l, get_list_at_x_back) ← get_list_at_x tl x
-      let back := fun l1 => let tl1 := get_list_at_x_back l1
-                            List.Cons hd tl1
+      let (l, get_list_at_x_back) ← get_list_at_x (MutBorrow.mk tl.val) x
+      let back :=
+        fun l1 => let l2 := get_list_at_x_back l1
+                  List.Cons hd (Box.mk l2)
       ok (l, back)
-  | List.Nil => ok (List.Nil, fun ls1 => ls1)
+  | List.Nil => ok (MutBorrow.mk List.Nil, fun ls1 => ls1)
 partial_fixpoint
 
 end polonius_list

@@ -25,7 +25,7 @@ namespace drop_bug
 
 /-- [drop_bug::wipe_slice]:
     Source: 'tests/src/drop_bug.rs', lines 20:0-24:1 -/
-axiom wipe_slice {T : Type _} : Slice T → Result (Slice T)
+axiom wipe_slice {T : Type _} : MutBorrow (Slice T) → Result (Slice T)
 
 /-- [drop_bug::Inner]
     Source: 'tests/src/drop_bug.rs', lines 26:0-28:1 -/
@@ -35,10 +35,12 @@ structure Inner where
 /-- [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}::drop]:
     Source: 'tests/src/drop_bug.rs', lines 31:4-33:5
     Visibility: public -/
-def Inner.Insts.CoreOpsDropDrop.drop (self : Inner) : Result Inner := do
-  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.buf)
+def Inner.Insts.CoreOpsDropDrop.drop
+  (self : MutBorrow Inner) : Result Inner := do
+  let (s, as_mut_slice_back) ←
+    lift (Array.as_mut_slice (MutBorrow.mk self.val.buf))
   let s1 ← wipe_slice s
-  let a := to_slice_mut_back s1
+  let a := as_mut_slice_back s1
   ok { buf := a }
 
 /-- Trait implementation: [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}]
@@ -51,12 +53,13 @@ def Inner.Insts.CoreOpsDropDrop : core.ops.drop.Drop Inner := {
 /-- [drop_bug::{drop_bug::Inner}::init]:
     Source: 'tests/src/drop_bug.rs', lines 37:4-39:5 -/
 def Inner.init
-  (self : Inner) (block_size : Std.U32) (pad_value : Std.U8) :
+  (self : MutBorrow Inner) (block_size : Std.U32) (pad_value : Std.U8) :
   Result Inner
   := do
-  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.buf)
+  let (s, as_mut_slice_back) ←
+    lift (Array.as_mut_slice (MutBorrow.mk self.val.buf))
   let s1 ← wipe_slice s
-  let a := to_slice_mut_back s1
+  let a := as_mut_slice_back s1
   ok { buf := a }
 
 /-- [drop_bug::Outer]
@@ -68,21 +71,21 @@ structure Outer where
 
 /-- [drop_bug::{drop_bug::Outer}::get_block_size]:
     Source: 'tests/src/drop_bug.rs', lines 49:4-51:5 -/
-def Outer.get_block_size (self : Outer) : Result Std.U32 := do
-  ok self.block_size
+def Outer.get_block_size (self : SharedBorrow Outer) : Result Std.U32 := do
+  ok self.val.block_size
 
 /-- [drop_bug::{drop_bug::Outer}::get_pad_value]:
     Source: 'tests/src/drop_bug.rs', lines 53:4-55:5 -/
-def Outer.get_pad_value (self : Outer) : Result Std.U8 := do
-  ok self.pad_value
+def Outer.get_pad_value (self : SharedBorrow Outer) : Result Std.U8 := do
+  ok self.val.pad_value
 
 /-- [drop_bug::{drop_bug::Outer}::init]:
     Source: 'tests/src/drop_bug.rs', lines 60:4-62:5 -/
-def Outer.init (self : Outer) : Result Outer := do
-  let i ← Outer.get_block_size self
-  let i1 ← Outer.get_pad_value self
-  let i2 ← Inner.init self.inner i i1
-  ok { self with inner := i2 }
+def Outer.init (self : MutBorrow Outer) : Result Outer := do
+  let i ← Outer.get_block_size (SharedBorrow.mk self.val)
+  let i1 ← Outer.get_pad_value (SharedBorrow.mk self.val)
+  let i2 ← Inner.init (MutBorrow.mk self.val.inner) i i1
+  ok { self.val with inner := i2 }
 
 /-- [drop_bug::InnerNoDrop]
     Source: 'tests/src/drop_bug.rs', lines 67:0-69:1 -/
@@ -92,12 +95,13 @@ structure InnerNoDrop where
 /-- [drop_bug::{drop_bug::InnerNoDrop}::init]:
     Source: 'tests/src/drop_bug.rs', lines 72:4-74:5 -/
 def InnerNoDrop.init
-  (self : InnerNoDrop) (block_size : Std.U32) (pad_value : Std.U8) :
+  (self : MutBorrow InnerNoDrop) (block_size : Std.U32) (pad_value : Std.U8) :
   Result InnerNoDrop
   := do
-  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.buf)
+  let (s, as_mut_slice_back) ←
+    lift (Array.as_mut_slice (MutBorrow.mk self.val.buf))
   let s1 ← wipe_slice s
-  let a := to_slice_mut_back s1
+  let a := as_mut_slice_back s1
   ok { buf := a }
 
 /-- [drop_bug::OuterNoDrop]
@@ -109,20 +113,22 @@ structure OuterNoDrop where
 
 /-- [drop_bug::{drop_bug::OuterNoDrop}::get_block_size]:
     Source: 'tests/src/drop_bug.rs', lines 84:4-86:5 -/
-def OuterNoDrop.get_block_size (self : OuterNoDrop) : Result Std.U32 := do
-  ok self.block_size
+def OuterNoDrop.get_block_size
+  (self : SharedBorrow OuterNoDrop) : Result Std.U32 := do
+  ok self.val.block_size
 
 /-- [drop_bug::{drop_bug::OuterNoDrop}::get_pad_value]:
     Source: 'tests/src/drop_bug.rs', lines 88:4-90:5 -/
-def OuterNoDrop.get_pad_value (self : OuterNoDrop) : Result Std.U8 := do
-  ok self.pad_value
+def OuterNoDrop.get_pad_value
+  (self : SharedBorrow OuterNoDrop) : Result Std.U8 := do
+  ok self.val.pad_value
 
 /-- [drop_bug::{drop_bug::OuterNoDrop}::init]:
     Source: 'tests/src/drop_bug.rs', lines 92:4-94:5 -/
-def OuterNoDrop.init (self : OuterNoDrop) : Result OuterNoDrop := do
-  let i ← OuterNoDrop.get_block_size self
-  let i1 ← OuterNoDrop.get_pad_value self
-  let ind ← InnerNoDrop.init self.inner i i1
-  ok { self with inner := ind }
+def OuterNoDrop.init (self : MutBorrow OuterNoDrop) : Result OuterNoDrop := do
+  let i ← OuterNoDrop.get_block_size (SharedBorrow.mk self.val)
+  let i1 ← OuterNoDrop.get_pad_value (SharedBorrow.mk self.val)
+  let ind ← InnerNoDrop.init (MutBorrow.mk self.val.inner) i i1
+  ok { self.val with inner := ind }
 
 end drop_bug

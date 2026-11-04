@@ -156,10 +156,11 @@ theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Ar
 abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i j : Nat) : List α :=
   v.val.slice i j
 
-@[expose] def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Result α :=
-  match v[i]? with
+@[expose] def Array.index_usize {α : Type u} {n : Usize} (v: SharedBorrow (Array α n)) (i: Usize) :
+  Result (SharedBorrow α) :=
+  match v.val[i]? with
   | none => fail .arrayOutOfBounds
-  | some x => ok x
+  | some x => ok (.mk x)
 
 -- For initialization
 @[expose, rust_fun "core::array::repeat" -canFail -lift (keepTraitClauses := [false])]
@@ -171,9 +172,9 @@ theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.re
   simp only [Array.repeat, Array.from_val]
 
 @[step]
-theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
-  (hbound : i.val < v.length) :
-  (v.index_usize i) ⦃ x => x = v.val[i.val] ⦄ := by
+theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: SharedBorrow (Array α n)) (i: Usize)
+  (hbound : i.val < v.val.length) :
+  (Array.index_usize v i) ⦃ x => x.val = v.val[i.val] ⦄ := by
   grind [index_usize]
 
 @[expose] def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
@@ -278,17 +279,17 @@ theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (
   simp at *
   split <;> simp_all
 
-@[expose] def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
-  Result (α × (α -> Array α n)) := do
-  let x ← index_usize v i
-  ok (x, set v i)
+@[expose] def Array.index_mut_usize {α : Type u} {n : Usize} (v: MutBorrow (Array α n)) (i: Usize) :
+  Result (MutBorrow α × (α -> Array α n)) := do
+  let x ← index_usize (.mk v.val) i
+  ok (.mk x.val, set v.val i)
 
 @[step]
-theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
+theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: MutBorrow (Array α n)) (i: Usize)
+  (hbound : i.val < v.val.length) :
+  Array.index_mut_usize v i ⦃ x back => x.val = v.val[i.val] ∧ back = set v.val i ⦄ := by
   simp only [index_mut_usize, Bind.bind]
-  apply spec_bind (index_usize_spec v i hbound)
+  apply spec_bind (index_usize_spec (.mk v.val) i hbound)
   intro x hx
   simp [hx]
 
@@ -350,13 +351,15 @@ theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s
 
 @[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
 def core.array.CloneArray.clone
-  {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
-  Array.clone cloneInst.clone a
+  {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T) (a : SharedBorrow (Array T N)) :
+  Result (Array T N) :=
+  Array.clone (fun x => cloneInst.clone (.mk x)) a.val
 
 @[step]
-theorem core.array.CloneArray.clone_spec {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N)
-  (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
-  core.array.CloneArray.clone cloneInst a ⦃ a' => a = a' ⦄:= by
+theorem core.array.CloneArray.clone_spec {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T)
+  (a : SharedBorrow (Array T N))
+  (h : ∀ x ∈ a.val.val, cloneInst.clone (.mk x) = ok x) :
+  core.array.CloneArray.clone cloneInst a ⦃ a' => a.val = a' ⦄:= by
   unfold clone
   apply spec_mono (Array.clone_spec h)
   intro a' ha'
@@ -364,13 +367,14 @@ theorem core.array.CloneArray.clone_spec {T : Type _} {N : Usize} (cloneInst : c
 
 @[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
 def core.array.CloneArray.clone_from {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T)
-  (_self source : Array T N) : Result (Array T N) :=
-  Array.clone cloneInst.clone source
+  (_self : MutBorrow (Array T N)) (source : SharedBorrow (Array T N)) : Result (Array T N) :=
+  Array.clone (fun x => cloneInst.clone (.mk x)) source.val
 
 @[step]
 theorem core.array.CloneArray.clone_from_spec {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T)
-  (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
-  core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source = source' ⦄ := by
+  (self : MutBorrow (Array T N)) (source : SharedBorrow (Array T N))
+  (h : ∀ x ∈ source.val.val, cloneInst.clone (.mk x) = ok x) :
+  core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source.val = source' ⦄ := by
   unfold clone_from
   apply spec_mono (Array.clone_spec h)
   intro source' hsource'

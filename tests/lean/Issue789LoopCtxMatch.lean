@@ -31,10 +31,11 @@ structure S where
     Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 9:0-11:1
     Visibility: public -/
 def f
-  (_r : Std.U8) (_a : Slice Std.U8) (_b : Slice Std.U8) :
+  (_r : MutBorrow Std.U8) (_a : SharedBorrow (Slice Std.U8))
+  (_b : MutBorrow (Slice Std.U8)) :
   Result ((Bool × Std.Usize) × Std.U8 × (Slice Std.U8))
   := do
-  ok ((true, 0#usize), _r, _b)
+  ok ((true, 0#usize), _r.val, _b.val)
 
 /-- [issue_789_loop_ctx_match::the_loop]: loop body 0:
     Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5
@@ -45,22 +46,22 @@ def the_loop_loop.body
   Result (ControlFlow (S × (Slice Std.U8)) (Std.U8 × (Array Std.U8 4#usize)
     × (Slice Std.U8) × Bool))
   := do
-  let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s.y)
-  let ((done1, n), i, s2) ← f s.x next_in s1
-  let next_in1 ←
+  let (s1, as_mut_slice_back) ← lift (Array.as_mut_slice (MutBorrow.mk s.y))
+  let ((done1, n), i, s2) ← f (MutBorrow.mk s.x) (SharedBorrow.mk next_in) s1
+  let s3 ←
     core.slice.index.Slice.index
-      (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8) next_in
-      { start := n }
+      (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8) (SharedBorrow.mk
+      next_in) { start := n }
   if done1
-  then let a := to_slice_mut_back s2
-       ok (done (i, a, next_in1, done1))
+  then let a := as_mut_slice_back s2
+       ok (done (i, a, s3.val, done1))
   else
-    let b ← core.slice.Slice.is_empty next_in1
+    let b ← core.slice.Slice.is_empty s3
     if b
-    then let a := to_slice_mut_back s2
-         ok (done (i, a, next_in1, done1))
-    else let a := to_slice_mut_back s2
-         ok (cont ({ x := i, y := a }, next_in1))
+    then let a := as_mut_slice_back s2
+         ok (done (i, a, s3.val, done1))
+    else let a := as_mut_slice_back s2
+         ok (cont ({ x := i, y := a }, s3.val))
 
 /-- [issue_789_loop_ctx_match::the_loop]: loop 0:
     Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5
@@ -78,8 +79,10 @@ def the_loop_loop
     Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 13:0-23:1
     Visibility: public -/
 def the_loop
-  (s : S) (next_in : Slice Std.U8) : Result (Bool × S × (Slice Std.U8)) := do
-  let (i, a, next_in1, done1) ← the_loop_loop s next_in
-  ok (done1, { x := i, y := a }, next_in1)
+  (s : MutBorrow S) (next_in : MutBorrow (SharedBorrow (Slice Std.U8))) :
+  Result (Bool × S × (SharedBorrow (Slice Std.U8)))
+  := do
+  let (i, a, next_in1, done1) ← the_loop_loop s.val next_in.val.val
+  ok (done1, { x := i, y := a }, SharedBorrow.mk next_in1)
 
 end issue_789_loop_ctx_match

@@ -539,7 +539,11 @@ let () =
                prefixed with the type name to prevent collisions *)
             variant_concatenate_type_name := false;
             (* *) merge_let_app_decompose_tuple := true;
-            lift_pure_function_calls := true
+            lift_pure_function_calls := true;
+            (* We preserve the box and borrow types, and extract the tuple
+               structures as structures *)
+            erase_boxes_and_borrows := false;
+            use_tuple_structs := false
         | HOL4 ->
             check_not !feature_gates
               "The HOL4 backend doesn't support the -feature-gates option";

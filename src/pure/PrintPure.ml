@@ -282,6 +282,9 @@ let builtin_ty_to_string (aty : builtin_ty) : string =
   | TStr -> "Str"
   | TRawPtr Mut -> "MutRawPtr"
   | TRawPtr Const -> "ConstRawPtr"
+  | TBox -> "Box"
+  | TSharedBorrow -> "SharedBorrow"
+  | TMutBorrow -> "MutBorrow"
 
 let type_id_to_string (env : fmt_env) (id : type_id) : string =
   match id with
@@ -514,6 +517,9 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
       | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
           [%craise_opt_span] span "Unreachable"
+      | TBox | TSharedBorrow | TMutBorrow ->
+          [%cassert_opt_span] span (variant_id = None) "Ill-formed value";
+          builtin_ty_to_string aty
       | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_ok_id then "@Result::Ok"
@@ -569,7 +575,10 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           [%craise_opt_span] span "Unreachable"
       | TResult | TError | TSum | TLoopResult | TRawPtr _ ->
           (* Enumerations: we can't get there *)
-          [%craise_opt_span] span "Unreachable")
+          [%craise_opt_span] span "Unreachable"
+      | TBox | TSharedBorrow | TMutBorrow ->
+          [%cassert_opt_span] span (field_id = FieldId.zero) "Ill-formed field";
+          "val")
 
 (** Not safe to use (this function should be used between calls to
     [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use [tpat_to_string]
@@ -706,6 +715,11 @@ and adt_pat_to_string_core (span : Meta.span option) (env : fmt_env)
             else
               [%craise_opt_span] span
                 "Unreachable: improper variant id for fuel type"
+        | TBox | TSharedBorrow | TMutBorrow -> (
+            [%cassert_opt_span] span (variant_id = None) "Ill-formed value";
+            match fields with
+            | [ v ] -> builtin_ty_to_string aty ^ " { val = " ^ v ^ " }"
+            | _ -> [%craise_opt_span] span "Ill-formed value")
         | TArray | TSlice | TStr ->
             [%cassert_opt_span] span (variant_id = None) "Ill-formed value";
             let fields =
@@ -868,6 +882,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
     end
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
+  | ResultUnwrapMutBorrow -> "@resultUnwrapMutBorrow"
   | GetTarget -> "@getTarget"
   | TargetFeatureEnabled -> "@targetFeatureEnabled"
 

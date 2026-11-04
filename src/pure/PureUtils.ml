@@ -944,6 +944,71 @@ let mk_adt_proj (span : span) (adt : texpr) (field_id : field_id)
   let qualif = { e = qualif; ty = mk_arrow adt.ty field_ty } in
   [%add_loc] mk_app span qualif adt
 
+(** The wrappers used for boxes and borrows when
+    {!Config.erase_boxes_and_borrows} is [false]. *)
+type wrapper_kind = WBox | WShared | WMut [@@deriving show, ord]
+
+let wrapper_kind_to_builtin_ty (k : wrapper_kind) : builtin_ty =
+  match k with
+  | WBox -> TBox
+  | WShared -> TSharedBorrow
+  | WMut -> TMutBorrow
+
+let builtin_ty_as_wrapper_kind (ty : builtin_ty) : wrapper_kind option =
+  match ty with
+  | TBox -> Some WBox
+  | TSharedBorrow -> Some WShared
+  | TMutBorrow -> Some WMut
+  | _ -> None
+
+let mk_wrapper_ty (k : wrapper_kind) (ty : ty) : ty =
+  TAdt
+    (TBuiltin (wrapper_kind_to_builtin_ty k), mk_generic_args_from_types [ ty ])
+
+(** Check if a type is a wrapper type. If yes, return the kind and the wrapped
+    type. *)
+let ty_as_wrapper_opt (ty : ty) : (wrapper_kind * ty) option =
+  match ty with
+  | TAdt (TBuiltin bty, { types = [ ty ]; const_generics = []; trait_refs = [] })
+    -> (
+      match builtin_ty_as_wrapper_kind bty with
+      | Some k -> Some (k, ty)
+      | None -> None)
+  | _ -> None
+
+(** Wrap an expression: [x ~> Box.mk x] *)
+let mk_wrapper_texpr (span : span) (k : wrapper_kind) (e : texpr) : texpr =
+  mk_adt_texpr span (mk_wrapper_ty k e.ty) None [ e ]
+
+(** Wrap a pattern: [x ~> Box.mk x] *)
+let mk_wrapper_pat (k : wrapper_kind) (p : tpat) : tpat =
+  mk_adt_pat (mk_wrapper_ty k p.ty) None [ p ]
+
+(** Project the value out of a wrapper: [x ~> x.val] *)
+let mk_wrapper_proj (span : span) (e : texpr) : texpr =
+  match ty_as_wrapper_opt e.ty with
+  | Some (_, ty) -> (
+      (* Simplify [(mk x).val] to [x] *)
+      match destruct_apps e with
+      | ( { e = Qualif { id = AdtCons { adt_id = TBuiltin bty; _ }; _ }; _ },
+          [ x ] )
+        when Option.is_some (builtin_ty_as_wrapper_kind bty) -> x
+      | _ -> mk_adt_proj span e FieldId.zero ty)
+  | None -> [%craise] span "Not a wrapper type"
+
+(** Wrap an expression if [k] is [Some ...] *)
+let mk_opt_wrapper_texpr (span : span) (k : wrapper_kind option) (e : texpr) :
+    texpr =
+  match k with
+  | None -> e
+  | Some k -> mk_wrapper_texpr span k e
+
+(** Wrap a pattern if [k] is [Some ...] *)
+let mk_opt_wrapper_pat (k : wrapper_kind option) (p : tpat) : tpat =
+  match k with
+  | None -> p
+  | Some k -> mk_wrapper_pat k p
+
 let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   match t with
   | TLiteral (TInt int_ty) -> Signed int_ty
@@ -2717,6 +2782,9 @@ let tpat_decomposes_enum span (type_decls : type_decl TypeDeclId.Map.t)
             super#visit_adt_pat ty pat
         | TTuple ->
             (* ok *)
+            super#visit_adt_pat ty pat
+        | TBuiltin bty when Option.is_some (builtin_ty_as_wrapper_kind bty) ->
+            (* Boxes and borrows: those are structures *)
             super#visit_adt_pat ty pat
         | TBuiltin _ ->
             (* Shouldn't happen *)

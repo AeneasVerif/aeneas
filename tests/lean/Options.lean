@@ -27,18 +27,18 @@ def test_unwrap_or {T : Type _} (x : Option T) (default : T) : Result T := do
 
 /-- [options::test_expect]:
     Source: 'tests/src/options.rs', lines 9:0-11:1 -/
-def test_expect {T : Type _} (x : Option T) (msg : Str) : Result T := do
+def test_expect
+  {T : Type _} (x : Option T) (msg : SharedBorrow Str) : Result T := do
   core.option.Option.expect x msg
 
 /-- [options::test_is_some]:
     Source: 'tests/src/options.rs', lines 13:0-15:1 -/
 def test_is_some {T : Type _} (x : Option T) : Result Bool := do
-  ok (core.option.Option.is_some x)
+  ok (core.option.Option.is_some (SharedBorrow.mk x))
 
 /-- [options::test_map_some::{closure}]
     Source: 'tests/src/options.rs', lines 23:27-23:36 -/
-@[reducible]
-def test_map_some.closure := Unit
+structure test_map_some.closure where
 
 /-- [options::test_map_some::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_some::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 23:27-23:36 -/
@@ -62,7 +62,7 @@ def test_map_some : Result Unit := do
   let o ←
     core.option.Option.map
       test_map_some.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 (some 1#u32)
-      ()
+      test_map_some.closure.mk
   let i ← core.option.Option.unwrap o
   massert (i = 2#u32)
 
@@ -71,8 +71,7 @@ def test_map_some : Result Unit := do
 
 /-- [options::test_map_none::{closure}]
     Source: 'tests/src/options.rs', lines 30:18-30:41 -/
-@[reducible]
-def test_map_none.closure := Unit
+structure test_map_none.closure where
 
 /-- [options::test_map_none::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_none::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 30:18-30:41 -/
@@ -95,8 +94,9 @@ def test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
 def test_map_none : Result Unit := do
   let o ←
     core.option.Option.map
-      test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 none ()
-  let b := core.option.Option.is_none o
+      test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 none
+      test_map_none.closure.mk
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [options::test_map_none] -/
@@ -104,14 +104,14 @@ def test_map_none : Result Unit := do
 
 /-- [options::test_map_capture::{closure}]
     Source: 'tests/src/options.rs', lines 37:27-37:36 -/
-@[reducible]
-def test_map_capture.closure := Std.U32
+structure test_map_capture.closure where
+  _0 : SharedBorrow Std.U32
 
 /-- [options::test_map_capture::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_capture::{closure}<'_0>}::call_once]:
     Source: 'tests/src/options.rs', lines 37:27-37:36 -/
 def test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   (c : test_map_capture.closure) (tupled_args : Std.U32) : Result Std.U32 := do
-  tupled_args + c
+  tupled_args + c._0.val
 
 /-- Trait implementation: [options::test_map_capture::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_capture::{closure}<'_0>}]
     Source: 'tests/src/options.rs', lines 37:27-37:36 -/
@@ -129,7 +129,7 @@ def test_map_capture : Result Unit := do
   let o ←
     core.option.Option.map
       test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 (some
-      1#u32) 3#u32
+      1#u32) { _0 := (SharedBorrow.mk 3#u32) }
   let i ← core.option.Option.unwrap o
   massert (i = 4#u32)
 
@@ -138,8 +138,7 @@ def test_map_capture : Result Unit := do
 
 /-- [options::test_is_some_and_true::{closure}]
     Source: 'tests/src/options.rs', lines 46:35-46:44 -/
-@[reducible]
-def test_is_some_and_true.closure := Unit
+structure test_is_some_and_true.closure where
 
 /-- [options::test_is_some_and_true::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_true::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 46:35-46:44 -/
@@ -166,7 +165,7 @@ def test_is_some_and_true : Result Unit := do
   let b ←
     core.option.Option.is_some_and
       test_is_some_and_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
-      (some 2#u32) ()
+      (some 2#u32) test_is_some_and_true.closure.mk
   massert b
 
 /- Unit test for [options::test_is_some_and_true] -/
@@ -174,8 +173,7 @@ def test_is_some_and_true : Result Unit := do
 
 /-- [options::test_is_some_and_false::{closure}]
     Source: 'tests/src/options.rs', lines 51:36-51:45 -/
-@[reducible]
-def test_is_some_and_false.closure := Unit
+structure test_is_some_and_false.closure where
 
 /-- [options::test_is_some_and_false::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_false::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 51:36-51:45 -/
@@ -202,7 +200,7 @@ def test_is_some_and_false : Result Unit := do
   let b ←
     core.option.Option.is_some_and
       test_is_some_and_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
-      (some 0#u32) ()
+      (some 0#u32) test_is_some_and_false.closure.mk
   massert (¬ b)
 
 /- Unit test for [options::test_is_some_and_false] -/
@@ -210,8 +208,7 @@ def test_is_some_and_false : Result Unit := do
 
 /-- [options::test_is_some_and_none::{closure}]
     Source: 'tests/src/options.rs', lines 58:27-58:39 -/
-@[reducible]
-def test_is_some_and_none.closure := Unit
+structure test_is_some_and_none.closure where
 
 /-- [options::test_is_some_and_none::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_none::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 58:27-58:39 -/
@@ -238,7 +235,7 @@ def test_is_some_and_none : Result Unit := do
   let b ←
     core.option.Option.is_some_and
       test_is_some_and_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
-      none ()
+      none test_is_some_and_none.closure.mk
   massert (¬ b)
 
 /- Unit test for [options::test_is_some_and_none] -/
@@ -246,8 +243,7 @@ def test_is_some_and_none : Result Unit := do
 
 /-- [options::test_bool_then_true::{closure}]
     Source: 'tests/src/options.rs', lines 67:22-67:29 -/
-@[reducible]
-def test_bool_then_true.closure := Unit
+structure test_bool_then_true.closure where
 
 /-- [options::test_bool_then_true::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_true::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 67:22-67:29 -/
@@ -270,7 +266,8 @@ def test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32 :
 def test_bool_then_true : Result Unit := do
   let o ←
     core.bool.Bool.then
-      test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32 true ()
+      test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32 true
+      test_bool_then_true.closure.mk
   let i ← core.option.Option.unwrap o
   massert (i = 1#u32)
 
@@ -279,8 +276,7 @@ def test_bool_then_true : Result Unit := do
 
 /-- [options::test_bool_then_false::{closure}]
     Source: 'tests/src/options.rs', lines 73:23-73:45 -/
-@[reducible]
-def test_bool_then_false.closure := Unit
+structure test_bool_then_false.closure where
 
 /-- [options::test_bool_then_false::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_false::{closure}}::call_once]:
     Source: 'tests/src/options.rs', lines 73:23-73:45 -/
@@ -303,8 +299,9 @@ def test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32 :
 def test_bool_then_false : Result Unit := do
   let o ←
     core.bool.Bool.then
-      test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32 false ()
-  let b := core.option.Option.is_none o
+      test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32 false
+      test_bool_then_false.closure.mk
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [options::test_bool_then_false] -/

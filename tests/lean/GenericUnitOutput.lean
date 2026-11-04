@@ -23,7 +23,7 @@ namespace generic_unit_output
 /-- [generic_unit_output::set_and_return]:
     Source: 'tests/src/generic_unit_output.rs', lines 12:0-15:1 -/
 def set_and_return
-  {T : Type _} (r : Std.U32) (x : Std.U32) (t : T) :
+  {T : Type _} (r : MutBorrow Std.U32) (x : Std.U32) (t : T) :
   Result (T × Std.U32)
   := do
   ok (t, x)
@@ -31,8 +31,8 @@ def set_and_return
 /-- [generic_unit_output::call_with_unit]:
     Source: 'tests/src/generic_unit_output.rs', lines 17:0-21:1 -/
 def call_with_unit (n : Std.U32) : Result Std.U32 := do
-  let (_, n1) ← set_and_return n 1#u32 ()
-  let (_, n2) ← set_and_return n1 2#u32 ()
+  let (_, n1) ← set_and_return (MutBorrow.mk n) 1#u32 ()
+  let (_, n2) ← set_and_return (MutBorrow.mk n1) 2#u32 ()
   ok n2
 
 end generic_unit_output

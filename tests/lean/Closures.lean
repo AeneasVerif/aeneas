@@ -37,35 +37,42 @@ axiom core.iter.traits.iterator.Iterator.map.default
 
 /-- [closures::call_fn_no_state::{closure}]
     Source: 'tests/src/closures.rs', lines 4:15-4:40 -/
-@[reducible]
-def call_fn_no_state.closure := Unit
+structure call_fn_no_state.closure where
 
 /-- [closures::call_fn_no_state::{impl core::ops::function::Fn<(u32,), u32> for closures::call_fn_no_state::{closure}}::call]:
     Source: 'tests/src/closures.rs', lines 4:15-4:40 -/
 def call_fn_no_state.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
-  (c : call_fn_no_state.closure) (tupled_args : Std.U32) : Result Std.U32 := do
+  (c : SharedBorrow call_fn_no_state.closure) (tupled_args : Std.U32) :
+  Result Std.U32
+  := do
   tupled_args + 1#u32
 
 /-- [closures::call_fn_no_state]:
     Source: 'tests/src/closures.rs', lines 3:0-6:1 -/
 def call_fn_no_state (i : Std.U32) : Result Std.U32 := do
-  call_fn_no_state.closure.Insts.CoreOpsFunctionFnTupleU32U32.call () i
+  call_fn_no_state.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
+    (SharedBorrow.mk call_fn_no_state.closure.mk) i
 
 /-- [closures::call_fn_shared::{closure}]
     Source: 'tests/src/closures.rs', lines 9:15-9:40 -/
-@[reducible]
-def call_fn_shared.closure := Slice Std.U8
+structure call_fn_shared.closure where
+  _0 : SharedBorrow (Slice Std.U8)
 
 /-- [closures::call_fn_shared::{impl core::ops::function::Fn<(usize,), u8> for closures::call_fn_shared::{closure}<'_0>}::call]:
     Source: 'tests/src/closures.rs', lines 9:15-9:40 -/
 def call_fn_shared.closure.Insts.CoreOpsFunctionFnTupleUsizeU8.call
-  (c : call_fn_shared.closure) (tupled_args : Std.Usize) : Result Std.U8 := do
-  Slice.index_usize c tupled_args
+  (c : SharedBorrow call_fn_shared.closure) (tupled_args : Std.Usize) :
+  Result Std.U8
+  := do
+  let i ← Slice.index_usize c.val._0 tupled_args
+  ok i.val
 
 /-- [closures::call_fn_shared]:
     Source: 'tests/src/closures.rs', lines 8:0-11:1 -/
-def call_fn_shared (a : Slice Std.U8) (i : Std.Usize) : Result Std.U8 := do
-  call_fn_shared.closure.Insts.CoreOpsFunctionFnTupleUsizeU8.call a i
+def call_fn_shared
+  (a : SharedBorrow (Slice Std.U8)) (i : Std.Usize) : Result Std.U8 := do
+  call_fn_shared.closure.Insts.CoreOpsFunctionFnTupleUsizeU8.call
+    (SharedBorrow.mk { _0 := a }) i
 
 /-- [closures::call_closure]:
     Source: 'tests/src/closures.rs', lines 30:0-32:1 -/
@@ -74,34 +81,36 @@ def call_closure
   Std.U32) (f : F) :
   Result Std.U32
   := do
-  coreopsfunctionFnFTupleU32Inst.call f ()
+  coreopsfunctionFnFTupleU32Inst.call (SharedBorrow.mk f) ()
 
 /-- [closures::call_closure1::{closure}]
     Source: 'tests/src/closures.rs', lines 35:17-35:21 -/
-@[reducible]
-def call_closure1.closure := Unit
+structure call_closure1.closure where
 
 /-- [closures::call_closure1::{impl core::ops::function::Fn<(), u32> for closures::call_closure1::{closure}}::call]:
     Source: 'tests/src/closures.rs', lines 35:17-35:21 -/
 def call_closure1.closure.Insts.CoreOpsFunctionFnTupleU32.call
-  (c : call_closure1.closure) (_ : Unit) : Result Std.U32 := do
+  (c : SharedBorrow call_closure1.closure) (_ : Unit) : Result Std.U32 := do
   ok 0#u32
 
 /-- [closures::call_closure1::{impl core::ops::function::FnMut<(), u32> for closures::call_closure1::{closure}}::call_mut]:
     Source: 'tests/src/closures.rs', lines 35:17-35:21 -/
 def call_closure1.closure.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
-  (state : call_closure1.closure) (_ : Unit) :
+  (state : MutBorrow call_closure1.closure) (_ : Unit) :
   Result (Std.U32 × call_closure1.closure)
   := do
-  let i ← call_closure1.closure.Insts.CoreOpsFunctionFnTupleU32.call state ()
-  ok (i, state)
+  let i ←
+    call_closure1.closure.Insts.CoreOpsFunctionFnTupleU32.call (SharedBorrow.mk
+      state.val) ()
+  ok (i, state.val)
 
 /-- [closures::call_closure1::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure1::{closure}}::call_once]:
     Source: 'tests/src/closures.rs', lines 35:17-35:21 -/
 def call_closure1.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
   (c : call_closure1.closure) (_ : Unit) : Result Std.U32 := do
   let (i, _) ←
-    call_closure1.closure.Insts.CoreOpsFunctionFnMutTupleU32.call_mut c ()
+    call_closure1.closure.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
+      (MutBorrow.mk c) ()
   ok i
 
 /-- Trait implementation: [closures::call_closure1::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure1::{closure}}]
@@ -134,35 +143,37 @@ def call_closure1.closure.Insts.CoreOpsFunctionFnTupleU32 :
 /-- [closures::call_closure1]:
     Source: 'tests/src/closures.rs', lines 34:0-36:1 -/
 def call_closure1 : Result Std.U32 := do
-  call_closure call_closure1.closure.Insts.CoreOpsFunctionFnTupleU32 ()
+  call_closure call_closure1.closure.Insts.CoreOpsFunctionFnTupleU32
+    call_closure1.closure.mk
 
 /-- [closures::call_closure2::{closure#1}]
     Source: 'tests/src/closures.rs', lines 40:17-40:21 -/
-@[reducible]
-def call_closure2.closure_1 := Unit
+structure call_closure2.closure_1 where
 
 /-- [closures::call_closure2::{impl core::ops::function::Fn<(), u32> for closures::call_closure2::{closure#1}}::call]:
     Source: 'tests/src/closures.rs', lines 40:17-40:21 -/
 def call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32.call
-  (c : call_closure2.closure_1) (_ : Unit) : Result Std.U32 := do
+  (c : SharedBorrow call_closure2.closure_1) (_ : Unit) : Result Std.U32 := do
   ok 0#u32
 
 /-- [closures::call_closure2::{impl core::ops::function::FnMut<(), u32> for closures::call_closure2::{closure#1}}::call_mut]:
     Source: 'tests/src/closures.rs', lines 40:17-40:21 -/
 def call_closure2.closure_1.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
-  (state : call_closure2.closure_1) (_ : Unit) :
+  (state : MutBorrow call_closure2.closure_1) (_ : Unit) :
   Result (Std.U32 × call_closure2.closure_1)
   := do
   let i ←
-    call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32.call state ()
-  ok (i, state)
+    call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32.call
+      (SharedBorrow.mk state.val) ()
+  ok (i, state.val)
 
 /-- [closures::call_closure2::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure2::{closure#1}}::call_once]:
     Source: 'tests/src/closures.rs', lines 40:17-40:21 -/
 def call_closure2.closure_1.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
   (c : call_closure2.closure_1) (_ : Unit) : Result Std.U32 := do
   let (i, _) ←
-    call_closure2.closure_1.Insts.CoreOpsFunctionFnMutTupleU32.call_mut c ()
+    call_closure2.closure_1.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
+      (MutBorrow.mk c) ()
   ok i
 
 /-- Trait implementation: [closures::call_closure2::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure2::{closure#1}}]
@@ -195,30 +206,32 @@ def call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32 :
 
 /-- [closures::call_closure2::{closure}]
     Source: 'tests/src/closures.rs', lines 39:17-39:21 -/
-@[reducible]
-def call_closure2.closure := Unit
+structure call_closure2.closure where
 
 /-- [closures::call_closure2::{impl core::ops::function::Fn<(), u32> for closures::call_closure2::{closure}}::call]:
     Source: 'tests/src/closures.rs', lines 39:17-39:21 -/
 def call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32.call
-  (c : call_closure2.closure) (_ : Unit) : Result Std.U32 := do
+  (c : SharedBorrow call_closure2.closure) (_ : Unit) : Result Std.U32 := do
   ok 0#u32
 
 /-- [closures::call_closure2::{impl core::ops::function::FnMut<(), u32> for closures::call_closure2::{closure}}::call_mut]:
     Source: 'tests/src/closures.rs', lines 39:17-39:21 -/
 def call_closure2.closure.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
-  (state : call_closure2.closure) (_ : Unit) :
+  (state : MutBorrow call_closure2.closure) (_ : Unit) :
   Result (Std.U32 × call_closure2.closure)
   := do
-  let i ← call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32.call state ()
-  ok (i, state)
+  let i ←
+    call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32.call (SharedBorrow.mk
+      state.val) ()
+  ok (i, state.val)
 
 /-- [closures::call_closure2::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure2::{closure}}::call_once]:
     Source: 'tests/src/closures.rs', lines 39:17-39:21 -/
 def call_closure2.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
   (c : call_closure2.closure) (_ : Unit) : Result Std.U32 := do
   let (i, _) ←
-    call_closure2.closure.Insts.CoreOpsFunctionFnMutTupleU32.call_mut c ()
+    call_closure2.closure.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
+      (MutBorrow.mk c) ()
   ok i
 
 /-- Trait implementation: [closures::call_closure2::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure2::{closure}}]
@@ -252,8 +265,10 @@ def call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32 :
     Source: 'tests/src/closures.rs', lines 38:0-41:1 -/
 def call_closure2 : Result Std.U32 := do
   let _ ←
-    call_closure call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32 ()
-  call_closure call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32 ()
+    call_closure call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32
+      call_closure2.closure.mk
+  call_closure call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32
+    call_closure2.closure_1.mk
 
 /-- [closures::u8_id]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
@@ -263,11 +278,11 @@ def u8_id (x : Std.U8) : Result Std.U8 := do
 /-- [closures::{impl core::ops::function::FnMut<(u8,), u8> for closures::u8_id}::call_mut]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
 def P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
-  (state : Std.U8 → Result Std.U8) (args : Std.U8) :
+  (state : MutBorrow (Std.U8 → Result Std.U8)) (args : Std.U8) :
   Result (Std.U8 × (Std.U8 → Result Std.U8))
   := do
   let i ← u8_id args
-  ok (i, state)
+  ok (i, state.val)
 
 /-- [closures::{impl core::ops::function::FnOnce<(u8,), u8> for closures::u8_id}::call_once]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/

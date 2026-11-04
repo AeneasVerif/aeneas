@@ -205,6 +205,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fun_sigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
+      sv_to_expr = SymbolicValueId.Map.empty;
       fresh_fvar_id;
       fvars;
       fvars_tys;

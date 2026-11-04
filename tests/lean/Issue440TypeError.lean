@@ -25,15 +25,17 @@ namespace issue_440_type_error
 @[discriminant isize]
 inductive PeanoNum where
 | Zero : PeanoNum
-| Succ : PeanoNum → PeanoNum
+| Succ : Box PeanoNum → PeanoNum
 
 /-- [issue_440_type_error::f]:
     Source: 'tests/src/issue-440-type-error.rs', lines 8:0-15:1 -/
-def f (x : PeanoNum) (value : Std.Isize) : Result PeanoNum := do
-  match x with
+def f (x : MutBorrow PeanoNum) (value : Std.Isize) : Result PeanoNum := do
+  match x.val with
   | PeanoNum.Zero =>
-    let (_, x1) := core.mem.replace PeanoNum.Zero (PeanoNum.Succ PeanoNum.Zero)
+    let (_, x1) :=
+      core.mem.replace (MutBorrow.mk PeanoNum.Zero) (PeanoNum.Succ (Box.mk
+        PeanoNum.Zero))
     ok x1
-  | PeanoNum.Succ _ => ok x
+  | PeanoNum.Succ _ => ok x.val
 
 end issue_440_type_error

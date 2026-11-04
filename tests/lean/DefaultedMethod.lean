@@ -23,31 +23,32 @@ namespace defaulted_method
 /-- Trait declaration: [defaulted_method::Trait]
     Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 -/
 structure Trait (Self : Type _) where
-  provided_method : Self → Result Std.U32
-  required_method : Self → Result Std.U32
+  provided_method : SharedBorrow Self → Result Std.U32
+  required_method : SharedBorrow Self → Result Std.U32
 
 /-- [defaulted_method::Trait::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
 @[trait_default]
 def Trait.provided_method.default
-  {Self : Type _} (TraitInst : Trait Self) (self : Self) : Result Std.U32 := do
+  {Self : Type _} (TraitInst : Trait Self) (self : SharedBorrow Self) :
+  Result Std.U32
+  := do
   TraitInst.required_method self
 
 /-- [defaulted_method::NoOverride]
     Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 -/
-@[reducible]
-def NoOverride := Unit
+structure NoOverride where
 
 /-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 -/
 def NoOverride.Insts.Defaulted_methodTrait.required_method
-  (self : NoOverride) : Result Std.U32 := do
+  (self : SharedBorrow NoOverride) : Result Std.U32 := do
   ok 12#u32
 
 /-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 -/
 def NoOverride.Insts.Defaulted_methodTrait.provided_method
-  (self : NoOverride) : Result Std.U32 := do
+  (self : SharedBorrow NoOverride) : Result Std.U32 := do
   ok 73#u32
 
 /-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}]
@@ -60,13 +61,12 @@ def NoOverride.Insts.Defaulted_methodTrait : Trait NoOverride := {
 
 /-- [defaulted_method::YesOverride]
     Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 -/
-@[reducible]
-def YesOverride := Unit
+structure YesOverride where
 
 /-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 -/
 def YesOverride.Insts.Defaulted_methodTrait.required_method
-  (self : YesOverride) : Result Std.U32 := do
+  (self : SharedBorrow YesOverride) : Result Std.U32 := do
   ok 42#u32
 
 /-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}]
@@ -81,9 +81,12 @@ impl_def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
 /-- [defaulted_method::main]:
     Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 -/
 def main : Result Unit := do
-  let _ ← NoOverride.Insts.Defaulted_methodTrait.provided_method ()
   let _ ←
-    Trait.provided_method.default YesOverride.Insts.Defaulted_methodTrait ()
+    NoOverride.Insts.Defaulted_methodTrait.provided_method (SharedBorrow.mk
+      NoOverride.mk)
+  let _ ←
+    Trait.provided_method.default YesOverride.Insts.Defaulted_methodTrait
+      (SharedBorrow.mk YesOverride.mk)
   let n ← lift (core.cmp.impls.OrdI32.min 10#i32 1#i32)
   massert (n = 1#i32)
 

@@ -26,11 +26,14 @@ theorem m_spec (x y : U64) :
 set_option maxHeartbeats 1000000 in
 set_option exponentiation.threshold 500 in
 @[step]
-theorem mul_internal_spec (a b : Array U64 5#usize)
-    (ha : ∀ (i : Nat) (hi : i < 5), (a.val[i]).val < 2 ^ 62)
-    (hb : ∀ (i : Nat) (hi : i < 5), (b.val[i]).val < 2 ^ 62) :
+theorem mul_internal_spec (a b : SharedBorrow Scalar52)
+    (ha : ∀ (i : Nat) (hi : i < 5), (a.val._0[i]).val < 2 ^ 62)
+    (hb : ∀ (i : Nat) (hi : i < 5), (b.val._0[i]).val < 2 ^ 62) :
     mul_internal a b ⦃ result =>
-      Scalar52.wideAsNat result = Scalar52.asNat a * Scalar52.asNat b ⦄ := by
+      Scalar52.wideAsNat result = Scalar52.asNat a.val._0 * Scalar52.asNat b.val._0 ⦄ := by
+  obtain ⟨⟨a⟩⟩ := a
+  obtain ⟨⟨b⟩⟩ := b
+  simp only at ha hb ⊢
   unfold mul_internal
   simp [Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index]
   step*

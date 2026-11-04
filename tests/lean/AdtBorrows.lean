@@ -22,93 +22,105 @@ namespace adt_borrows
 
 /-- [adt_borrows::SharedWrapper]
     Source: 'tests/src/adt-borrows.rs', lines 7:0-7:35 -/
-@[reducible]
-def SharedWrapper (T : Type _) := T
+structure SharedWrapper (T : Type _) where
+  _0 : SharedBorrow T
 
 /-- [adt_borrows::{adt_borrows::SharedWrapper<'a, T>}::create]:
     Source: 'tests/src/adt-borrows.rs', lines 10:4-12:5 -/
-def SharedWrapper.create {T : Type _} (x : T) : Result (SharedWrapper T) := do
-  ok x
+def SharedWrapper.create
+  {T : Type _} (x : SharedBorrow T) : Result (SharedWrapper T) := do
+  ok { _0 := x }
 
 /-- [adt_borrows::{adt_borrows::SharedWrapper<'a, T>}::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 14:4-16:5 -/
-def SharedWrapper.unwrap {T : Type _} (self : SharedWrapper T) : Result T := do
-  ok self
+def SharedWrapper.unwrap
+  {T : Type _} (self : SharedWrapper T) : Result (SharedBorrow T) := do
+  ok self._0
 
 /-- [adt_borrows::use_shared_wrapper]:
     Source: 'tests/src/adt-borrows.rs', lines 19:0-24:1 -/
 def use_shared_wrapper : Result Unit := do
-  let w ← SharedWrapper.create 0#i32
+  let w ← SharedWrapper.create (SharedBorrow.mk 0#i32)
   let p ← SharedWrapper.unwrap w
-  massert (0#i32 = p)
+  massert (0#i32 = p.val)
 
 /-- [adt_borrows::SharedWrapper1]
     Source: 'tests/src/adt-borrows.rs', lines 26:0-28:1 -/
 structure SharedWrapper1 (T : Type _) where
-  x : T
+  x : SharedBorrow T
 
 /-- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}::create]:
     Source: 'tests/src/adt-borrows.rs', lines 31:4-33:5 -/
 def SharedWrapper1.create
-  {T : Type _} (x : T) : Result (SharedWrapper1 T) := do
+  {T : Type _} (x : SharedBorrow T) : Result (SharedWrapper1 T) := do
   ok { x }
 
 /-- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 35:4-37:5 -/
 def SharedWrapper1.unwrap
-  {T : Type _} (self : SharedWrapper1 T) : Result T := do
+  {T : Type _} (self : SharedWrapper1 T) : Result (SharedBorrow T) := do
   ok self.x
 
 /-- [adt_borrows::use_shared_wrapper1]:
     Source: 'tests/src/adt-borrows.rs', lines 40:0-45:1 -/
 def use_shared_wrapper1 : Result Unit := do
-  let w ← SharedWrapper1.create 0#i32
+  let w ← SharedWrapper1.create (SharedBorrow.mk 0#i32)
   let p ← SharedWrapper1.unwrap w
-  massert (0#i32 = p)
+  massert (0#i32 = p.val)
 
 /-- [adt_borrows::SharedWrapper2]
     Source: 'tests/src/adt-borrows.rs', lines 47:0-50:1 -/
 structure SharedWrapper2 (T : Type _) where
-  x : T
-  y : T
+  x : SharedBorrow T
+  y : SharedBorrow T
 
 /-- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}::create]:
     Source: 'tests/src/adt-borrows.rs', lines 53:4-55:5 -/
 def SharedWrapper2.create
-  {T : Type _} (x : T) (y : T) : Result (SharedWrapper2 T) := do
+  {T : Type _} (x : SharedBorrow T) (y : SharedBorrow T) :
+  Result (SharedWrapper2 T)
+  := do
   ok { x, y }
 
 /-- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 57:4-59:5 -/
 def SharedWrapper2.unwrap
-  {T : Type _} (self : SharedWrapper2 T) : Result (T × T) := do
+  {T : Type _} (self : SharedWrapper2 T) :
+  Result ((SharedBorrow T) × (SharedBorrow T))
+  := do
   ok (self.x, self.y)
 
 /-- [adt_borrows::use_shared_wrapper2]:
     Source: 'tests/src/adt-borrows.rs', lines 62:0-69:1 -/
 def use_shared_wrapper2 : Result Unit := do
-  let w ← SharedWrapper2.create 0#i32 1#i32
-  let (px, py) ← SharedWrapper2.unwrap w
-  massert (0#i32 = px)
-  massert (1#i32 = py)
+  let w ←
+    SharedWrapper2.create (SharedBorrow.mk 0#i32) (SharedBorrow.mk 1#i32)
+  let (i, i1) ← SharedWrapper2.unwrap w
+  massert (0#i32 = i.val)
+  massert (1#i32 = i1.val)
 
 /-- [adt_borrows::MutWrapper]
     Source: 'tests/src/adt-borrows.rs', lines 71:0-71:36 -/
-@[reducible]
-def MutWrapper (T : Type _) := T
+structure MutWrapper (T : Type _) where
+  _0 : MutBorrow T
 
 /-- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::create]:
     Source: 'tests/src/adt-borrows.rs', lines 74:4-76:5 -/
 def MutWrapper.create
-  {T : Type _} (x : T) : Result ((MutWrapper T) × (MutWrapper T → T)) := do
-  ok (x, fun mw => mw)
+  {T : Type _} (x : MutBorrow T) :
+  Result ((MutWrapper T) × (MutWrapper T → T))
+  := do
+  let back := fun mw => mw._0.val
+  ok ({ _0 := x }, back)
 
 /-- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 78:4-80:5 -/
 def MutWrapper.unwrap
-  {T : Type _} (self : MutWrapper T) : Result (T × (T → MutWrapper T)) := do
-  let back := fun t => t
-  ok (self, back)
+  {T : Type _} (self : MutWrapper T) :
+  Result ((MutBorrow T) × (T → MutWrapper T))
+  := do
+  let back := fun t => ({ _0 := (MutBorrow.mk t) } : MutWrapper T)
+  ok (self._0, back)
 
 /-- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::id]:
     Source: 'tests/src/adt-borrows.rs', lines 82:4-84:5 -/
@@ -116,15 +128,14 @@ def MutWrapper.id
   {T : Type _} (self : MutWrapper T) :
   Result ((MutWrapper T) × (MutWrapper T → MutWrapper T))
   := do
-  let back := fun mw => mw
-  ok (self, back)
+  ok (self, fun mw => mw)
 
 /-- [adt_borrows::use_mut_wrapper]:
     Source: 'tests/src/adt-borrows.rs', lines 87:0-93:1 -/
 def use_mut_wrapper : Result Unit := do
-  let (w, create_back) ← MutWrapper.create 0#i32
+  let (w, create_back) ← MutWrapper.create (MutBorrow.mk 0#i32)
   let (p, unwrap_back) ← MutWrapper.unwrap w
-  let p1 ← p + 1#i32
+  let p1 ← p.val + 1#i32
   let x := create_back (unwrap_back p1)
   massert (x = 1#i32)
 
@@ -134,31 +145,29 @@ def use_mut_wrapper_id
   {T : Type _} (x : MutWrapper T) :
   Result ((MutWrapper T) × (MutWrapper T → MutWrapper T))
   := do
-  let (mw, id_back) ← MutWrapper.id x
-  let back := fun mw1 => id_back mw1
-  ok (mw, back)
+  MutWrapper.id x
 
 /-- [adt_borrows::MutWrapper1]
     Source: 'tests/src/adt-borrows.rs', lines 99:0-101:1 -/
 structure MutWrapper1 (T : Type _) where
-  x : T
+  x : MutBorrow T
 
 /-- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}::create]:
     Source: 'tests/src/adt-borrows.rs', lines 104:4-106:5 -/
 def MutWrapper1.create
-  {T : Type _} (x : T) :
+  {T : Type _} (x : MutBorrow T) :
   Result ((MutWrapper1 T) × (MutWrapper1 T → T))
   := do
-  let back := fun mw => mw.x
+  let back := fun mw => mw.x.val
   ok ({ x }, back)
 
 /-- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 108:4-110:5 -/
 def MutWrapper1.unwrap
   {T : Type _} (self : MutWrapper1 T) :
-  Result (T × (T → MutWrapper1 T))
+  Result ((MutBorrow T) × (T → MutWrapper1 T))
   := do
-  let back := fun t => ({ x := t } : MutWrapper1 T)
+  let back := fun t => ({ x := (MutBorrow.mk t) } : MutWrapper1 T)
   ok (self.x, back)
 
 /-- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}::id]:
@@ -172,9 +181,9 @@ def MutWrapper1.id
 /-- [adt_borrows::use_mut_wrapper1]:
     Source: 'tests/src/adt-borrows.rs', lines 117:0-123:1 -/
 def use_mut_wrapper1 : Result Unit := do
-  let (w, create_back) ← MutWrapper1.create 0#i32
+  let (w, create_back) ← MutWrapper1.create (MutBorrow.mk 0#i32)
   let (p, unwrap_back) ← MutWrapper1.unwrap w
-  let p1 ← p + 1#i32
+  let p1 ← p.val + 1#i32
   let x := create_back (unwrap_back p1)
   massert (x = 1#i32)
 
@@ -189,27 +198,28 @@ def use_mut_wrapper1_id
 /-- [adt_borrows::MutWrapper2]
     Source: 'tests/src/adt-borrows.rs', lines 129:0-132:1 -/
 structure MutWrapper2 (T : Type _) where
-  x : T
-  y : T
+  x : MutBorrow T
+  y : MutBorrow T
 
 /-- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}::create]:
     Source: 'tests/src/adt-borrows.rs', lines 135:4-137:5 -/
 def MutWrapper2.create
-  {T : Type _} (x : T) (y : T) :
+  {T : Type _} (x : MutBorrow T) (y : MutBorrow T) :
   Result ((MutWrapper2 T) × (MutWrapper2 T → T) × (MutWrapper2 T → T))
   := do
-  let back'a := fun mw => mw.x
-  let back'b := fun mw => mw.y
+  let back'a := fun mw => mw.x.val
+  let back'b := fun mw => mw.y.val
   ok ({ x, y }, back'a, back'b)
 
 /-- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 139:4-141:5 -/
 def MutWrapper2.unwrap
   {T : Type _} (self : MutWrapper2 T) :
-  Result ((T × T) × (T → MutWrapper2 T) × (T → MutWrapper2 T))
+  Result (((MutBorrow T) × (MutBorrow T)) × (T → MutWrapper2 T) × (T →
+    MutWrapper2 T))
   := do
-  let back'a := fun t => { self with x := t }
-  let back'b := fun t => { self with y := t }
+  let back'a := fun t => { self with x := (MutBorrow.mk t) }
+  let back'b := fun t => { self with y := (MutBorrow.mk t) }
   ok ((self.x, self.y), back'a, back'b)
 
 /-- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}::id]:
@@ -226,13 +236,14 @@ def MutWrapper2.id
 /-- [adt_borrows::use_mut_wrapper2]:
     Source: 'tests/src/adt-borrows.rs', lines 148:0-157:1 -/
 def use_mut_wrapper2 : Result Unit := do
-  let (w, create_back, create_back1) ← MutWrapper2.create 0#i32 10#i32
-  let ((px, py), unwrap_back, unwrap_back1) ← MutWrapper2.unwrap w
-  let px1 ← px + 1#i32
-  let py1 ← py + 1#i32
-  let x := create_back { w with x := (unwrap_back px1).x }
+  let (w, create_back, create_back1) ←
+    MutWrapper2.create (MutBorrow.mk 0#i32) (MutBorrow.mk 10#i32)
+  let ((i, i1), unwrap_back, unwrap_back1) ← MutWrapper2.unwrap w
+  let px ← i.val + 1#i32
+  let py ← i1.val + 1#i32
+  let x := create_back { w with x := (unwrap_back px).x }
   massert (x = 1#i32)
-  let y := create_back1 { w with y := (unwrap_back1 py1).y }
+  let y := create_back1 { w with y := (unwrap_back1 py).y }
   massert (y = 11#i32)
 
 /-- [adt_borrows::use_mut_wrapper2_id]:
@@ -250,30 +261,35 @@ def use_mut_wrapper2_id
 /-- [adt_borrows::array_shared_borrow]:
     Source: 'tests/src/adt-borrows.rs', lines 170:0-172:1 -/
 def array_shared_borrow
-  {N : Std.Usize} (x : Array Std.U32 N) : Result (Array Std.U32 N) := do
+  {N : Std.Usize} (x : Array (SharedBorrow Std.U32) N) :
+  Result (Array (SharedBorrow Std.U32) N)
+  := do
   ok x
 
 /-- [adt_borrows::array_mut_borrow]:
     Source: 'tests/src/adt-borrows.rs', lines 174:0-176:1 -/
 def array_mut_borrow
-  {N : Std.Usize} (x : Array Std.U32 N) :
-  Result ((Array Std.U32 N) × (Array Std.U32 N → Array Std.U32 N))
+  {N : Std.Usize} (x : Array (MutBorrow Std.U32) N) :
+  Result ((Array (MutBorrow Std.U32) N) × (Array (MutBorrow Std.U32) N →
+    Array (MutBorrow Std.U32) N))
   := do
   ok (x, fun x1 => x1)
 
 /-- [adt_borrows::use_array_mut_borrow1]:
     Source: 'tests/src/adt-borrows.rs', lines 178:0-180:1 -/
 def use_array_mut_borrow1
-  {N : Std.Usize} (x : Array Std.U32 N) :
-  Result ((Array Std.U32 N) × (Array Std.U32 N → Array Std.U32 N))
+  {N : Std.Usize} (x : Array (MutBorrow Std.U32) N) :
+  Result ((Array (MutBorrow Std.U32) N) × (Array (MutBorrow Std.U32) N →
+    Array (MutBorrow Std.U32) N))
   := do
   array_mut_borrow x
 
 /-- [adt_borrows::use_array_mut_borrow2]:
     Source: 'tests/src/adt-borrows.rs', lines 182:0-185:1 -/
 def use_array_mut_borrow2
-  {N : Std.Usize} (x : Array Std.U32 N) :
-  Result ((Array Std.U32 N) × (Array Std.U32 N → Array Std.U32 N))
+  {N : Std.Usize} (x : Array (MutBorrow Std.U32) N) :
+  Result ((Array (MutBorrow Std.U32) N) × (Array (MutBorrow Std.U32) N →
+    Array (MutBorrow Std.U32) N))
   := do
   let (x1, array_mut_borrow_back) ← array_mut_borrow x
   let (a, array_mut_borrow_back1) ← array_mut_borrow x1
@@ -285,30 +301,35 @@ def use_array_mut_borrow2
 /-- [adt_borrows::boxed_slice_shared_borrow]:
     Source: 'tests/src/adt-borrows.rs', lines 187:0-189:1 -/
 def boxed_slice_shared_borrow
-  (x : Slice Std.U32) : Result (Slice Std.U32) := do
+  (x : Box (Slice (SharedBorrow Std.U32))) :
+  Result (Box (Slice (SharedBorrow Std.U32)))
+  := do
   ok x
 
 /-- [adt_borrows::boxed_slice_mut_borrow]:
     Source: 'tests/src/adt-borrows.rs', lines 191:0-193:1 -/
 def boxed_slice_mut_borrow
-  (x : Slice Std.U32) :
-  Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
+  (x : Box (Slice (MutBorrow Std.U32))) :
+  Result ((Box (Slice (MutBorrow Std.U32))) × (Slice (MutBorrow Std.U32) →
+    Slice (MutBorrow Std.U32)))
   := do
   ok (x, fun x1 => x1)
 
 /-- [adt_borrows::use_boxed_slice_mut_borrow1]:
     Source: 'tests/src/adt-borrows.rs', lines 195:0-197:1 -/
 def use_boxed_slice_mut_borrow1
-  (x : Slice Std.U32) :
-  Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
+  (x : Box (Slice (MutBorrow Std.U32))) :
+  Result ((Box (Slice (MutBorrow Std.U32))) × (Slice (MutBorrow Std.U32) →
+    Slice (MutBorrow Std.U32)))
   := do
   boxed_slice_mut_borrow x
 
 /-- [adt_borrows::use_boxed_slice_mut_borrow2]:
     Source: 'tests/src/adt-borrows.rs', lines 199:0-202:1 -/
 def use_boxed_slice_mut_borrow2
-  (x : Slice Std.U32) :
-  Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
+  (x : Box (Slice (MutBorrow Std.U32))) :
+  Result ((Box (Slice (MutBorrow Std.U32))) × (Slice (MutBorrow Std.U32) →
+    Slice (MutBorrow Std.U32)))
   := do
   let (x1, boxed_slice_mut_borrow_back) ← boxed_slice_mut_borrow x
   let (s, boxed_slice_mut_borrow_back1) ← boxed_slice_mut_borrow x1
@@ -323,75 +344,83 @@ def use_boxed_slice_mut_borrow2
 @[discriminant isize]
 inductive SharedList (T : Type _) where
 | Nil : SharedList T
-| Cons : T → SharedList T → SharedList T
+| Cons : SharedBorrow T → Box (SharedList T) → SharedList T
 
 /-- [adt_borrows::{adt_borrows::SharedList<'a, T>}::push]:
     Source: 'tests/src/adt-borrows.rs', lines 214:4-216:5
     Visibility: public -/
 def SharedList.push
-  {T : Type _} (self : SharedList T) (x : T) : Result (SharedList T) := do
-  ok (SharedList.Cons x self)
+  {T : Type _} (self : SharedList T) (x : SharedBorrow T) :
+  Result (SharedList T)
+  := do
+  ok (SharedList.Cons x (Box.mk self))
 
 /-- [adt_borrows::{adt_borrows::SharedList<'a, T>}::pop]:
     Source: 'tests/src/adt-borrows.rs', lines 218:4-224:5
     Visibility: public -/
 def SharedList.pop
-  {T : Type _} (self : SharedList T) : Result (T × (SharedList T)) := do
+  {T : Type _} (self : SharedList T) :
+  Result ((SharedBorrow T) × (SharedList T))
+  := do
   match self with
   | SharedList.Nil => fail panic
-  | SharedList.Cons hd tl => ok (hd, tl)
+  | SharedList.Cons t sl => ok (t, sl.val)
 
 /-- [adt_borrows::MutList]
     Source: 'tests/src/adt-borrows.rs', lines 227:0-230:1 -/
 @[discriminant isize]
 inductive MutList (T : Type _) where
 | Nil : MutList T
-| Cons : T → MutList T → MutList T
+| Cons : MutBorrow T → Box (MutList T) → MutList T
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::push]:
     Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5
     Visibility: public -/
 def MutList.push
-  {T : Type _} (self : MutList T) (x : T) :
+  {T : Type _} (self : MutList T) (x : MutBorrow T) :
   Result ((MutList T) × (MutList T → ((MutList T) × T)))
   := do
   let back :=
     fun ml =>
       let (x1, ml1) :=
         match ml with
-        | MutList.Cons t ml2 => (t, ml2)
-        | _ => (x, self)
+        | MutList.Cons (MutBorrow.mk t) (Box.mk ml2) => (t, ml2)
+        | _ => (x.val, self)
       (ml1, x1)
-  ok (MutList.Cons x self, back)
+  ok (MutList.Cons x (Box.mk self), back)
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::pop]:
     Source: 'tests/src/adt-borrows.rs', lines 238:4-244:5
     Visibility: public -/
 def MutList.pop
   {T : Type _} (self : MutList T) :
-  Result ((T × (MutList T)) × ((T × (MutList T)) → MutList T))
+  Result (((MutBorrow T) × (MutList T)) × ((T × (MutList T)) → MutList T))
   := do
   match self with
   | MutList.Nil => fail panic
-  | MutList.Cons hd tl =>
-    let back := fun p => let (t, ml) := p
-                         MutList.Cons t ml
-    ok ((hd, tl), back)
+  | MutList.Cons t ml =>
+    let back :=
+      fun p => let (t1, ml1) := p
+               MutList.Cons (MutBorrow.mk t1) (Box.mk ml1)
+    ok ((t, ml.val), back)
 
 /-- [adt_borrows::wrap_shared_in_option]:
     Source: 'tests/src/adt-borrows.rs', lines 247:0-249:1
     Visibility: public -/
-def wrap_shared_in_option {T : Type _} (x : T) : Result (Option T) := do
+def wrap_shared_in_option
+  {T : Type _} (x : SharedBorrow T) : Result (Option (SharedBorrow T)) := do
   ok (some x)
 
 /-- [adt_borrows::wrap_mut_in_option]:
     Source: 'tests/src/adt-borrows.rs', lines 251:0-253:1
     Visibility: public -/
 def wrap_mut_in_option
-  {T : Type _} (x : T) : Result ((Option T) × (Option T → T)) := do
+  {T : Type _} (x : MutBorrow T) :
+  Result ((Option (MutBorrow T)) × (Option (MutBorrow T) → T))
+  := do
   let back := fun o => match o with
-                       | some t => t
-                       | _ => x
+                       | some (MutBorrow.mk t) => t
+                       | _ => x.val
   ok (some x, back)
 
 end adt_borrows

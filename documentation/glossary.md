@@ -4,7 +4,9 @@
 
 **Aeneas** — A tool that translates Rust programs to pure Lean code via the LLBC intermediate representation, enabling formal verification of Rust code in the Lean proof assistant.
 
-**Backward continuation** — A function returned alongside a borrowed value that propagates updates back to the original owner. Generated when Rust code uses mutable borrows (`&mut T`). In the generated Lean code, appears as an extra return value: `Result (T × (T → Result OriginalType))`.
+**Backward continuation** — A function returned alongside a borrowed value that propagates updates back to the original owner. Generated when Rust code uses mutable borrows (`&mut T`). In the generated Lean code, appears as an extra return value: `Result (MutBorrow T × (T → OriginalType))` (note that the backward continuation takes the new borrowed *value*, of type `T`).
+
+**Box / SharedBorrow / MutBorrow** — The Lean translations of `Box<T>`, `&T` and `&mut T`: simple wrapper structures with a single field `val` (no heap model). A function taking an `x : MutBorrow T` returns the new value of `x.val`.
 
 **Charon** — The Rust compiler frontend used by Aeneas. Extracts Rust MIR and produces LLBC. The `charon` binary and `charon-pin` file in the repo manage this.
 

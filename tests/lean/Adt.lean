@@ -27,8 +27,8 @@ structure Struct where
 
 /-- [adt::{adt::Struct}::len]:
     Source: 'tests/src/adt.rs', lines 8:4-10:5 -/
-def Struct.impl.len (self : Struct) : Result Std.Usize := do
-  ok self.len
+def Struct.impl.len (self : SharedBorrow Struct) : Result Std.Usize := do
+  ok self.val.len
 
 /-- [adt::{adt::Struct}::f]:
     Source: 'tests/src/adt.rs', lines 11:4-11:13 -/
@@ -37,13 +37,16 @@ def Struct.f : Result Unit := do
 
 /-- [adt::BigStructName]
     Source: 'tests/src/adt.rs', lines 14:0-14:23 -/
-@[reducible]
-def BigStructName := Unit
+structure BigStructName where
 
 /-- [adt::BigStruct]
     Source: 'tests/src/adt.rs', lines 17:0-24:2 -/
-def BigStruct :=
-  BigStructName × BigStructName × BigStructName × BigStructName ×
-  BigStructName × BigStructName
+structure BigStruct where
+  _0 : BigStructName
+  _1 : BigStructName
+  _2 : BigStructName
+  _3 : BigStructName
+  _4 : BigStructName
+  _5 : BigStructName
 
 end adt

@@ -28,7 +28,7 @@ namespace iter_adapters
 def
   core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
   (T : Type _) : core.iter.traits.double_ended.DoubleEndedIterator
-  (core.slice.iter.Iter T) T := {
+  (core.slice.iter.Iter T) (SharedBorrow T) := {
   iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
   next_back := core.slice.iter.IteratorSliceIter.next_back
 }
@@ -38,33 +38,34 @@ def
     Visibility: public -/
 def test_enumerate_slice : Result Unit := do
   let s ←
-    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ])))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
   let (o, it1) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
-  let (i0, x0) ← core.option.Option.unwrap o
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
+  let (i0, i1) ← core.option.Option.unwrap o
   massert (i0 = 0#usize)
-  massert (x0 = 10#u32)
+  massert (i1.val = 10#u32)
   let (o1, it2) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
-  let (i1, x1) ← core.option.Option.unwrap o1
-  massert (i1 = 1#usize)
-  massert (x1 = 20#u32)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it1)
+  let (i11, i2) ← core.option.Option.unwrap o1
+  massert (i11 = 1#usize)
+  massert (i2.val = 20#u32)
   let (o2, it3) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
-  let (i2, x2) ← core.option.Option.unwrap o2
-  massert (i2 = 2#usize)
-  massert (x2 = 30#u32)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it2)
+  let (i21, i3) ← core.option.Option.unwrap o2
+  massert (i21 = 2#usize)
+  massert (i3.val = 30#u32)
   let (o3, _) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it3
-  let b := core.option.Option.is_none o3
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_enumerate_slice] -/
@@ -74,15 +75,15 @@ def test_enumerate_slice : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 28:0-32:1
     Visibility: public -/
 def test_enumerate_empty : Result Unit := do
-  let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
+  let s ← lift (Array.as_slice (SharedBorrow.mk (Std.Array.empty Std.U32)))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
   let (o, _) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
-  let b := core.option.Option.is_none o
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_enumerate_empty] -/
@@ -93,26 +94,26 @@ def test_enumerate_empty : Result Unit := do
     Visibility: public -/
 def test_take_2 : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 4#usize [ 10#u32, 20#u32, 30#u32, 40#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 4#usize [ 10#u32, 20#u32, 30#u32, 40#u32 ])))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.take.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 2#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 10#u32)
+  massert (i1.val = 10#u32)
   let (o1, it2) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it1)
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 20#u32)
+  massert (i2.val = 20#u32)
   let (o2, _) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
-  let b := core.option.Option.is_none o2
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b
 
 /- Unit test for [iter_adapters::test_take_2] -/
@@ -123,15 +124,16 @@ def test_take_2 : Result Unit := do
     Visibility: public -/
 def test_take_0 : Result Unit := do
   let s ←
-    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ])))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.take.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 0#usize
   let (o, _) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
-  let b := core.option.Option.is_none o
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_take_0] -/
@@ -141,30 +143,32 @@ def test_take_0 : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 58:0-65:1
     Visibility: public -/
 def test_take_more_than_available : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.take.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 5#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 1#u32)
+  massert (i1.val = 1#u32)
   let (o1, it2) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it1)
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 2#u32)
+  massert (i2.val = 2#u32)
   let (o2, it3) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it2)
   let i3 ← core.option.Option.unwrap o2
-  massert (i3 = 3#u32)
+  massert (i3.val = 3#u32)
   let (o3, _) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it3
-  let b := core.option.Option.is_none o3
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_take_more_than_available] -/
@@ -175,31 +179,32 @@ def test_take_more_than_available : Result Unit := do
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u8_loop.body
-  (iter : core.ops.range.Range Std.U8) (count : Std.U32) :
-  Result (ControlFlow ((core.ops.range.Range Std.U8) × Std.U32) Std.U32)
+  (count : Std.U32) (iter : core.ops.range.Range Std.U8) :
+  Result (ControlFlow (Std.U32 × (core.ops.range.Range Std.U8)) Std.U32)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU8 iter
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done count)
   | some _ => let count1 ← count + 1#u32
-              ok (cont (iter1, count1))
+              ok (cont (count1, iter1))
 
 /-- [iter_adapters::test_range_u8]: loop 0:
     Source: 'tests/src/iter_adapters.rs', lines 75:4-77:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u8_loop
-  (iter : core.ops.range.Range Std.U8) (count : Std.U32) : Result Std.U32 := do
+  (count : Std.U32) (iter : core.ops.range.Range Std.U8) : Result Std.U32 := do
   loop
-    (fun (iter1, count1) => test_range_u8_loop.body iter1 count1)
-    (iter, count)
+    (fun (count1, iter1) => test_range_u8_loop.body count1 iter1)
+    (count, iter)
 
 /-- [iter_adapters::test_range_u8]:
     Source: 'tests/src/iter_adapters.rs', lines 73:0-79:1
     Visibility: public -/
 def test_range_u8 : Result Unit := do
-  let count ← test_range_u8_loop { start := 0#u8, «end» := 5#u8 } 0#u32
+  let count ← test_range_u8_loop 0#u32 { start := 0#u8, «end» := 5#u8 }
   massert (count = 5#u32)
 
 /- Unit test for [iter_adapters::test_range_u8] -/
@@ -210,33 +215,34 @@ def test_range_u8 : Result Unit := do
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u16_loop.body
-  (iter : core.ops.range.Range Std.U16) (count : Std.U32) :
-  Result (ControlFlow ((core.ops.range.Range Std.U16) × Std.U32) Std.U32)
+  (count : Std.U32) (iter : core.ops.range.Range Std.U16) :
+  Result (ControlFlow (Std.U32 × (core.ops.range.Range Std.U16)) Std.U32)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU16 iter
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done count)
   | some _ => let count1 ← count + 1#u32
-              ok (cont (iter1, count1))
+              ok (cont (count1, iter1))
 
 /-- [iter_adapters::test_range_u16]: loop 0:
     Source: 'tests/src/iter_adapters.rs', lines 85:4-87:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u16_loop
-  (iter : core.ops.range.Range Std.U16) (count : Std.U32) :
+  (count : Std.U32) (iter : core.ops.range.Range Std.U16) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, count1) => test_range_u16_loop.body iter1 count1)
-    (iter, count)
+    (fun (count1, iter1) => test_range_u16_loop.body count1 iter1)
+    (count, iter)
 
 /-- [iter_adapters::test_range_u16]:
     Source: 'tests/src/iter_adapters.rs', lines 83:0-89:1
     Visibility: public -/
 def test_range_u16 : Result Unit := do
-  let count ← test_range_u16_loop { start := 0#u16, «end» := 4#u16 } 0#u32
+  let count ← test_range_u16_loop 0#u32 { start := 0#u16, «end» := 4#u16 }
   massert (count = 4#u32)
 
 /- Unit test for [iter_adapters::test_range_u16] -/
@@ -247,33 +253,34 @@ def test_range_u16 : Result Unit := do
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u32_loop.body
-  (iter : core.ops.range.Range Std.U32) (count : Std.U32) :
-  Result (ControlFlow ((core.ops.range.Range Std.U32) × Std.U32) Std.U32)
+  (count : Std.U32) (iter : core.ops.range.Range Std.U32) :
+  Result (ControlFlow (Std.U32 × (core.ops.range.Range Std.U32)) Std.U32)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU32 iter
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done count)
   | some _ => let count1 ← count + 1#u32
-              ok (cont (iter1, count1))
+              ok (cont (count1, iter1))
 
 /-- [iter_adapters::test_range_u32]: loop 0:
     Source: 'tests/src/iter_adapters.rs', lines 95:4-97:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u32_loop
-  (iter : core.ops.range.Range Std.U32) (count : Std.U32) :
+  (count : Std.U32) (iter : core.ops.range.Range Std.U32) :
   Result Std.U32
   := do
   loop
-    (fun (iter1, count1) => test_range_u32_loop.body iter1 count1)
-    (iter, count)
+    (fun (count1, iter1) => test_range_u32_loop.body count1 iter1)
+    (count, iter)
 
 /-- [iter_adapters::test_range_u32]:
     Source: 'tests/src/iter_adapters.rs', lines 93:0-99:1
     Visibility: public -/
 def test_range_u32 : Result Unit := do
-  let count ← test_range_u32_loop { start := 0#u32, «end» := 3#u32 } 0#u32
+  let count ← test_range_u32_loop 0#u32 { start := 0#u32, «end» := 3#u32 }
   massert (count = 3#u32)
 
 /- Unit test for [iter_adapters::test_range_u32] -/
@@ -284,33 +291,34 @@ def test_range_u32 : Result Unit := do
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u64_loop.body
-  (iter : core.ops.range.Range Std.U64) (count : Std.U64) :
-  Result (ControlFlow ((core.ops.range.Range Std.U64) × Std.U64) Std.U64)
+  (count : Std.U64) (iter : core.ops.range.Range Std.U64) :
+  Result (ControlFlow (Std.U64 × (core.ops.range.Range Std.U64)) Std.U64)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU64 iter
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done count)
   | some _ => let count1 ← count + 1#u64
-              ok (cont (iter1, count1))
+              ok (cont (count1, iter1))
 
 /-- [iter_adapters::test_range_u64]: loop 0:
     Source: 'tests/src/iter_adapters.rs', lines 105:4-107:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u64_loop
-  (iter : core.ops.range.Range Std.U64) (count : Std.U64) :
+  (count : Std.U64) (iter : core.ops.range.Range Std.U64) :
   Result Std.U64
   := do
   loop
-    (fun (iter1, count1) => test_range_u64_loop.body iter1 count1)
-    (iter, count)
+    (fun (count1, iter1) => test_range_u64_loop.body count1 iter1)
+    (count, iter)
 
 /-- [iter_adapters::test_range_u64]:
     Source: 'tests/src/iter_adapters.rs', lines 103:0-109:1
     Visibility: public -/
 def test_range_u64 : Result Unit := do
-  let count ← test_range_u64_loop { start := 0#u64, «end» := 4#u64 } 0#u64
+  let count ← test_range_u64_loop 0#u64 { start := 0#u64, «end» := 4#u64 }
   massert (count = 4#u64)
 
 /- Unit test for [iter_adapters::test_range_u64] -/
@@ -321,35 +329,36 @@ def test_range_u64 : Result Unit := do
     Visibility: public -/
 @[rust_loop_body]
 def test_range_usize_loop.body
-  (iter : core.ops.range.Range Std.Usize) (count : Std.Usize) :
-  Result (ControlFlow ((core.ops.range.Range Std.Usize) × Std.Usize)
+  (count : Std.Usize) (iter : core.ops.range.Range Std.Usize) :
+  Result (ControlFlow (Std.Usize × (core.ops.range.Range Std.Usize))
     Std.Usize)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done count)
   | some _ => let count1 ← count + 1#usize
-              ok (cont (iter1, count1))
+              ok (cont (count1, iter1))
 
 /-- [iter_adapters::test_range_usize]: loop 0:
     Source: 'tests/src/iter_adapters.rs', lines 115:4-117:5
     Visibility: public -/
 @[rust_loop]
 def test_range_usize_loop
-  (iter : core.ops.range.Range Std.Usize) (count : Std.Usize) :
+  (count : Std.Usize) (iter : core.ops.range.Range Std.Usize) :
   Result Std.Usize
   := do
   loop
-    (fun (iter1, count1) => test_range_usize_loop.body iter1 count1)
-    (iter, count)
+    (fun (count1, iter1) => test_range_usize_loop.body count1 iter1)
+    (count, iter)
 
 /-- [iter_adapters::test_range_usize]:
     Source: 'tests/src/iter_adapters.rs', lines 113:0-119:1
     Visibility: public -/
 def test_range_usize : Result Unit := do
   let count ←
-    test_range_usize_loop { start := 0#usize, «end» := 5#usize } 0#usize
+    test_range_usize_loop 0#usize { start := 0#usize, «end» := 5#usize }
   massert (count = 5#usize)
 
 /- Unit test for [iter_adapters::test_range_usize] -/
@@ -360,31 +369,32 @@ def test_range_usize : Result Unit := do
     Visibility: public -/
 @[rust_loop_body]
 def test_range_empty_loop.body
-  (iter : core.ops.range.Range Std.U8) (count : Std.U32) :
-  Result (ControlFlow ((core.ops.range.Range Std.U8) × Std.U32) Std.U32)
+  (count : Std.U32) (iter : core.ops.range.Range Std.U8) :
+  Result (ControlFlow (Std.U32 × (core.ops.range.Range Std.U8)) Std.U32)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU8 iter
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done count)
   | some _ => let count1 ← count + 1#u32
-              ok (cont (iter1, count1))
+              ok (cont (count1, iter1))
 
 /-- [iter_adapters::test_range_empty]: loop 0:
     Source: 'tests/src/iter_adapters.rs', lines 125:4-127:5
     Visibility: public -/
 @[rust_loop]
 def test_range_empty_loop
-  (iter : core.ops.range.Range Std.U8) (count : Std.U32) : Result Std.U32 := do
+  (count : Std.U32) (iter : core.ops.range.Range Std.U8) : Result Std.U32 := do
   loop
-    (fun (iter1, count1) => test_range_empty_loop.body iter1 count1)
-    (iter, count)
+    (fun (count1, iter1) => test_range_empty_loop.body count1 iter1)
+    (count, iter)
 
 /-- [iter_adapters::test_range_empty]:
     Source: 'tests/src/iter_adapters.rs', lines 123:0-129:1
     Visibility: public -/
 def test_range_empty : Result Unit := do
-  let count ← test_range_empty_loop { start := 5#u8, «end» := 5#u8 } 0#u32
+  let count ← test_range_empty_loop 0#u32 { start := 5#u8, «end» := 5#u8 }
   massert (count = 0#u32)
 
 /- Unit test for [iter_adapters::test_range_empty] -/
@@ -395,19 +405,20 @@ def test_range_empty : Result Unit := do
     Visibility: public -/
 def test_array_into_iter : Result Unit := do
   let s ←
-    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ])))
   let it ← core.slice.Slice.iter s
-  let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
+  let (o, it1) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
-  massert (i = 10#u32)
-  let (o1, it2) ← core.slice.iter.IteratorSliceIter.next it1
+  massert (i.val = 10#u32)
+  let (o1, it2) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it1)
   let i1 ← core.option.Option.unwrap o1
-  massert (i1 = 20#u32)
-  let (o2, it3) ← core.slice.iter.IteratorSliceIter.next it2
+  massert (i1.val = 20#u32)
+  let (o2, it3) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it2)
   let i2 ← core.option.Option.unwrap o2
-  massert (i2 = 30#u32)
-  let (o3, _) ← core.slice.iter.IteratorSliceIter.next it3
-  let b := core.option.Option.is_none o3
+  massert (i2.val = 30#u32)
+  let (o3, _) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_array_into_iter] -/
@@ -418,22 +429,23 @@ def test_array_into_iter : Result Unit := do
     Visibility: public -/
 def test_slice_into_iter : Result Unit := do
   let s ←
-    lift (Array.to_slice (Array.make 4#usize [ 1#u32, 2#u32, 3#u32, 4#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 4#usize [ 1#u32, 2#u32, 3#u32, 4#u32 ])))
   let it ← core.slice.Slice.iter s
-  let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
+  let (o, it1) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
-  massert (i = 1#u32)
-  let (o1, it2) ← core.slice.iter.IteratorSliceIter.next it1
+  massert (i.val = 1#u32)
+  let (o1, it2) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it1)
   let i1 ← core.option.Option.unwrap o1
-  massert (i1 = 2#u32)
-  let (o2, it3) ← core.slice.iter.IteratorSliceIter.next it2
+  massert (i1.val = 2#u32)
+  let (o2, it3) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it2)
   let i2 ← core.option.Option.unwrap o2
-  massert (i2 = 3#u32)
-  let (o3, it4) ← core.slice.iter.IteratorSliceIter.next it3
+  massert (i2.val = 3#u32)
+  let (o3, it4) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it3)
   let i3 ← core.option.Option.unwrap o3
-  massert (i3 = 4#u32)
-  let (o4, _) ← core.slice.iter.IteratorSliceIter.next it4
-  let b := core.option.Option.is_none o4
+  massert (i3.val = 4#u32)
+  let (o4, _) ← core.slice.iter.IteratorSliceIter.next (MutBorrow.mk it4)
+  let b := core.option.Option.is_none (SharedBorrow.mk o4)
   massert b
 
 /- Unit test for [iter_adapters::test_slice_into_iter] -/
@@ -444,8 +456,8 @@ def test_slice_into_iter : Result Unit := do
     Visibility: public -/
 def test_enumerate_step_by : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 6#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32, 60#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 6#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32, 60#u32 ])))
   let i ← core.slice.Slice.iter s
   let e ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
@@ -457,17 +469,17 @@ def test_enumerate_step_by : Result Unit := do
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorEnumerate
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) it
-  let (i0, x0) ← core.option.Option.unwrap o
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) (MutBorrow.mk it)
+  let (i0, i1) ← core.option.Option.unwrap o
   massert (i0 = 0#usize)
-  massert (x0 = 10#u32)
+  massert (i1.val = 10#u32)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorEnumerate
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) it1
-  let (i1, x1) ← core.option.Option.unwrap o1
-  massert (i1 = 2#usize)
-  massert (x1 = 30#u32)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) (MutBorrow.mk it1)
+  let (i11, i2) ← core.option.Option.unwrap o1
+  massert (i11 = 2#usize)
+  massert (i2.val = 30#u32)
 
 /- Unit test for [iter_adapters::test_enumerate_step_by] -/
 #guard (test_enumerate_step_by).reducesTo ()
@@ -477,8 +489,8 @@ def test_enumerate_step_by : Result Unit := do
     Visibility: public -/
 def test_enumerate_take : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 5#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 5#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32 ])))
   let i ← core.slice.Slice.iter s
   let e ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
@@ -490,22 +502,22 @@ def test_enumerate_take : Result Unit := do
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorEnumerate
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) it
-  let (i0, x0) ← core.option.Option.unwrap o
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) (MutBorrow.mk it)
+  let (i0, i1) ← core.option.Option.unwrap o
   massert (i0 = 0#usize)
-  massert (x0 = 10#u32)
+  massert (i1.val = 10#u32)
   let (o1, it2) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorEnumerate
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) it1
-  let (i1, x1) ← core.option.Option.unwrap o1
-  massert (i1 = 1#usize)
-  massert (x1 = 20#u32)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) (MutBorrow.mk it1)
+  let (i11, i2) ← core.option.Option.unwrap o1
+  massert (i11 = 1#usize)
+  massert (i2.val = 20#u32)
   let (o2, _) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorEnumerate
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) it2
-  let b := core.option.Option.is_none o2
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) (MutBorrow.mk it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b
 
 /- Unit test for [iter_adapters::test_enumerate_take] -/
@@ -515,25 +527,26 @@ def test_enumerate_take : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 188:0-197:1
     Visibility: public -/
 def test_take_exhausted_then_next : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk (Array.make 1#usize [ 42#u32 ])))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.take.trait_default
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 2#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it)
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 42#u32)
+  massert (i1.val = 42#u32)
   let (o1, it2) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
-  let b := core.option.Option.is_none o1
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
   let (o2, _) ←
     core.iter.adapters.take.IteratorTake.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
-  let b1 := core.option.Option.is_none o2
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) (MutBorrow.mk it2)
+  let b1 := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b1
 
 /- Unit test for [iter_adapters::test_take_exhausted_then_next] -/
@@ -544,12 +557,13 @@ def test_take_exhausted_then_next : Result Unit := do
     Visibility: public -/
 def test_range_single_element : Result Unit := do
   let (o, it) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU8
-      { start := 0#u8, «end» := 1#u8 }
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk
+      { start := 0#u8, «end» := 1#u8 })
   let i ← core.option.Option.unwrap o
   massert (i = 0#u8)
-  let (o1, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU8 it
-  let b := core.option.Option.is_none o1
+  let (o1, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
 
 /- Unit test for [iter_adapters::test_range_single_element] -/
@@ -560,12 +574,13 @@ def test_range_single_element : Result Unit := do
     Visibility: public -/
 def test_range_u8_near_max : Result Unit := do
   let (o, it) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU8
-      { start := 254#u8, «end» := 255#u8 }
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk
+      { start := 254#u8, «end» := 255#u8 })
   let i ← core.option.Option.unwrap o
   massert (i = 254#u8)
-  let (o1, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU8 it
-  let b := core.option.Option.is_none o1
+  let (o1, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
 
 /- Unit test for [iter_adapters::test_range_u8_near_max] -/
@@ -576,9 +591,9 @@ def test_range_u8_near_max : Result Unit := do
     Visibility: public -/
 def test_range_u8_start_gt_end : Result Unit := do
   let (o, _) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU8
-      { start := 10#u8, «end» := 5#u8 }
-  let b := core.option.Option.is_none o
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk
+      { start := 10#u8, «end» := 5#u8 })
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_range_u8_start_gt_end] -/
@@ -589,9 +604,9 @@ def test_range_u8_start_gt_end : Result Unit := do
     Visibility: public -/
 def test_range_u8_start_eq_end : Result Unit := do
   let (o, _) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU8
-      { start := 5#u8, «end» := 5#u8 }
-  let b := core.option.Option.is_none o
+    core.iter.range.IteratorRange.next core.iter.range.StepU8 (MutBorrow.mk
+      { start := 5#u8, «end» := 5#u8 })
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_range_u8_start_eq_end] -/
@@ -602,21 +617,24 @@ def test_range_u8_start_eq_end : Result Unit := do
     Visibility: public -/
 def test_range_u16_boundary : Result Unit := do
   let (o, it) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU16
-      { start := 0#u16, «end» := 3#u16 }
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 (MutBorrow.mk
+      { start := 0#u16, «end» := 3#u16 })
   let i ← core.option.Option.unwrap o
   massert (i = 0#u16)
   let (o1, it1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU16 it
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 (MutBorrow.mk
+      it)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 1#u16)
   let (o2, it2) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU16 it1
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 (MutBorrow.mk
+      it1)
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 2#u16)
   let (o3, _) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU16 it2
-  let b := core.option.Option.is_none o3
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 (MutBorrow.mk
+      it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_range_u16_boundary] -/
@@ -627,17 +645,19 @@ def test_range_u16_boundary : Result Unit := do
     Visibility: public -/
 def test_range_u32_boundary : Result Unit := do
   let (o, it) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU32
-      { start := 0#u32, «end» := 2#u32 }
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 (MutBorrow.mk
+      { start := 0#u32, «end» := 2#u32 })
   let i ← core.option.Option.unwrap o
   massert (i = 0#u32)
   let (o1, it1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU32 it
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 (MutBorrow.mk
+      it)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 1#u32)
   let (o2, _) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU32 it1
-  let b := core.option.Option.is_none o2
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 (MutBorrow.mk
+      it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b
 
 /- Unit test for [iter_adapters::test_range_u32_boundary] -/
@@ -648,21 +668,24 @@ def test_range_u32_boundary : Result Unit := do
     Visibility: public -/
 def test_range_u64_boundary : Result Unit := do
   let (o, it) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU64
-      { start := 100#u64, «end» := 103#u64 }
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 (MutBorrow.mk
+      { start := 100#u64, «end» := 103#u64 })
   let i ← core.option.Option.unwrap o
   massert (i = 100#u64)
   let (o1, it1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU64 it
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 (MutBorrow.mk
+      it)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 101#u64)
   let (o2, it2) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU64 it1
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 (MutBorrow.mk
+      it1)
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 102#u64)
   let (o3, _) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepU64 it2
-  let b := core.option.Option.is_none o3
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 (MutBorrow.mk
+      it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_range_u64_boundary] -/
@@ -673,9 +696,9 @@ def test_range_u64_boundary : Result Unit := do
     Visibility: public -/
 def test_range_usize_start_gt_end : Result Unit := do
   let (o, _) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepUsize
-      { start := 10#usize, «end» := 5#usize }
-  let b := core.option.Option.is_none o
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize (MutBorrow.mk
+      { start := 10#usize, «end» := 5#usize })
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_range_usize_start_gt_end] -/
@@ -691,13 +714,15 @@ def test_step_by_larger_than_range : Result Unit := do
       { start := 0#u8, «end» := 3#u8 } 10#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 0#u8)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
-  let b := core.option.Option.is_none o1
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_larger_than_range] -/
@@ -713,13 +738,15 @@ def test_step_by_exact_range : Result Unit := do
       { start := 0#u8, «end» := 5#u8 } 5#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 0#u8)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
-  let b := core.option.Option.is_none o1
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_exact_range] -/
@@ -735,28 +762,33 @@ def test_step_by_one : Result Unit := do
       { start := 0#u8, «end» := 4#u8 } 1#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 0#u8)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it1)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 1#u8)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it2
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it2)
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 2#u8)
   let (o3, it4) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it3
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it3)
   let i3 ← core.option.Option.unwrap o3
   massert (i3 = 3#u8)
   let (o4, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it4
-  let b := core.option.Option.is_none o4
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it4)
+  let b := core.option.Option.is_none (SharedBorrow.mk o4)
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_one] -/
@@ -772,8 +804,9 @@ def test_step_by_empty : Result Unit := do
       { start := 5#u8, «end» := 5#u8 } 3#usize
   let (o, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
-  let b := core.option.Option.is_none o
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_empty] -/
@@ -789,23 +822,27 @@ def test_step_by_odd_range : Result Unit := do
       { start := 0#u8, «end» := 5#u8 } 2#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 0#u8)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it1)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 2#u8)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it2
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it2)
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 4#u8)
   let (o3, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it3
-  let b := core.option.Option.is_none o3
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_odd_range] -/
@@ -821,23 +858,27 @@ def test_step_by_u8_near_max : Result Unit := do
       { start := 250#u8, «end» := 255#u8 } 2#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 250#u8)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it1)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 252#u8)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it2
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it2)
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 254#u8)
   let (o3, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it3
-  let b := core.option.Option.is_none o3
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
+      (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_u8_near_max] -/
@@ -850,23 +891,23 @@ def test_range_inclusive_basic : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 1#usize 3#usize
   let (o, it1) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it
+      core.iter.range.StepUsize (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 1#usize)
   let (o1, it2) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it1
+      core.iter.range.StepUsize (MutBorrow.mk it1)
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 2#usize)
   let (o2, it3) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it2
+      core.iter.range.StepUsize (MutBorrow.mk it2)
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 3#usize)
   let (o3, _) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it3
-  let b := core.option.Option.is_none o3
+      core.iter.range.StepUsize (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_range_inclusive_basic] -/
@@ -879,13 +920,13 @@ def test_range_inclusive_singleton : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 7#usize 7#usize
   let (o, it1) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it
+      core.iter.range.StepUsize (MutBorrow.mk it)
   let i ← core.option.Option.unwrap o
   massert (i = 7#usize)
   let (o1, _) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it1
-  let b := core.option.Option.is_none o1
+      core.iter.range.StepUsize (MutBorrow.mk it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
 
 /- Unit test for [iter_adapters::test_range_inclusive_singleton] -/
@@ -898,8 +939,8 @@ def test_range_inclusive_empty : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 5#usize 3#usize
   let (o, _) ←
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-      core.iter.range.StepUsize it
-  let b := core.option.Option.is_none o
+      core.iter.range.StepUsize (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_range_inclusive_empty] -/
@@ -909,7 +950,9 @@ def test_range_inclusive_empty : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 359:0-366:1
     Visibility: public -/
 def test_rev_slice : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.rev.trait_default
@@ -919,26 +962,26 @@ def test_rev_slice : Result Unit := do
   let (o, it1) ←
     core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
       (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
-      Std.U32) it
+      Std.U32) (MutBorrow.mk it)
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 3#u32)
+  massert (i1.val = 3#u32)
   let (o1, it2) ←
     core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
       (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
-      Std.U32) it1
+      Std.U32) (MutBorrow.mk it1)
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 2#u32)
+  massert (i2.val = 2#u32)
   let (o2, it3) ←
     core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
       (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
-      Std.U32) it2
+      Std.U32) (MutBorrow.mk it2)
   let i3 ← core.option.Option.unwrap o2
-  massert (i3 = 1#u32)
+  massert (i3.val = 1#u32)
   let (o3, _) ←
     core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
       (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
-      Std.U32) it3
-  let b := core.option.Option.is_none o3
+      Std.U32) (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
 
 /- Unit test for [iter_adapters::test_rev_slice] -/
@@ -948,7 +991,7 @@ def test_rev_slice : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 369:0-373:1
     Visibility: public -/
 def test_rev_empty_slice : Result Unit := do
-  let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
+  let s ← lift (Array.as_slice (SharedBorrow.mk (Std.Array.empty Std.U32)))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.rev.trait_default
@@ -958,8 +1001,8 @@ def test_rev_empty_slice : Result Unit := do
   let (o, _) ←
     core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
       (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
-      Std.U32) it
-  let b := core.option.Option.is_none o
+      Std.U32) (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
 
 /- Unit test for [iter_adapters::test_rev_empty_slice] -/

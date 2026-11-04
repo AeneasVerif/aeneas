@@ -249,6 +249,14 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
                 id_var_pairs next
             in
             (super#visit_texpr env e).e
+      | PAdt { variant_id = None; fields = [ pat ] }, TAdt (TBuiltin bty, _)
+        when Option.is_some (builtin_ty_as_wrapper_kind bty)
+             && not !Config.dont_use_field_projectors ->
+          (* Boxes and borrows: [let ⟨ x ⟩ := e] ~> [let x := e.val] *)
+          let e =
+            mk_opened_let false pat (mk_wrapper_proj span scrutinee) next
+          in
+          (super#visit_texpr env e).e
       | _ -> super#visit_Let env monadic lv scrutinee next
   end
 
@@ -1696,12 +1704,37 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
           (* TODO: we should remove this case, which dates from before the
                introduction of [StructUpdate] *)
           let app, args = destruct_apps e in
-          match app.e with
-          | Qualif
-              {
-                id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
-                generics;
-              } ->
+          match (app.e, args) with
+          | ( Qualif
+                { id = AdtCons { adt_id = TBuiltin bty; variant_id = None }; _ },
+              [ arg ] )
+            when Option.is_some (builtin_ty_as_wrapper_kind bty) -> (
+              (* Boxes and borrows: [Box.mk x.val ~> x] *)
+              match destruct_apps arg with
+              | ( {
+                    e = Qualif { id = Proj { adt_id = TBuiltin bty'; _ }; _ };
+                    _;
+                  },
+                  [ x ] )
+                when bty' = bty && x.ty = e.ty -> x
+              | _ -> e)
+          | Qualif { id = Proj { adt_id = TBuiltin bty; _ }; _ }, [ arg ]
+            when Option.is_some (builtin_ty_as_wrapper_kind bty) -> (
+              (* Boxes and borrows: [(Box.mk x).val ~> x] *)
+              match destruct_apps arg with
+              | ( {
+                    e = Qualif { id = AdtCons { adt_id = TBuiltin bty'; _ }; _ };
+                    _;
+                  },
+                  [ x ] )
+                when bty' = bty -> x
+              | _ -> e)
+          | ( Qualif
+                {
+                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
+                  generics;
+                },
+              _ ) ->
               (* This is a struct *)
               (* Retrieve the definiton, to find how many fields there are *)
               let adt_decl =
@@ -2199,13 +2232,16 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
     def
 
 (** Eliminate the box functions like [Box::new] (which is translated to the
-    identity) and [Box::free] (which is translated to [()]).
+    identity, or to [Box.mk] if we preserve the boxes - see
+    {!Config.erase_boxes_and_borrows}) and [Box::free] (which is translated to
+    [()]).
 
-    Note that the box types have already been eliminated during the translation
-    from symbolic to pure. The reason why we don't eliminate the box functions
-    at the same time is that we would need to eliminate them in two different
-    places: when translating function calls, and when translating end
-    abstractions. Here, we can do something simpler, in one micro-pass. *)
+    Note that the box types have already been eliminated (or translated to the
+    [Box] wrapper) during the translation from symbolic to pure. The reason why
+    we don't eliminate the box functions at the same time is that we would need
+    to eliminate them in two different places: when translating function calls,
+    and when translating end abstractions. Here, we can do something simpler, in
+    one micro-pass. *)
 let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
@@ -2224,6 +2260,10 @@ let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
             when (FunDeclId.Map.find fid ctx.fun_decls).item_meta
                    .diagnostic_item = Some "box_new" ->
               let arg, args = Collections.List.pop args in
+              let arg =
+                if !Config.erase_boxes_and_borrows then arg
+                else mk_wrapper_texpr span WBox arg
+              in
               [%add_loc] mk_apps span arg args
           | _ -> super#visit_texpr env e)
       | _ -> super#visit_texpr env e
@@ -2251,23 +2291,34 @@ let eliminate_box_functions =
 
     TODO: move this to the prepasses
 *)
+type simplify_trait_call_kind =
+  | SimplRef
+      (** The impl is for [&T]: the arguments have type [&&T] and the inner
+          method takes arguments of type [&T] *)
+  | SimplBox
+      (** The impl is for [Box<T>]: the arguments have type [&Box<T>] and the
+          inner method takes arguments of type [&T] *)
+
 let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
   (* Create a map from pattern to method *)
   let pats =
     [
-      ("alloc::boxed::{core::clone::Clone<Box<@T>>}", "clone");
-      ("core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}", "eq");
-      ("alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}", "eq");
+      ("alloc::boxed::{core::clone::Clone<Box<@T>>}", "clone", SimplBox);
+      ( "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}",
+        "eq",
+        SimplRef );
+      ("alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}", "eq", SimplBox);
     ]
   in
   let pats =
     List.map
-      (fun (pat, x) -> (NameMatcher.parse_pattern (pat ^ "::" ^ x), x))
+      (fun (pat, x, kind) ->
+        (NameMatcher.parse_pattern (pat ^ "::" ^ x), (x, kind)))
       pats
   in
   let names_map = NameMatcher.NameMatcherMap.of_list pats in
   let match_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
-  let get_method (d : fun_decl) : string option =
+  let get_method (d : fun_decl) : (string * simplify_trait_call_kind) option =
     let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.find_opt match_ctx config d.item_meta.name
       names_map
@@ -2290,7 +2341,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                 when List.length generics.trait_refs > 0 && List.length args > 0
                 -> (
                   match get_method d with
-                  | Some method_name -> (
+                  | Some (method_name, kind) -> (
                       (* Retrieve the first clause - TODO: is it always the first clause? *)
                       let trait_ref = List.hd generics.trait_refs in
                       match trait_ref.trait_id with
@@ -2318,11 +2369,47 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                           let qualif : qualif =
                             { id = qualif; generics = impl_generics }
                           in
+                          (* If we preserve the boxes and the borrows, we need
+                             to update the arguments, and the output in the case
+                             of [Clone<Box<T>>] *)
+                          let erase = !Config.erase_boxes_and_borrows in
+                          let args =
+                            if erase then args
+                            else
+                              List.map
+                                (fun (arg : texpr) ->
+                                  match kind with
+                                  | SimplRef ->
+                                      (* [&&T ~> &T] *)
+                                      mk_wrapper_proj span arg
+                                  | SimplBox ->
+                                      (* [&Box<T> ~> &T] *)
+                                      mk_wrapper_texpr span WShared
+                                        (mk_wrapper_proj span
+                                           (mk_wrapper_proj span arg)))
+                                args
+                          in
+                          let wrap_box = (not erase) && kind = SimplBox in
+                          let unbox_ty (ty : ty) : ty =
+                            match ty_as_wrapper_opt ty with
+                            | Some (WBox, ty) -> ty
+                            | _ -> [%internal_error] span
+                          in
+                          let call_ret_ty =
+                            if wrap_box && method_name = "clone" then
+                              match opt_destruct_result span ret_ty with
+                              | Some ty -> mk_result_ty (unbox_ty ty)
+                              | None -> unbox_ty ret_ty
+                            else ret_ty
+                          in
                           let arg_tys =
                             List.map (fun (a : texpr) -> a.ty) args
                           in
                           let qualif : texpr =
-                            { e = Qualif qualif; ty = mk_arrows arg_tys ret_ty }
+                            {
+                              e = Qualif qualif;
+                              ty = mk_arrows arg_tys call_ret_ty;
+                            }
                           in
                           let e = [%add_loc] mk_apps span qualif args in
                           (* Should we introduce a [toResult] because the method is actually pure? *)
@@ -2337,6 +2424,29 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                           in
                           let e =
                             if not monadic then mk_to_result_texpr span e else e
+                          in
+                          (* Wrap the output in a box, if necessary *)
+                          let e =
+                            if call_ret_ty = ret_ty then e
+                            else
+                              match opt_destruct_result span e.ty with
+                              | Some ty ->
+                                  let var : fvar =
+                                    {
+                                      id = ctx.fresh_fvar_id ();
+                                      basename = None;
+                                      ty;
+                                    }
+                                  in
+                                  let boxed =
+                                    mk_wrapper_texpr span WBox
+                                      (mk_texpr_from_fvar var)
+                                  in
+                                  mk_opened_let true
+                                    (mk_tpat_from_fvar None var)
+                                    e
+                                    (mk_result_ok_texpr span boxed)
+                              | None -> [%internal_error] span
                           in
                           (* Re-explore *)
                           self#visit_texpr env e
@@ -2468,7 +2578,13 @@ let recover_builtin_index_functions =
                 let generics =
                   match kind with
                   | Array ->
-                      let ty, n = ty_as_array span collection.ty in
+                      (* The collection may be wrapped in a borrow *)
+                      let collection_ty =
+                        match ty_as_wrapper_opt collection.ty with
+                        | Some (_, ty) -> ty
+                        | None -> collection.ty
+                      in
+                      let ty, n = ty_as_array span collection_ty in
                       {
                         types = [ ty ];
                         const_generics = [ n ];
@@ -2534,6 +2650,13 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
   let try_simplify (monadic : bool) (pat : tpat) (e1 : texpr) (e2 : texpr)
       (back_var : fvar) (is_array : bool) (index_generics : generic_args)
       (a : texpr) (i : texpr) : texpr =
+    (* If we preserve the borrows, [a] is a mutable borrow: the update
+       function takes the borrowed array/slice as input *)
+    let a =
+      match ty_as_wrapper_opt a.ty with
+      | Some _ -> mk_wrapper_proj span a
+      | None -> a
+    in
     (* Helper: outputs the input argument if this is a call to the backward function *)
     let is_call_to_back (e : texpr) : texpr option =
       let f, args = destruct_apps e in

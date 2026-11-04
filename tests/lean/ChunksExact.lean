@@ -25,29 +25,29 @@ namespace chunks_exact
     Visibility: public -/
 def test_chunks_exact_exact_fit : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 6#usize [ 1#u32, 2#u32, 3#u32, 4#u32, 5#u32, 6#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 6#usize [ 1#u32, 2#u32, 3#u32, 4#u32, 5#u32, 6#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 3#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
   let c1 ← core.option.Option.unwrap o
   let i ← Slice.index_usize c1 0#usize
-  massert (i = 1#u32)
+  massert (i.val = 1#u32)
   let i1 ← Slice.index_usize c1 1#usize
-  massert (i1 = 2#u32)
+  massert (i1.val = 2#u32)
   let i2 ← Slice.index_usize c1 2#usize
-  massert (i2 = 3#u32)
-  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next it1
+  massert (i2.val = 3#u32)
+  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it1)
   let c2 ← core.option.Option.unwrap o1
   let i3 ← Slice.index_usize c2 0#usize
-  massert (i3 = 4#u32)
+  massert (i3.val = 4#u32)
   let i4 ← Slice.index_usize c2 1#usize
-  massert (i4 = 5#u32)
+  massert (i4.val = 5#u32)
   let i5 ← Slice.index_usize c2 2#usize
-  massert (i5 = 6#u32)
-  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next it2
-  let b := core.option.Option.is_none o2
+  massert (i5.val = 6#u32)
+  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it3
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it3)
   let i6 := Slice.len rem
   massert (i6 = 0#usize)
 
@@ -59,33 +59,33 @@ def test_chunks_exact_exact_fit : Result Unit := do
     Visibility: public -/
 def test_chunks_exact_with_remainder : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 7#usize [ 1#u32, 2#u32, 3#u32, 4#u32, 5#u32, 6#u32, 7#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 7#usize [ 1#u32, 2#u32, 3#u32, 4#u32, 5#u32, 6#u32, 7#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 3#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
   let c1 ← core.option.Option.unwrap o
   let i ← Slice.index_usize c1 0#usize
-  massert (i = 1#u32)
+  massert (i.val = 1#u32)
   let i1 ← Slice.index_usize c1 1#usize
-  massert (i1 = 2#u32)
+  massert (i1.val = 2#u32)
   let i2 ← Slice.index_usize c1 2#usize
-  massert (i2 = 3#u32)
-  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next it1
+  massert (i2.val = 3#u32)
+  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it1)
   let c2 ← core.option.Option.unwrap o1
   let i3 ← Slice.index_usize c2 0#usize
-  massert (i3 = 4#u32)
+  massert (i3.val = 4#u32)
   let i4 ← Slice.index_usize c2 1#usize
-  massert (i4 = 5#u32)
+  massert (i4.val = 5#u32)
   let i5 ← Slice.index_usize c2 2#usize
-  massert (i5 = 6#u32)
-  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next it2
-  let b := core.option.Option.is_none o2
+  massert (i5.val = 6#u32)
+  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it3
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it3)
   let i6 := Slice.len rem
   massert (i6 = 1#usize)
   let i7 ← Slice.index_usize rem 0#usize
-  massert (i7 = 7#u32)
+  massert (i7.val = 7#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_with_remainder] -/
 #guard (test_chunks_exact_with_remainder).reducesTo ()
@@ -95,27 +95,27 @@ def test_chunks_exact_with_remainder : Result Unit := do
     Visibility: public -/
 def test_chunks_exact_remainder_2 : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 5#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 5#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 3#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
   let c ← core.option.Option.unwrap o
   let i ← Slice.index_usize c 0#usize
-  massert (i = 10#u32)
+  massert (i.val = 10#u32)
   let i1 ← Slice.index_usize c 1#usize
-  massert (i1 = 20#u32)
+  massert (i1.val = 20#u32)
   let i2 ← Slice.index_usize c 2#usize
-  massert (i2 = 30#u32)
-  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next it1
-  let b := core.option.Option.is_none o1
+  massert (i2.val = 30#u32)
+  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it2
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it2)
   let i3 := Slice.len rem
   massert (i3 = 2#usize)
   let i4 ← Slice.index_usize rem 0#usize
-  massert (i4 = 40#u32)
+  massert (i4.val = 40#u32)
   let i5 ← Slice.index_usize rem 1#usize
-  massert (i5 = 50#u32)
+  massert (i5.val = 50#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_remainder_2] -/
 #guard (test_chunks_exact_remainder_2).reducesTo ()
@@ -125,24 +125,25 @@ def test_chunks_exact_remainder_2 : Result Unit := do
     Visibility: public -/
 def test_chunks_exact_size_1 : Result Unit := do
   let s ←
-    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 1#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
   let c1 ← core.option.Option.unwrap o
   let i ← Slice.index_usize c1 0#usize
-  massert (i = 10#u32)
-  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next it1
+  massert (i.val = 10#u32)
+  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it1)
   let c2 ← core.option.Option.unwrap o1
   let i1 ← Slice.index_usize c2 0#usize
-  massert (i1 = 20#u32)
-  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next it2
+  massert (i1.val = 20#u32)
+  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it2)
   let c3 ← core.option.Option.unwrap o2
   let i2 ← Slice.index_usize c3 0#usize
-  massert (i2 = 30#u32)
-  let (o3, it4) ← core.slice.iter.IteratorChunksExact.next it3
-  let b := core.option.Option.is_none o3
+  massert (i2.val = 30#u32)
+  let (o3, it4) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it3)
+  let b := core.option.Option.is_none (SharedBorrow.mk o3)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it4
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it4)
   let i3 := Slice.len rem
   massert (i3 = 0#usize)
 
@@ -153,12 +154,12 @@ def test_chunks_exact_size_1 : Result Unit := do
     Source: 'tests/src/chunks_exact.rs', lines 77:0-83:1
     Visibility: public -/
 def test_chunks_exact_empty : Result Unit := do
-  let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
+  let s ← lift (Array.as_slice (SharedBorrow.mk (Std.Array.empty Std.U32)))
   let it ← core.slice.Slice.chunks_exact s 3#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
-  let b := core.option.Option.is_none o
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it1
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it1)
   let i := Slice.len rem
   massert (i = 0#usize)
 
@@ -169,18 +170,20 @@ def test_chunks_exact_empty : Result Unit := do
     Source: 'tests/src/chunks_exact.rs', lines 87:0-95:1
     Visibility: public -/
 def test_chunks_exact_chunk_larger_than_slice : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 2#usize [ 1#u32, 2#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 5#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
-  let b := core.option.Option.is_none o
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it1
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it1)
   let i := Slice.len rem
   massert (i = 2#usize)
   let i1 ← Slice.index_usize rem 0#usize
-  massert (i1 = 1#u32)
+  massert (i1.val = 1#u32)
   let i2 ← Slice.index_usize rem 1#usize
-  massert (i2 = 2#u32)
+  massert (i2.val = 2#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_chunk_larger_than_slice] -/
 #guard (test_chunks_exact_chunk_larger_than_slice).reducesTo ()
@@ -189,20 +192,22 @@ def test_chunks_exact_chunk_larger_than_slice : Result Unit := do
     Source: 'tests/src/chunks_exact.rs', lines 99:0-109:1
     Visibility: public -/
 def test_chunks_exact_chunk_equals_slice : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 3#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
   let c ← core.option.Option.unwrap o
   let i ← Slice.index_usize c 0#usize
-  massert (i = 1#u32)
+  massert (i.val = 1#u32)
   let i1 ← Slice.index_usize c 1#usize
-  massert (i1 = 2#u32)
+  massert (i1.val = 2#u32)
   let i2 ← Slice.index_usize c 2#usize
-  massert (i2 = 3#u32)
-  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next it1
-  let b := core.option.Option.is_none o1
+  massert (i2.val = 3#u32)
+  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it1)
+  let b := core.option.Option.is_none (SharedBorrow.mk o1)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it2
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it2)
   let i3 := Slice.len rem
   massert (i3 = 0#usize)
 
@@ -214,29 +219,29 @@ def test_chunks_exact_chunk_equals_slice : Result Unit := do
     Visibility: public -/
 def test_chunks_exact_2_odd : Result Unit := do
   let s ←
-    lift (Array.to_slice
-      (Array.make 5#usize [ 1#u32, 2#u32, 3#u32, 4#u32, 5#u32 ]))
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 5#usize [ 1#u32, 2#u32, 3#u32, 4#u32, 5#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 2#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
   let c1 ← core.option.Option.unwrap o
   let i ← Slice.index_usize c1 0#usize
-  massert (i = 1#u32)
+  massert (i.val = 1#u32)
   let i1 ← Slice.index_usize c1 1#usize
-  massert (i1 = 2#u32)
-  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next it1
+  massert (i1.val = 2#u32)
+  let (o1, it2) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it1)
   let c2 ← core.option.Option.unwrap o1
   let i2 ← Slice.index_usize c2 0#usize
-  massert (i2 = 3#u32)
+  massert (i2.val = 3#u32)
   let i3 ← Slice.index_usize c2 1#usize
-  massert (i3 = 4#u32)
-  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next it2
-  let b := core.option.Option.is_none o2
+  massert (i3.val = 4#u32)
+  let (o2, it3) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it2)
+  let b := core.option.Option.is_none (SharedBorrow.mk o2)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it3
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it3)
   let i4 := Slice.len rem
   massert (i4 = 1#usize)
   let i5 ← Slice.index_usize rem 0#usize
-  massert (i5 = 5#u32)
+  massert (i5.val = 5#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_2_odd] -/
 #guard (test_chunks_exact_2_odd).reducesTo ()
@@ -245,16 +250,17 @@ def test_chunks_exact_2_odd : Result Unit := do
     Source: 'tests/src/chunks_exact.rs', lines 130:0-137:1
     Visibility: public -/
 def test_chunks_exact_2_single_element : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk (Array.make 1#usize [ 42#u32 ])))
   let it ← core.slice.Slice.chunks_exact s 2#usize
-  let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
-  let b := core.option.Option.is_none o
+  let (o, it1) ← core.slice.iter.IteratorChunksExact.next (MutBorrow.mk it)
+  let b := core.option.Option.is_none (SharedBorrow.mk o)
   massert b
-  let rem ← core.slice.iter.ChunksExact.getRemainder it1
+  let rem ← core.slice.iter.ChunksExact.getRemainder (SharedBorrow.mk it1)
   let i := Slice.len rem
   massert (i = 1#usize)
   let i1 ← Slice.index_usize rem 0#usize
-  massert (i1 = 42#u32)
+  massert (i1.val = 42#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_2_single_element] -/
 #guard (test_chunks_exact_2_single_element).reducesTo ()

@@ -23,12 +23,12 @@ namespace dyn
 /-- Trait declaration: [dyn::Trait]
     Source: 'tests/src/dyn.rs', lines 3:0-5:1 -/
 structure Trait (Self : Type _) where
-  get : Self → Result Std.U32
+  get : SharedBorrow Self → Result Std.U32
 
 /-- [dyn::{impl dyn::Trait for u32}::get]:
     Source: 'tests/src/dyn.rs', lines 8:4-10:5 -/
-def U32.Insts.DynTrait.get (self : Std.U32) : Result Std.U32 := do
-  ok self
+def U32.Insts.DynTrait.get (self : SharedBorrow Std.U32) : Result Std.U32 := do
+  ok self.val
 
 /-- Trait implementation: [dyn::{impl dyn::Trait for u32}]
     Source: 'tests/src/dyn.rs', lines 7:0-11:1 -/
@@ -39,8 +39,8 @@ def U32.Insts.DynTrait : Trait Std.U32 := {
 
 /-- [dyn::{impl dyn::Trait for bool}::get]:
     Source: 'tests/src/dyn.rs', lines 14:4-16:5 -/
-def Bool.Insts.DynTrait.get (self : Bool) : Result Std.U32 := do
-  ok (UScalar.cast_fromBool .U32 self)
+def Bool.Insts.DynTrait.get (self : SharedBorrow Bool) : Result Std.U32 := do
+  ok (UScalar.cast_fromBool .U32 self.val)
 
 /-- Trait implementation: [dyn::{impl dyn::Trait for bool}]
     Source: 'tests/src/dyn.rs', lines 13:0-17:1 -/
@@ -56,10 +56,10 @@ def bool_to_trait (b : Bool) : Result Bool := do
 
 /-- [dyn::mk_trait]:
     Source: 'tests/src/dyn.rs', lines 23:0-29:1 -/
-def mk_trait (b : Bool) : Result (Dyn (fun _dyn => Trait _dyn)) := do
+def mk_trait (b : Bool) : Result (Box (Dyn (fun _dyn => Trait _dyn))) := do
   if b
-  then ok (Dyn.mk _ Bool.Insts.DynTrait b)
-  else ok (Dyn.mk _ U32.Insts.DynTrait 0#u32)
+  then ok (Box.mk (Dyn.mk _ Bool.Insts.DynTrait b))
+  else ok (Box.mk (Dyn.mk _ U32.Insts.DynTrait 0#u32))
 
 /-- Trait declaration: [dyn::Into]
     Source: 'tests/src/dyn.rs', lines 31:0-33:1 -/
@@ -71,11 +71,11 @@ structure Into (Self : Type _) (T : Type _) where
 def mk_into
   (U : Type _) {V : Type _} {T : Type _} {W : Type _} (IntoInst : Into T V)
   (IntoInst1 : Into W V) (b : Bool) (x : T) (y : W) :
-  Result (Dyn (fun _dyn => Into _dyn V))
+  Result (Box (Dyn (fun _dyn => Into _dyn V)))
   := do
   if b
-  then ok (Dyn.mk _ IntoInst x)
-  else ok (Dyn.mk _ IntoInst1 y)
+  then ok (Box.mk (Dyn.mk _ IntoInst x))
+  else ok (Box.mk (Dyn.mk _ IntoInst1 y))
 
 /-- Trait declaration: [dyn::Trivial]
     Source: 'tests/src/dyn.rs', lines 48:0-48:16 -/
@@ -83,8 +83,7 @@ structure Trivial (Self : Type _) where
 
 /-- [dyn::dyn_closure::{closure}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
-@[reducible]
-def dyn_closure.closure (T0 : Type _) := Unit
+structure dyn_closure.closure (T0 : Type _) where
 
 /-- [dyn::dyn_closure]:
     Source: 'tests/src/dyn.rs', lines 50:0-52:1 -/
@@ -95,8 +94,8 @@ def dyn_closure
 /-- [dyn::dyn_closure::{impl core::ops::function::Fn<(u32,), u32> for dyn::dyn_closure::{closure}<T0>}::call]:
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
-  {T0 : Type _} (TrivialInst : Trivial T0) (c : dyn_closure.closure T0)
-  (tupled_args : Std.U32) :
+  {T0 : Type _} (TrivialInst : Trivial T0)
+  (c : SharedBorrow (dyn_closure.closure T0)) (tupled_args : Std.U32) :
   Result Std.U32
   := do
   ok tupled_args

@@ -24,15 +24,15 @@ namespace hashmap
 /-- [hashmap::hash_key]:
     Source: 'tests/src/hashmap.rs', lines 32:0-37:1
     Visibility: public -/
-def hash_key (k : Std.Usize) : Result Std.Usize := do
-  ok k
+def hash_key (k : SharedBorrow Std.Usize) : Result Std.Usize := do
+  ok k.val
 
 /-- [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone]:
     Source: 'tests/src/hashmap.rs', lines 39:9-39:14
     Visibility: public -/
 def Fraction.Insts.CoreCloneClone.clone
-  (self : Fraction) : Result Fraction := do
-  ok self
+  (self : SharedBorrow Fraction) : Result Fraction := do
+  ok self.val
 
 /-- Trait implementation: [hashmap::{impl core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 39:9-39:14 -/
@@ -57,7 +57,7 @@ def HashMap.allocate_slots_loop
   := do
   if n > 0#usize
   then
-    let slots1 ← alloc.vec.Vec.push slots AList.Nil
+    let slots1 ← alloc.vec.Vec.push (MutBorrow.mk slots) AList.Nil
     let n1 ← n - 1#usize
     HashMap.allocate_slots_loop slots1 n1
   else ok slots
@@ -105,12 +105,12 @@ def HashMap.clear_loop
   {T : Type _} (slots : alloc.vec.Vec (AList T)) (i : Std.Usize) :
   Result (alloc.vec.Vec (AList T))
   := do
-  let i1 := alloc.vec.Vec.len slots
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk slots)
   if i < i1
   then
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
-        slots i
+        (MutBorrow.mk slots) i
     let i2 ← i + 1#usize
     let slots1 := index_mut_back AList.Nil
     HashMap.clear_loop slots1 i2
@@ -120,15 +120,17 @@ partial_fixpoint
 /-- [hashmap::{hashmap::HashMap<T>}::clear]:
     Source: 'tests/src/hashmap.rs', lines 96:4-104:5
     Visibility: public -/
-def HashMap.clear {T : Type _} (self : HashMap T) : Result (HashMap T) := do
-  let slots ← HashMap.clear_loop self.slots 0#usize
-  ok { self with num_entries := 0#usize, slots }
+def HashMap.clear
+  {T : Type _} (self : MutBorrow (HashMap T)) : Result (HashMap T) := do
+  let slots ← HashMap.clear_loop self.val.slots 0#usize
+  ok { self.val with num_entries := 0#usize, slots }
 
 /-- [hashmap::{hashmap::HashMap<T>}::len]:
     Source: 'tests/src/hashmap.rs', lines 106:4-108:5
     Visibility: public -/
-def HashMap.len {T : Type _} (self : HashMap T) : Result Std.Usize := do
-  ok self.num_entries
+def HashMap.len
+  {T : Type _} (self : SharedBorrow (HashMap T)) : Result Std.Usize := do
+  ok self.val.num_entries
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
     Source: 'tests/src/hashmap.rs', lines 1:0-129:9 -/
@@ -142,41 +144,41 @@ def HashMap.insert_in_list_loop
     if ckey = key
     then ok (false, AList.Cons ckey value tl)
     else
-      let (b, back) ← HashMap.insert_in_list_loop key value tl
-      let back1 := AList.Cons ckey cvalue back
+      let (b, back) ← HashMap.insert_in_list_loop key value tl.val
+      let back1 := AList.Cons ckey cvalue (Box.mk back)
       ok (b, back1)
-  | AList.Nil => ok (true, AList.Cons key value AList.Nil)
+  | AList.Nil => ok (true, AList.Cons key value (Box.mk AList.Nil))
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
     Source: 'tests/src/hashmap.rs', lines 113:4-130:5 -/
 @[reducible]
 def HashMap.insert_in_list
-  {T : Type _} (key : Std.Usize) (value : T) (ls : AList T) :
+  {T : Type _} (key : Std.Usize) (value : T) (ls : MutBorrow (AList T)) :
   Result (Bool × (AList T))
   := do
-  HashMap.insert_in_list_loop key value ls
+  HashMap.insert_in_list_loop key value ls.val
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
     Source: 'tests/src/hashmap.rs', lines 133:4-141:5 -/
 def HashMap.insert_no_resize
-  {T : Type _} (self : HashMap T) (key : Std.Usize) (value : T) :
+  {T : Type _} (self : MutBorrow (HashMap T)) (key : Std.Usize) (value : T) :
   Result (HashMap T)
   := do
-  let hash ← hash_key key
-  let i := alloc.vec.Vec.len self.slots
+  let hash ← hash_key (SharedBorrow.mk key)
+  let i := alloc.vec.Vec.len (SharedBorrow.mk self.val.slots)
   let hash_mod ← hash % i
   let (a, index_mut_back) ←
     alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
-      self.slots hash_mod
+      (MutBorrow.mk self.val.slots) hash_mod
   let (inserted, a1) ← HashMap.insert_in_list key value a
   if inserted
   then
-    let i1 ← self.num_entries + 1#usize
+    let i1 ← self.val.num_entries + 1#usize
     let v := index_mut_back a1
-    ok { self with num_entries := i1, slots := v }
+    ok { self.val with num_entries := i1, slots := v }
   else let v := index_mut_back a1
-       ok { self with slots := v }
+       ok { self.val with slots := v }
 
 /-- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
     Source: 'tests/src/hashmap.rs', lines 195:12-202:17 -/
@@ -185,8 +187,8 @@ def HashMap.move_elements_from_list_loop
   {T : Type _} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) := do
   match ls with
   | AList.Cons k v tl =>
-    let ntable1 ← HashMap.insert_no_resize ntable k v
-    HashMap.move_elements_from_list_loop ntable1 tl
+    let ntable1 ← HashMap.insert_no_resize (MutBorrow.mk ntable) k v
+    HashMap.move_elements_from_list_loop ntable1 tl.val
   | AList.Nil => ok ntable
 partial_fixpoint
 
@@ -194,8 +196,10 @@ partial_fixpoint
     Source: 'tests/src/hashmap.rs', lines 192:4-205:5 -/
 @[reducible]
 def HashMap.move_elements_from_list
-  {T : Type _} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) := do
-  HashMap.move_elements_from_list_loop ntable ls
+  {T : Type _} (ntable : MutBorrow (HashMap T)) (ls : AList T) :
+  Result (HashMap T)
+  := do
+  HashMap.move_elements_from_list_loop ntable.val ls
 
 /-- [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
     Source: 'tests/src/hashmap.rs', lines 181:8-188:9 -/
@@ -205,14 +209,14 @@ def HashMap.move_elements_loop
   (i : Std.Usize) :
   Result ((HashMap T) × (alloc.vec.Vec (AList T)))
   := do
-  let i1 := alloc.vec.Vec.len slots
+  let i1 := alloc.vec.Vec.len (SharedBorrow.mk slots)
   if i < i1
   then
     let (a, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
-        slots i
+        (MutBorrow.mk slots) i
     let (ls, a1) := core.mem.replace a AList.Nil
-    let ntable1 ← HashMap.move_elements_from_list ntable ls
+    let ntable1 ← HashMap.move_elements_from_list (MutBorrow.mk ntable) ls
     let i2 ← i + 1#usize
     let slots1 := index_mut_back a1
     HashMap.move_elements_loop ntable1 slots1 i2
@@ -223,39 +227,42 @@ partial_fixpoint
     Source: 'tests/src/hashmap.rs', lines 179:4-189:5 -/
 @[reducible]
 def HashMap.move_elements
-  {T : Type _} (ntable : HashMap T) (slots : alloc.vec.Vec (AList T)) :
+  {T : Type _} (ntable : MutBorrow (HashMap T))
+  (slots : MutBorrow (alloc.vec.Vec (AList T))) :
   Result ((HashMap T) × (alloc.vec.Vec (AList T)))
   := do
-  HashMap.move_elements_loop ntable slots 0#usize
+  HashMap.move_elements_loop ntable.val slots.val 0#usize
 
 /-- [hashmap::{hashmap::HashMap<T>}::try_resize]:
     Source: 'tests/src/hashmap.rs', lines 156:4-175:5 -/
 def HashMap.try_resize
-  {T : Type _} (self : HashMap T) : Result (HashMap T) := do
-  let capacity := alloc.vec.Vec.len self.slots
+  {T : Type _} (self : MutBorrow (HashMap T)) : Result (HashMap T) := do
+  let capacity := alloc.vec.Vec.len (SharedBorrow.mk self.val.slots)
   let n1 ← core.num.Usize.MAX / 2#usize
-  let i ← n1 / self.max_load_factor.dividend
+  let i ← n1 / self.val.max_load_factor.dividend
   if capacity <= i
   then
     let i1 ← capacity * 2#usize
-    let ntable ← HashMap.new_with_capacity T i1 self.max_load_factor
-    let (ntable1, _) ← HashMap.move_elements ntable self.slots
-    ok { self with max_load := ntable1.max_load, slots := ntable1.slots }
-  else ok { self with saturated := true }
+    let ntable ← HashMap.new_with_capacity T i1 self.val.max_load_factor
+    let (ntable1, _) ←
+      HashMap.move_elements (MutBorrow.mk ntable) (MutBorrow.mk self.val.slots)
+    ok { self.val with max_load := ntable1.max_load, slots := ntable1.slots }
+  else ok { self.val with saturated := true }
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert]:
     Source: 'tests/src/hashmap.rs', lines 145:4-152:5
     Visibility: public -/
 def HashMap.insert
-  {T : Type _} (self : HashMap T) (key : Std.Usize) (value : T) :
+  {T : Type _} (self : MutBorrow (HashMap T)) (key : Std.Usize) (value : T) :
   Result (HashMap T)
   := do
   let self1 ← HashMap.insert_no_resize self key value
-  let i ← HashMap.len self1
+  let i ← HashMap.len (SharedBorrow.mk self1)
   if i > self1.max_load
-  then if self1.saturated
-       then ok self1
-       else HashMap.try_resize self1
+  then
+    if self1.saturated
+    then ok self1
+    else HashMap.try_resize (MutBorrow.mk self1)
   else ok self1
 
 /-- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
@@ -268,7 +275,7 @@ def HashMap.contains_key_in_list_loop
   | AList.Cons ckey _ tl =>
     if ckey = key
     then ok true
-    else HashMap.contains_key_in_list_loop key tl
+    else HashMap.contains_key_in_list_loop key tl.val
   | AList.Nil => ok false
 partial_fixpoint
 
@@ -277,32 +284,39 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def HashMap.contains_key_in_list
-  {T : Type _} (key : Std.Usize) (ls : AList T) : Result Bool := do
-  HashMap.contains_key_in_list_loop key ls
+  {T : Type _} (key : SharedBorrow Std.Usize) (ls : SharedBorrow (AList T)) :
+  Result Bool
+  := do
+  HashMap.contains_key_in_list_loop key.val ls.val
 
 /-- [hashmap::{hashmap::HashMap<T>}::contains_key]:
     Source: 'tests/src/hashmap.rs', lines 208:4-212:5
     Visibility: public -/
 def HashMap.contains_key
-  {T : Type _} (self : HashMap T) (key : Std.Usize) : Result Bool := do
+  {T : Type _} (self : SharedBorrow (HashMap T)) (key : SharedBorrow Std.Usize)
+  :
+  Result Bool
+  := do
   let hash ← hash_key key
-  let i := alloc.vec.Vec.len self.slots
+  let i := alloc.vec.Vec.len (SharedBorrow.mk self.val.slots)
   let hash_mod ← hash % i
   let a ←
     alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice (AList T))
-      self.slots hash_mod
+      (SharedBorrow.mk self.val.slots) hash_mod
   HashMap.contains_key_in_list key a
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
     Source: 'tests/src/hashmap.rs', lines 234:8-242:5 -/
 @[rust_loop]
 def HashMap.get_in_list_loop
-  {T : Type _} (key : Std.Usize) (ls : AList T) : Result (Option T) := do
+  {T : Type _} (key : Std.Usize) (ls : AList T) :
+  Result (Option (SharedBorrow T))
+  := do
   match ls with
   | AList.Cons ckey cvalue tl =>
     if ckey = key
-    then ok (some cvalue)
-    else HashMap.get_in_list_loop key tl
+    then ok (some (SharedBorrow.mk cvalue))
+    else HashMap.get_in_list_loop key tl.val
   | AList.Nil => ok none
 partial_fixpoint
 
@@ -310,20 +324,25 @@ partial_fixpoint
     Source: 'tests/src/hashmap.rs', lines 233:4-242:5 -/
 @[reducible]
 def HashMap.get_in_list
-  {T : Type _} (key : Std.Usize) (ls : AList T) : Result (Option T) := do
-  HashMap.get_in_list_loop key ls
+  {T : Type _} (key : SharedBorrow Std.Usize) (ls : SharedBorrow (AList T)) :
+  Result (Option (SharedBorrow T))
+  := do
+  HashMap.get_in_list_loop key.val ls.val
 
 /-- [hashmap::{hashmap::HashMap<T>}::get]:
     Source: 'tests/src/hashmap.rs', lines 244:4-248:5
     Visibility: public -/
 def HashMap.get
-  {T : Type _} (self : HashMap T) (key : Std.Usize) : Result (Option T) := do
+  {T : Type _} (self : SharedBorrow (HashMap T)) (key : SharedBorrow Std.Usize)
+  :
+  Result (Option (SharedBorrow T))
+  := do
   let hash ← hash_key key
-  let i := alloc.vec.Vec.len self.slots
+  let i := alloc.vec.Vec.len (SharedBorrow.mk self.val.slots)
   let hash_mod ← hash % i
   let a ←
     alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice (AList T))
-      self.slots hash_mod
+      (SharedBorrow.mk self.val.slots) hash_mod
   HashMap.get_in_list key a
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
@@ -332,22 +351,22 @@ def HashMap.get
 @[rust_loop]
 def HashMap.get_mut_in_list_loop
   {T : Type _} (ls : AList T) (key : Std.Usize) :
-  Result ((Option T) × (Option T → AList T))
+  Result ((Option (MutBorrow T)) × (Option (MutBorrow T) → AList T))
   := do
   match ls with
   | AList.Cons ckey cvalue tl =>
     if ckey = key
     then
-      ok (some cvalue,
+      ok (some (MutBorrow.mk cvalue),
         fun o =>
           let t := match o with
-                   | some t1 => t1
+                   | some (MutBorrow.mk t1) => t1
                    | _ => cvalue
           AList.Cons ckey t tl)
     else
-      let (o, back) ← HashMap.get_mut_in_list_loop tl key
+      let (o, back) ← HashMap.get_mut_in_list_loop tl.val key
       let back1 := fun o1 => let a := back o1
-                             AList.Cons ckey cvalue a
+                             AList.Cons ckey cvalue (Box.mk a)
       ok (o, back1)
   | AList.Nil => ok (none, fun o => AList.Nil)
 partial_fixpoint
@@ -357,30 +376,30 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def HashMap.get_mut_in_list
-  {T : Type _} (ls : AList T) (key : Std.Usize) :
-  Result ((Option T) × (Option T → AList T))
+  {T : Type _} (ls : MutBorrow (AList T)) (key : SharedBorrow Std.Usize) :
+  Result ((Option (MutBorrow T)) × (Option (MutBorrow T) → AList T))
   := do
-  HashMap.get_mut_in_list_loop ls key
+  HashMap.get_mut_in_list_loop ls.val key.val
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_mut]:
     Source: 'tests/src/hashmap.rs', lines 262:4-266:5
     Visibility: public -/
 def HashMap.get_mut
-  {T : Type _} (self : HashMap T) (key : Std.Usize) :
-  Result ((Option T) × (Option T → HashMap T))
+  {T : Type _} (self : MutBorrow (HashMap T)) (key : SharedBorrow Std.Usize) :
+  Result ((Option (MutBorrow T)) × (Option (MutBorrow T) → HashMap T))
   := do
   let hash ← hash_key key
-  let i := alloc.vec.Vec.len self.slots
+  let i := alloc.vec.Vec.len (SharedBorrow.mk self.val.slots)
   let hash_mod ← hash % i
   let (a, index_mut_back) ←
     alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
-      self.slots hash_mod
+      (MutBorrow.mk self.val.slots) hash_mod
   let (o, get_mut_in_list_back) ← HashMap.get_mut_in_list a key
   let back :=
     fun o1 =>
       let a1 := get_mut_in_list_back o1
       let v := index_mut_back a1
-      { self with slots := v }
+      { self.val with slots := v }
   ok (o, back)
 
 /-- [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
@@ -394,13 +413,13 @@ def HashMap.remove_from_list_loop
   | AList.Cons ckey t tl =>
     if ckey = key
     then
-      let (mv_ls, _) := core.mem.replace ls AList.Nil
+      let (mv_ls, _) := core.mem.replace (MutBorrow.mk ls) AList.Nil
       match mv_ls with
-      | AList.Cons _ cvalue tl1 => ok (some cvalue, tl1)
+      | AList.Cons _ cvalue tl1 => ok (some cvalue, tl1.val)
       | AList.Nil => fail panic
     else
-      let (o, back) ← HashMap.remove_from_list_loop key tl
-      let back1 := AList.Cons ckey t back
+      let (o, back) ← HashMap.remove_from_list_loop key tl.val
+      let back1 := AList.Cons ckey t (Box.mk back)
       ok (o, back1)
   | AList.Nil => ok (none, AList.Nil)
 partial_fixpoint
@@ -409,31 +428,31 @@ partial_fixpoint
     Source: 'tests/src/hashmap.rs', lines 270:4-296:5 -/
 @[reducible]
 def HashMap.remove_from_list
-  {T : Type _} (key : Std.Usize) (ls : AList T) :
+  {T : Type _} (key : SharedBorrow Std.Usize) (ls : MutBorrow (AList T)) :
   Result ((Option T) × (AList T))
   := do
-  HashMap.remove_from_list_loop key ls
+  HashMap.remove_from_list_loop key.val ls.val
 
 /-- [hashmap::{hashmap::HashMap<T>}::remove]:
     Source: 'tests/src/hashmap.rs', lines 299:4-311:5
     Visibility: public -/
 def HashMap.remove
-  {T : Type _} (self : HashMap T) (key : Std.Usize) :
+  {T : Type _} (self : MutBorrow (HashMap T)) (key : SharedBorrow Std.Usize) :
   Result ((Option T) × (HashMap T))
   := do
   let hash ← hash_key key
-  let i := alloc.vec.Vec.len self.slots
+  let i := alloc.vec.Vec.len (SharedBorrow.mk self.val.slots)
   let hash_mod ← hash % i
   let (a, index_mut_back) ←
     alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
-      self.slots hash_mod
+      (MutBorrow.mk self.val.slots) hash_mod
   let (x, a1) ← HashMap.remove_from_list key a
   match x with
   | none => let v := index_mut_back a1
-            ok (none, { self with slots := v })
+            ok (none, { self.val with slots := v })
   | some _ =>
-    let i1 ← self.num_entries - 1#usize
+    let i1 ← self.val.num_entries - 1#usize
     let v := index_mut_back a1
-    ok (x, { self with num_entries := i1, slots := v })
+    ok (x, { self.val with num_entries := i1, slots := v })
 
 end hashmap

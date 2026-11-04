@@ -24,7 +24,9 @@ namespace array_slice_index
     Source: 'tests/src/array_slice_index.rs', lines 5:0-7:1
     Visibility: public -/
 def slice_use_index_range_from
-  (s : Slice Std.U32) : Result (Slice Std.U32) := do
+  (s : SharedBorrow (Slice Std.U32)) :
+  Result (SharedBorrow (Slice Std.U32))
+  := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice
     Std.U32) s { start := 0#usize }
 
@@ -32,14 +34,19 @@ def slice_use_index_range_from
     Source: 'tests/src/array_slice_index.rs', lines 9:0-11:1
     Visibility: public -/
 def slice_use_get_range_from
-  (s : Slice Std.U32) : Result (Option (Slice Std.U32)) := do
+  (s : SharedBorrow (Slice Std.U32)) :
+  Result (Option (SharedBorrow (Slice Std.U32)))
+  := do
   core.slice.Slice.get (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U32)
     s { start := 0#usize }
 
 /-- [array_slice_index::slice_use_index_range]:
     Source: 'tests/src/array_slice_index.rs', lines 13:0-15:1
     Visibility: public -/
-def slice_use_index_range (s : Slice Std.U32) : Result (Slice Std.U32) := do
+def slice_use_index_range
+  (s : SharedBorrow (Slice Std.U32)) :
+  Result (SharedBorrow (Slice Std.U32))
+  := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice
     Std.U32) s { start := 0#usize, «end» := 1#usize }
 
@@ -47,7 +54,9 @@ def slice_use_index_range (s : Slice Std.U32) : Result (Slice Std.U32) := do
     Source: 'tests/src/array_slice_index.rs', lines 17:0-19:1
     Visibility: public -/
 def slice_use_get_range
-  (s : Slice Std.U32) : Result (Option (Slice Std.U32)) := do
+  (s : SharedBorrow (Slice Std.U32)) :
+  Result (Option (SharedBorrow (Slice Std.U32)))
+  := do
   core.slice.Slice.get (core.slice.index.SliceIndexRangeUsizeSlice Std.U32) s
     { start := 0#usize, «end» := 1#usize }
 
@@ -55,8 +64,8 @@ def slice_use_get_range
     Source: 'tests/src/array_slice_index.rs', lines 21:0-23:1
     Visibility: public -/
 def slice_use_index_mut_range_from
-  (s : Slice Std.U32) :
-  Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
+  (s : MutBorrow (Slice Std.U32)) :
+  Result ((MutBorrow (Slice Std.U32)) × (Slice Std.U32 → Slice Std.U32))
   := do
   core.slice.index.Slice.index_mut
     (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U32) s
@@ -66,9 +75,9 @@ def slice_use_index_mut_range_from
     Source: 'tests/src/array_slice_index.rs', lines 25:0-27:1
     Visibility: public -/
 def slice_use_get_mut_range_from
-  (s : Slice Std.U32) :
-  Result ((Option (Slice Std.U32)) × (Option (Slice Std.U32) → Slice
-    Std.U32))
+  (s : MutBorrow (Slice Std.U32)) :
+  Result ((Option (MutBorrow (Slice Std.U32))) × (Option (MutBorrow (Slice
+    Std.U32)) → Slice Std.U32))
   := do
   core.slice.Slice.get_mut (core.slice.index.SliceIndexRangeFromUsizeSlice
     Std.U32) s { start := 0#usize }

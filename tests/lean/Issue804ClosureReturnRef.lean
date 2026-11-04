@@ -35,31 +35,33 @@ axiom core.array.from_fn
 
 /-- [issue_804_closure_return_ref::each_ref::{closure}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
-@[reducible]
-def each_ref.closure := Array Std.U8 10#usize
+structure each_ref.closure where
+  _0 : SharedBorrow (Array Std.U8 10#usize)
 
 /-- [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnMut<(usize,), &'_0 u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0, '_1>}::call_mut]:
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8.call_mut
-  (c : each_ref.closure) (tupled_args : Std.Usize) :
-  Result (Std.U8 × each_ref.closure)
+  (c : MutBorrow each_ref.closure) (tupled_args : Std.Usize) :
+  Result ((SharedBorrow Std.U8) × each_ref.closure)
   := do
-  let i ← Array.index_usize c tupled_args
-  ok (i, c)
+  let i ← Array.index_usize c.val._0 tupled_args
+  ok (i, c.val)
 
 /-- [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnOnce<(usize,), &'_0 u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0, '_1>}::call_once]:
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeShared0U8.call_once
-  (c : each_ref.closure) (i : Std.Usize) : Result Std.U8 := do
+  (c : each_ref.closure) (i : Std.Usize) : Result (SharedBorrow Std.U8) := do
   let (i1, _) ←
-    each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8.call_mut c i
+    each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8.call_mut
+      (MutBorrow.mk c) i
   ok i1
 
 /-- Trait implementation: [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnOnce<(usize,), &'_0 u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0, '_1>}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
 def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeShared0U8 :
-  core.ops.function.FnOnce each_ref.closure Std.Usize Std.U8 := {
+  core.ops.function.FnOnce each_ref.closure Std.Usize (SharedBorrow Std.U8)
+  := {
   call_once :=
     each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeShared0U8.call_once
 }
@@ -68,7 +70,7 @@ def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeShared0U8 :
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
 def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8 :
-  core.ops.function.FnMut each_ref.closure Std.Usize Std.U8 := {
+  core.ops.function.FnMut each_ref.closure Std.Usize (SharedBorrow Std.U8) := {
   FnOnceInst := each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeShared0U8
   call_mut :=
     each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8.call_mut
@@ -77,8 +79,11 @@ def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8 :
 /-- [issue_804_closure_return_ref::each_ref]:
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 5:0-7:1
     Visibility: public -/
-def each_ref (s : Array Std.U8 10#usize) : Result (Array Std.U8 10#usize) := do
+def each_ref
+  (s : SharedBorrow (Array Std.U8 10#usize)) :
+  Result (Array (SharedBorrow Std.U8) 10#usize)
+  := do
   core.array.from_fn 10#usize
-    each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8 s
+    each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeShared0U8 { _0 := s }
 
 end issue_804_closure_return_ref

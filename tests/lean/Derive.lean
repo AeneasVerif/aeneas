@@ -28,7 +28,8 @@ namespace derive
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
-axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
+axiom Bool.Insts.CoreCmpPartialEqBool.ne
+  : SharedBorrow Bool → SharedBorrow Bool → Result Bool
 
 /-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
     Source: '/rustc/library/alloc/src/boxed.rs', lines 2185:4-2185:38
@@ -37,7 +38,7 @@ axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
 axiom Box.Insts.CoreCmpPartialEqBox.ne
   {T : Type _} (A : Type _) (corecmpPartialEqInst : core.cmp.PartialEq T T) :
-  T → T → Result Bool
+  SharedBorrow (Box T) → SharedBorrow (Box T) → Result Bool
 
 /-- [derive::CopyEnumOneVariant]
     Source: 'tests/src/derive.rs', lines 4:0-6:1 -/
@@ -49,8 +50,8 @@ inductive CopyEnumOneVariant where
     Source: 'tests/src/derive.rs', lines 3:9-3:14
     Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreCloneClone.clone
-  (self : CopyEnumOneVariant) : Result CopyEnumOneVariant := do
-  ok self
+  (self : SharedBorrow CopyEnumOneVariant) : Result CopyEnumOneVariant := do
+  ok self.val
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:9-3:14 -/
@@ -79,10 +80,14 @@ def CopyEnumOneVariant.Insts.CoreMarkerStructuralPartialEq :
     Source: 'tests/src/derive.rs', lines 3:22-3:31
     Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.eq
-  (self : CopyEnumOneVariant) (other : CopyEnumOneVariant) : Result Bool := do
-  let ⟨ __self_0 ⟩ := self
-  let ⟨ __arg1_0 ⟩ := other
-  core.cmp.impls.PartialEqBool.eq __self_0 __arg1_0
+  (self : SharedBorrow CopyEnumOneVariant)
+  (other : SharedBorrow CopyEnumOneVariant) :
+  Result Bool
+  := do
+  let ⟨ __self_0 ⟩ := self.val
+  let ⟨ __arg1_0 ⟩ := other.val
+  core.cmp.impls.PartialEqBool.eq (SharedBorrow.mk __self_0) (SharedBorrow.mk
+    __arg1_0)
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:22-3:31 -/
@@ -98,7 +103,7 @@ impl_def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant :
     Source: 'tests/src/derive.rs', lines 3:33-3:35
     Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreCmpEq.assert_fields_are_eq
-  (self : CopyEnumOneVariant) : Result Unit := do
+  (self : SharedBorrow CopyEnumOneVariant) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [derive::{impl core::cmp::Eq for derive::CopyEnumOneVariant}]
@@ -114,12 +119,15 @@ def CopyEnumOneVariant.Insts.CoreCmpEq : core.cmp.Eq CopyEnumOneVariant := {
     Source: 'tests/src/derive.rs', lines 3:37-3:42
     Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreFmtDebug.fmt
-  (self : CopyEnumOneVariant) (f : core.fmt.Formatter) :
+  (self : SharedBorrow CopyEnumOneVariant) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
-  let ⟨ __self_0 ⟩ := self
-  let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
-  core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant") __self_01
+  let ⟨ __self_0 ⟩ := self.val
+  let dyn :=
+    Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) (SharedBorrow.mk
+      __self_0)
+  core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+    "Variant")) (SharedBorrow.mk dyn)
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:37-3:42 -/
@@ -142,8 +150,8 @@ inductive ScalarEnum where
     Source: 'tests/src/derive.rs', lines 8:9-8:14
     Visibility: public -/
 def ScalarEnum.Insts.CoreCloneClone.clone
-  (self : ScalarEnum) : Result ScalarEnum := do
-  ok self
+  (self : SharedBorrow ScalarEnum) : Result ScalarEnum := do
+  ok self.val
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:9-8:14 -/
@@ -170,10 +178,12 @@ def ScalarEnum.Insts.CoreMarkerStructuralPartialEq :
     Source: 'tests/src/derive.rs', lines 8:22-8:31
     Visibility: public -/
 def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
-  (self : ScalarEnum) (other : ScalarEnum) : Result Bool := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  ok (self1 = other1)
+  (self : SharedBorrow ScalarEnum) (other : SharedBorrow ScalarEnum) :
+  Result Bool
+  := do
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  ok (__self_discr = __arg1_discr)
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:22-8:31 -/
@@ -198,14 +208,18 @@ impl_def ScalarEnum.Insts.CoreCmpEq : core.cmp.Eq ScalarEnum := {
     Source: 'tests/src/derive.rs', lines 8:37-8:42
     Visibility: public -/
 def ScalarEnum.Insts.CoreFmtDebug.fmt
-  (self : ScalarEnum) (f : core.fmt.Formatter) :
+  (self : SharedBorrow ScalarEnum) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
-  match self with
-  | ScalarEnum.Variant0 => core.fmt.Formatter.write_str f (toStr "Variant0")
-  | ScalarEnum.Variant1 => core.fmt.Formatter.write_str f (toStr "Variant1")
-  | ScalarEnum.Variant2 => core.fmt.Formatter.write_str f (toStr "Variant2")
-  | ScalarEnum.Variant3 => core.fmt.Formatter.write_str f (toStr "Variant3")
+  match self.val with
+  | ScalarEnum.Variant0 =>
+    core.fmt.Formatter.write_str f (SharedBorrow.mk (toStr "Variant0"))
+  | ScalarEnum.Variant1 =>
+    core.fmt.Formatter.write_str f (SharedBorrow.mk (toStr "Variant1"))
+  | ScalarEnum.Variant2 =>
+    core.fmt.Formatter.write_str f (SharedBorrow.mk (toStr "Variant2"))
+  | ScalarEnum.Variant3 =>
+    core.fmt.Formatter.write_str f (SharedBorrow.mk (toStr "Variant3"))
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:37-8:42 -/
@@ -227,19 +241,21 @@ inductive CopyEnum (T : Type _) where
     Source: 'tests/src/derive.rs', lines 16:9-16:14
     Visibility: public -/
 def CopyEnum.Insts.CoreCloneClone.clone
-  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (self : CopyEnum T) :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (self : SharedBorrow (CopyEnum T)) :
   Result (CopyEnum T)
   := do
-  match self with
+  match self.val with
   | CopyEnum.Variant0 => ok CopyEnum.Variant0
   | CopyEnum.Variant1 __self_0 =>
-    let b ← lift (core.clone.impls.CloneBool.clone __self_0)
+    let b ←
+      lift (core.clone.impls.CloneBool.clone (SharedBorrow.mk __self_0))
     ok (CopyEnum.Variant1 b)
   | CopyEnum.Variant2 __self_0 =>
-    let i ← lift (core.clone.impls.CloneU32.clone __self_0)
+    let i ← lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk __self_0))
     ok (CopyEnum.Variant2 i)
   | CopyEnum.Variant3 __self_0 =>
-    let t ← corecloneCloneInst.clone __self_0
+    let t ← corecloneCloneInst.clone (SharedBorrow.mk __self_0)
     ok (CopyEnum.Variant3 t)
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::CopyEnum<T>}]
@@ -271,37 +287,40 @@ def CopyEnum.Insts.CoreMarkerStructuralPartialEq {T : Type _}
     Visibility: public -/
 def CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq
   {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T)
-  (self : CopyEnum T) (other : CopyEnum T) :
+  (self : SharedBorrow (CopyEnum T)) (other : SharedBorrow (CopyEnum T)) :
   Result Bool
   := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  if self1 = other1
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  if __self_discr = __arg1_discr
   then
-    match self with
+    match self.val with
     | CopyEnum.Variant0 => ok true
     | CopyEnum.Variant1 __self_0 =>
-      match other with
+      match other.val with
       | CopyEnum.Variant0 => ok true
       | CopyEnum.Variant1 __arg1_0 =>
-        core.cmp.impls.PartialEqBool.eq __self_0 __arg1_0
+        core.cmp.impls.PartialEqBool.eq (SharedBorrow.mk __self_0)
+          (SharedBorrow.mk __arg1_0)
       | CopyEnum.Variant2 _ => ok true
       | CopyEnum.Variant3 _ => ok true
     | CopyEnum.Variant2 __self_0 =>
-      match other with
+      match other.val with
       | CopyEnum.Variant0 => ok true
       | CopyEnum.Variant1 _ => ok true
       | CopyEnum.Variant2 __arg1_0 =>
-        lift (core.cmp.impls.PartialEqU32.eq __self_0 __arg1_0)
+        lift (core.cmp.impls.PartialEqU32.eq (SharedBorrow.mk __self_0)
+          (SharedBorrow.mk __arg1_0))
       | CopyEnum.Variant3 _ => ok true
     | CopyEnum.Variant3 __self_0 =>
-      match other with
+      match other.val with
       | CopyEnum.Variant0 => ok true
       | CopyEnum.Variant1 _ => ok true
       | CopyEnum.Variant2 _ => ok true
       | CopyEnum.Variant3 __arg1_0 =>
-        core.cmp.impls.PartialEqShared.eq corecmpPartialEqInst __self_0
-          __arg1_0
+        core.cmp.impls.PartialEqShared.eq corecmpPartialEqInst (SharedBorrow.mk
+          (SharedBorrow.mk __self_0)) (SharedBorrow.mk (SharedBorrow.mk
+          __arg1_0))
   else ok false
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}]
@@ -319,7 +338,8 @@ impl_def CopyEnum.Insts.CoreCmpPartialEqCopyEnum {T : Type _}
     Source: 'tests/src/derive.rs', lines 16:33-16:35
     Visibility: public -/
 def CopyEnum.Insts.CoreCmpEq.assert_fields_are_eq
-  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : CopyEnum T) :
+  {T : Type _} (corecmpEqInst : core.cmp.Eq T)
+  (self : SharedBorrow (CopyEnum T)) :
   Result Unit
   := do
   ok ()
@@ -339,22 +359,31 @@ def CopyEnum.Insts.CoreCmpEq {T : Type _} (corecmpEqInst : core.cmp.Eq T) :
     Source: 'tests/src/derive.rs', lines 16:37-16:42
     Visibility: public -/
 def CopyEnum.Insts.CoreFmtDebug.fmt
-  {T : Type _} (corefmtDebugInst : core.fmt.Debug T) (self : CopyEnum T)
-  (f : core.fmt.Formatter) :
+  {T : Type _} (corefmtDebugInst : core.fmt.Debug T)
+  (self : SharedBorrow (CopyEnum T)) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
-  match self with
-  | CopyEnum.Variant0 => core.fmt.Formatter.write_str f (toStr "Variant0")
+  match self.val with
+  | CopyEnum.Variant0 =>
+    core.fmt.Formatter.write_str f (SharedBorrow.mk (toStr "Variant0"))
   | CopyEnum.Variant1 __self_0 =>
-    let __self_01 :=
-      Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant1") __self_01
+    let dyn :=
+      Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) (SharedBorrow.mk
+        __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant1")) (SharedBorrow.mk dyn)
   | CopyEnum.Variant2 __self_0 =>
-    let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant2") __self_01
+    let dyn :=
+      Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) (SharedBorrow.mk
+        __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant2")) (SharedBorrow.mk dyn)
   | CopyEnum.Variant3 __self_0 =>
-    let __self_01 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant3") __self_01
+    let dyn :=
+      Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) (SharedBorrow.mk
+        __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant3")) (SharedBorrow.mk dyn)
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:37-16:42 -/
@@ -378,22 +407,25 @@ inductive Enum (T : Type _) where
     Source: 'tests/src/derive.rs', lines 24:9-24:14
     Visibility: public -/
 def Enum.Insts.CoreCloneClone.clone
-  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (self : Enum T) :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (self : SharedBorrow (Enum T)) :
   Result (Enum T)
   := do
-  match self with
+  match self.val with
   | Enum.Variant0 => ok Enum.Variant0
   | Enum.Variant1 __self_0 =>
-    let b ← lift (core.clone.impls.CloneBool.clone __self_0)
+    let b ←
+      lift (core.clone.impls.CloneBool.clone (SharedBorrow.mk __self_0))
     ok (Enum.Variant1 b)
   | Enum.Variant2 __self_0 =>
-    let i ← lift (core.clone.impls.CloneU32.clone __self_0)
+    let i ← lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk __self_0))
     ok (Enum.Variant2 i)
   | Enum.Variant3 __self_0 =>
-    let t ← corecloneCloneInst.clone __self_0
+    let t ← corecloneCloneInst.clone (SharedBorrow.mk __self_0)
     ok (Enum.Variant3 t)
   | Enum.Variant4 __self_0 =>
-    let v ← alloc.vec.CloneVec.clone corecloneCloneInst __self_0
+    let v ←
+      alloc.vec.CloneVec.clone corecloneCloneInst (SharedBorrow.mk __self_0)
     ok (Enum.Variant4 v)
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::Enum<T>}]
@@ -415,50 +447,53 @@ def Enum.Insts.CoreMarkerStructuralPartialEq {T : Type _} (corecmpPartialEqInst
     Source: 'tests/src/derive.rs', lines 24:16-24:25
     Visibility: public -/
 def Enum.Insts.CoreCmpPartialEqEnum.eq
-  {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T) (self : Enum T)
-  (other : Enum T) :
+  {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T)
+  (self : SharedBorrow (Enum T)) (other : SharedBorrow (Enum T)) :
   Result Bool
   := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  if self1 = other1
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  if __self_discr = __arg1_discr
   then
-    match self with
+    match self.val with
     | Enum.Variant0 => ok true
     | Enum.Variant1 __self_0 =>
-      match other with
+      match other.val with
       | Enum.Variant0 => ok true
       | Enum.Variant1 __arg1_0 =>
-        core.cmp.impls.PartialEqBool.eq __self_0 __arg1_0
+        core.cmp.impls.PartialEqBool.eq (SharedBorrow.mk __self_0)
+          (SharedBorrow.mk __arg1_0)
       | Enum.Variant2 _ => ok true
       | Enum.Variant3 _ => ok true
       | Enum.Variant4 _ => ok true
     | Enum.Variant2 __self_0 =>
-      match other with
+      match other.val with
       | Enum.Variant0 => ok true
       | Enum.Variant1 _ => ok true
       | Enum.Variant2 __arg1_0 =>
-        lift (core.cmp.impls.PartialEqU32.eq __self_0 __arg1_0)
+        lift (core.cmp.impls.PartialEqU32.eq (SharedBorrow.mk __self_0)
+          (SharedBorrow.mk __arg1_0))
       | Enum.Variant3 _ => ok true
       | Enum.Variant4 _ => ok true
     | Enum.Variant3 __self_0 =>
-      match other with
+      match other.val with
       | Enum.Variant0 => ok true
       | Enum.Variant1 _ => ok true
       | Enum.Variant2 _ => ok true
       | Enum.Variant3 __arg1_0 =>
-        core.cmp.impls.PartialEqShared.eq corecmpPartialEqInst __self_0
-          __arg1_0
+        core.cmp.impls.PartialEqShared.eq corecmpPartialEqInst (SharedBorrow.mk
+          (SharedBorrow.mk __self_0)) (SharedBorrow.mk (SharedBorrow.mk
+          __arg1_0))
       | Enum.Variant4 _ => ok true
     | Enum.Variant4 __self_0 =>
-      match other with
+      match other.val with
       | Enum.Variant0 => ok true
       | Enum.Variant1 _ => ok true
       | Enum.Variant2 _ => ok true
       | Enum.Variant3 _ => ok true
       | Enum.Variant4 __arg1_0 =>
-        alloc.vec.partial_eq.PartialEqVec.eq corecmpPartialEqInst __self_0
-          __arg1_0
+        alloc.vec.partial_eq.PartialEqVec.eq corecmpPartialEqInst
+          (SharedBorrow.mk __self_0) (SharedBorrow.mk __arg1_0)
   else ok false
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}]
@@ -475,7 +510,7 @@ impl_def Enum.Insts.CoreCmpPartialEqEnum {T : Type _} (corecmpPartialEqInst :
     Source: 'tests/src/derive.rs', lines 24:27-24:29
     Visibility: public -/
 def Enum.Insts.CoreCmpEq.assert_fields_are_eq
-  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : Enum T) :
+  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : SharedBorrow (Enum T)) :
   Result Unit
   := do
   ok ()
@@ -494,27 +529,37 @@ def Enum.Insts.CoreCmpEq {T : Type _} (corecmpEqInst : core.cmp.Eq T) :
     Source: 'tests/src/derive.rs', lines 24:31-24:36
     Visibility: public -/
 def Enum.Insts.CoreFmtDebug.fmt
-  {T : Type _} (corefmtDebugInst : core.fmt.Debug T) (self : Enum T)
-  (f : core.fmt.Formatter) :
+  {T : Type _} (corefmtDebugInst : core.fmt.Debug T)
+  (self : SharedBorrow (Enum T)) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
-  match self with
-  | Enum.Variant0 => core.fmt.Formatter.write_str f (toStr "Variant0")
+  match self.val with
+  | Enum.Variant0 =>
+    core.fmt.Formatter.write_str f (SharedBorrow.mk (toStr "Variant0"))
   | Enum.Variant1 __self_0 =>
-    let __self_01 :=
-      Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant1") __self_01
+    let dyn :=
+      Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) (SharedBorrow.mk
+        __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant1")) (SharedBorrow.mk dyn)
   | Enum.Variant2 __self_0 =>
-    let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant2") __self_01
+    let dyn :=
+      Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) (SharedBorrow.mk
+        __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant2")) (SharedBorrow.mk dyn)
   | Enum.Variant3 __self_0 =>
-    let __self_01 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant3") __self_01
+    let dyn :=
+      Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) (SharedBorrow.mk
+        __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant3")) (SharedBorrow.mk dyn)
   | Enum.Variant4 __self_0 =>
-    let __self_01 :=
+    let dyn :=
       Dyn.mk _ (core.fmt.DebugShared (core.fmt.DebugVec corefmtDebugInst))
-        __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant4") __self_01
+        (SharedBorrow.mk __self_0)
+    core.fmt.Formatter.debug_tuple_field1_finish f (SharedBorrow.mk (toStr
+      "Variant4")) (SharedBorrow.mk dyn)
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:31-24:36 -/
@@ -529,21 +574,25 @@ def Enum.Insts.CoreFmtDebug {T : Type _} (corefmtDebugInst : core.fmt.Debug T)
 @[discriminant isize]
 inductive List (T : Type _) where
 | Nil : List T
-| Cons : T → List T → List T
+| Cons : T → Box (List T) → List T
 
 /-- [derive::{impl core::clone::Clone for derive::List<T>}::clone]:
     Source: 'tests/src/derive.rs', lines 34:9-34:14
     Visibility: public -/
 def List.Insts.CoreCloneClone.clone
-  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (self : List T) :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (self : SharedBorrow (List T)) :
   Result (List T)
   := do
-  match self with
+  match self.val with
   | List.Nil => ok List.Nil
   | List.Cons __self_0 __self_1 =>
-    let t ← corecloneCloneInst.clone __self_0
-    let l ← List.Insts.CoreCloneClone.clone corecloneCloneInst __self_1
-    ok (List.Cons t l)
+    let t ← corecloneCloneInst.clone (SharedBorrow.mk __self_0)
+    let l ←
+      List.Insts.CoreCloneClone.clone corecloneCloneInst (SharedBorrow.mk
+        __self_1.val)
+    let l1 := Box.mk l
+    ok (List.Cons t l1)
 partial_fixpoint
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::List<T>}]
@@ -565,27 +614,28 @@ def List.Insts.CoreMarkerStructuralPartialEq {T : Type _} (corecmpPartialEqInst
     Source: 'tests/src/derive.rs', lines 34:16-34:25
     Visibility: public -/
 def List.Insts.CoreCmpPartialEqList.eq
-  {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T) (self : List T)
-  (other : List T) :
+  {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T)
+  (self : SharedBorrow (List T)) (other : SharedBorrow (List T)) :
   Result Bool
   := do
-  let self1 := read_discriminant self
-  let other1 := read_discriminant other
-  if self1 = other1
+  let __self_discr := read_discriminant self.val
+  let __arg1_discr := read_discriminant other.val
+  if __self_discr = __arg1_discr
   then
-    match self with
+    match self.val with
     | List.Nil => ok true
     | List.Cons __self_0 __self_1 =>
-      match other with
+      match other.val with
       | List.Nil => ok true
       | List.Cons __arg1_0 __arg1_1 =>
         let b ←
-          core.cmp.impls.PartialEqShared.eq corecmpPartialEqInst __self_0
-            __arg1_0
+          core.cmp.impls.PartialEqShared.eq corecmpPartialEqInst
+            (SharedBorrow.mk (SharedBorrow.mk __self_0)) (SharedBorrow.mk
+            (SharedBorrow.mk __arg1_0))
         if b
         then
-          List.Insts.CoreCmpPartialEqList.eq corecmpPartialEqInst __self_1
-            __arg1_1
+          List.Insts.CoreCmpPartialEqList.eq corecmpPartialEqInst
+            (SharedBorrow.mk __self_1.val) (SharedBorrow.mk __arg1_1.val)
         else ok false
   else ok false
 partial_fixpoint
@@ -604,7 +654,7 @@ impl_def List.Insts.CoreCmpPartialEqList {T : Type _} (corecmpPartialEqInst :
     Source: 'tests/src/derive.rs', lines 34:27-34:29
     Visibility: public -/
 def List.Insts.CoreCmpEq.assert_fields_are_eq
-  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : List T) :
+  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : SharedBorrow (List T)) :
   Result Unit
   := do
   ok ()
@@ -631,14 +681,16 @@ structure CopyStruct (T : Type _) where
     Source: 'tests/src/derive.rs', lines 41:9-41:14
     Visibility: public -/
 def CopyStruct.Insts.CoreCloneClone.clone
-  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (self : CopyStruct T)
-  :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (self : SharedBorrow (CopyStruct T)) :
   Result (CopyStruct T)
   := do
-  (BuiltinClone Unit).clone ()
-  let b ← lift (core.clone.impls.CloneBool.clone self.f1)
-  let i ← lift (core.clone.impls.CloneU32.clone self.f2)
-  let t ← corecloneCloneInst.clone self.f3
+  (BuiltinClone Unit).clone (SharedBorrow.mk ())
+  let b ←
+    lift (core.clone.impls.CloneBool.clone (SharedBorrow.mk self.val.f1))
+  let i ←
+    lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.f2))
+  let t ← corecloneCloneInst.clone (SharedBorrow.mk self.val.f3)
   ok { f0 := (), f1 := b, f2 := i, f3 := t }
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::CopyStruct<T>}]
@@ -670,16 +722,19 @@ def CopyStruct.Insts.CoreMarkerStructuralPartialEq {T : Type _}
     Visibility: public -/
 def CopyStruct.Insts.CoreCmpPartialEqCopyStruct.eq
   {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T)
-  (self : CopyStruct T) (other : CopyStruct T) :
+  (self : SharedBorrow (CopyStruct T)) (other : SharedBorrow (CopyStruct T)) :
   Result Bool
   := do
-  let b ← core.cmp.impls.PartialEqUnit.eq () ()
+  let b ←
+    core.cmp.impls.PartialEqUnit.eq (SharedBorrow.mk ()) (SharedBorrow.mk ())
   if b
   then
-    if self.f1 = other.f1
+    if self.val.f1 = other.val.f1
     then
-      if self.f2 = other.f2
-      then corecmpPartialEqInst.eq self.f3 other.f3
+      if self.val.f2 = other.val.f2
+      then
+        corecmpPartialEqInst.eq (SharedBorrow.mk self.val.f3) (SharedBorrow.mk
+          other.val.f3)
       else ok false
     else ok false
   else ok false
@@ -699,7 +754,8 @@ impl_def CopyStruct.Insts.CoreCmpPartialEqCopyStruct {T : Type _}
     Source: 'tests/src/derive.rs', lines 41:33-41:35
     Visibility: public -/
 def CopyStruct.Insts.CoreCmpEq.assert_fields_are_eq
-  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : CopyStruct T) :
+  {T : Type _} (corecmpEqInst : core.cmp.Eq T)
+  (self : SharedBorrow (CopyStruct T)) :
   Result Unit
   := do
   ok ()
@@ -719,16 +775,21 @@ def CopyStruct.Insts.CoreCmpEq {T : Type _} (corecmpEqInst : core.cmp.Eq T) :
     Source: 'tests/src/derive.rs', lines 41:37-41:42
     Visibility: public -/
 def CopyStruct.Insts.CoreFmtDebug.fmt
-  {T : Type _} (corefmtDebugInst : core.fmt.Debug T) (self : CopyStruct T)
-  (f : core.fmt.Formatter) :
+  {T : Type _} (corefmtDebugInst : core.fmt.Debug T)
+  (self : SharedBorrow (CopyStruct T)) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
   let dyn := Dyn.mk _ core.fmt.DebugUnit ()
-  let dyn1 := Dyn.mk _ core.fmt.DebugBool self.f1
-  let dyn2 := Dyn.mk _ core.fmt.DebugU32 self.f2
-  let dyn3 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) self.f3
-  core.fmt.Formatter.debug_struct_field4_finish f (toStr "CopyStruct") (toStr
-    "f0") dyn (toStr "f1") dyn1 (toStr "f2") dyn2 (toStr "f3") dyn3
+  let dyn1 := Dyn.mk _ core.fmt.DebugBool self.val.f1
+  let dyn2 := Dyn.mk _ core.fmt.DebugU32 self.val.f2
+  let dyn3 :=
+    Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) (SharedBorrow.mk
+      self.val.f3)
+  core.fmt.Formatter.debug_struct_field4_finish f (SharedBorrow.mk (toStr
+    "CopyStruct")) (SharedBorrow.mk (toStr "f0")) (SharedBorrow.mk dyn)
+    (SharedBorrow.mk (toStr "f1")) (SharedBorrow.mk dyn1) (SharedBorrow.mk
+    (toStr "f2")) (SharedBorrow.mk dyn2) (SharedBorrow.mk (toStr "f3"))
+    (SharedBorrow.mk dyn3)
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:37-41:42 -/
@@ -747,10 +808,12 @@ structure Struct (T : Type _) where
     Source: 'tests/src/derive.rs', lines 49:9-49:14
     Visibility: public -/
 def Struct.Insts.CoreCloneClone.clone
-  {T : Type _} (corecloneCloneInst : core.clone.Clone T) (self : Struct T) :
+  {T : Type _} (corecloneCloneInst : core.clone.Clone T)
+  (self : SharedBorrow (Struct T)) :
   Result (Struct T)
   := do
-  let v ← alloc.vec.CloneVec.clone corecloneCloneInst self.f
+  let v ←
+    alloc.vec.CloneVec.clone corecloneCloneInst (SharedBorrow.mk self.val.f)
   ok { f := v }
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::Struct<T>}]
@@ -774,10 +837,11 @@ def Struct.Insts.CoreMarkerStructuralPartialEq {T : Type _}
     Visibility: public -/
 def Struct.Insts.CoreCmpPartialEqStruct.eq
   {T : Type _} (corecmpPartialEqInst : core.cmp.PartialEq T T)
-  (self : Struct T) (other : Struct T) :
+  (self : SharedBorrow (Struct T)) (other : SharedBorrow (Struct T)) :
   Result Bool
   := do
-  alloc.vec.partial_eq.PartialEqVec.eq corecmpPartialEqInst self.f other.f
+  alloc.vec.partial_eq.PartialEqVec.eq corecmpPartialEqInst (SharedBorrow.mk
+    self.val.f) (SharedBorrow.mk other.val.f)
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:16-49:25 -/
@@ -793,7 +857,8 @@ impl_def Struct.Insts.CoreCmpPartialEqStruct {T : Type _} (corecmpPartialEqInst
     Source: 'tests/src/derive.rs', lines 49:27-49:29
     Visibility: public -/
 def Struct.Insts.CoreCmpEq.assert_fields_are_eq
-  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : Struct T) :
+  {T : Type _} (corecmpEqInst : core.cmp.Eq T) (self : SharedBorrow (Struct T))
+  :
   Result Unit
   := do
   ok ()
@@ -813,14 +878,15 @@ def Struct.Insts.CoreCmpEq {T : Type _} (corecmpEqInst : core.cmp.Eq T) :
     Source: 'tests/src/derive.rs', lines 49:31-49:36
     Visibility: public -/
 def Struct.Insts.CoreFmtDebug.fmt
-  {T : Type _} (corefmtDebugInst : core.fmt.Debug T) (self : Struct T)
-  (f : core.fmt.Formatter) :
+  {T : Type _} (corefmtDebugInst : core.fmt.Debug T)
+  (self : SharedBorrow (Struct T)) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
   let dyn :=
-    Dyn.mk _ (core.fmt.DebugShared (core.fmt.DebugVec corefmtDebugInst)) self.f
-  core.fmt.Formatter.debug_struct_field1_finish f (toStr "Struct") (toStr "f")
-    dyn
+    Dyn.mk _ (core.fmt.DebugShared (core.fmt.DebugVec corefmtDebugInst))
+      (SharedBorrow.mk self.val.f)
+  core.fmt.Formatter.debug_struct_field1_finish f (SharedBorrow.mk (toStr
+    "Struct")) (SharedBorrow.mk (toStr "f")) (SharedBorrow.mk dyn)
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:31-49:36 -/
@@ -845,13 +911,18 @@ structure Struct6Fields where
     Source: 'tests/src/derive.rs', lines 54:9-54:14
     Visibility: public -/
 def Struct6Fields.Insts.CoreCloneClone.clone
-  (self : Struct6Fields) : Result Struct6Fields := do
-  let i ← lift (core.clone.impls.CloneU32.clone self.a)
-  let i1 ← lift (core.clone.impls.CloneU32.clone self.b)
-  let i2 ← lift (core.clone.impls.CloneU32.clone self.c)
-  let i3 ← lift (core.clone.impls.CloneU32.clone self.d)
-  let i4 ← lift (core.clone.impls.CloneU32.clone self.e)
-  let i5 ← lift (core.clone.impls.CloneU32.clone self.f)
+  (self : SharedBorrow Struct6Fields) : Result Struct6Fields := do
+  let i ← lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.a))
+  let i1 ←
+    lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.b))
+  let i2 ←
+    lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.c))
+  let i3 ←
+    lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.d))
+  let i4 ←
+    lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.e))
+  let i5 ←
+    lift (core.clone.impls.CloneU32.clone (SharedBorrow.mk self.val.f))
   ok { a := i, b := i1, c := i2, d := i3, e := i4, f := i5 }
 
 /-- Trait implementation: [derive::{impl core::clone::Clone for derive::Struct6Fields}]
@@ -872,17 +943,20 @@ def Struct6Fields.Insts.CoreMarkerStructuralPartialEq :
     Source: 'tests/src/derive.rs', lines 54:16-54:25
     Visibility: public -/
 def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
-  (self : Struct6Fields) (other : Struct6Fields) : Result Bool := do
-  if self.a = other.a
+  (self : SharedBorrow Struct6Fields) (other : SharedBorrow Struct6Fields) :
+  Result Bool
+  := do
+  if self.val.a = other.val.a
   then
-    if self.b = other.b
+    if self.val.b = other.val.b
     then
-      if self.c = other.c
+      if self.val.c = other.val.c
       then
-        if self.d = other.d
-        then if self.e = other.e
-             then ok (self.f = other.f)
-             else ok false
+        if self.val.d = other.val.d
+        then
+          if self.val.e = other.val.e
+          then ok (self.val.f = other.val.f)
+          else ok false
         else ok false
       else ok false
     else ok false
@@ -902,7 +976,7 @@ impl_def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields : core.cmp.PartialEq
     Source: 'tests/src/derive.rs', lines 54:27-54:29
     Visibility: public -/
 def Struct6Fields.Insts.CoreCmpEq.assert_fields_are_eq
-  (self : Struct6Fields) : Result Unit := do
+  (self : SharedBorrow Struct6Fields) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [derive::{impl core::cmp::Eq for derive::Struct6Fields}]
@@ -917,24 +991,32 @@ def Struct6Fields.Insts.CoreCmpEq : core.cmp.Eq Struct6Fields := {
     Source: 'tests/src/derive.rs', lines 54:31-54:36
     Visibility: public -/
 def Struct6Fields.Insts.CoreFmtDebug.fmt
-  (self : Struct6Fields) (f : core.fmt.Formatter) :
+  (self : SharedBorrow Struct6Fields) (f : MutBorrow core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
   := do
-  let dyn := Dyn.mk _ core.fmt.DebugU32 self.a
-  let dyn1 := Dyn.mk _ core.fmt.DebugU32 self.b
-  let dyn2 := Dyn.mk _ core.fmt.DebugU32 self.c
-  let dyn3 := Dyn.mk _ core.fmt.DebugU32 self.d
-  let dyn4 := Dyn.mk _ core.fmt.DebugU32 self.e
-  let dyn5 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) self.f
+  let dyn := Dyn.mk _ core.fmt.DebugU32 self.val.a
+  let dyn1 := Dyn.mk _ core.fmt.DebugU32 self.val.b
+  let dyn2 := Dyn.mk _ core.fmt.DebugU32 self.val.c
+  let dyn3 := Dyn.mk _ core.fmt.DebugU32 self.val.d
+  let dyn4 := Dyn.mk _ core.fmt.DebugU32 self.val.e
+  let dyn5 :=
+    Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) (SharedBorrow.mk
+      self.val.f)
   let values :=
-    Array.to_slice (Array.make 6#usize [ dyn, dyn1, dyn2, dyn3, dyn4, dyn5 ])
-  let s ←
-    lift (Array.to_slice
+    Array.as_slice (SharedBorrow.mk
       (Array.make 6#usize [
-        toStr "a", toStr "b", toStr "c", toStr "d", toStr "e", toStr "f"
+        SharedBorrow.mk dyn, SharedBorrow.mk dyn1, SharedBorrow.mk dyn2,
+        SharedBorrow.mk dyn3, SharedBorrow.mk dyn4, SharedBorrow.mk dyn5
         ]))
-  core.fmt.Formatter.debug_struct_fields_finish f (toStr "Struct6Fields") s
-    values
+  let s ←
+    lift (Array.as_slice (SharedBorrow.mk
+      (Array.make 6#usize [
+        SharedBorrow.mk (toStr "a"), SharedBorrow.mk (toStr "b"),
+        SharedBorrow.mk (toStr "c"), SharedBorrow.mk (toStr "d"),
+        SharedBorrow.mk (toStr "e"), SharedBorrow.mk (toStr "f")
+        ])))
+  core.fmt.Formatter.debug_struct_fields_finish f (SharedBorrow.mk (toStr
+    "Struct6Fields")) s values
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:31-54:36 -/
@@ -946,14 +1028,21 @@ def Struct6Fields.Insts.CoreFmtDebug : core.fmt.Debug Struct6Fields := {
 /-- [derive::refs_ne]:
     Source: 'tests/src/derive.rs', lines 64:0-66:1
     Visibility: public -/
-def refs_ne (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
+def refs_ne
+  (a : SharedBorrow Struct6Fields) (b : SharedBorrow Struct6Fields) :
+  Result Bool
+  := do
   core.cmp.impls.PartialEqShared.ne
-    Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields a b
+    Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields (SharedBorrow.mk a)
+    (SharedBorrow.mk b)
 
 /-- [derive::refs_eq]:
     Source: 'tests/src/derive.rs', lines 68:0-70:1
     Visibility: public -/
-def refs_eq (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
+def refs_eq
+  (a : SharedBorrow Struct6Fields) (b : SharedBorrow Struct6Fields) :
+  Result Bool
+  := do
   Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq a b
 
 end derive

@@ -23,68 +23,80 @@ namespace higher_ranked_trait_bounds
 /-- Trait declaration: [higher_ranked_trait_bounds::RefTrait]
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 4:0-6:1 -/
 structure RefTrait (Self : Type _) (X : Type _) where
-  get : Self → Result X
+  get : SharedBorrow Self → Result X
 
 /-- [higher_ranked_trait_bounds::use_higher_ranked_trait_bound]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 9:0-11:1 -/
 def use_higher_ranked_trait_bound
-  {P : Type _} (RefTraitPShared0U8Inst : RefTrait P Std.U8) (p : P) :
+  {P : Type _} (RefTraitPShared0U8Inst : RefTrait P (SharedBorrow Std.U8))
+  (p : SharedBorrow P) :
   Result Std.U8
   := do
-  RefTraitPShared0U8Inst.get p
+  let i ← RefTraitPShared0U8Inst.get p
+  ok i.val
 
 /-- [higher_ranked_trait_bounds::use_higher_ranked_trait_bound_where]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 14:0-19:1 -/
 def use_higher_ranked_trait_bound_where
-  {P : Type _} (RefTraitPShared0U8Inst : RefTrait P Std.U8) (p : P) :
+  {P : Type _} (RefTraitPShared0U8Inst : RefTrait P (SharedBorrow Std.U8))
+  (p : SharedBorrow P) :
   Result Std.U8
   := do
-  RefTraitPShared0U8Inst.get p
+  let i ← RefTraitPShared0U8Inst.get p
+  ok i.val
 
 /-- [higher_ranked_trait_bounds::call_fn_ref]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 21:0-24:1 -/
 def call_fn_ref
   {T0 : Type _} (coreopsfunctionFnT0TupleSharedU8U8Inst : core.ops.function.Fn
-  T0 Std.U8 Std.U8) (g : T0) (x : Std.U8) :
+  T0 (SharedBorrow Std.U8) Std.U8) (g : T0) (x : Std.U8) :
   Result Std.U8
   := do
-  coreopsfunctionFnT0TupleSharedU8U8Inst.call g x
+  coreopsfunctionFnT0TupleSharedU8U8Inst.call (SharedBorrow.mk g)
+    (SharedBorrow.mk x)
 
 /-- [higher_ranked_trait_bounds::call_fnmut_ref]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 26:0-29:1 -/
 def call_fnmut_ref
   {T0 : Type _} (coreopsfunctionFnMutT0TupleSharedU8TupleInst :
-  core.ops.function.FnMut T0 Std.U8 Unit) (g : T0) (x : Std.U8) :
+  core.ops.function.FnMut T0 (SharedBorrow Std.U8) Unit) (g : T0) (x : Std.U8)
+  :
   Result Unit
   := do
-  let (_, g1) ← coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut g x
-  let _ ← coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut g1 x
+  let (_, g1) ←
+    coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut (MutBorrow.mk g)
+      (SharedBorrow.mk x)
+  let _ ←
+    coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut (MutBorrow.mk g1)
+      (SharedBorrow.mk x)
   ok ()
 
 /-- [higher_ranked_trait_bounds::call_fnonce_ref]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 39:0-41:1 -/
 def call_fnonce_ref
   {T0 : Type _} (coreopsfunctionFnOnceT0TupleSharedU8U8Inst :
-  core.ops.function.FnOnce T0 Std.U8 Std.U8) (g : T0) (x : Std.U8) :
+  core.ops.function.FnOnce T0 (SharedBorrow Std.U8) Std.U8) (g : T0)
+  (x : Std.U8) :
   Result Std.U8
   := do
-  coreopsfunctionFnOnceT0TupleSharedU8U8Inst.call_once g x
+  coreopsfunctionFnOnceT0TupleSharedU8U8Inst.call_once g (SharedBorrow.mk x)
 
 /-- [higher_ranked_trait_bounds::call_fn_two_refs]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 44:0-46:1 -/
 def call_fn_two_refs
   {T0 : Type _} (coreopsfunctionFnT0PairSharedU8SharedU8U8Inst :
-  core.ops.function.Fn T0 (Std.U8 × Std.U8) Std.U8) (g : T0) (x : Std.U8)
-  (y : Std.U8) :
+  core.ops.function.Fn T0 ((SharedBorrow Std.U8) × (SharedBorrow Std.U8))
+  Std.U8) (g : T0) (x : Std.U8) (y : Std.U8) :
   Result Std.U8
   := do
-  coreopsfunctionFnT0PairSharedU8SharedU8U8Inst.call g (x, y)
+  coreopsfunctionFnT0PairSharedU8SharedU8U8Inst.call (SharedBorrow.mk g)
+    (SharedBorrow.mk x, SharedBorrow.mk y)
 
 /-- [higher_ranked_trait_bounds::ignore_higher_ranked_fn]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 49:0-49:47 -/
 def ignore_higher_ranked_fn
   {T0 : Type _} (coreopsfunctionFnT0TupleSharedTupleTupleInst :
-  core.ops.function.Fn T0 Unit Unit) (_g : T0) :
+  core.ops.function.Fn T0 (SharedBorrow Unit) Unit) (_g : T0) :
   Result Unit
   := do
   ok ()

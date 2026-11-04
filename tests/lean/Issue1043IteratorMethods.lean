@@ -46,7 +46,7 @@ axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
   (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
   Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
   core.ops.function.FnMut F Clause0_Item B) :
-  core.iter.adapters.map.Map I F → Result ((Option B) ×
+  MutBorrow (core.iter.adapters.map.Map I F) → Result ((Option B) ×
     (core.iter.adapters.map.Map I F))
 
 /-- Trait implementation: [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}]
@@ -69,22 +69,22 @@ impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
 
 /-- [issue_1043_iterator_methods::indexed_squares::{closure}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
-@[reducible]
-def indexed_squares.closure (I : Type _) := Unit
+structure indexed_squares.closure (I : Type _) where
 
 /-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnMut<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}::call_mut]:
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 def
   indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32.call_mut
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
-  core.iter.traits.iterator.Iterator I Std.U32) (c : indexed_squares.closure I)
+  core.iter.traits.iterator.Iterator I Std.U32)
+  (c : MutBorrow (indexed_squares.closure I))
   (tupled_args : (Std.Usize × Std.U32)) :
   Result (Std.U32 × (indexed_squares.closure I))
   := do
   let (i, x) := tupled_args
   let i1 ← lift (UScalar.cast .U32 i)
   let i2 ← x + i1
-  ok (i2, c)
+  ok (i2, c.val)
 
 /-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnOnce<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}::call_once]:
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
@@ -97,7 +97,7 @@ def
   := do
   let (i, _) ←
     indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32.call_mut
-      coreitertraitsiteratorIteratorIU32Inst c p
+      coreitertraitsiteratorIteratorIU32Inst (MutBorrow.mk c) p
   ok i
 
 /-- Trait implementation: [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnOnce<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}]
@@ -141,7 +141,7 @@ def indexed_squares
       (core.iter.traits.iterator.IteratorEnumerate
       coreitertraitsiteratorIteratorIU32Inst)
       (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
-      coreitertraitsiteratorIteratorIU32Inst) e ()
+      coreitertraitsiteratorIteratorIU32Inst) e indexed_squares.closure.mk
   core.iter.traits.iterator.Iterator.collect.default
     (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
     (core.iter.traits.iterator.IteratorEnumerate

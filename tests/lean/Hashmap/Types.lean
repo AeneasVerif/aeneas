@@ -25,7 +25,7 @@ namespace hashmap
     Visibility: public -/
 @[discriminant isize]
 inductive AList (T : Type _) where
-| Cons : Std.Usize → T → AList T → AList T
+| Cons : Std.Usize → T → Box (AList T) → AList T
 | Nil : AList T
 
 /-- [hashmap::Fraction]

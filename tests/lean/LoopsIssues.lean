@@ -22,12 +22,13 @@ namespace loops_issues
 
 /-- [loops_issues::write]:
     Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
-def write (a : Array Std.U8 4#usize) : Result (Array Std.U8 4#usize) := do
-  ok a
+def write
+  (a : MutBorrow (Array Std.U8 4#usize)) : Result (Array Std.U8 4#usize) := do
+  ok a.val
 
 /-- [loops_issues::read]:
     Source: 'tests/src/loops-issues.rs', lines 8:0-8:23 -/
-def read (a : Array Std.U8 4#usize) : Result Unit := do
+def read (a : SharedBorrow (Array Std.U8 4#usize)) : Result Unit := do
   ok ()
 
 /-- [loops_issues::CARRAY]
@@ -44,7 +45,7 @@ def loop_access_array_loop.body
   := do
   if start < 4#usize
   then
-    let _ ← Array.index_usize CARRAY k
+    let _ ← Array.index_usize (SharedBorrow.mk CARRAY) k
     let start1 ← start + 1#usize
     ok (cont start1)
   else ok (done ())
@@ -94,10 +95,11 @@ def loop_array_len_write_loop.body
   Result (ControlFlow (Array Std.U8 4#usize) Unit)
   := do
   if b0
-  then if b1
-       then let buf1 ← write buf
-            ok (cont buf1)
-       else ok (cont buf)
+  then
+    if b1
+    then let buf1 ← write (MutBorrow.mk buf)
+         ok (cont buf1)
+    else ok (cont buf)
   else ok (done ())
 
 /-- [loops_issues::loop_array_len_write]: loop 0:
@@ -149,7 +151,7 @@ def mut_loop_len_loop.body
   (b : Bool) (buf : Array Std.U8 4#usize) :
   Result (ControlFlow Unit Unit)
   := do
-  let s ← lift (Array.to_slice buf)
+  let s ← lift (Array.as_slice (SharedBorrow.mk buf))
   let i := Slice.len s
   massert ((¬ b) || (0#usize <= i))
   if b
@@ -167,10 +169,10 @@ def mut_loop_len_loop
 
 /-- [loops_issues::mut_loop_len]:
     Source: 'tests/src/loops-issues.rs', lines 52:0-58:1 -/
-def mut_loop_len (i : Std.U32) (b : Bool) : Result Std.U32 := do
+def mut_loop_len (i : MutBorrow Std.U32) (b : Bool) : Result Std.U32 := do
   let buf := Array.repeat 4#usize 0#u8
   mut_loop_len_loop b buf
-  ok i
+  ok i.val
 
 /-- [loops_issues::test]: loop body 0:
     Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
@@ -180,11 +182,12 @@ def test_loop.body
   Result (ControlFlow (Array Std.U8 4#usize) Unit)
   := do
   if b0
-  then let buf1 ← if b1
-                    then write buf
-                    else ok buf
-       read buf1
-       ok (cont buf1)
+  then
+    let buf1 ← if b1
+                 then write (MutBorrow.mk buf)
+                 else ok buf
+    read (SharedBorrow.mk buf1)
+    ok (cont buf1)
   else ok (done ())
 
 /-- [loops_issues::test]: loop 0:
@@ -220,7 +223,8 @@ def loop_consume_u32_loop.body
   Result (ControlFlow (core.ops.range.Range Std.I32) Unit)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next core.iter.range.StepI32 iter
+    core.iter.range.IteratorRange.next core.iter.range.StepI32 (MutBorrow.mk
+      iter)
   match o with
   | none => ok (done ())
   | some _ => consume_u32 x
@@ -230,7 +234,7 @@ def loop_consume_u32_loop.body
     Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
 @[rust_loop]
 def loop_consume_u32_loop
-  (iter : core.ops.range.Range Std.I32) (x : Std.U32) : Result Unit := do
+  (x : Std.U32) (iter : core.ops.range.Range Std.I32) : Result Unit := do
   loop
     (fun iter1 => loop_consume_u32_loop.body x iter1)
     iter
@@ -238,7 +242,7 @@ def loop_consume_u32_loop
 /-- [loops_issues::loop_consume_u32]:
     Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
 @[reducible]
-def loop_consume_u32 (params : WrapperU32) : Result Unit := do
-  loop_consume_u32_loop { start := 0#i32, «end» := 32#i32 } params.x
+def loop_consume_u32 (params : SharedBorrow WrapperU32) : Result Unit := do
+  loop_consume_u32_loop params.val.x { start := 0#i32, «end» := 32#i32 }
 
 end loops_issues

@@ -24,22 +24,23 @@ namespace traits
     Source: 'tests/src/traits.rs', lines 3:0-11:1
     Visibility: public -/
 structure BoolTrait (Self : Type _) where
-  get_bool : Self → Result Bool
-  ret_true : Self → Result Bool
+  get_bool : SharedBorrow Self → Result Bool
+  ret_true : SharedBorrow Self → Result Bool
 
 /-- [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5
     Visibility: public -/
 @[trait_default]
 def BoolTrait.ret_true.default
-  {Self : Type _} (self : Self) : Result Bool := do
+  {Self : Type _} (self : SharedBorrow Self) : Result Bool := do
   ok true
 
 /-- [traits::{impl traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5
     Visibility: public -/
-def Bool.Insts.TraitsBoolTrait.get_bool (self : Bool) : Result Bool := do
-  ok self
+def Bool.Insts.TraitsBoolTrait.get_bool
+  (self : SharedBorrow Bool) : Result Bool := do
+  ok self.val
 
 /-- Trait implementation: [traits::{impl traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 -/
@@ -53,17 +54,17 @@ def Bool.Insts.TraitsBoolTrait : BoolTrait Bool := {
     Source: 'tests/src/traits.rs', lines 19:0-21:1
     Visibility: public -/
 def test_bool_trait_bool (x : Bool) : Result Bool := do
-  let b ← Bool.Insts.TraitsBoolTrait.get_bool x
+  let b ← Bool.Insts.TraitsBoolTrait.get_bool (SharedBorrow.mk x)
   if b
-  then BoolTrait.ret_true.default x
+  then BoolTrait.ret_true.default (SharedBorrow.mk x)
   else ok false
 
 /-- [traits::{impl traits::BoolTrait for core::option::Option<T>}::get_bool]:
     Source: 'tests/src/traits.rs', lines 25:4-30:5
     Visibility: public -/
 def core.option.Option.Insts.TraitsBoolTrait.get_bool
-  {T : Type _} (self : Option T) : Result Bool := do
-  match self with
+  {T : Type _} (self : SharedBorrow (Option T)) : Result Bool := do
+  match self.val with
   | none => ok false
   | some _ => ok true
 
@@ -80,9 +81,10 @@ def core.option.Option.Insts.TraitsBoolTrait (T : Type _) : BoolTrait (Option
     Source: 'tests/src/traits.rs', lines 33:0-35:1
     Visibility: public -/
 def test_bool_trait_option {T : Type _} (x : Option T) : Result Bool := do
-  let b ← core.option.Option.Insts.TraitsBoolTrait.get_bool x
+  let b ←
+    core.option.Option.Insts.TraitsBoolTrait.get_bool (SharedBorrow.mk x)
   if b
-  then BoolTrait.ret_true.default x
+  then BoolTrait.ret_true.default (SharedBorrow.mk x)
   else ok false
 
 /-- [traits::test_bool_trait]:
@@ -90,7 +92,7 @@ def test_bool_trait_option {T : Type _} (x : Option T) : Result Bool := do
     Visibility: public -/
 def test_bool_trait
   {T : Type _} (BoolTraitInst : BoolTrait T) (x : T) : Result Bool := do
-  BoolTraitInst.get_bool x
+  BoolTraitInst.get_bool (SharedBorrow.mk x)
 
 /-- Trait declaration: [traits::ToU64]
     Source: 'tests/src/traits.rs', lines 41:0-43:1
@@ -239,36 +241,39 @@ def h4
 /-- [traits::TestType]
     Source: 'tests/src/traits.rs', lines 124:0-124:26
     Visibility: public -/
-@[reducible]
-def TestType (T : Type _) := T
+structure TestType (T : Type _) where
+  _0 : T
 
 /-- [traits::{traits::TestType<T>}::test::TestType1]
     Source: 'tests/src/traits.rs', lines 129:8-129:30 -/
-@[reducible]
-def TestType.test.TestType1 := Std.U64
+structure TestType.test.TestType1 where
+  _0 : Std.U64
 
 /-- [traits::{traits::TestType<T>}::test::{impl traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}::test]:
     Source: 'tests/src/traits.rs', lines 141:12-143:13 -/
 def TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test
-  (self : TestType.test.TestType1) : Result Bool := do
-  ok (self > 1#u64)
+  (self : SharedBorrow TestType.test.TestType1) : Result Bool := do
+  ok (self.val._0 > 1#u64)
 
 /-- [traits::{traits::TestType<T>}::test]:
     Source: 'tests/src/traits.rs', lines 128:4-149:5
     Visibility: public -/
 def TestType.test
-  {T : Type _} (ToU64Inst : ToU64 T) (self : TestType T) (x : T) :
+  {T : Type _} (ToU64Inst : ToU64 T) (self : SharedBorrow (TestType T)) 
+  (x : T) :
   Result Bool
   := do
   let x1 ← ToU64Inst.to_u64 x
   if x1 > 0#u64
-  then TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test 0#u64
+  then
+    TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test
+      (SharedBorrow.mk { _0 := 0#u64 })
   else ok false
 
 /-- Trait declaration: [traits::{traits::TestType<T>}::test::TestTrait]
     Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
 structure TestType.test.TestTrait (Self : Type _) where
-  test : Self → Result Bool
+  test : SharedBorrow Self → Result Bool
 
 /-- Trait implementation: [traits::{traits::TestType<T>}::test::{impl traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}]
     Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
@@ -281,8 +286,8 @@ def TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait :
 /-- [traits::BoolWrapper]
     Source: 'tests/src/traits.rs', lines 152:0-152:33
     Visibility: public -/
-@[reducible]
-def BoolWrapper := Bool
+structure BoolWrapper where
+  _0 : Bool
 
 /-- [traits::{impl traits::ToType<T> for traits::BoolWrapper}::to_type]:
     Source: 'tests/src/traits.rs', lines 158:4-160:5
@@ -291,7 +296,7 @@ def BoolWrapper.Insts.TraitsToType.to_type
   {T : Type _} (ToTypeBoolTInst : ToType Bool T) (self : BoolWrapper) :
   Result T
   := do
-  ToTypeBoolTInst.to_type self
+  ToTypeBoolTInst.to_type self._0
 
 /-- Trait implementation: [traits::{impl traits::ToType<T> for traits::BoolWrapper}]
     Source: 'tests/src/traits.rs', lines 154:0-161:1 -/
@@ -309,7 +314,7 @@ structure WithConstTy (Self : Type _) (Self_V : Type _) (Self_W : Type _) (LEN
   LEN1 : Result Std.Usize
   LEN2 : Result Std.Usize
   ToU64Inst : ToU64 Self_W
-  f : Self_W → Array Std.U8 LEN → Result Self_W
+  f : MutBorrow Self_W → SharedBorrow (Array Std.U8 LEN) → Result Self_W
 
 /-- [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
@@ -323,8 +328,10 @@ def WithConstTy.LEN2.default (Self : Type _) (Clause0_V : Type _) (Clause0_W :
     Source: 'tests/src/traits.rs', lines 182:4-182:42
     Visibility: public -/
 def Bool.Insts.TraitsWithConstTyU8U6432.f
-  (i : Std.U64) (a : Array Std.U8 32#usize) : Result Std.U64 := do
-  ok i
+  (i : MutBorrow Std.U64) (a : SharedBorrow (Array Std.U8 32#usize)) :
+  Result Std.U64
+  := do
+  ok i.val
 
 /-- [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27
@@ -376,7 +383,7 @@ def use_with_const_ty3
 /-- [traits::test_where1]:
     Source: 'tests/src/traits.rs', lines 195:0-195:43
     Visibility: public -/
-def test_where1 {T : Type _} (_x : T) : Result Unit := do
+def test_where1 {T : Type _} (_x : SharedBorrow T) : Result Unit := do
   ok ()
 
 /-- [traits::test_where2]:
@@ -393,8 +400,8 @@ def test_where2
     Source: 'tests/src/traits.rs', lines 202:0-206:1
     Visibility: public -/
 structure ParentTrait0 (Self : Type _) (Self_W : Type _) where
-  get_name : Self → Result String
-  get_w : Self → Result Self_W
+  get_name : SharedBorrow Self → Result String
+  get_w : SharedBorrow Self → Result Self_W
 
 /-- Trait declaration: [traits::ParentTrait1]
     Source: 'tests/src/traits.rs', lines 207:0-207:25
@@ -413,7 +420,7 @@ structure ChildTrait (Self : Type _) (Self_Clause0_W : Type _) where
     Visibility: public -/
 def test_child_trait1
   {T : Type _} {Clause0_Clause0_W : Type _} (ChildTraitInst : ChildTrait T
-  Clause0_Clause0_W) (x : T) :
+  Clause0_Clause0_W) (x : SharedBorrow T) :
   Result String
   := do
   ChildTraitInst.ParentTrait0Inst.get_name x
@@ -423,7 +430,7 @@ def test_child_trait1
     Visibility: public -/
 def test_child_trait2
   {T : Type _} {Clause0_Clause0_W : Type _} (ChildTraitInst : ChildTrait T
-  Clause0_Clause0_W) (x : T) :
+  Clause0_Clause0_W) (x : SharedBorrow T) :
   Result Clause0_Clause0_W
   := do
   ChildTraitInst.ParentTrait0Inst.get_w x
@@ -542,7 +549,7 @@ structure CFnOnce (Self : Type _) (Args : Type _) (Self_Output : Type _) where
 structure CFnMut (Self : Type _) (Args : Type _) (Self_Clause0_Output : Type _)
   where
   CFnOnceInst : CFnOnce Self Args Self_Clause0_Output
-  call_mut : Self → Args → Result (Self_Clause0_Output × Self)
+  call_mut : MutBorrow Self → Args → Result (Self_Clause0_Output × Self)
 
 /-- Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 298:0-300:1
@@ -550,20 +557,20 @@ structure CFnMut (Self : Type _) (Args : Type _) (Self_Clause0_Output : Type _)
 structure CFn (Self : Type _) (Args : Type _) (Self_Clause0_Clause0_Output :
   Type _) where
   CFnMutInst : CFnMut Self Args Self_Clause0_Clause0_Output
-  call : Self → Args → Result Self_Clause0_Clause0_Output
+  call : SharedBorrow Self → Args → Result Self_Clause0_Clause0_Output
 
 /-- Trait declaration: [traits::GetTrait]
     Source: 'tests/src/traits.rs', lines 302:0-305:1
     Visibility: public -/
 structure GetTrait (Self : Type _) (Self_W : Type _) where
-  get_w : Self → Result Self_W
+  get_w : SharedBorrow Self → Result Self_W
 
 /-- [traits::test_get_trait]:
     Source: 'tests/src/traits.rs', lines 307:0-309:1
     Visibility: public -/
 def test_get_trait
   {T : Type _} {Clause0_W : Type _} (GetTraitInst : GetTrait T Clause0_W)
-  (x : T) :
+  (x : SharedBorrow T) :
   Result Clause0_W
   := do
   GetTraitInst.get_w x

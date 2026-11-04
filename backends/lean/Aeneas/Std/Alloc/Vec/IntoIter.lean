@@ -14,8 +14,10 @@ def alloc.vec.into_iter.IntoIter (T : Type u) : Type u := alloc.vec.Vec T
 @[expose, rust_fun
   "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::next"
   (keepParams := [true, false])]
-def alloc.vec.into_iter.IteratorIntoIter.next {T : Type _} (it: alloc.vec.into_iter.IntoIter T) :
+def alloc.vec.into_iter.IteratorIntoIter.next {T : Type _}
+  (it: MutBorrow (alloc.vec.into_iter.IntoIter T)) :
   Result ((Option T) × (alloc.vec.into_iter.IntoIter T)) :=
+  let it := it.val
   match h : it.val with
   | []  => ok (none, it)
   | hd :: tl => ok (hd, .from tl (by grind) )
@@ -54,7 +56,7 @@ def alloc.vec.FromIteratorVec.iterToList
     {T : Type _} {IntoIter : Type _}
     (iterInst : core.iter.traits.iterator.Iterator IntoIter T)
     (iter : IntoIter) (acc : List T) : Result (List T) := do
-  let (opt, iter) ← iterInst.next iter
+  let (opt, iter) ← iterInst.next (MutBorrow.mk iter)
   match opt with
   | none => .ok acc.reverse
   | some item => alloc.vec.FromIteratorVec.iterToList iterInst iter (item :: acc)
