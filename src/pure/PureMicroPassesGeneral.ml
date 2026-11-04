@@ -2248,7 +2248,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                                 "Could not lookup a fun declaration, probably \
                                  because of a previous error"
                             in
-                            fun_decl.signature.fwd_info.effect_info.can_fail
+                            fun_decl.signature.fwd_info.effect_info.is_effectful
                           in
                           let e =
                             if not monadic then mk_to_result_texpr span e else e

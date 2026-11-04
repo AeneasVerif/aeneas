@@ -28,8 +28,8 @@ let translate_fun_decl_body (ctx : bs_ctx) (signature : fun_sig) (body : S.expr)
              "Unexpected: reached a return expression without value in a \
               function forward expression")
     | Some output ->
-        (* Wrap in a result if the function can fail *)
-        if effect_info.can_fail then mk_result_ok_texpr ctx.span output
+        (* Wrap in a result if the function is effectful *)
+        if effect_info.is_effectful then mk_result_ok_texpr ctx.span output
         else output
   in
   let mk_panic =

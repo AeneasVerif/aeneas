@@ -606,8 +606,8 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   in
   (ctx, pat)
 
-(** The boolean is [can_fail] (i.e., does the expression live in the error
-    monad?).
+(** The boolean is [is_effectful] (i.e., does the expression live in the
+    result/effect monad?).
 
     [bound_inputs]: see the doc of [bound_inputs] *)
 let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
@@ -643,7 +643,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
           "- pat: " ^ tepat_to_string ctx pat ^ "\n- pat.ty: "
           ^ InterpUtils.ty_to_string ectx pat.ty];
         (* Translate *)
-        let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
+        let ctx, bound_is_effectful, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
         let ctx, pat = tepat_to_tpat ctx fvar_to_texpr rids' pat in
         [%ldebug
@@ -651,7 +651,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
           ^ InterpUtils.ty_to_string ectx llbc_pat.ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
-        let ctx, next_can_fail, next = to_texpr ~filter rids ctx next in
+        let ctx, next_is_effectful, next = to_texpr ~filter rids ctx next in
         (* Create the let binding *)
         let bound =
           match bound with
@@ -664,13 +664,13 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
           | Some next -> next
         in
         let next =
-          if bound_can_fail && not next_can_fail then
+          if bound_is_effectful && not next_is_effectful then
             mk_result_ok_texpr span next
           else next
         in
         let e = [%add_loc] mk_closed_checked_let ctx false pat bound next in
-        let can_fail = bound_can_fail || next_can_fail in
-        (ctx, can_fail, Some e)
+        let is_effectful = bound_is_effectful || next_is_effectful in
+        (ctx, is_effectful, Some e)
     | V.EJoinMarkers _ | V.EBVar _ ->
         (* - joins should have been eliminated
            - there should be no bound variables *)
@@ -689,8 +689,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
           let ctx, args =
             List.fold_left_map
               (fun ctx arg ->
-                let ctx, can_fail, arg = to_texpr ~filter rids ctx arg in
-                [%sanity_check] span (not can_fail);
+                let ctx, is_effectful, arg = to_texpr ~filter rids ctx arg in
+                [%sanity_check] span (not is_effectful);
                 (ctx, arg))
               ctx args
           in
@@ -714,7 +714,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
               [%internal_error] span
           | V.EFunCall abs_id | V.ELoop (abs_id, _) | V.EJoin abs_id ->
               (* Lookup the variable introduced for the backward function *)
-              let e, can_fail =
+              let e, is_effectful =
                 match V.AbsId.Map.find_opt abs_id ctx.abs_id_to_info with
                 | None ->
                     (* No variable was introduced: it means the abstraction should
@@ -723,7 +723,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
                     [%sanity_check] span
                       (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids);
                     (None, false)
-                | Some { fvar; can_fail } ->
+                | Some { fvar; is_effectful } ->
                     (* The list of lists of arguments is only used in the presence
                      of nested borrows with function applications *)
                     let args =
@@ -747,9 +747,9 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
                       if args = [] && is_arrow_ty fvar.ty then [ mk_unit_texpr ]
                       else args
                     in
-                    (Some ([%add_loc] mk_apps span fvar args), can_fail)
+                    (Some ([%add_loc] mk_apps span fvar args), is_effectful)
               in
-              (ctx, can_fail, e)
+              (ctx, is_effectful, e)
         end
     | V.EAdt { borrow_proj = _; variant_id; fields } -> begin
         [%ldebug "adt"];
@@ -757,8 +757,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
           gtranslate_adt_fields ~project_borrows:false (tevalue_to_string ctx)
             (texpr_to_string ctx)
             (fun ~filter ctx v ->
-              let ctx, can_fail, e = to_texpr ~filter rids ctx v in
-              (ctx, Option.map (fun x -> (can_fail, x)) e))
+              let ctx, is_effectful, e = to_texpr ~filter rids ctx v in
+              (ctx, Option.map (fun x -> (is_effectful, x)) e))
             (compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos rids
                abs_level current_level)
             (fun fields ->
@@ -771,8 +771,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
         in
         match out with
         | None -> (ctx, false, None)
-        | Some (can_fail, x) ->
-            [%sanity_check] span (List.for_all (fun x -> not x) can_fail);
+        | Some (is_effectful, x) ->
+            [%sanity_check] span (List.for_all (fun x -> not x) is_effectful);
             (ctx, false, Some x)
       end
     | V.ELoan lc -> (
@@ -887,13 +887,13 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.region_set)
       ^ Print.option_to_string (texpr_to_string ctx) e];
     e
   in
-  let ctx, can_fail, e = to_texpr ~filter:true rids ctx input in
+  let ctx, is_effectful, e = to_texpr ~filter:true rids ctx input in
   let e =
     match e with
     | None -> mk_unit_texpr
     | Some e -> e
   in
-  (ctx, can_fail, e)
+  (ctx, is_effectful, e)
 
 (** Go through some avalues to register the inputs (i.e., the borrows).
 
@@ -1072,11 +1072,11 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
 
   (* Translate the abstraction expression *)
   let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
-  let ctx, can_fail, input_e =
+  let ctx, is_effectful, input_e =
     einput_to_texpr ctx ectx abs.regions.owned bound_inputs fvar_to_texpr
       abs_level input
   in
-  [%sanity_check] span (not can_fail);
+  [%sanity_check] span (not is_effectful);
   let ctx, bound_outputs, pat =
     eoutput_to_pat ctx fvar_to_texpr abs.regions.owned abs_level output
   in
@@ -1099,7 +1099,8 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     (* Put everything together *)
     let output_e = mk_simpl_tuple_texpr span outputs in
     let e =
-      mk_closed_checked_let __FILE__ __LINE__ ctx can_fail pat input_e output_e
+      mk_closed_checked_let __FILE__ __LINE__ ctx is_effectful pat input_e
+        output_e
     in
     let e =
       mk_closed_lambdas span (List.map (mk_tpat_from_fvar None) inputs) e
@@ -1271,11 +1272,11 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
   [%cassert] span (abs_level = 0) "Unimplemented";
   (* Translate the abstraction expression *)
   let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
-  let ctx, can_fail, input_e =
+  let ctx, is_effectful, input_e =
     einput_to_texpr ctx ectx abs.regions.owned empty_bound_borrows_loans
       fvar_to_texpr abs_level input
   in
-  [%sanity_check] span (not can_fail);
+  [%sanity_check] span (not is_effectful);
   let ctx, pat =
     tevalue_to_given_back abs.regions.owned abs_level None output ctx
   in
@@ -1285,7 +1286,7 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     | None -> mk_ignored_pat input_e.ty
     | Some pat -> pat
   in
-  (ctx, can_fail, pat, input_e)
+  (ctx, is_effectful, pat, input_e)
 
 (** Translate the continuation of an ended region abstraction to a pure
     continuation. *)
@@ -1297,11 +1298,11 @@ let translate_ended_abs_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx)
   | Some cont -> (
       match (cont.output, cont.input) with
       | Some output, Some input ->
-          let ctx, can_fail, pat, expr =
+          let ctx, is_effectful, pat, expr =
             ended_abs_cont_to_texpr_aux ctx ectx abs abs_level output input
           in
           [%ltrace
             "translated abs:\n" ^ tpat_to_string ctx pat ^ " :=\n"
             ^ texpr_to_string ctx expr];
-          (ctx, can_fail, pat, expr)
+          (ctx, is_effectful, pat, expr)
       | _ -> [%internal_error] ctx.span)
