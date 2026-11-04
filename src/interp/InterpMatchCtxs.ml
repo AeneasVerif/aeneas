@@ -1747,7 +1747,7 @@ struct
   let span = S.span
   let recover = S.recover
 
-  module MkGetSetM (Id : Identifiers.Id) = struct
+  module MkGetSetM (Id : Identifiers.OrdId) = struct
     module Inj = Id.InjSubst
 
     let add (msg : string) (m : Inj.t ref) (k0 : Id.id) (k1 : Id.id) =
@@ -2187,7 +2187,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     ^ "\n"];
 
   (* Initialize the maps and instantiate the matcher *)
-  let module IdMap (Id : Identifiers.Id) = struct
+  let module IdMap (Id : Identifiers.OrdId) = struct
     let mk_map_ref (ids : Id.Set.t) : Id.InjSubst.t ref =
       ref
         (Id.InjSubst.of_list (List.map (fun x -> (x, x)) (Id.Set.elements ids)))
