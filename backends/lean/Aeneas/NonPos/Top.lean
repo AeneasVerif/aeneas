@@ -443,7 +443,7 @@ that of `body` (`getContTheorems`) and applies the first that fits.  The forms w
 shape to index are handled directly: a body not depending on `d` is `Cont.const`, a lambda is
 `Cont.lam`, and an application with no matching form is peeled by `Cont.app` (last argument not
 depending on `d`) or `Cont.app₂` (last argument depending on `d`; the function is then a projection
-of a dictionary, whose condition comes from `Fix.cond`).  A `match` on a scrutinee not depending on
+of a dictionary, whose condition comes from `Fix.cond`, read along the projection's path).  A `match` on a scrutinee not depending on
 `d` is split by `cases`, and a remaining definition is unfolded (`delta`).  Around this, the loop
 introduces binders, turns a `Shape.cond` goal into its conjuncts with `nonpos_cond_simp`, and splits
 conjunctions. -/
@@ -474,9 +474,37 @@ macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
   `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.const,
       Shape.var, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
-/-- `Cont (projection of the dictionary `e`)`, from `Fix.cond e`. -/
+/-- `Cont (projection of the dictionary `e`)`, from `Fix.cond e`.  (The general fallback of
+`nonposProjCondProof?` below.) -/
 macro "nonpos_proj" e:term : tactic =>
   `(tactic| (have h := Fix.cond _ $e; nonpos_cond_simp at h; solve_by_elim [And.left, And.right]))
+
+/-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
+arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
+condition `Fix.cond F e` has the nested shape of the tuple (a plain field's part is `True`), so it
+is read along the same path, then applied to the arguments (past a dictionary binder, its `.2`
+first), and its `.1` is the fact.  `none` if `fn'` is not of this form. -/
+meta def nonposProjCondProof? (fn' : Expr) : MetaM (Option Expr) := do
+  let isProj (e : Expr) := e.isAppOf ``PProd.fst || e.isAppOf ``PProd.snd
+  unless isProj fn' && fn'.getAppNumArgs ≥ 3 do return none
+  let args := fn'.getAppArgs.extract 3 fn'.getAppNumArgs  -- `t₁ … tₖ`
+  let mut e := fn'.getAppArgs[2]!
+  let mut path := #[fn'.isAppOf ``PProd.fst]  -- the projections, outermost first (`true` for `.1`)
+  while isProj e && e.getAppNumArgs == 3 do
+    path := path.push (e.isAppOf ``PProd.fst)
+    e := e.appArg!
+  unless e.isAppOfArity ``Fix.unfold 5 do return none
+  -- `.1` or `.2` of a proof of a conjunction (exposed by unfolding the `Shape` instances)
+  let part (pf : Expr) (left : Bool) : MetaM Expr := do
+    let_expr And a b := (← whnf (← inferType pf)) | throwError "not a conjunction"
+    return mkApp3 (mkConst (if left then ``And.left else ``And.right)) a b pf
+  try
+    let mut pf ← mkAppOptM ``Fix.cond (e.getAppArgs.map some)
+    for left in path.reverse do pf ← part pf left
+    for t in args do
+      pf ← if (← whnf (← inferType pf)).isForall then pure (mkApp pf t) else pure (mkApp (← part pf false) t)
+    return some (← part pf true)
+  catch _ => return none
 
 syntax "nonpos_cont" (num)? : tactic
 syntax "nonpos_cont_peel" : tactic
@@ -534,7 +562,12 @@ elab_rules : tactic
       if !dep a then
         return ← `(tactic| apply Cont.app (f := $(← stx fn')) (t := $(← Term.exprToSyntax a)))
       if let some u := fn'.find? isProj then
-        if a == d && !dep u then return ← `(tactic| nonpos_proj $(← Term.exprToSyntax u.appArg!))
+        if a == d && !dep u then
+          let proj ← `(tactic| nonpos_proj $(← Term.exprToSyntax u.appArg!))
+          if !dep fn' then
+            if let some pf ← nonposProjCondProof? fn' then
+              return ← `(tactic| first | exact $(← Term.exprToSyntax pf) | $(← `(tacticSeq| $proj:tactic)))
+          return proj
         return ← `(tactic| refine Cont.app₂ (f := $(← stx fn')) (a := $(← stx a)) ?_ (by intro _; nonpos_cont) ?_)
       if let some c := unfoldable then return ← `(tactic| delta $(mkIdent c):ident)
       if a == d then throwError "nonpos_cont: continuity of {← ppExpr fn'} is not known"

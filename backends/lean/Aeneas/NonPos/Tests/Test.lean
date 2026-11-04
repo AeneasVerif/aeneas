@@ -128,6 +128,24 @@ nonpos_structure WithParams (Self : Type) (n : Nat) : Type 1 where
 
 #check @WithParams.comb
 
+/-! ## A method of a fixed dictionary, called with the varying one, among several such fields
+
+The continuity of `e.cmp` in its dictionary argument is part of `e`'s condition, which has one part
+per field; `nonpos_cont` finds it by following the projection's path into the condition. -/
+
+nonpos_structure Many (Self : Type) : Type 1 where
+  to_num : Self → Option Nat
+  add : ∀ {Other : Type} (inst : Many Other), Other → Self → Option Nat
+  size : Nat → Option Nat
+  mul : ∀ {Other : Type} (inst : Many Other), Other → Self → Option Nat
+  twice : (inst : Many Self) → Self → Option Nat
+  cmp : ∀ {Other : Type} (inst : Many Other), Self → Option Bool
+
+example (e : Many Int) (o : Int) (s : Int) : Cont (fun d : Many Int => e.add d o s) := by nonpos_cont
+example (e : Many Int) (o : Int) (s : Int) : Cont (fun d : Many Int => e.mul d o s) := by nonpos_cont
+example (e : Many Int) (s : Int) : Cont (fun d : Many Int => e.twice d s) := by nonpos_cont
+example (e : Many Int) (s : Int) : Cont (fun d : Many Int => e.cmp d s) := by nonpos_cont
+
 end NonPos.Test
 
 namespace NonPos.Test
