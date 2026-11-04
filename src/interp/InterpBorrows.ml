@@ -2555,7 +2555,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
             if
               abs_is_endable ctx abs
               && (not
-                    (abs.alive_hint = Some Long
+                    (config.keep_alive_hints && abs.alive_hint = Some Long
                     && abs_has_borrows_or_loans ctx abs))
               && not (abs_mut_borrows_loans_in_fixed span ctx frozen_abs abs)
             then raise (FoundAbsId abs.abs_id)

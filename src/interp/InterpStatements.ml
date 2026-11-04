@@ -1092,137 +1092,149 @@ and eval_switch_with_join (config : config) (span : Meta.span)
        what happens inside the loop inside the branching expression. *)
     let ctx = List.hd ctxl in
     ([ (ctx, Unit) ], cf)
-  else (
-    (* We need to join the contexts *)
-    [%ldebug
-      "About to join contexts after an [if then else]." ^ "\n- initial ctx:\n"
-      ^ eval_ctx_to_string ctx0 ^ "\n\n"
-      ^ String.concat "\n\n"
-          (List.map
-             (fun (ctx, res) ->
-               "- eval_ctx (res: "
-               ^ show_statement_eval_res res
-               ^ "):\n" ^ eval_ctx_to_string ctx)
-             ctx_resl)];
-    let ctx_to_join =
-      List.filter_map
-        (fun (ctx, res) -> if res = Unit then Some ctx else None)
-        ctx_resl
-    in
-    (* Note that we make the join *recoverable*: if the join fails (because
-       it requires supporting some unsupported case) it is possible to recover
-       from it, in which case we simply duplicate the code after the switch *)
-    let _, joined_ctx =
-      InterpJoin.join_ctxs_list config span ~recoverable:!Config.recover_joins
-        ~with_abs_conts:true Join ctx_to_join
-    in
-    [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
-    let ctx0_aids = env_get_abs_ids ctx0.env in
-    [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
-    let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 joined_ctx in
-    let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
-    let joined_ctx =
-      InterpJoin.destructure_new_abs span fixed_aids joined_ctx
-    in
-    let joined_ctx =
-      InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true Join
-        fixed_aids fixed_dids joined_ctx
-    in
-
-    (* We need to update the fresh abstraction continuations in the joined context,
-       to reflect the fact that in the symbolic AST they should be introduced by
-       the branching expression (they are bound by the let-binding we introduce) *)
-    let joined_ctx =
-      Contexts.ctx_map_abs
-        (fun abs ->
-          if AbsId.Set.mem abs.abs_id ctx0_aids then abs
-          else
-            (* The abstraction is fresh and is thus introduced by the join:
-                we need to update its continuation *)
-            InterpAbs.add_abs_cont_to_abs span joined_ctx abs (EJoin abs.abs_id))
-        joined_ctx
-    in
-    [%ldebug
-      "Joined ctx (after updating the abs conts):\n"
-      ^ eval_ctx_to_string joined_ctx];
-
-    (* Compute the output values *)
-    let output_svalues =
-      InterpJoin.compute_ctx_fresh_ordered_symbolic_values span
-        ~only_modified_svalues:true ctx0 joined_ctx
-    in
-    let output_svalue_ids =
-      List.map (fun (sv : symbolic_value) -> sv.sv_id) output_svalues
-    in
-
-    let output_abs =
-      List.filter_map
-        (fun (e : env_elem) ->
-          match e with
-          | EAbs abs when not (AbsId.Set.mem abs.abs_id ctx0_aids) -> Some abs
-          | _ -> None)
-        joined_ctx.env
-    in
-    let output_abs_ids = List.map (fun (abs : abs) -> abs.abs_id) output_abs in
-
-    let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 joined_ctx in
-    let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
-
-    (* Match every context resulting from evaluating a branch (there should be
-       one if no explicit panic was encountered, or 0 it we encountered a panic)
-       with the joined context.
-
-       Note that we make the match (and the whole join) recoverable.
-    *)
-    let match_ctx (ctx : eval_ctx) : SA.expr =
-      (* Match the contexts with the joined context to determine the output of the branch *)
-      let (_, ctx, output_values, output_abs), cf =
-        InterpJoin.match_ctx_with_target config span WithCont fixed_aids
-          fixed_dids output_abs_ids output_svalue_ids
-          ~recoverable:!Config.recover_joins joined_ctx ctx
+  else
+    let join_aux config =
+      let recoverable = config.keep_alive_hints || !Config.recover_joins in
+      (* We need to join the contexts *)
+      [%ldebug
+        "About to join contexts after an [if then else]." ^ "\n- initial ctx:\n"
+        ^ eval_ctx_to_string ctx0 ^ "\n\n"
+        ^ String.concat "\n\n"
+            (List.map
+               (fun (ctx, res) ->
+                 "- eval_ctx (res: "
+                 ^ show_statement_eval_res res
+                 ^ "):\n" ^ eval_ctx_to_string ctx)
+               ctx_resl)];
+      let ctx_to_join =
+        List.filter_map
+          (fun (ctx, res) -> if res = Unit then Some ctx else None)
+          ctx_resl
+      in
+      (* Note that we make the join *recoverable*: if the join fails (because
+         it requires supporting some unsupported case) it is possible to recover
+         from it, in which case we simply duplicate the code after the switch *)
+      let _, joined_ctx =
+        InterpJoin.join_ctxs_list config span ~recoverable ~with_abs_conts:true
+          Join ctx_to_join
+      in
+      [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
+      let ctx0_aids = env_get_abs_ids ctx0.env in
+      [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
+      let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 joined_ctx in
+      let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
+      let joined_ctx =
+        InterpJoin.destructure_new_abs span fixed_aids joined_ctx
+      in
+      let joined_ctx =
+        InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true Join
+          fixed_aids fixed_dids joined_ctx
       in
 
-      let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
-          abs list =
-        List.map (fun id -> AbsId.Map.find id map) absl
+      (* We need to update the fresh abstraction continuations in the joined context,
+         to reflect the fact that in the symbolic AST they should be introduced by
+         the branching expression (they are bound by the let-binding we introduce) *)
+      let joined_ctx =
+        Contexts.ctx_map_abs
+          (fun abs ->
+            if AbsId.Set.mem abs.abs_id ctx0_aids then abs
+            else
+              (* The abstraction is fresh and is thus introduced by the join:
+                  we need to update its continuation *)
+              InterpAbs.add_abs_cont_to_abs span joined_ctx abs
+                (EJoin abs.abs_id))
+          joined_ctx
       in
-      let reorder_output_values (map : tvalue SymbolicValueId.Map.t)
-          (values : symbolic_value_id list) : tvalue list =
-        List.map (fun id -> SymbolicValueId.Map.find id map) values
+      [%ldebug
+        "Joined ctx (after updating the abs conts):\n"
+        ^ eval_ctx_to_string joined_ctx];
+
+      (* Compute the output values *)
+      let output_svalues =
+        InterpJoin.compute_ctx_fresh_ordered_symbolic_values span
+          ~only_modified_svalues:true ctx0 joined_ctx
       in
-      let output_values =
-        reorder_output_values output_values output_svalue_ids
+      let output_svalue_ids =
+        List.map (fun (sv : symbolic_value) -> sv.sv_id) output_svalues
       in
-      let output_abs = reorder_output_abs output_abs output_abs_ids in
+
+      let output_abs =
+        List.filter_map
+          (fun (e : env_elem) ->
+            match e with
+            | EAbs abs when not (AbsId.Set.mem abs.abs_id ctx0_aids) -> Some abs
+            | _ -> None)
+          joined_ctx.env
+      in
+      let output_abs_ids =
+        List.map (fun (abs : abs) -> abs.abs_id) output_abs
+      in
+
+      let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 joined_ctx in
+      let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
+
+      (* Match every context resulting from evaluating a branch (there should be
+         one if no explicit panic was encountered, or 0 it we encountered a panic)
+         with the joined context.
+
+         Note that we make the match (and the whole join) recoverable.
+      *)
+      let match_ctx (ctx : eval_ctx) : SA.expr =
+        (* Match the contexts with the joined context to determine the output of the branch *)
+        let (_, ctx, output_values, output_abs), cf =
+          InterpJoin.match_ctx_with_target config span WithCont fixed_aids
+            fixed_dids output_abs_ids output_svalue_ids ~recoverable joined_ctx
+            ctx
+        in
+
+        let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
+            abs list =
+          List.map (fun id -> AbsId.Map.find id map) absl
+        in
+        let reorder_output_values (map : tvalue SymbolicValueId.Map.t)
+            (values : symbolic_value_id list) : tvalue list =
+          List.map (fun id -> SymbolicValueId.Map.find id map) values
+        in
+        let output_values =
+          reorder_output_values output_values output_svalue_ids
+        in
+        let output_abs = reorder_output_abs output_abs output_abs_ids in
+
+        (* Generate the let expression *)
+        cf (SA.Join (ctx, output_values, output_abs))
+      in
+      let resl = List.map match_ctx ctxl in
+
+      (* We can now call the continuation introduced when branching to group the
+         expressions of the branches into a single branching expression (i.e.,
+         we group the expressions for the [then] and [else] branches into a single
+         [if then else] expression. *)
+      let bound_expr = cf resl in
 
       (* Generate the let expression *)
-      cf (SA.Join (ctx, output_values, output_abs))
+      let cf (el : SA.expr list) : SA.expr =
+        match el with
+        | [ next_expr ] ->
+            Let
+              {
+                bound_expr;
+                out_svalues = output_svalues;
+                out_abs = output_abs;
+                next_expr;
+                span;
+              }
+        | _ -> [%internal_error] span
+      in
+
+      (* Output the joined context *)
+      ([ (joined_ctx, Unit) ], cf)
     in
-    let resl = List.map match_ctx ctxl in
-
-    (* We can now call the continuation introduced when branching to group the
-       expressions of the branches into a single branching expression (i.e.,
-       we group the expressions for the [then] and [else] branches into a single
-       [if then else] expression. *)
-    let bound_expr = cf resl in
-
-    (* Generate the let expression *)
-    let cf (el : SA.expr list) : SA.expr =
-      match el with
-      | [ next_expr ] ->
-          Let
-            {
-              bound_expr;
-              out_svalues = output_svalues;
-              out_abs = output_abs;
-              next_expr;
-              span;
-            }
-      | _ -> [%internal_error] span
-    in
-
-    (* Output the joined context *)
-    ([ (joined_ctx, Unit) ], cf))
+    (* TODO: check if there even are abstractions that have the alive_hint before we do this *)
+    if config.keep_alive_hints then
+      try join_aux config
+      with Errors.RFailure ->
+        join_aux { config with keep_alive_hints = false }
+    else join_aux config
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (span : Meta.span) (call : call)
