@@ -9,7 +9,8 @@ public import Aeneas.NonPos.Proofs
 This file is the whole trusted surface of the library.  It contains, and only contains:
 
 1. the *statements* that pin down the imported constants (`Dom`, `Cont`, `Shape`, `Fix`, ...);
-2. the `nonpos_structure` command, a thin wrapper around `Fix`;
+2. the `nonpos_structure` command, a thin wrapper around `Fix`, and the lemma it proves about each
+   structure (with the tactic of 4, so that it does not have to derive it at each use);
 3. the statements of the continuity theorems, one per form of term;
 4. the `nonpos_cont` tactic, a thin wrapper around those theorems;
 5. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
@@ -205,7 +206,8 @@ structure:
 * `Bla Self := Fix G.F (.Bla Self)`;
 * `Bla.mk to_num add (h : Shape.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
-  type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk`.
+  type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk`;
+* the lemma `Bla.mk_cont`, described in section 8.
 
 The command never inspects the field types: `Shape (G.F k)` is found by instance search, which can
 only succeed through the instances of section 2, and the types of `mk` and the projections are the
@@ -326,14 +328,8 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
           @$projId $args* ($mkId $fieldNames* h) = @$f:ident := by
         simp only [$projId:ident, $mkId:ident, Fix.unfold_fold]))  -- `Example1.to_nat_mk`, `Example1.f_mk`, `A.fa_mk`, `B.fb_mk`
 
-@[command_elab nonposStructure] meta def elabNonposStructure : CommandElab := fun stx => do
-  elabGroup #[← parseStruct stx]
-
-/-- `mutual nonpos_structure ... nonpos_structure ... end`. -/
-@[command_elab Lean.Parser.Command.«mutual»] meta def elabNonposMutual : CommandElab := fun stx => do
-  let cmds := stx[1].getArgs
-  unless cmds.size > 0 && cmds.all (·.isOfKind ``nonposStructure) do throwUnsupportedSyntax
-  elabGroup (← cmds.mapM parseStruct)
+/-! The command itself is registered in section 8, after the lemma of each structure, which needs
+the tactic of section 6. -/
 
 /-! ## 5. The forms
 
@@ -638,7 +634,49 @@ elab "nonpos_continuity " id:ident : command => do
       logWarning m!"nonpos_continuity: could not prove {lemmaName} ({e.toMessageData}); \
         nonpos_cont will unfold {f} instead"
 
-/-! ## 8. Axioms
+/-! ## 8. The lemma of each structure
+
+For performance, `nonpos_structure` also proves, once for each structure `Bla`, that `mk` is
+continuous in its fields: `Bla.mk_cont` gives, from `Cont f₁`, ..., `Cont fₙ`,
+`Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
+`@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
+left with one goal per field, instead of going through the whole tuple of fields each time.
+-/
+
+/-- `Bla.mk_cont` for each structure of a group made by `elabGroup`. -/
+meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
+  let g := ss[0]!.name
+  let fId := mkIdentFrom g (g.getId ++ `F)
+  for s in ss do
+    if s.fields.isEmpty then continue
+    let impl ← implicitBinders s.params
+    let args := s.params.map (·.1)
+    let k ← `($(mkIdent (g.getId ++ `I ++ s.name.getId)) $args*)  -- `G.I.Bla x₁ ... xₙ`
+    let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)
+    let contId := mkIdentFrom s.name (s.name.getId ++ `mk_cont)
+    let fieldFns ← s.fields.mapM fun (f, τ) => `(bracketedBinder| ($f : D → $τ))
+    let fieldConts ← s.fields.mapM fun (f, _) => `(bracketedBinder| (_ : Cont $f))
+    let apps ← s.fields.mapM fun (f, _) => `($f d)
+    let tuple ← apps.foldrM (init := ← `(⟨⟩)) fun a acc => `(⟨$a, $acc⟩)
+    elabCommand (← `(theorem $contId $impl* {D : Type _} [Dom D] $fieldFns*
+        (h : ∀ d, Shape.cond (F := $fId $k) (X := Fix $fId) $tuple) $fieldConts* :
+        Cont (fun d => $mkId $apps* (h d)) := by nonpos_cont 5000))
+    elabCommand (← `(attribute [nonpos_continuous] $contId))
+
+@[command_elab nonposStructure] meta def elabNonposStructure : CommandElab := fun stx => do
+  let ss := #[← parseStruct stx]
+  elabGroup ss
+  elabGroupLemmas ss
+
+/-- `mutual nonpos_structure ... nonpos_structure ... end`. -/
+@[command_elab Lean.Parser.Command.«mutual»] meta def elabNonposMutual : CommandElab := fun stx => do
+  let cmds := stx[1].getArgs
+  unless cmds.size > 0 && cmds.all (·.isOfKind ``nonposStructure) do throwUnsupportedSyntax
+  let ss ← cmds.mapM parseStruct
+  elabGroup ss
+  elabGroupLemmas ss
+
+/-! ## 9. Axioms
 
 Everything above, with its proofs and model, uses only the standard axioms (no `sorry`, no
 axiom of the library's own).  The build fails if this changes. -/
