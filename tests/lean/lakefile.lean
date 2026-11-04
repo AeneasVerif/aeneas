@@ -20,6 +20,7 @@ package «tests» {}
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib BoolCmp
+@[default_target] lean_lib Borrow
 @[default_target] lean_lib Bst
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib BuiltinAuto
@@ -117,3 +118,4 @@ package «tests» {}
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecIter
+@[default_target] lean_lib VecMethods
