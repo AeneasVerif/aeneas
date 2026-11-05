@@ -235,15 +235,7 @@ verify-raw-box:
 
 .PHONY: verify-doubly-linked
 verify-doubly-linked:
-	cd backends/lean && lake build Aeneas.Std.Heap.EffectSpecs
-	@set -eu; tmp=$$(mktemp -d); \
-	trap 'for module in Types FunsExternal Raw Safe Funs RawProperties ListProperties Ownership SafeProperties; do rm -f "$$tmp/DoublyLinked/$$module.olean" "$$tmp/DoublyLinked/$$module.olean.private" "$$tmp/DoublyLinked/$$module.olean.server" "$$tmp/DoublyLinked/$$module.ir" "$$tmp/DoublyLinked/$$module.ir.sig"; done; rmdir "$$tmp/DoublyLinked" "$$tmp"' EXIT; \
-	mkdir "$$tmp/DoublyLinked"; \
-	cd backends/lean; \
-	for module in Types FunsExternal Raw Safe Funs RawProperties ListProperties Ownership SafeProperties; do \
-	  LEAN_PATH="$$tmp" lake env lean --root=../../tests/lean "../../tests/lean/DoublyLinked/$$module.lean" -o "$$tmp/DoublyLinked/$$module.olean"; \
-	done; \
-	LEAN_PATH="$$tmp" lake env lean ../../tests/lean/DoublyLinked.lean
+	cd tests/lean && lake build DoublyLinked
 
 .PHONY: verify-raw-pointer-api
 verify-raw-pointer-api:

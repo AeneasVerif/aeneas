@@ -22,7 +22,7 @@ namespace raw_zmij_mwe.execution
 
 def address : BasePtr := 256#usize
 def old : Vector Aeneas.Std.Byte 4 := Vector.replicate 4 .uninit
-def updated : List Aeneas.Std.Byte := [.data 48#u8, .uninit, .uninit, .uninit]
+def updated : Vector Aeneas.Std.Byte 4 := #v[.data 48#u8, .uninit, .uninit, .uninit]
 def start : RawPtr U8 := ⟨0, address⟩
 def finish : RawPtr U8 := ⟨0, 257#usize⟩
 def origin : RawPtr U8 := ⟨1, address⟩
@@ -34,9 +34,9 @@ def s₁ : Heap := ((create old.toList 0 Heap.empty).getD (0, Heap.empty)).2
 def s₂ : Heap :=
   (Heap.write Repr.u8 start 48#u8 #v[.data 48#u8] rfl s₁).getD Heap.empty
 def s₃ : Heap := (Heap.endExposureAt Repr.u8 start 4 0 s₂).getD Heap.empty
-def s₄ : Heap := ((create updated 1 s₃).getD (0, Heap.empty)).2
+def s₄ : Heap := ((create updated.toList 1 s₃).getD (0, Heap.empty)).2
 def s₅ : Heap := (Heap.endExposureAt Repr.u8 origin 4 1 s₄).getD Heap.empty
-def s₆ : Heap := ((create updated 1 s₅).getD (0, Heap.empty)).2
+def s₆ : Heap := ((create updated.toList 1 s₅).getD (0, Heap.empty)).2
 def s₇ : Heap := (Heap.shareRange Repr.u8 ptr 1 s₆).getD Heap.empty
 def s₈ : Heap := (Heap.endShareRange Repr.u8 ptr 1 s₇).getD Heap.empty
 def finalHeap : Heap := (Heap.endExposureAt Repr.u8 ptr 4 1 s₈).getD Heap.empty

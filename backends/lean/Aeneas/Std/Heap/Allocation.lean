@@ -361,8 +361,8 @@ theorem retire.spec (s : Heap) (base : Nat) (blk : Block)
     by simpa using matches_retire_frame old (frame_base_absent hl hd old),
     preserved, rfl⟩
 
-/-- Layout cleanup is not root-return authority. These state-specific conditions
-are still required until safe backward resources track all outstanding views. -/
+/-- Current-state authority for returning a complete root. Layout cleanup and
+borrowed cells alone do not establish the absence of other active views. -/
 def RootReturn (s : Heap) (base : Nat) : Prop :=
   ∀ blk, s.allocations base = some blk →
     ∃ root, s.allocations blk.root = some root ∧ blk.bptr = root.bptr ∧

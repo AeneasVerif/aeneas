@@ -74,8 +74,8 @@ correspondence or compiler-correctness theorem is claimed.
 | `write_exponent` | `Writes.lean`, `SafeWrites.lean`: `write_exponent_scoped.spec` | Both unaligned u16 stores, including the one-byte overlap where the second store wins, with exact untouched bytes and full scope return. |
 | `write_decimal` | `Decimal.lean`: `write_decimal.spec` | Every u8 input: exact 1--3 digit decimal prefix, untouched suffix, exact end cursor and retained provenance. |
 | `DecimalBuffer::format` | `Formatter.lean`: `DecimalBuffer.format.spec` | Three fresh exposures, retirement of the writer view before subtraction, initialized-prefix borrow, exact decimal slice, and all heap cleanup before returning the slice value with a trivial updated-storage callback. Conditional on the address equality described below. |
-| One complete formatter borrow scope | `Formatter.lean`: `DecimalBuffer.format_and_return.spec` (`@[step]`) | Calls the preceding computation and its callback, yielding the exact slice value and raw updated buffer; suitable for repeated calls. |
-| `DecimalBuffer::format_twice` | `Reuse.lean`: `DecimalBuffer.format_twice.spec` (`@[step]`) | Two actual formatter scopes, with a checked/proved length recovery between them; exact saved first result, second result, and final storage including the stale suffix. Rust copies each slice into a Vec; the model represents these as pure snapshots, not overlapping live borrows. |
+| One complete formatter borrow scope | `Formatter.lean`: `DecimalBuffer.format_and_return.spec` (`@[step]`) | Calls the preceding computation and its callback, yielding the exact slice value and updated `Vector Byte 4`; suitable for repeated calls. |
+| `DecimalBuffer::format_twice` | `Reuse.lean`: `DecimalBuffer.format_twice.spec` (`@[step]`) | Two actual formatter scopes, threading the statically sized buffer directly without a length-recovery check; exact saved first result, second result, and final storage including the stale suffix. Rust copies each slice into a Vec; the model represents these as pure snapshots, not overlapping live borrows. |
 
 ### Explicit interpretation boundaries
 
@@ -91,10 +91,14 @@ model because their only difference is the spelling of this cast.
 `Repr (MaybeUninit u8)`: a decoder that distinguishes an uninitialized byte from
 its initialized replacement would violate `Repr.decode_mono`. Instead the local
 adapter stores `List Byte` / `Vector Byte n`, materializes them with `exposeBytes`,
-snapshots exact raw cells with `snapshotBytes`, and retires the view with the
+snapshots exact raw cells with `snapshotBytes` or `snapshotVector`, and retires the view with the
 actual `Heap.endExposureAt`. Snapshot contracts require the complete storage
 footprint; this is not a typed read of invalid values. The clients exercise
 uninitialized/numeric bytes, not a general pointer-bearing-storage translation.
+The vector snapshot retains the exact whole-storage extent in its result type;
+it neither truncates nor pads a mismatched snapshot. Its contract follows from
+the list snapshot contract. The formatter retains `Vector Byte 4` through its
+mutable backward computation and both caller wrappers, with no `restore` adapter.
 Pure mutable-array outputs are represented by returned raw byte snapshots;
 their theorems identify every byte with initialized input/scalar bytes.
 The Ryu `assume_init` operations instead remain actual typed u64 reads.
@@ -274,7 +278,10 @@ These additions do not claim new successful whole-file extraction.
   and multiple retired fresh views; it composes transitively.
   `RootReturn.after_closed_views` restores outer authority. The executable
   sibling/shared/empty-slice scenario also mutates an independent allocation.
-  No dynamic loan-tree authentication or linear callback type is claimed.
+  Raw operations do not dynamically authenticate a loan tree. Scoped proofs
+  require current-state authority, which is unavailable while a child view
+  remains active, even if its cells are borrowed. This is not an additional
+  unchecked stack-discipline assumption on verified clients.
 - Representation regressions distinguish genuinely ignored padding, initialized
   value bytes, invalid Bool encodings, unsupported single-ZST accesses, and
   conservative rejection of mutable pointer-byte loans. The Rust counterparts
@@ -301,10 +308,25 @@ These additions do not claim new successful whole-file extraction.
 Validation uses the default backend and fixture `lake build` commands above,
 and debug/release Rust plus default Miri on `raw_ryu_mwe.rs`,
 `raw_zmij_mwe.rs`, `raw_memory_views.rs`, and `doubly_linked.rs` (18 tests).
-For a reproducible Cargo harness, add one `[[test]]` entry per source file with
-its absolute `path`, then run `RUSTFLAGS=-Dwarnings cargo test`,
-`RUSTFLAGS=-Dwarnings cargo test --release`, and
-`RUSTFLAGS=-Dwarnings cargo miri test`.
+The checked-in runner reproduces these checks with warnings denied:
+
+```sh
+bash scripts/heap-assurance.sh rust /tmp/heap-assurance-rust all
+# Or select just debug, release, or miri instead of all.
+bash scripts/heap-assurance.sh extract /tmp/heap-assurance-extraction
+```
+
+Each output directory must be new. The runner copies the fixture tree, creates
+a dependency-free Cargo harness for Rust checks, and retains artifacts for
+inspection. It uses the active Rust toolchain (`RUSTUP_TOOLCHAIN` may override
+it); Miri must already be installed. Extraction uses the repository test runner,
+honors fixture options and expected failures, and writes only into the copied
+tree. Set `AENEAS_EXE`, `CHARON_EXE`, and `TEST_RUNNER_EXE` to override the
+repository's default executable paths. No compiler build or installation is
+performed. Extraction success here means the expected outcomes matched, not
+that every fixture emitted Lean. Relative input paths keep diagnostic filenames
+independent of the output directory.
+
 `gmake format` ran rustfmt; its ignored OCaml stages reported missing
 `ocamlformat` (no OCaml files changed).
 

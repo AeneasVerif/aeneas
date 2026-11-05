@@ -741,9 +741,10 @@ theorem borrowRange_return.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     exact endBorrowRange_encoding.post repr p blk.bptr updated vector enc hcount hsize
       h₁ F s₁ s₂ hp₁ hd₁ hm₁ hi₁ (by simpa [vector] using actual)
 
-/-- State-specific boundary for a matching return protocol. One compatible
-encoding enables the operation; the postcondition covers all permitted encodings.
-Deriving this premise from a backward-function resource remains separate work. -/
+/-- Low-level state-specific return rule. One compatible encoding enables the
+operation; the postcondition covers all permitted encodings. Scoped clients use
+captured-state callback contracts or derive enabledness from RootReturn via
+endBorrowRange_exclusive.spec, rather than assuming it from borrowed cells. -/
 theorem endBorrowRange.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (values : Vector T count) (s : Heap) (hcount : 0 < count) (hsize : 0 < repr.size)
     (enabled : ∃ next, State.endBorrowRange repr p values.toList s () next) :

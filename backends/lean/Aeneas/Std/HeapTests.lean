@@ -228,8 +228,8 @@ def rootAndLoanGuards : Option Unit := do
 
 example : rootAndLoanGuards = some () := by native_decide
 
-/-- Direct premature restoration remains possible: matching continuation order
-is a stated boundary assumption, not a dynamically authenticated loan tree. -/
+/-- Raw restoration can succeed with a suspended child. This is not a scoped
+callback counterexample: the active child prevents parent RootReturn authority. -/
 example : (do
     let (a, s₀) ← Heap.alloc Repr.u8 1 (addr 256) Heap.empty
     let s₁ ← Heap.borrow Repr.u8 a s₀

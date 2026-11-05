@@ -12,8 +12,8 @@ import all Aeneas.Std.Alloc.Boxed
 
 /-! Contracts for actual checked Rust effects, with arbitrary indexed frames and
 all permitted successors. Ordinary access derives enabledness from resources.
-Allocation needs compatible placement; restoration remains a low-level,
-state-specific interface until backward resources supply return authority. -/
+Allocation accepts OOM if compatible placement is unavailable. Low-level
+restoration is state-specific; scoped rules derive it from return authority. -/
 
 @[expose] public section
 

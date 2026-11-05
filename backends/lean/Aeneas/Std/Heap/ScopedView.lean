@@ -163,26 +163,19 @@ theorem RootReturn.after_scoped_view {s₀ s₁ : Heap} {base : Nat}
     (scope : Heap.NewView s₀ s₁)
     (inactive : ∀ blk, s₁.allocations s₀.next = some blk → blk.active = false) :
     RootReturn s₁ base := by
-  intro blk lookup
-  have original : s₀.allocations base = some blk := by
-    rw [← scope.2 base (Nat.ne_of_lt bound)]
-    exact lookup
-  obtain ⟨root, hr, hb, hlen, aliases⟩ := authority blk original
-  have rootDifferent : blk.root ≠ s₀.next := Nat.ne_of_lt (hi.base_lt hr)
-  refine ⟨root, by rw [scope.2 _ rootDifferent]; exact hr, hb, hlen, ?_⟩
-  apply List.all_eq_true.mpr
-  intro id member
-  by_cases fresh : id = s₀.next
-  · subst id
-    cases hl : s₁.allocations s₀.next
-    · simp
-    · simp [inactive _ hl]
-  · have old : id < s₀.next := by
-      have bound' := List.mem_range.mp member
-      rw [scope.1] at bound'
-      agrind
-    have entry := List.all_eq_true.mp aliases id (List.mem_range.mpr old)
-    simpa only [scope.2 id fresh] using entry
+  have closed : Heap.ClosedViews s₀ s₁ := by
+    refine ⟨by rw [scope.1]; exact Nat.le_succ _, ?_, ?_⟩
+    · intro id before
+      rw [scope.2 id (Nat.ne_of_lt before)]
+    · intro id blk after lookup
+      by_cases fresh : id = s₀.next
+      · subst id
+        exact inactive blk lookup
+      · have original : s₀.allocations id = some blk := by
+          rw [← scope.2 id fresh]
+          exact lookup
+        exact (Nat.not_lt_of_ge after (hi.base_lt original)).elim
+  exact authority.after_closed_views hi bound closed
 
 end SepLogic
 

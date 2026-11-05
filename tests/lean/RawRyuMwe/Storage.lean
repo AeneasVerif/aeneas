@@ -165,6 +165,26 @@ theorem snapshotBytes.spec (p : RawPtr U8) (bytes : List Aeneas.Std.Byte) (depth
   subst other
   exact ⟨Option.some.inj (hr.symm.trans read), rfl⟩
 
+/-- The same raw snapshot relation with its storage extent retained in the type. -/
+def snapshotVector (p : RawPtr U8) (size : Nat) : Result (Vector Aeneas.Std.Byte size) :=
+  Result.checkedModify fun s₀ bytes s₁ =>
+    ∃ block, s₀.allocations p.provenance = some block ∧ s₀.live block = true ∧
+      block.bptr = p.address ∧ block.repr.mapM Cell.read = some bytes.toList ∧ s₁ = s₀
+
+theorem snapshotVector.spec (p : RawPtr U8) (bytes : Vector Aeneas.Std.Byte size)
+    (depth : Nat) (h F : Fragment) (s₀ : Heap) (hp : storageAt p bytes.toList depth h)
+    (hm : Fragment.Matches s₀ (h ∪ F)) :
+    HeapWP.Spec (snapshotVector p size) (fun result s₁ => result = bytes ∧ s₁ = s₀) s₀ := by
+  have original := HeapWP.Spec.checkedModify.mp (snapshotBytes.spec p bytes.toList depth h F s₀ hp hm)
+  apply HeapWP.Spec.checkedModify.mpr
+  constructor
+  · obtain ⟨result, stop, transition⟩ := original.1
+    obtain ⟨rfl, rfl⟩ := original.2 result stop transition
+    exact ⟨bytes, _, transition⟩
+  · intro result stop transition
+    obtain ⟨same, state⟩ := original.2 result.toList stop transition
+    exact ⟨Vector.toList_inj.mp same, state⟩
+
 theorem allocationAlive_retire (s : Heap) (id : Nat) (block : Block) :
     (s.retire id).allocationAlive block = s.allocationAlive block := by
   by_cases eq : block.root = id

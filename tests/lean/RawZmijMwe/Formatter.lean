@@ -33,6 +33,15 @@ theorem formattedBytes_length (old : Vector Aeneas.Std.Byte 4) (value : U8) :
     List.length_drop, Vector.length_toList]
   agrind
 
+def formattedBuffer (old : Vector Aeneas.Std.Byte 4) (value : U8) :
+    Vector Aeneas.Std.Byte 4 :=
+  ⟨(formattedBytes old value).toArray, by simp⟩
+
+@[simp]
+theorem formattedBuffer_toList (old : Vector Aeneas.Std.Byte 4) (value : U8) :
+    (formattedBuffer old value).toList = formattedBytes old value := by
+  simp [formattedBuffer]
+
 theorem write_decimal.storage_spec (out : RawPtr U8) (value : U8)
     (old : Vector Aeneas.Std.Byte 4) :
     HeapWP.Triple (storageAt out old.toList 0) (write_decimal out value)
@@ -56,15 +65,15 @@ theorem write_decimal.storage_spec (out : RawPtr U8) (value : U8)
 /- Local raw-storage adapters for the anticipated forward/backward interface.
    These are not compiler emissions or ordinary typed MaybeUninit descriptors. -/
 def DecimalBuffer.as_mut_ptr_back (p : RawPtr U8) (size : Nat) :
-    Result (List Aeneas.Std.Byte) := do
-  let updated ← snapshotBytes p
+    Result (Vector Aeneas.Std.Byte size) := do
+  let updated ← snapshotVector p size
   closeBytes p size 0
   .ok updated
 
-def DecimalBuffer.as_mut_ptr (bytes : List Aeneas.Std.Byte) (address : BasePtr) :
-    Result (RawPtr U8 × Result (List Aeneas.Std.Byte)) := do
-  let p ← exposeBytes bytes 0 address
-  .ok (p, as_mut_ptr_back p bytes.length)
+def DecimalBuffer.as_mut_ptr (bytes : Vector Aeneas.Std.Byte size) (address : BasePtr) :
+    Result (RawPtr U8 × Result (Vector Aeneas.Std.Byte size)) := do
+  let p ← exposeBytes bytes.toList 0 address
+  .ok (p, as_mut_ptr_back p size)
 
 def DecimalBuffer.as_ptr (bytes : List Aeneas.Std.Byte) (address : BasePtr) :
     Result (RawPtr U8 × Result Unit) := do
@@ -77,15 +86,15 @@ def DecimalBuffer.as_ptr (bytes : List Aeneas.Std.Byte) (address : BasePtr) :
    computation only returns updated storage. This is handwritten, not emitted. -/
 def DecimalBuffer.format (old : Vector Aeneas.Std.Byte 4) (value : U8)
     (mutableAddress firstSharedAddress secondSharedAddress : BasePtr) :
-    Result (Slice U8 × Result (List Aeneas.Std.Byte)) := do
-  let (start, start_back) ← as_mut_ptr old.toList mutableAddress
+    Result (Slice U8 × Result (Vector Aeneas.Std.Byte 4)) := do
+  let (start, start_back) ← as_mut_ptr old mutableAddress
   let finish ← write_decimal start value
   let updated ← start_back
-  let (origin, origin_back) ← as_ptr updated firstSharedAddress
+  let (origin, origin_back) ← as_ptr updated.toList firstSharedAddress
   let distance ← RawPtr.offset_from Repr.u8 finish origin
   origin_back
   let len := IScalar.hcast .Usize distance
-  let (ptr, ptr_back) ← as_ptr updated secondSharedAddress
+  let (ptr, ptr_back) ← as_ptr updated.toList secondSharedAddress
   let (bytes, bytes_back) ← core.slice.raw.from_raw_parts Repr.u8 ptr len
   bytes_back
   ptr_back
@@ -102,7 +111,7 @@ theorem DecimalBuffer.format.spec (old : Vector Aeneas.Std.Byte 4) (value : U8)
     HeapWP.Spec (DecimalBuffer.format old value mutableAddress firstSharedAddress secondSharedAddress)
       (fun result s₁ => result.1.val = decimalDigits value ∧
         HeapWP.Spec result.2 (fun updated s₂ =>
-          updated = formattedBytes old value ∧ s₂.Inv ∧ Fragment.Matches s₂ F) s₁) s₀ := by
+          updated = formattedBuffer old value ∧ s₂.Inv ∧ Fragment.Matches s₂ F) s₁) s₀ := by
   simp only [DecimalBuffer.format, DecimalBuffer.as_mut_ptr, DecimalBuffer.as_mut_ptr_back,
     DecimalBuffer.as_ptr, Std.bind_assoc, bind_ok,
     uncurry_apply_pair, Vector.length_toList]
@@ -110,10 +119,13 @@ theorem DecimalBuffer.format.spec (old : Vector Aeneas.Std.Byte 4) (value : U8)
   rintro start s₁ ⟨startAddr, _, h₁, hd₁, hm₁, hi₁, hp₁⟩
   apply HeapWP.Spec.bind (write_decimal.storage_spec start value old h₁ F s₁ hp₁ hd₁ hm₁ hi₁)
   rintro finish s₂ ⟨h₂, hd₂, hm₂, hi₂, prov, cursor, hp₂⟩
-  apply HeapWP.Spec.bind (snapshotBytes.spec start (formattedBytes old value) 0 h₂ F s₂ hp₂ hm₂)
+  have snapshot := snapshotVector.spec start (formattedBuffer old value) 0 h₂ F s₂
+    (by simpa using hp₂) hm₂
+  apply HeapWP.Spec.bind snapshot
   rintro updated s₃ ⟨updatedEq, stateEq⟩
   subst updated
   subst s₃
+  simp only [formattedBuffer_toList]
   have closing := closeBytes.state_spec start (formattedBytes old value) 0 h₂ F s₂ hp₂ hd₂ hm₂ hi₂
   simp only [formattedBytes_length] at closing
   apply HeapWP.Spec.bind closing
@@ -141,8 +153,9 @@ theorem DecimalBuffer.format.spec (old : Vector Aeneas.Std.Byte 4) (value : U8)
     have castEq := IScalar.hcast_inBounds_spec .Usize distance castBounds
     simp only [lift, WP.spec_ok, distanceVal] at castEq
     exact_mod_cast castEq
-  apply HeapWP.Spec.bind
-    (closeBytes.state_spec origin (formattedBytes old value) 1 h₄ F s₄ hp₄ hd₄ hm₄ hi₄)
+  have originReturn := closeBytes.state_spec origin (formattedBytes old value) 1 h₄ F s₄ hp₄ hd₄ hm₄ hi₄
+  simp only [formattedBytes_length] at originReturn
+  apply HeapWP.Spec.bind originReturn
   rintro _ s₅ ⟨hi₅, hm₅, _, _⟩
   apply HeapWP.Spec.bind
     (exposeBytes.spec (formattedBytes old value) 1 secondSharedAddress s₅ F hi₅ hm₅)
@@ -165,8 +178,9 @@ theorem DecimalBuffer.format.spec (old : Vector Aeneas.Std.Byte 4) (value : U8)
   subst s₈
   have hp₆ : storageAt ptr (formattedBytes old value) 1 h₆ :=
     ⟨cleanup, cells, disjoint, union, alloc, raw⟩
-  apply HeapWP.Spec.bind
-    (closeBytes.state_spec ptr (formattedBytes old value) 1 h₆ F s₆ hp₆ hd₆ hm₆ hi₆)
+  have ptrReturn := closeBytes.state_spec ptr (formattedBytes old value) 1 h₆ F s₆ hp₆ hd₆ hm₆ hi₆
+  simp only [formattedBytes_length] at ptrReturn
+  apply HeapWP.Spec.bind ptrReturn
   rintro _ s₈ ⟨hi₈, hm₈, _, _⟩
   apply (HeapWP.Spec.pure _ _ _).mpr
   refine ⟨by simpa [digits] using contents, ?_⟩
@@ -175,7 +189,7 @@ theorem DecimalBuffer.format.spec (old : Vector Aeneas.Std.Byte 4) (value : U8)
 /- Collect the pure updated storage for composing repeated formatter calls.
    The formatter has already executed all heap-borrow returns. -/
 def DecimalBuffer.format_and_return (old : Vector Aeneas.Std.Byte 4) (value : U8)
-    (address : BasePtr) : Result (Slice U8 × List Aeneas.Std.Byte) := do
+    (address : BasePtr) : Result (Slice U8 × Vector Aeneas.Std.Byte 4) := do
   let (bytes, back) ← DecimalBuffer.format old value address address address
   let updated ← back
   pure (bytes, updated)
@@ -186,8 +200,8 @@ def DecimalBuffer.format_and_return (old : Vector Aeneas.Std.Byte 4) (value : U8
 theorem DecimalBuffer.format_and_return.spec (old : Vector Aeneas.Std.Byte 4)
     (value : U8) (address : BasePtr) :
     ⦃ SepLogic.empty ⦄ DecimalBuffer.format_and_return old value address
-    ⦃ (bytes : Slice U8) (updated : List Aeneas.Std.Byte) => fun h =>
-      bytes.val = decimalDigits value ∧ updated = formattedBytes old value ∧ SepLogic.empty h ⦄ := by
+    ⦃ (bytes : Slice U8) (updated : Vector Aeneas.Std.Byte 4) => fun h =>
+      bytes.val = decimalDigits value ∧ updated = formattedBuffer old value ∧ SepLogic.empty h ⦄ := by
   intro h F s₀ empty hd hm hi
   subst h
   unfold DecimalBuffer.format_and_return

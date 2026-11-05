@@ -15,9 +15,9 @@ refinement between Rust and this prototype.
 
 | Milestone | Evidence | Boundary |
 |---|---|---|
-| Whole clients | `RawMemoryViews/ProvenanceScoped.lean` proves allocation, initialization, physical free, stack exposure, pointer-byte copy and both returns. `RawZmijMwe/Reuse.lean` proves two formatter calls with exact snapshots and final storage. | Handwritten models. Allocator outcome/placements are ghost parameters. Formatter address stability remains an explicit specialization/hypothesis. The first Rust slice must be copied before reborrowing. |
+| Whole clients | `RawMemoryViews/ProvenanceScoped.lean` proves allocation, initialization, physical free, stack exposure, pointer-byte copy and both returns. `RawZmijMwe/Reuse.lean` proves two formatter calls with exact snapshots and statically sized final storage. | Handwritten models. Allocator outcome/placements are ghost parameters. Formatter address stability remains an explicit specialization/hypothesis. The first Rust slice must be copied before reborrowing. |
 | Successful executions | `Execution.lean` defines `HeapWP.Runs` directly over `Result` effects; `Runs.post` links it to universal WP. Client witnesses execute the real formatter, full deallocation/copy wrapper, owning-cell destructor client and list constructor. | Finite witnesses establish existence, not success for every placement. The formatter witness is one call; repeated calls also have a universal contract and a separate seven-call heap trace. |
-| Composable returns | `ScopedView.lean`: transitive `ClosedViews` and `RootReturn.after_closed_views` allow multiple fresh scopes and byte changes to old allocations. `HeapAssuranceTests.siblingScopes` exercises disjoint siblings, a shared child, an empty range and an unrelated write. | Old return metadata must be preserved; all fresh views must retire. Frame preservation and heap invariants are separate obligations. There is still no authenticated loan tree. |
+| Composable returns | `ScopedView.lean`: transitive `ClosedViews` and `RootReturn.after_closed_views` allow multiple fresh scopes and byte changes to old allocations. `HeapAssuranceTests.siblingScopes` exercises disjoint siblings, a shared child, an empty range and an unrelated write. | Return authority is a proved precondition, not implied by borrowed cells alone. Frame preservation and heap invariants are separate obligations. Raw operations do not dynamically authenticate a loan tree. |
 | Representation boundaries | Genuine ignored padding and partial initialization/copy, all 256 Bool bytes, all 256 numeric padding replacements, ZST lifecycle, and pointer-lane corruption/loan rejection. | Single ZST accesses and mutable U8 loans across pointer lanes are valid Rust patterns but unsupported. Invalid Bool/value-byte reads are rejected; unsupported does not mean Rust UB. |
 | Concrete ownership | `DoublyLinked/ConcreteLayout.lean` supplies a 24-byte, alignment-8 descriptor and `NodeLayout` proof. `RawMemoryViews/Ownership.lean` proves one destructor observation and physical reclamation with arbitrary frames. | Node calibration is 64-bit little-endian `repr(C)`, checked by Rust layout tests. Non-Copy/once-only ownership is enforced by the Rust API, not linear Lean types. Forget/abort paths do not promise cleanup. |
 
@@ -49,10 +49,13 @@ histories, so the current mutable-loan boundary conservatively rejects both.
 
 Nonempty duplicate returns, repeated exposure retirement, and parent cleanup
 with a live child are rejected in the tested scenarios. This does **not** make
-arbitrary low-level `endBorrow` calls safe: `HeapTests` retains the counterexample
-to premature restoration when a child is itself suspended. Empty-range returns
-also carry no consumable byte permission. Correct child-before-parent ordering
-and once-only callback use remain obligations of the translated/scoped protocol.
+arbitrary low-level `endBorrow` calls safe: `HeapTests` retains a raw-operation
+trace that prematurely restores a parent when a child is itself suspended.
+This is not a counterexample to the scoped callback contracts: the child remains
+an active view, so the parent's `RootReturn` authority is unavailable.
+Empty-range returns carry no consumable byte permission and may be repeatable
+no-ops. Client proofs must establish each callback's current-state preconditions;
+they do not assume an additional unchecked stack discipline.
 
 ## The implicit safe heap
 
@@ -333,12 +336,16 @@ cannot connect repeated conversions of the same unmoved Box to that identity.
 They may choose a different address. Retaining an old pointer's address does
 not fix that address-history overapproximation.
 
-Matching translated backward continuations are trusted to return the correct
-range and value, once, after their children have returned. There is no dynamic
-loan tree or consumable return ticket. A direct Lean call can prematurely
-restore a parent while a child is borrowed; the regression explicitly
-demonstrates that boundary. Cleanup nevertheless checks independently active
-views in its pre-state. Compatibility is not a replacement for safe authority.
+The low-level evaluator and the scoped proof interface have different roles.
+Raw restoration checks borrowed cells and heap compatibility, not a dynamic
+loan tree. It can restore a parent while a child view is itself borrowed.
+Scoped contracts instead require current-state return authority: the
+`RootReturn` rule excludes every other active view of that root, including
+suspended ones. Captured-state callback contracts likewise cannot simply be
+reused after intervening effects; their preservation must be proved.
+The regression demonstrates evaluator permissiveness, not a failure of these
+contracts. Rust-to-model correspondence must justify the generated callbacks;
+capability-respecting client proofs do not need a separate stack-order axiom.
 
 Mutable safe loans currently require the selected representation to be an
 admissible encoding of each decoded value (`State.mutableValues`). Numerical

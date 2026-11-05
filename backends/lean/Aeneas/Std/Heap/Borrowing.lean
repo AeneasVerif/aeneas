@@ -4,7 +4,8 @@ public import Aeneas.Std.Heap.Allocation
 
 /-! Selected-view transfers preserve symbolic bytes. Restoration/decrements are
 state-specific: linear indexed ownership alone does not rule out physical aliases.
-Matching safe backward-continuation authority is a separate boundary assumption. -/
+Scoped callback contracts additionally require current-state return authority;
+this low-level interface does not supply that authority. -/
 
 @[expose] public section
 
