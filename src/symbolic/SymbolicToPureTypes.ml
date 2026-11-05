@@ -945,7 +945,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let inputs = translate_back_inputs_for_gid gid in
     let outputs = compute_back_outputs_for_gid gid in
     let inputs =
-      if Option.is_some alive_hint && inputs = [] && outputs <> [] then
+      if Option.is_some alive_hint && inputs = [] then
         [ (0, [ (None, mk_unit_ty) ]) ]
       else inputs
     in

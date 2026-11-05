@@ -215,8 +215,7 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
   in
 
   let inputs =
-    if Option.is_some abs.alive_hint && inputs = [] && outputs <> [] then
-      [ mk_unit_ty ]
+    if Option.is_some abs.alive_hint && inputs = [] then [ mk_unit_ty ]
     else inputs
   in
 
@@ -1095,7 +1094,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
   in
 
   let ctx, inputs =
-    if Option.is_some abs.alive_hint && inputs = [] && outputs <> [] then
+    if Option.is_some abs.alive_hint && inputs = [] then
       let ctx, dummy = fresh_var None mk_unit_ty ctx in
       (ctx, [ dummy ])
     else (ctx, inputs)
@@ -1295,7 +1294,11 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
 
   let pat =
     match pat with
-    | None -> mk_ignored_pat input_e.ty
+    | None ->
+        let pat_ty =
+          if is_effectful then unwrap_result_ty span input_e.ty else input_e.ty
+        in
+        mk_ignored_pat pat_ty
     | Some pat -> pat
   in
   (ctx, is_effectful, pat, input_e)

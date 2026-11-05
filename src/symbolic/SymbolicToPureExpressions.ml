@@ -1145,7 +1145,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     in
     let ctx, outputs = abs_to_given_back output_mpl abs abs_level ctx in
     let back_inputs =
-      if Option.is_some abs.alive_hint && back_inputs = [] && outputs <> [] then
+      if Option.is_some abs.alive_hint && back_inputs = [] then
         [ mk_unit_texpr ]
       else back_inputs
     in
@@ -1321,8 +1321,7 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
   let back_inputs = abs_to_consumed ctx ectx abs abs_level in
   let ctx, outputs = abs_to_given_back None abs abs_level ctx in
   let back_inputs =
-    if Option.is_some abs.alive_hint && back_inputs = [] && outputs <> [] then
-      [ mk_unit_texpr ]
+    if Option.is_some abs.alive_hint && back_inputs = [] then [ mk_unit_texpr ]
     else back_inputs
   in
   let output = mk_simpl_tuple_pat outputs in
