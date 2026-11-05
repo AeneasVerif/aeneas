@@ -372,7 +372,7 @@ set_option pp.coercions true
 /- Example 1: indexing the first element of the list -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList)[i.val] = hd := by
+  (hd :: tl.toList)[i.val]'(by scalar_tac) = hd := by
   have hi : i.val = 0 := by scalar_tac
   simp only [hi]
   --
