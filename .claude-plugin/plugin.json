@@ -1,0 +1,7 @@
+{
+  "name": "aeneas",
+  "description": "Skills for verifying Rust programs with Aeneas",
+  "homepage": "https://aeneasverif.github.io/",
+  "repository": "https://github.com/AeneasVerif/aeneas",
+  "license": "Apache-2.0"
+}

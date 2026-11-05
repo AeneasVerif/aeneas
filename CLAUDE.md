@@ -6,8 +6,16 @@ Aeneas translates Rust programs to pure Lean code for formal verification.
 
 All detailed instructions for AI agents live in `documentation/skills/`. These are
 the **source of truth** — they are symlinked to `.github/instructions/` (for GitHub
-Copilot) and `.claude/skills/` (for Claude Code). **Always edit files in
+Copilot), `.claude/skills/` (for Claude Code in this repo), and `skills/` (for the
+Claude Code plugin marketplace; see `.claude-plugin/`). **Always edit files in
 `documentation/skills/`**; changes propagate automatically through the symlinks.
+
+External users can install these skills via:
+
+```
+/plugin marketplace add AeneasVerif/aeneas
+/plugin install aeneas@aeneas
+```
 
 | Skill file | Covers |
 |---|---|
