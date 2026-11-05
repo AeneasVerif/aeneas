@@ -1,7 +1,7 @@
 module
 
 public import RawMemoryViews.Repr
-public import RawScale.Notation
+public import Aeneas.Std.Heap.Notation
 import all Aeneas.Std.Heap.Resources
 import all Aeneas.Std.Core.Ptr
 

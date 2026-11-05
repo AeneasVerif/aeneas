@@ -10,25 +10,30 @@ import all Aeneas.Std.Core.Ptr
 
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 
-namespace raw_scale
+namespace Aeneas.Std
 
 set_option maxHeartbeats 1000000
 
-/- Read-only exposure can retain symbolic pointer bytes with the same numeric
-   decoding. Such bytes need not be an admissible encoding for a scalar write. -/
-def readableRange (repr : Aeneas.Std.Repr T) (p : RawPtr T) (base : BasePtr)
-    (values : Vector T count) (depth : Nat) : Assertion :=
-  fun h => ∃ data : Vector (Vector Aeneas.Std.Byte repr.size) count,
-    (∀ i : Fin count, repr.decode data[i.val] = some values[i.val]) ∧
-    block repr p base
-      (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList h
-
-theorem pointsToRange_readable {repr : Aeneas.Std.Repr T} {p : RawPtr T}
-    {base : BasePtr} {values : Vector T count} {depth : Nat} {h : Fragment}
-    (hp : pointsToRange repr p base values depth h) :
-    readableRange repr p base values depth h := by
-  obtain ⟨data, encoded, rest⟩ := hp
-  exact ⟨data, fun i => repr.encode_decode _ _ (encoded i), rest⟩
+theorem readableRange_bound (repr : Repr T) (p : RawPtr T) (base : BasePtr)
+    (values : Vector T count) (depth : Nat) (hcount : 0 < count) (hsize : 0 < repr.size)
+    (h : Fragment) (s : Heap) (hp : readableRange repr p base values depth h)
+    (hm : Fragment.Matches s h) (hi : s.Inv) :
+    p.address.val + count * repr.size < 2 ^ UScalarTy.numBits .Usize := by
+  obtain ⟨data, _, hlo, _, rfl⟩ := hp
+  obtain ⟨blk, hb, hl, _, hbase, _⟩ :=
+    bytes_of_matches (repr := repr.region count) (p := p.cast Unit)
+      (data := data.flatMap (fun b => b.map (Cell.shared depth)))
+      (Nat.mul_pos hcount hsize) hm
+  have bounded := hi.validBlock hl
+  simp only [Heap.validBlock, Bool.and_eq_true] at bounded
+  have upper : blk.bptr.val + blk.repr.length < 2 ^ UScalarTy.numBits .Usize := by
+    have bounds : 0 < blk.bptr.val ∧
+        blk.bptr.val + blk.repr.length < 2 ^ UScalarTy.numBits .Usize := by
+      simpa [Heap.bounded] using bounded.1.1
+    exact bounds.2
+  change p.offsetFrom base + count * repr.size ≤ blk.repr.length at hb
+  simp only [RawPtr.offsetFrom] at hb
+  agrind
 
 private theorem read_range_element {T : Type} {s : Heap} {repr : Aeneas.Std.Repr T}
     {p q : RawPtr T} {base : BasePtr} {values : Vector T count} {depth : Nat}
@@ -150,4 +155,21 @@ theorem add_range.spec {T : Type} (repr : Aeneas.Std.Repr T)
   add_range_with.spec repr p base values depth _ (fun _ => pointsToRange_readable)
     i hcount hsize hle hfit
 
-end raw_scale
+/-- Heap validity supplies the address bound, rather than a client-side premise. -/
+theorem add_readable_range.spec {T : Type} (repr : Repr T)
+    (p : RawPtr T) (base : BasePtr) (values : Vector T count) (depth : Nat)
+    (P : Assertion) (view : ∀ h, P h → readableRange repr p base values depth h)
+    (i : Usize) (hcount : 0 < count) (hsize : 0 < repr.size) (hle : i.val ≤ count) :
+    HeapWP.Triple P (RawPtr.add repr p i)
+      (fun result h => result.provenance = p.provenance ∧
+        result.address.val = p.address.val + i.val * repr.size ∧ P h) := by
+  intro h F s₀ hp hd hm hi
+  have bound := readableRange_bound repr p base values depth hcount hsize h s₀ (view h hp)
+    ((Fragment.matches_union _ _ _).mp hm).1 hi
+  have fit : p.address.val + i.val * repr.size < 2 ^ UScalarTy.numBits .Usize := by
+    have := Nat.mul_le_mul_right repr.size hle
+    agrind
+  exact add_range_with.spec repr p base values depth P view i hcount hsize hle fit
+    h F s₀ hp hd hm hi
+
+end Aeneas.Std

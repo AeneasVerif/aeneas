@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_ryu_mwe.llbc
+[[91mError[39m] Raw ptr casts are only supported between pointers to literal types; found: cast<*mut u8>
+Source: 'tests/src/raw_ryu_mwe.rs', lines 29:0-38:1
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 604
+

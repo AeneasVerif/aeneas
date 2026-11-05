@@ -1,7 +1,7 @@
 module
 
 public import RawScale.Funs
-public import RawScale.RangeAccess
+public import Aeneas.Std.Heap.RangeAccess
 public import RawMatrixView.Properties
 public import Aeneas.Std.RangeIter
 import all RawScale.Funs

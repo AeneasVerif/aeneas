@@ -1,8 +1,8 @@
 module
 
 public import RawScale.Properties
-public import RawScale.RangeWrite
-public import RawScale.Notation
+public import Aeneas.Std.Heap.RangeWrite
+public import Aeneas.Std.Heap.Notation
 
 @[expose] public section
 

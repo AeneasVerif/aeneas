@@ -20,6 +20,24 @@ have precondition `empty` and postcondition `result = expected ∧ empty h`,
 without explicit heap, frame, or resource-matching parameters. `HeapWP.frame`
 adds a caller's assertion to such a contract.
 
+`Heap/Step.lean` registers `HeapWP.Triple` directly with the existing `step`
+tactic. Heap contracts are not duplicated as pure specifications. Existing
+pure `WP.spec` contracts can be lifted while preserving the owned fragment;
+OOM keeps its accepted-abort semantics. `step with` selects a heap contract,
+and `step*` also handles intervening pure arithmetic. Nontrivial separation
+rearrangements and framing remain explicit rather than an implicit heap solver.
+
+Reusable range and exposure support lives in the backend, not in `RawScale`:
+`RangeAccess.lean` handles indexed reads and address bounds;
+`RangeWrite.lean` focuses and reassembles single or paired ranges;
+`SharedExposure.lean` handles singleton shared exposures;
+`SliceExposure.lean` handles whole-slice allocation and matching returns,
+including empty slices. Cleanup ownership establishes empty-view liveness.
+Exclusive range exposure requires encoding calibration, just like its singleton
+counterpart. The read-back and mutable-return contracts require positive element
+size, but not positive element count. `Notation.lean` provides the scoped
+heap-triple syntax.
+
 Exposure brings a compatible contribution into the explicit heap. Borrowing
 returns permissions to safe Rust. Neither operation necessarily allocates or
 deallocates physical storage. Numerical compatibility alone does not authorize
@@ -190,7 +208,10 @@ guarantee. Accesses first check that this address is at least the selected view'
 base, then derive the local index by subtraction. A before-view address must not
 silently become index zero through truncated subtraction.
 Arithmetic checks source and target addresses against the selected view, including
-one-past, and rejects overflow before constructing a new Usize.
+one-past, and rejects overflow before constructing a new Usize. It requires the
+allocation root to remain alive, but does not require the access view to remain
+active: returning a temporary view removes access permissions, not the retained
+allocation identity or bounds. Reads and writes still require active views.
 `distance` recognizes a common root
 across distinct views; equal numerical addresses alone do not prove provenance.
 `ptrEq` compares numerical addresses, not ghost records.
@@ -201,6 +222,16 @@ Consequently a dangling pointer can still be stored, loaded, and numerically
 observed directly from the pointer value. Numerical equality does not require
 either view to be live or even present. Reusing an address creates a new root;
 it cannot revive the old view, and numerical observation grants no access.
+
+For nonempty views whose allocation roots are still alive, equal **start**
+addresses imply overlapping storage, so `Heap.Inv.same_root_of_overlap` derives
+common root identity. `HeapWP.offset_from_reexposed.spec` uses an explicit
+start-address equality hypothesis to prove the exact byte distance from a
+writer's end cursor to a newly exposed start, even after the writer's view
+retires. This is not a general equal-address/provenance axiom: dead allocations
+and equal one-past/start addresses of adjacent allocations do not qualify.
+Independent safe-to-raw conversions still do not guarantee this start-address
+equality; source-place tracking remains a separate translation boundary.
 
 `returnOwned` transfers a complete owned view to implicit safe Rust without
 physical death. A subsequent `newBlock` can use that known inactive root,

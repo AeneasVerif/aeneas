@@ -2,7 +2,7 @@ module
 
 public import RawMemoryViews.Initialization
 public import Aeneas.Std.Heap.ScopedView
-public import RawScale.RangeAccess
+public import Aeneas.Std.Heap.RangeAccess
 import all Aeneas.Std.Heap.Resources
 import all Aeneas.Std.Heap.Model
 import all Aeneas.Std.Heap.Repr

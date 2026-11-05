@@ -1,6 +1,8 @@
 module
 
-public import RawScale.Exposure
+public import RawScale.Funs
+public import Aeneas.Std.Heap.SharedExposure
+public import Aeneas.Std.Heap.Step
 import all Aeneas.Std.Core.Ptr
 
 @[expose] public section
@@ -16,20 +18,20 @@ namespace raw_scale
 
 /-- **Spec theorem for `raw_scale::scale_one_raw` (equal pointers)**
     One exclusive word is replaced by its wrapping product. -/
+@[step]
 theorem scale_one_raw.in_place_spec (k : U32) (p : RawPtr U32)
     (base : BasePtr) (value : U32) :
     ⦃ readable raw_box.u32Repr p base value ⦄
     scale_one_raw k p p
     ⦃ _ => pointsTo raw_box.u32Repr p base (core.num.U32.wrapping_mul k value) ⦄ := by
-  intro h F s₀ hp hd hm hi
   unfold scale_one_raw
-  apply HeapWP.Spec.bind (HeapWP.read_exposed.spec raw_box.u32Repr p base value 0
-    (by decide) h F s₀ hp hd hm hi)
-  rintro x s₁ ⟨h₁, hd₁, hm₁, hi₁, hx, hp₁⟩
+  step with HeapWP.read_exposed.spec raw_box.u32Repr p base value 0 (by decide)
+    as ⟨x, h, hx, hp⟩
   subst x
   simp only [lift, bind_ok]
-  exact HeapWP.write_readable.spec raw_box.u32Repr p base value _
-    (raw_box.u32Repr_noPointers _) (by decide) h₁ F s₁ hp₁ hd₁ hm₁ hi₁
+  step with HeapWP.write_readable.spec raw_box.u32Repr p base value
+    (core.num.U32.wrapping_mul k value) (raw_box.u32Repr_noPointers _) (by decide)
+  assumption
 
 /-- **Spec theorem for `raw_scale::scale_one_raw` (disjoint pointers)**
     Preserve the readable source and overwrite the exclusive destination. -/

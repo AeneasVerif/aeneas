@@ -3,7 +3,7 @@ module
 public import Aeneas.Std.Heap.Effects
 public import Aeneas.Std.WP
 
-/-! Paper-facing notation for framed heap contracts. Open `Aeneas.Std.HeapWP`
+/-! Notation for framed heap contracts. Open `Aeneas.Std.HeapWP`
     to enable it. The pre/postconditions remain separation assertions; ordinary
     `c ⦃ result => proposition ⦄` retains its existing pure-WP meaning. -/
 

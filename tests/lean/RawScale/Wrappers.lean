@@ -1,6 +1,7 @@
 module
 
 public import RawScale.Scalar
+public import RawScale.RowResources
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Primitives
 
@@ -11,35 +12,24 @@ open scoped Aeneas.Std.HeapWP
 
 namespace raw_scale
 
-private theorem sep_exchange (P Q R S : Assertion) (h : Fragment) :
-    ((P ∗ Q) ∗ (R ∗ S)) h ↔ ((P ∗ R) ∗ (Q ∗ S)) h := by
-  have move : ∀ h, (Q ∗ (R ∗ S)) h ↔ (R ∗ (Q ∗ S)) h := by
-    intro h
-    have swap : (Q ∗ R) = (R ∗ Q) := funext fun h => propext (sep_comm Q R h)
-    rw [← sep_assoc, swap, sep_assoc]
-  rw [sep_assoc, sep_assoc]
-  constructor
-  · exact sep_mono (fun _ hp => hp) (fun h => (move h).mp)
-  · exact sep_mono (fun _ hp => hp) (fun h => (move h).mpr)
-
-def scaledRow (k : U32) (row : Row13) : Row13 :=
+def scaledRow (k : U32) (row : Row15) : Row15 :=
   rowOfWords (scaledWords k (rowWords row))
 
 local macro_rules
   | `(tactic| get_elem_tactic) => `(tactic| agrind)
 
-theorem scaledRow_get (k : U32) (row : Row13) (i : Nat) (hi : i < 16) :
+theorem scaledRow_get (k : U32) (row : Row15) (i : Nat) (hi : i < 16) :
     (scaledRow k row).val[i] = core.num.U32.wrapping_mul k row.val[i] := by
   simp [scaledRow, rowOfWords, scaledWords, rowWords]
 
-theorem scaledRow_zero_padding (k : U32) (row : Row13)
-    (padding : ∀ i, 13 ≤ i → (hi : i < 16) → row.val[i] = 0#u32) :
-    ∀ i, 13 ≤ i → (hi : i < 16) → (scaledRow k row).val[i] = 0#u32 := by
+theorem scaledRow_zero_padding (k : U32) (row : Row15)
+    (padding : ∀ i, 15 ≤ i → (hi : i < 16) → row.val[i] = 0#u32) :
+    ∀ i, 15 ≤ i → (hi : i < 16) → (scaledRow k row).val[i] = 0#u32 := by
   intro i hlo hi
   rw [scaledRow_get k row i hi, padding i hlo hi]
   bv_tac 32
 
-private theorem row_pointer_facts (p : RawPtr Row13) (row : Row13) (depth : Nat)
+private theorem row_pointer_facts (p : RawPtr Row15) (row : Row15) (depth : Nat)
     (s : Heap) (h : Fragment)
     (hp : (alloc rowRepr p p.address 1 false ∗ readable rowRepr p p.address row depth) h)
     (hm : Fragment.Matches s h) (hi : s.Inv) :
@@ -61,11 +51,11 @@ private theorem row_pointer_facts (p : RawPtr Row13) (row : Row13) (depth : Nat)
     rw [haddr]
     agrind
 
-theorem scale_in_place_tail.spec (k : U32) (p : RawPtr Row13) (buf : Row13) :
+theorem scale_in_place_tail.spec (k : U32) (p : RawPtr Row15) (buf : Row15) :
     ⦃ alloc rowRepr p p.address 1 false ∗ pointsTo rowRepr p p.address buf ⦄
     (do scale_raw 16#usize k (p.cast U32) (p.cast U32)
         core.ptr.end_from_mut rowRepr p)
-    ⦃ (result : Row13) => fun h => result = scaledRow k buf ∧ empty h ⦄ := by
+    ⦃ (result : Row15) => fun h => result = scaledRow k buf ∧ empty h ⦄ := by
   intro h F s hp hd hm hi
   have readable := sep_mono (fun _ hp => hp) (fun _ => pointsTo_readable) hp
   obtain ⟨aligned, fit⟩ := row_pointer_facts p buf 0 s h readable
@@ -86,9 +76,9 @@ theorem scale_in_place_tail.spec (k : U32) (p : RawPtr Row13) (buf : Row13) :
     All sixteen physical words are scaled modulo 2^32; the matching backward
     computation returns the updated safe row and retires its temporary exposure.
     Unavailable exposure placement may abort with OOM. -/
-theorem scale_in_place.spec (k : U32) (buf : Row13) :
+theorem scale_in_place.spec (k : U32) (buf : Row15) :
     ⦃ empty ⦄ scale_in_place k buf
-    ⦃ (result : Row13) => fun h => result = scaledRow k buf ∧ empty h ⦄ := by
+    ⦃ (result : Row15) => fun h => result = scaledRow k buf ∧ empty h ⦄ := by
   intro h F s rfl _ hm hi
   simp only [Fragment.empty_union] at hm
   simp only [scale_in_place, ext.row_as_mut_ptr, core.ptr.from_mut,
@@ -98,14 +88,14 @@ theorem scale_in_place.spec (k : U32) (buf : Row13) :
   rintro p s' ⟨_, h, hd, hm', hi', hp⟩
   exact scale_in_place_tail.spec k p buf h F s' hp hd hm' hi'
 
-theorem scale_into_tail.spec (k : U32) (p q : RawPtr Row13) (src dst : Row13) :
+theorem scale_into_tail.spec (k : U32) (p q : RawPtr Row15) (src dst : Row15) :
     ⦃ (alloc rowRepr p p.address 1 false ∗ readable rowRepr p p.address src 1) ∗
       (alloc rowRepr q q.address 1 false ∗ pointsTo rowRepr q q.address dst) ⦄
     (do scale_raw 16#usize k (p.cast U32) (q.cast U32)
         let result ← core.ptr.end_from_mut rowRepr q
         p.endSharedExposure rowRepr [src]
         pure result)
-    ⦃ (result : Row13) => fun h => result = scaledRow k src ∧ empty h ⦄ := by
+    ⦃ (result : Row15) => fun h => result = scaledRow k src ∧ empty h ⦄ := by
   intro h F s hp hd hm hi
   have keep := hp
   obtain ⟨a, b, _, hh, source, target⟩ := hp
@@ -149,9 +139,9 @@ theorem scale_into_tail.spec (k : U32) (p q : RawPtr Row13) (src dst : Row13) :
     The returned safe row is the pointwise wrapping product of `k` and `src`,
     independently of `dst`. Both temporary exposures are retired; the external
     frame is preserved on success; unavailable placement may abort with OOM. -/
-theorem scale_into.spec (k : U32) (src dst : Row13) :
+theorem scale_into.spec (k : U32) (src dst : Row15) :
     ⦃ empty ⦄ scale_into k src dst
-    ⦃ (result : Row13) => fun h => result = scaledRow k src ∧ empty h ⦄ := by
+    ⦃ (result : Row15) => fun h => result = scaledRow k src ∧ empty h ⦄ := by
   intro h F s rfl _ hm hi
   simp only [Fragment.empty_union] at hm
   simp only [scale_into, ext.row_as_ptr, ext.row_as_mut_ptr, core.ptr.from_ref, core.ptr.from_mut,
@@ -171,12 +161,12 @@ theorem scale_into.spec (k : U32) (src dst : Row13) :
   exact scale_into_tail.spec k p q src dst (b ∪ a) F s₂ pre
     (Fragment.disjoint_union_left.mpr ⟨hbF, haF⟩) combinedMatch hi₂
 
-theorem scale_via_borrow_tail.spec (k : U32) (p : RawPtr Row13) (buf : Row13) :
+theorem scale_via_borrow_tail.spec (k : U32) (p : RawPtr Row15) (buf : Row15) :
     ⦃ alloc rowRepr p p.address 1 false ∗ pointsTo rowRepr p p.address buf ⦄
     (do let result ← scale_via_borrow_raw k (p.cast U32)
         let buf ← core.ptr.end_from_mut rowRepr p
         pure (result, buf))
-    ⦃ (result : U32) (updated : Row13) => fun h =>
+    ⦃ (result : U32) (updated : Row15) => fun h =>
       result = (scaledWords k (rowWords buf))[0] ∧ updated = scaledRow k buf ∧ empty h ⦄ := by
   intro h F s₀ hp hd hm hi
   have readable := sep_mono (fun _ hp => hp) (fun _ => pointsTo_readable) hp
@@ -201,9 +191,9 @@ theorem scale_via_borrow_tail.spec (k : U32) (p : RawPtr Row13) (buf : Row13) :
     The safe row is scaled through a temporary raw pointer and flat safe borrow.
     Both matching backward computations run; the returned scalar is the first
     scaled word, and the external heap frame is preserved. -/
-theorem scale_via_borrow.spec (k : U32) (buf : Row13) :
+theorem scale_via_borrow.spec (k : U32) (buf : Row15) :
     ⦃ empty ⦄ scale_via_borrow k buf
-    ⦃ (result : U32) (updated : Row13) => fun h =>
+    ⦃ (result : U32) (updated : Row15) => fun h =>
       result = (scaledWords k (rowWords buf))[0] ∧ updated = scaledRow k buf ∧ empty h ⦄ := by
   intro h F s₀ rfl _ hm hi
   simp only [Fragment.empty_union] at hm

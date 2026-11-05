@@ -1,4 +1,4 @@
-import RawScale.Wrappers
+import RawScale.Rows
 
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 open scoped Aeneas.Std.HeapWP
@@ -96,3 +96,19 @@ example (k value : U32) (R : Assertion) :
 /-- info: 'raw_scale.scaledWords_zero' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_scale.scaledWords_zero
+
+/-- info: 'raw_scale.scale_rows_raw.in_place_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_rows_raw.in_place_spec
+
+/-- info: 'raw_scale.scale_rows_raw.disjoint_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_rows_raw.disjoint_spec
+
+/-- info: 'raw_scale.scale_rows_in_place.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_rows_in_place.spec
+
+/-- info: 'raw_scale.scale_rows_into.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_scale.scale_rows_into.spec

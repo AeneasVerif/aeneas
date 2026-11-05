@@ -1,7 +1,7 @@
 module
 
 public import RawMemoryViews.ByteLayout
-public import RawScale.Notation
+public import Aeneas.Std.Heap.Notation
 public import Aeneas.Std.Heap.RangeRestoration
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Slice

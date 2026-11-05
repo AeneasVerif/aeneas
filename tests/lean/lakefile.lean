@@ -110,11 +110,13 @@ package «tests» {}
 @[default_target] lean_lib RawMemoryViews
 @[default_target] lean_lib RawPointerOps
 @[default_target] lean_lib RawReadWriteRead
+@[default_target] lean_lib RawRyuMwe
 @[default_target] lean_lib RawScale
 @[default_target] lean_lib RawTransmute
 @[default_target] lean_lib RawTransmuteExternals
 @[default_target] lean_lib RawValueCasts
 @[default_target] lean_lib RawZeroize
+@[default_target] lean_lib RawZmijMwe
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Scalars

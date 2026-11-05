@@ -57,7 +57,7 @@ def scale_raw (N : Usize) (k : U32) (src : ConstRawPtr U32) (dst : MutRawPtr U32
     Result Unit := do
   scale_raw_loop { start := 0#usize, «end» := N } k src dst
 
-def scale_into (k : U32) (src : Row13) (dst : Row13) : Result Row13 := do
+def scale_into (k : U32) (src : Row15) (dst : Row15) : Result Row15 := do
   let (p, src_back) ← ext.row_as_ptr src
   let (p1, dst_back) ← ext.row_as_mut_ptr dst
   scale_raw 16#usize k p p1
@@ -65,7 +65,7 @@ def scale_into (k : U32) (src : Row13) (dst : Row13) : Result Row13 := do
   src_back
   ok dst
 
-def scale_in_place (k : U32) (buf : Row13) : Result Row13 := do
+def scale_in_place (k : U32) (buf : Row15) : Result Row15 := do
   let (p, back) ← ext.row_as_mut_ptr buf
   let p1 ← ext.cast U32 p
   scale_raw 16#usize k p1 p
@@ -74,7 +74,7 @@ def scale_in_place (k : U32) (buf : Row13) : Result Row13 := do
 @[rust_loop]
 def scale_rows_raw_loop
     {R : Usize} (iter : core.ops.range.Range Usize)
-    (factors : Array U32 R) (src : ConstRawPtr Row13) (dst : MutRawPtr Row13) :
+    (factors : Array U32 R) (src : ConstRawPtr Row15) (dst : MutRawPtr Row15) :
     Result Unit := do
   let (o, iter1) ← core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
   match o with
@@ -91,11 +91,11 @@ partial_fixpoint
 
 @[reducible]
 def scale_rows_raw {R : Usize} (factors : Array U32 R)
-    (src : ConstRawPtr Row13) (dst : MutRawPtr Row13) : Result Unit := do
+    (src : ConstRawPtr Row15) (dst : MutRawPtr Row15) : Result Unit := do
   scale_rows_raw_loop { start := 0#usize, «end» := R } factors src dst
 
 def scale_rows_into {R : Usize} (factors : Array U32 R)
-    (src : Array Row13 R) (dst : Array Row13 R) : Result (Array Row13 R) := do
+    (src : Array Row15 R) (dst : Array Row15 R) : Result (Array Row15 R) := do
   let s ← lift (Array.to_slice src)
   let (p, src_back) ← Slice.as_ptr rowRepr s
   let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut dst)
@@ -109,10 +109,10 @@ def scale_rows_into {R : Usize} (factors : Array U32 R)
    mut-to-const aggregate cast. Reconstructed from the three Rust statements,
    using the same array exposure/backward plumbing as scale_rows_into. -/
 def scale_rows_in_place {R : Usize} (factors : Array U32 R)
-    (rows : Array Row13 R) : Result (Array Row13 R) := do
+    (rows : Array Row15 R) : Result (Array Row15 R) := do
   let (s, to_slice_mut_back) ← lift (Array.to_slice_mut rows)
   let (p, back) ← Slice.as_mut_ptr rowRepr s
-  let p1 ← ext.cast Row13 p
+  let p1 ← ext.cast Row15 p
   scale_rows_raw factors p1 p
   let s1 ← back
   ok (to_slice_mut_back s1)
@@ -139,7 +139,7 @@ def scale_via_borrow_raw (k : U32) (p : MutRawPtr U32) : Result U32 := do
   back borrowed
   RawPtr.read raw_box.u32Repr p
 
-def scale_via_borrow (k : U32) (buf : Row13) : Result (U32 × Row13) := do
+def scale_via_borrow (k : U32) (buf : Row15) : Result (U32 × Row15) := do
   let (p, back) ← ext.row_as_mut_ptr buf
   let i ← scale_via_borrow_raw k p
   let buf ← back

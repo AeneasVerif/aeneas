@@ -48,6 +48,16 @@ def allocated (s : Heap) (id : Nat) : Bool :=
 def live (s : Heap) (block : Block) : Bool :=
   block.active && ((s.allocations block.root).map Block.alive).getD false
 
+/-- Allocation lifetime survives the return of a temporary access view. -/
+def allocationAlive (s : Heap) (block : Block) : Bool :=
+  ((s.allocations block.root).map Block.alive).getD false
+
+@[simp] theorem allocationAlive_of_live (s : Heap) (block : Block)
+    (h : s.live block = true) : s.allocationAlive block = true := by
+  cases ha : block.active
+  · simp [live, ha] at h
+  · simpa [live, allocationAlive, ha] using h
+
 def bounded (block : Block) : Bool :=
   block.bptr.val > 0 &&
     block.bptr.val + block.repr.length < 2 ^ UScalarTy.numBits .Usize
@@ -282,12 +292,12 @@ def swapBytes (repr : Repr T) (p q : RawPtr T) (s : Heap) : Option Heap := do
       else none
     else none
 
-/-- Arithmetic is deliberately view-bounded; address observation is independent of liveness. -/
+/-- Arithmetic uses retained view bounds and allocation lifetime, not access permissions. -/
 def offset (repr : Repr ty) (p : RawPtr ty) (count : Int) (s : Heap) :
     Option (RawPtr ty) := do
   let block ← s.allocations p.provenance
   let target := (p.address.val : Int) + count * repr.size
-  if s.live block && block.bptr.val ≤ p.address.val &&
+  if s.allocationAlive block && block.bptr.val ≤ p.address.val &&
       p.address.val ≤ block.bptr.val + block.repr.length &&
       block.bptr.val ≤ target && target ≤ block.bptr.val + block.repr.length &&
       target < (2 ^ UScalarTy.numBits .Usize : Nat) then
@@ -300,7 +310,7 @@ def distance (repr : Repr ty) (p q : RawPtr ty) (s : Heap) : Option Int := do
   let pa := p.address
   let qa := q.address
   let distance := (pa.val : Int) - qa.val
-  if s.live a && s.live b && a.root == b.root && 0 < repr.size &&
+  if s.allocationAlive a && s.allocationAlive b && a.root == b.root && 0 < repr.size &&
       a.bptr.val ≤ pa.val && pa.val ≤ a.bptr.val + a.repr.length &&
       b.bptr.val ≤ qa.val && qa.val ≤ b.bptr.val + b.repr.length &&
       distance % repr.size = 0 then some (distance / repr.size) else none

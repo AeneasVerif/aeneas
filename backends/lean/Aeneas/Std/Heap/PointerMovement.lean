@@ -10,6 +10,38 @@ import all Aeneas.Std.Heap.Separation
 
 @[expose] public section
 
+namespace Aeneas.Std.Heap
+
+/-- Even retired views retain allocation identity. Overlapping ranges in live
+    allocations must have the same root; no byte-access permission is needed. -/
+theorem Inv.same_root_of_overlap {s : Heap} (hi : s.Inv)
+    {i j : Nat} {a b : Block} (ha : s.allocations i = some a)
+    (hb : s.allocations j = some b)
+    (aliveA : s.allocationAlive a = true) (aliveB : s.allocationAlive b = true)
+    (overlap : a.bptr.val < b.bptr.val + b.repr.length ∧
+      b.bptr.val < a.bptr.val + a.repr.length) :
+    a.root = b.root := by
+  have va := hi.validBlock ha
+  have vb := hi.validBlock hb
+  cases hra : s.allocations a.root
+  · simp [allocationAlive, hra] at aliveA
+  · rename_i ra
+    cases hrb : s.allocations b.root
+    · simp [allocationAlive, hrb] at aliveB
+    · rename_i rb
+      have ar : ra.alive = true := by simpa [allocationAlive, hra] using aliveA
+      have br : rb.alive = true := by simpa [allocationAlive, hrb] using aliveB
+      simp only [Heap.validBlock, hra, hrb, Bool.and_eq_true, beq_iff_eq,
+        decide_eq_true_eq] at va vb
+      by_contra different
+      have row := List.all_eq_true.mp hi.2 a.root (List.mem_range.mpr (hi.base_lt hra))
+      simp only [hra, Bool.and_eq_true] at row
+      have pair := List.all_eq_true.mp row.2 b.root (List.mem_range.mpr (hi.base_lt hrb))
+      simp [different, hrb, ar, br, overlaps] at pair
+      grind
+
+end Aeneas.Std.Heap
+
 namespace Aeneas.Std.SepLogic
 
 theorem byteOffset.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (count : Int)
@@ -89,6 +121,91 @@ end Aeneas.Std.SepLogic
 namespace Aeneas.Std.HeapWP
 
 open SepLogic
+
+/-- A scoped distance contract needs a common live allocation root, not equal
+    or active view IDs. Retired views retain their bounds and provenance. -/
+theorem offset_from_same_root.spec (repr : Repr T) (p origin : RawPtr T)
+    (s₀ : Heap) (a b : Block)
+    (ha : s₀.allocations p.provenance = some a)
+    (hb : s₀.allocations origin.provenance = some b)
+    (la : s₀.allocationAlive a = true) (lb : s₀.allocationAlive b = true)
+    (root : a.root = b.root)
+    (positive : 0 < repr.size)
+    (hp : a.bptr.val ≤ p.address.val ∧ p.address.val ≤ a.bptr.val + a.repr.length)
+    (ho : b.bptr.val ≤ origin.address.val ∧ origin.address.val ≤ b.bptr.val + b.repr.length)
+    (divisible : ((p.address.val : Int) - origin.address.val) % repr.size = 0)
+    (bytesFit : IScalar.cMin .Isize ≤ (p.address.val : Int) - origin.address.val ∧
+      (p.address.val : Int) - origin.address.val ≤ IScalar.cMax .Isize)
+    (countFit : IScalar.cMin .Isize ≤ ((p.address.val : Int) - origin.address.val) / repr.size ∧
+      ((p.address.val : Int) - origin.address.val) / repr.size ≤ IScalar.cMax .Isize) :
+    Spec (RawPtr.offset_from repr p origin)
+      (fun result s₁ =>
+        result.val = ((p.address.val : Int) - origin.address.val) / repr.size ∧ s₁ = s₀) s₀ := by
+  let result := IScalar.ofInt (((p.address.val : Int) - origin.address.val) / repr.size) countFit
+  have run : Heap.offsetFrom repr p origin s₀ = some result := by
+    simp [Heap.offsetFrom, Heap.distance, ha, hb, la, lb, root, positive,
+      hp.1, hp.2, ho.1, ho.2, divisible, bytesFit, countFit, result]
+  apply Spec.checkedModify.mpr
+  refine ⟨⟨result, s₀, run, rfl⟩, ?_⟩
+  rintro answer s₁ ⟨computed, rfl⟩
+  have same := Option.some.inj (computed.symm.trans run)
+  subst answer
+  exact ⟨by simp [result], rfl⟩
+
+/-- Re-exposure at the same start address suffices for byte-pointer subtraction
+    in a nonempty live allocation. Common root identity is derived, not assumed.
+    In particular, the original access view may already have been returned. -/
+theorem offset_from_reexposed.spec (start finish origin : RawPtr U8) (count : Nat)
+    (s₀ : Heap) (a b : Block) (hi : s₀.Inv)
+    (ha : s₀.allocations start.provenance = some a)
+    (hb : s₀.allocations origin.provenance = some b)
+    (la : s₀.allocationAlive a = true) (lb : s₀.allocationAlive b = true)
+    (startBase : start.address = a.bptr) (originBase : origin.address = b.bptr)
+    (sameAddress : start.address = origin.address)
+    (nonemptyA : 0 < a.repr.length) (nonemptyB : 0 < b.repr.length)
+    (sameView : finish.provenance = start.provenance)
+    (cursor : finish.address.val = start.address.val + count)
+    (within : count ≤ a.repr.length) (fits : (count : Int) ≤ IScalar.cMax .Isize) :
+    Spec (RawPtr.offset_from Repr.u8 finish origin)
+      (fun result s₁ => result.val = count ∧ s₁ = s₀) s₀ := by
+  have bases : a.bptr = b.bptr := startBase.symm.trans (sameAddress.trans originBase)
+  have overlap : a.bptr.val < b.bptr.val + b.repr.length ∧
+      b.bptr.val < a.bptr.val + a.repr.length := by
+    simp only [bases]
+    constructor
+    · agrind
+    · agrind
+  have root := hi.same_root_of_overlap ha hb la lb overlap
+  have distance : (finish.address.val : Int) - origin.address.val = count := by
+    simp only [cursor, sameAddress, Nat.cast_add]
+    ring
+  have lower : IScalar.cMin .Isize ≤ (count : Int) :=
+    le_trans (by decide : IScalar.cMin .Isize ≤ 0) (Int.natCast_nonneg count)
+  have finishBounds :
+      a.bptr.val ≤ finish.address.val ∧
+      finish.address.val ≤ a.bptr.val + a.repr.length := by
+    simp only [cursor, startBase]
+    constructor
+    · agrind
+    · agrind
+  have originBounds :
+      b.bptr.val ≤ origin.address.val ∧
+      origin.address.val ≤ b.bptr.val + b.repr.length := by
+    simp [originBase]
+  have lookup : s₀.allocations finish.provenance = some a := sameView ▸ ha
+  have divisible : ((finish.address.val : Int) - origin.address.val) % Repr.u8.size = 0 := by
+    simp [Repr.u8]
+  have bytesFit : IScalar.cMin .Isize ≤ (finish.address.val : Int) - origin.address.val ∧
+      (finish.address.val : Int) - origin.address.val ≤ IScalar.cMax .Isize := by
+    rw [distance]
+    exact ⟨lower, fits⟩
+  have countFit :
+      IScalar.cMin .Isize ≤ ((finish.address.val : Int) - origin.address.val) / Repr.u8.size ∧
+      ((finish.address.val : Int) - origin.address.val) / Repr.u8.size ≤ IScalar.cMax .Isize := by
+    simpa [Repr.u8] using bytesFit
+  have result := offset_from_same_root.spec Repr.u8 finish origin s₀ a b
+    lookup hb la lb root (by decide) finishBounds originBounds divisible bytesFit countFit
+  simpa [Repr.u8, distance] using result
 
 theorem byte_offset.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (count : Isize)
     (length : Nat) (own : Bool)

@@ -1,7 +1,7 @@
 module
 
 public import RawBoxProofs
-public import RawScale.Notation
+public import Aeneas.Std.Heap.Notation
 public import Aeneas.Std.Heap.Lifecycle
 import all RawBoxProofs
 import all Aeneas.Std.Heap.Initialization

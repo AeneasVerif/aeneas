@@ -38,29 +38,29 @@ pub fn scale_one_in_place(k: u32, value: &mut u32) {
     unsafe { scale_one_raw(k, p, p) };
 }
 
-/// A logical [u32; 13], backed by sixteen initialized, 256-bit-aligned lanes.
-/// The three hidden zero lanes are fields, not compiler padding.
+/// A logical [u32; 15], backed by sixteen initialized, 256-bit-aligned lanes.
+/// The hidden zero lane is a field, not compiler padding.
 #[repr(C, align(32))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Row13([u32; 16]);
+pub struct Row15([u32; 16]);
 
-impl Row13 {
+impl Row15 {
     pub const fn zero() -> Self {
         Self([0; 16])
     }
 
-    pub fn new(values: [u32; 13]) -> Self {
+    pub fn new(values: [u32; 15]) -> Self {
         let mut row = Self::zero();
-        row.0[..13].copy_from_slice(&values);
+        row.0[..15].copy_from_slice(&values);
         row
     }
 
-    pub fn as_array(&self) -> &[u32; 13] {
-        self.0.first_chunk::<13>().unwrap()
+    pub fn as_array(&self) -> &[u32; 15] {
+        self.0.first_chunk::<15>().unwrap()
     }
 
-    pub fn as_mut_array(&mut self) -> &mut [u32; 13] {
-        self.0.first_chunk_mut::<13>().unwrap()
+    pub fn as_mut_array(&mut self) -> &mut [u32; 15] {
+        self.0.first_chunk_mut::<15>().unwrap()
     }
 }
 
@@ -80,13 +80,13 @@ pub unsafe fn scale_raw<const N: usize>(k: u32, src: *const u32, dst: *mut u32) 
 }
 
 /// Disjoint mode: preserve src and replace dst by its scaled contents.
-pub fn scale_into(k: u32, src: &Row13, dst: &mut Row13) {
+pub fn scale_into(k: u32, src: &Row15, dst: &mut Row15) {
     // The safe borrows supply disjoint readable/writable ranges.
     unsafe { scale_raw::<16>(k, src.0.as_ptr(), dst.0.as_mut_ptr()) };
 }
 
 /// Equal mode: one exclusive range supplies both read and write permissions.
-pub fn scale_in_place(k: u32, buf: &mut Row13) {
+pub fn scale_in_place(k: u32, buf: &mut Row15) {
     let p = buf.0.as_mut_ptr();
     // No overlapping shared/mutable Rust references are manufactured.
     unsafe { scale_raw::<16>(k, p, p) };
@@ -101,8 +101,8 @@ pub fn scale_in_place(k: u32, buf: &mut Row13) {
 /// including overlap between factors and the destination elements.
 pub unsafe fn scale_rows_raw<const R: usize>(
     factors: &[u32; R],
-    src: *const Row13,
-    dst: *mut Row13,
+    src: *const Row15,
+    dst: *mut Row15,
 ) {
     for r in 0..R {
         unsafe {
@@ -112,12 +112,12 @@ pub unsafe fn scale_rows_raw<const R: usize>(
 }
 
 /// Functional contract: dst[r][i] = factors[r] * src_initial[r][i].
-pub fn scale_rows_into<const R: usize>(factors: &[u32; R], src: &[Row13; R], dst: &mut [Row13; R]) {
+pub fn scale_rows_into<const R: usize>(factors: &[u32; R], src: &[Row15; R], dst: &mut [Row15; R]) {
     unsafe { scale_rows_raw(factors, src.as_ptr(), dst.as_mut_ptr()) };
 }
 
 /// The same row specification, with a single matrix supplying both roles.
-pub fn scale_rows_in_place<const R: usize>(factors: &[u32; R], rows: &mut [Row13; R]) {
+pub fn scale_rows_in_place<const R: usize>(factors: &[u32; R], rows: &mut [Row15; R]) {
     let p = rows.as_mut_ptr();
     unsafe { scale_rows_raw(factors, p, p) };
 }
@@ -146,7 +146,7 @@ pub unsafe fn scale_via_borrow_raw(k: u32, p: *mut u32) -> u32 {
 }
 
 /// Safe -> raw -> safe helper -> raw observation -> safe updated buffer.
-pub fn scale_via_borrow(k: u32, buf: &mut Row13) -> u32 {
+pub fn scale_via_borrow(k: u32, buf: &mut Row15) -> u32 {
     unsafe { scale_via_borrow_raw(k, buf.0.as_mut_ptr()) }
 }
 
@@ -178,10 +178,10 @@ mod tests {
 
     #[test]
     fn both_modes_and_reverse_boundary() {
-        fn check(src: Row13) {
+        fn check(src: Row15) {
             for k in [0, 1, 2, 19, u32::MAX] {
                 let want = expected(k, &src.0);
-                let mut dst = Row13::zero();
+                let mut dst = Row15::zero();
                 scale_into(k, &src, &mut dst);
                 assert_eq!(dst.0.as_slice(), want);
                 let mut same = src;
@@ -192,34 +192,34 @@ mod tests {
                 assert_eq!(borrowed, dst);
             }
         }
-        check(Row13::zero());
+        check(Row15::zero());
         let values = std::array::from_fn(|i| [0, 1, 17, u32::MAX, 0x8000_0000][i % 5]);
-        check(Row13::new(values));
+        check(Row15::new(values));
     }
 
     #[test]
     fn subranges_of_one_allocation_preserve_the_frame() {
         let mut storage = [
-            Row13::new([91; 13]),
-            Row13::new([2; 13]),
-            Row13::zero(),
-            Row13::new([93; 13]),
+            Row15::new([91; 15]),
+            Row15::new([2; 15]),
+            Row15::zero(),
+            Row15::new([93; 15]),
         ];
         let (left, right) = storage.split_at_mut(2);
         let src = left.last_chunk::<1>().unwrap();
         let dst = right.first_chunk_mut::<1>().unwrap();
         scale_rows_into(&[7], src, dst);
-        assert_eq!(dst[0], Row13::new([14; 13]));
+        assert_eq!(dst[0], Row15::new([14; 15]));
         scale_rows_in_place(&[3], dst);
-        assert_eq!(dst[0], Row13::new([42; 13]));
+        assert_eq!(dst[0], Row15::new([42; 15]));
         assert_eq!(scale_via_borrow(2, &mut dst[0]), 84);
         assert_eq!(
             storage,
             [
-                Row13::new([91; 13]),
-                Row13::new([2; 13]),
-                Row13::new([84; 13]),
-                Row13::new([93; 13]),
+                Row15::new([91; 15]),
+                Row15::new([2; 15]),
+                Row15::new([84; 15]),
+                Row15::new([93; 15]),
             ]
         );
     }
@@ -227,12 +227,12 @@ mod tests {
     #[test]
     fn row_composition_and_empty_dimensions() {
         let src = [
-            Row13::new([1; 13]),
-            Row13::new([4; 13]),
-            Row13::new([7; 13]),
+            Row15::new([1; 15]),
+            Row15::new([4; 15]),
+            Row15::new([7; 15]),
         ];
         let factors = [2, 0, u32::MAX];
-        let mut dst = [Row13::zero(); 3];
+        let mut dst = [Row15::zero(); 3];
         scale_rows_into(&factors, &src, &mut dst);
         for r in 0..src.len() {
             assert_eq!(dst[r].0.as_slice(), expected(factors[r], &src[r].0));
@@ -247,8 +247,8 @@ mod tests {
 
     #[test]
     fn aligned_padded_rows_and_bounded_products() {
-        let src = Box::new([Row13::new([65535; 13]), Row13::new([12345; 13])]);
-        let mut dst = Box::new([Row13::zero(); 2]);
+        let src = Box::new([Row15::new([65535; 15]), Row15::new([12345; 15])]);
+        let mut dst = Box::new([Row15::zero(); 2]);
         for r in 0..2 {
             assert_eq!(src[r].0.as_ptr().addr() % 32, 0);
             assert_eq!(dst[r].0.as_ptr().addr() % 32, 0);
@@ -262,17 +262,17 @@ mod tests {
                 assert!(exact <= u64::from(u32::MAX));
                 assert_eq!(u64::from(dst[r].0[i]), exact);
             }
-            assert_eq!(&dst[r].0[13..], &[0; 3]);
+            assert_eq!(&dst[r].0[15..], &[0; 1]);
         }
     }
 
     #[test]
     fn client_array_updates_preserve_hidden_zero_lanes() {
-        let mut row = Row13::new([1; 13]);
-        let view: &mut [u32; 13] = row.as_mut_array();
-        *view = [7; 13];
+        let mut row = Row15::new([1; 15]);
+        let view: &mut [u32; 15] = row.as_mut_array();
+        *view = [7; 15];
         scale_in_place(3, &mut row);
-        assert_eq!(row.as_array(), &[21; 13]);
-        assert_eq!(&row.0[13..], &[0; 3]);
+        assert_eq!(row.as_array(), &[21; 15]);
+        assert_eq!(&row.0[15..], &[0; 1]);
     }
 }

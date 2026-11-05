@@ -1,7 +1,7 @@
 module
 
 public import RawMatrixView.Properties
-public import RawScale.Notation
+public import Aeneas.Std.Heap.Notation
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Primitives
 

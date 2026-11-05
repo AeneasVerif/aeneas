@@ -85,6 +85,22 @@ def pointsToRange (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (values : Vect
 
 end SepLogic
 
+/- Read-only exposure may retain symbolic pointer bytes with the same decoding,
+   even when those bytes are not an admissible encoding for a scalar write. -/
+def readableRange (repr : Repr T) (p : RawPtr T) (base : BasePtr)
+    (values : Vector T count) (depth : Nat) : SepLogic.Assertion :=
+  fun h => ∃ data : Vector (Vector Byte repr.size) count,
+    (∀ i : Fin count, repr.decode data[i.val] = some values[i.val]) ∧
+    SepLogic.block repr p base
+      (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList h
+
+theorem pointsToRange_readable {repr : Repr T} {p : RawPtr T}
+    {base : BasePtr} {values : Vector T count} {depth : Nat} {h : SepLogic.Fragment}
+    (hp : SepLogic.pointsToRange repr p base values depth h) :
+    readableRange repr p base values depth h := by
+  obtain ⟨data, encoded, rest⟩ := hp
+  exact ⟨data, fun i => repr.encode_decode _ _ (encoded i), rest⟩
+
 /-- Recover any element's cells from the selected contiguous region. -/
 theorem Repr.select_region (repr : Repr T) (bytes : Vector Cell r)
     (start count : Nat) (data : Vector (Vector Cell repr.size) count)
@@ -331,10 +347,10 @@ theorem endShareRange_cells.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
       · rfl)
   simpa [Vector.flatMap_map, Heap.endShareRange] using ht
 
-theorem read_of_pointsToRange {s : Heap} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+theorem read_of_readableRange {s : Heap} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
     {values : Vector T count} {depth : Nat} {h : Fragment}
     (hcount : 0 < count) (hsize : 0 < repr.size)
-    (hp : pointsToRange repr p bptr values depth h) (hm : Fragment.Matches s h) :
+    (hp : readableRange repr p bptr values depth h) (hm : Fragment.Matches s h) :
     Heap.readRange repr p count s = some values.toList := by
   obtain ⟨data, encoded, hlo, hpa, rfl⟩ := hp
   let grouped := repr.region count
@@ -351,7 +367,7 @@ theorem read_of_pointsToRange {s : Heap} {repr : Repr T} {p : RawPtr T} {bptr : 
       (by simpa [Vector.flatMap_map, grouped, q, RawPtr.cast, RawPtr.offsetFrom] using hs) i hi
     simp only [Vector.getElem_map] at hsel
     simp [Repr.read, hsize, range_element_bound hi hb, hsel,
-      Repr.readBytes_shared, repr.encode_decode _ _ (encoded ⟨i, hi⟩)]
+      Repr.readBytes_shared, encoded ⟨i, hi⟩]
   have hmap : (List.range count).mapM
       (fun i => repr.read blk.bytes (p.offsetFrom bptr + i * repr.size)) =
         some values.toList := by
@@ -361,6 +377,13 @@ theorem read_of_pointsToRange {s : Heap} {repr : Repr T} {p : RawPtr T} {bptr : 
     simp only [RawPtr.offsetFrom] at hb
     grind
   simpa [Heap.readRange, hl, hlive, hpa, hsize, bound, ha, hlo] using hmap
+
+theorem read_of_pointsToRange {s : Heap} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {values : Vector T count} {depth : Nat} {h : Fragment}
+    (hcount : 0 < count) (hsize : 0 < repr.size)
+    (hp : pointsToRange repr p bptr values depth h) (hm : Fragment.Matches s h) :
+    Heap.readRange repr p count s = some values.toList :=
+  read_of_readableRange hcount hsize (pointsToRange_readable hp) hm
 
 theorem readRange_transfer.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
     (values : Vector T count) (depth : Nat) (change : Heap → Option Heap) (Q : Assertion)

@@ -1,6 +1,8 @@
 module
 
-public import RawScale.RowResources
+public import Aeneas.Std.Heap.Notation
+public import Aeneas.Std.Heap.Allocation
+public import Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Heap.Allocation
 
@@ -9,7 +11,7 @@ import all Aeneas.Std.Heap.Allocation
 open Aeneas Aeneas.Std Aeneas.Std.SepLogic
 open scoped Aeneas.Std.HeapWP
 
-namespace raw_scale
+namespace Aeneas.Std
 
 private theorem shared_resources (repr : Aeneas.Std.Repr T) (data : Vector Aeneas.Std.Byte repr.size)
     (bptr : BasePtr) (root : Option Nat) {s s' : Heap} {p : RawPtr T}
@@ -103,4 +105,4 @@ theorem shared_end.spec (repr : Aeneas.Std.Repr T) (p : RawPtr T) (value : T)
   subst s'
   exact post () _ commit
 
-end raw_scale
+end Aeneas.Std

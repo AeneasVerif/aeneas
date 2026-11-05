@@ -13,13 +13,13 @@ namespace raw_scale
 local macro_rules
   | `(tactic| get_elem_tactic) => `(tactic| agrind)
 
-def rowWords (row : Row13) : Vector U32 16 :=
+def rowWords (row : Row15) : Vector U32 16 :=
   Vector.ofFn fun i => row.val[i.val]
 
-def rowOfWords (words : Vector U32 16) : Row13 :=
+def rowOfWords (words : Vector U32 16) : Row15 :=
   Array.from words.toList (by simp)
 
-theorem rowOfWords_rowWords (row : Row13) : rowOfWords (rowWords row) = row := by
+theorem rowOfWords_rowWords (row : Row15) : rowOfWords (rowWords row) = row := by
   apply Aeneas.Std.Array.ext
   apply List.ext_getElem
   · simp [rowOfWords]
@@ -52,8 +52,8 @@ theorem decodeRowWords_rowBytes (words : Vector U32 16) :
   exact congrArg (UScalar.mk (ty := .U32)) (raw_box.u32Bytes_roundtrip words[i].bv)
 
 /-- Sixteen initialized little-endian words, aligned to 32 bytes.
-    The logical thirteen-element prefix does not change the physical stride. -/
-def rowRepr : Aeneas.Std.Repr Row13 where
+    Fifteen logical words and one initialized padding word give a 64-byte stride. -/
+def rowRepr : Aeneas.Std.Repr Row15 where
   size := 64
   align := ⟨32, 5, rfl⟩
   aligned := by decide

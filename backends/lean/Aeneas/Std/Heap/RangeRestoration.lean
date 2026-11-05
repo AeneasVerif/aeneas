@@ -183,6 +183,86 @@ private theorem endBorrow_after_borrow (repr : Repr T) (p : RawPtr T)
     selected, selected₁, zipped, Vector.mapM_map, Function.comp_def, Cell.endBorrow,
     vector_mapM_some, Repr.writeBytes_shared, updated, Heap.storeRepr_storeRepr]
 
+/-- On a uniformly shared range, changing each element's depth is the same
+    update as changing the depth of its complete byte region. -/
+private theorem sharedRange_change (repr : Repr T)
+    (data : Vector (Vector Byte repr.size) count) (bytes : Vector Cell r)
+    (offset depth nextDepth : Nat) (hb : offset + count * repr.size ≤ r)
+    (selected : (repr.region count).select bytes offset hb =
+      data.flatMap (fun encoding => encoding.map (Cell.shared depth)))
+    (change : Cell → Option Cell)
+    (cellChange : ∀ byte, change (.shared depth byte) = some (.shared nextDepth byte))
+    (positive : 0 < repr.size) :
+    (List.range count).foldlM (fun current i =>
+      let start := offset + i * repr.size
+      if h : 0 < repr.size ∧ start + repr.size ≤ r then
+        ((repr.select current start h.2).mapM change).map (repr.update current start h.2)
+      else none) bytes =
+    some ((repr.region count).update bytes offset hb
+      (data.flatMap (fun encoding => encoding.map (Cell.shared nextDepth)))) := by
+  let old := data.map fun encoding => encoding.map (Cell.shared depth)
+  let new := data.map fun encoding => encoding.map (Cell.shared nextDepth)
+  have step : ∀ current i (hi : i < count),
+      repr.select current (offset + i * repr.size) (range_element_bound hi hb) = old[i] →
+      (if h : 0 < repr.size ∧ offset + i * repr.size + repr.size ≤ r then
+        ((repr.select current (offset + i * repr.size) h.2).mapM change).map
+          (repr.update current (offset + i * repr.size) h.2)
+      else none) = some (repr.update current (offset + i * repr.size)
+        (range_element_bound hi hb) new[i]) := by
+    intro current i hi hs
+    simp [positive, range_element_bound hi hb, hs, old, new,
+      Vector.mapM_map, Function.comp_def, cellChange, vector_mapM_some]
+  simpa only [new, Vector.flatMap_map, Function.comp_def, id_eq] using
+    repr.fold_region bytes offset count old new _ hb
+      (by simpa only [old, Vector.flatMap_map, Function.comp_def, id_eq] using selected)
+      step positive
+
+private theorem sharedRange_as_region (repr : Repr T) (p : RawPtr T)
+    (data : Vector (Vector Byte repr.size) count) (depth nextDepth : Nat)
+    (s : Heap) (blk : Block) (hc : 0 < count) (positive : 0 < repr.size)
+    (hb : p.offsetFrom blk.bptr + count * repr.size ≤ blk.repr.length)
+    (hl : s.allocations p.provenance = some blk) (live : s.live blk = true)
+    (lower : blk.bptr.val ≤ p.address.val) (aligned : repr.align.val ∣ p.address.val)
+    (selected : (repr.region count).select blk.bytes (p.offsetFrom blk.bptr) hb =
+      data.flatMap (fun encoding => encoding.map (Cell.shared depth)))
+    (change : Cell → Option Cell)
+    (cellChange : ∀ byte, change (.shared depth byte) = some (.shared nextDepth byte)) :
+    Heap.modifyRange repr p count (fun bytes start =>
+      if h : 0 < repr.size ∧ start + repr.size ≤ bytes.size then
+        ((repr.select bytes start h.2).mapM change).map (repr.update bytes start h.2)
+      else none) s =
+    Heap.modify (repr.region count) (p.cast Unit) (fun bytes start =>
+      if h : 0 < (repr.region count).size ∧ start + (repr.region count).size ≤ bytes.size then
+        (((repr.region count).select bytes start h.2).mapM change).map
+          ((repr.region count).update bytes start h.2)
+      else none) s := by
+  have folded := sharedRange_change repr data blk.bytes (p.offsetFrom blk.bptr)
+    depth nextDepth hb selected change cellChange positive
+  have whole : (data.flatMap (fun encoding => encoding.map (Cell.shared depth))).mapM change =
+      some (data.flatMap (fun encoding => encoding.map (Cell.shared nextDepth))) := by
+    have same (d : Nat) : data.flatMap (fun encoding => encoding.map (Cell.shared d)) =
+        (data.flatMap id).map (Cell.shared d) := by
+      apply Vector.ext
+      intro i hi
+      simp [Vector.getElem_flatMap]
+    rw [same depth, same nextDepth, Vector.mapM_map]
+    simp only [Function.comp_def, cellChange]
+    rw [vector_mapM_some]
+  have whole' : ((repr.region count).select blk.bytes (p.offsetFrom blk.bptr) hb).mapM change =
+      some (data.flatMap (fun encoding => encoding.map (Cell.shared nextDepth))) := by
+    rw [selected]
+    exact whole
+  have size : (repr.region count).size = count * repr.size := rfl
+  have align : (repr.region count).align = repr.align := rfl
+  simp only [Heap.modifyRange, Heap.modify, RawPtr.cast, hl, Bind.bind, Option.bind,
+    live, lower, aligned, align, decide_true, Bool.true_and, ↓reduceIte, Vector.size, size]
+  simp only [positive, or_true, hb, decide_true, Bool.true_and, ↓reduceIte] at folded ⊢
+  simp only [RawPtr.offsetFrom] at hb folded whole' ⊢
+  simp only [size, hb, Nat.mul_pos hc positive, and_self, ↓reduceDIte]
+  rw [folded]
+  rw [whole']
+  rfl
+
 private theorem zipIdx_vector [Inhabited α] (data : Vector α count) :
     data.toList.zipIdx = (List.range count).map (fun i => (data[i]!, i)) := by
   apply List.ext_getElem
@@ -390,6 +470,68 @@ end Aeneas.Std.SepLogic
 namespace Aeneas.Std.HeapWP
 
 open SepLogic
+
+/-- Whole-scope shared range contract, including return to exclusive depth zero.
+    The callback is valid at the exact state produced by sharing. This is not
+    an unrestricted rule that recovers exclusivity from shared cells alone. -/
+theorem shareRange_return.spec (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (initial : Vector T count) (depth : Nat) (hc : 0 < count) (positive : 0 < repr.size)
+    (h F : Fragment) (s₀ : Heap) (hp : pointsToRange repr p bptr initial depth h)
+    (hd : h.Disjoint F) (hm : Fragment.Matches s₀ (h ∪ F)) (hinv : s₀.Inv) :
+    Spec (RawPtr.shareRange repr p count)
+      (fun values s₁ => values = initial.toList ∧
+        Spec (RawPtr.endShareRange repr p initial.toList) (fun _ s₂ => s₂ = s₀) s₁) s₀ := by
+  have forward := Spec.checkedModify.mp
+    (shareRange.spec repr p bptr initial depth hc positive h F s₀ hp hd hm hinv)
+  obtain ⟨old, _, lower, aligned, cells⟩ := hp
+  have matching := ((Fragment.matches_union _ _ _).mp hm).1
+  rw [cells] at matching
+  have regionPositive : 0 < (repr.region count).size := Nat.mul_pos hc positive
+  obtain ⟨blk, bound, lookup, live, base, selected⟩ :=
+    bytes_of_matches (repr := repr.region count) (p := p.cast Unit) regionPositive matching
+  subst bptr
+  change (repr.region count).select blk.bytes (p.offsetFrom blk.bptr) bound =
+    old.flatMap (fun encoding => encoding.map (Cell.shared depth)) at selected
+  have wholeSelected :
+      (repr.region count).select blk.bytes (p.offsetFrom blk.bptr) bound =
+        (old.flatMap id).map (Cell.shared depth) := by
+    rw [selected]
+    apply Vector.ext
+    intro i hi
+    simp [Vector.getElem_flatMap]
+  have forwardEq : Heap.shareRange repr p count s₀ =
+      Heap.share (repr.region count) (p.cast Unit) s₀ :=
+    sharedRange_as_region repr p old depth (depth + 1) s₀ blk hc positive bound lookup live
+      lower aligned selected Cell.share (fun _ => rfl)
+  apply Spec.checkedModify.mpr
+  refine ⟨forward.1, ?_⟩
+  intro values s₁ run
+  obtain ⟨h₁, hd₁, hm₁, hi₁, hv, hp₁⟩ := forward.2 values s₁ run
+  have undo := endShare_after_share (repr.region count) (p.cast Unit) s₀ s₁ blk (old.flatMap id)
+    depth regionPositive bound lookup live lower aligned wholeSelected hinv
+    (forwardEq ▸ run.2)
+  have read := read_of_pointsToRange hc positive hp₁ ((Fragment.matches_union _ _ _).mp hm₁).1
+  obtain ⟨current, _, lower₁, aligned₁, cells₁⟩ := hp₁
+  have matching₁ := ((Fragment.matches_union _ _ _).mp hm₁).1
+  rw [cells₁] at matching₁
+  obtain ⟨blk₁, bound₁, lookup₁, live₁, base₁, selected₁⟩ :=
+    bytes_of_matches (repr := repr.region count) (p := p.cast Unit) regionPositive matching₁
+  have bound₁' : p.offsetFrom blk₁.bptr + count * repr.size ≤ blk₁.repr.length := by
+    simpa only [base₁, RawPtr.offsetFrom, RawPtr.cast, Repr.region] using bound₁
+  have selected₁' : (repr.region count).select blk₁.bytes (p.offsetFrom blk₁.bptr) bound₁' =
+      current.flatMap (fun encoding => encoding.map (Cell.shared (depth + 1))) := by
+    simpa only [base₁, RawPtr.offsetFrom, RawPtr.cast] using selected₁
+  have backwardEq : Heap.endShareRange repr p count s₁ =
+      Heap.endShare (repr.region count) (p.cast Unit) s₁ :=
+    sharedRange_as_region repr p current (depth + 1) depth s₁ blk₁ hc positive
+      bound₁' lookup₁ live₁ (by simpa [base₁] using lower₁) aligned₁ selected₁'
+      Cell.endShare (fun _ => rfl)
+  have returned : Heap.endShareRange repr p initial.toList.length s₁ = some s₀ := by
+    simpa only [Vector.length_toList, backwardEq] using undo
+  refine ⟨hv, Spec.checkedModify.mpr ⟨⟨(), s₀, ?_, returned⟩, ?_⟩⟩
+  · simpa only [Vector.length_toList] using read
+  · rintro _ s₂ ⟨_, returned₂⟩
+    exact Option.some.inj (returned₂.symm.trans returned)
 
 /-- Sharing supplies a matching return at the resulting state. Nested scopes
 may use this contract when their own backward calls restore that state. -/

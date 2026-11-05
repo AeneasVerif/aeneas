@@ -521,6 +521,49 @@ def alignmentAndBounds : Option Unit := do
 
 example : alignmentAndBounds = some () := by native_decide
 
+/-- A formatter returns its mutable view, then re-exposes the same storage.
+    Subtraction needs the surviving allocation, not permission to read the old view. -/
+def retiredViewArithmetic : Option Unit := do
+  let data := [#v[Byte.data (byte 49)], #v[Byte.data (byte 50)],
+    #v[Byte.data (byte 51)], #v[Byte.uninit]]
+  let (writer, s₀) ← Heap.newBlock Repr.u8 data false (addr 256) none Heap.empty
+  let finish ← Heap.offset Repr.u8 writer 3 s₀
+  let s₁ ← Heap.endExposureAt Repr.u8 writer 4 0 s₀
+  let (origin, s₂) ← Heap.newSharedExposure Repr.u8 data
+    (addr 256) (some writer.provenance) s₁
+  require (writer.provenance != origin.provenance &&
+    writer.address == origin.address &&
+    Heap.distance Repr.u8 finish origin s₂ == some 3 &&
+    Heap.offset Repr.u8 writer 3 s₂ == some finish &&
+    (Heap.read Repr.u8 writer s₂).isNone &&
+    (put writer (byte 9) s₂).isNone &&
+    (Heap.distance padded (shift writer 1) origin s₂).isNone &&
+    (Heap.distance Repr.u8 (shift writer 5) origin s₂).isNone &&
+    (Heap.distance Repr.u8 ⟨999, writer.address⟩ origin s₂).isNone)
+  let (reader, s₃) ← Heap.newSharedExposure Repr.u8 data
+    (addr 256) (some writer.provenance) s₂
+  let s₄ ← Heap.shareRange Repr.u8 reader 3 s₃
+  require (Heap.readRange Repr.u8 reader 3 s₄ == some ([49, 50, 51].map byte) &&
+    (Heap.readRange Repr.u8 reader 4 s₄).isNone)
+  let s₅ ← Heap.endShareRange Repr.u8 reader 3 s₄
+  let s₆ ← Heap.endSharedExposure Repr.u8 reader 4 s₅
+  let s₇ ← Heap.endSharedExposure Repr.u8 origin 4 s₆
+  let (adjacent, s₈) ← Heap.alloc Repr.u8 4 (addr 260) s₇
+  require ((Heap.distance Repr.u8 (shift writer 4) adjacent s₈).isNone)
+
+example : retiredViewArithmetic = some () := by native_decide
+
+def deadAllocationArithmetic : Option Unit := do
+  let (old, s₀) ← Heap.alloc Repr.u8 4 (addr 256) Heap.empty
+  let s₁ ← Heap.dealloc Repr.u8 old 4 s₀
+  let (fresh, s₂) ← Heap.alloc Repr.u8 4 (addr 256) s₁
+  require (old.address == fresh.address &&
+    (Heap.offset Repr.u8 old 1 s₂).isNone &&
+    (Heap.distance Repr.u8 old old s₂).isNone &&
+    (Heap.distance Repr.u8 old fresh s₂).isNone)
+
+example : deadAllocationArithmetic = some () := by native_decide
+
 def concreteAddressBounds : Option Unit := do
   let (p, s₀) ← Heap.newBlock Repr.u8 (enc [byte 7, byte 8])
     true (addr 256) none Heap.empty
@@ -750,5 +793,13 @@ example : HeapWP.Spec
 #print axioms SepLogic.endBorrow.spec
 #print axioms SepLogic.createRepr.spec
 #print axioms HeapWP.TripleAt.checkedModify
+
+/-- info: 'Aeneas.Std.Heap.Inv.same_root_of_overlap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Heap.Inv.same_root_of_overlap
+
+/-- info: 'Aeneas.Std.HeapWP.offset_from_reexposed.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms HeapWP.offset_from_reexposed.spec
 
 end Aeneas.Std.HeapTests

@@ -21,7 +21,7 @@ private theorem rowCells (v : Vector U32 16) (depth : Nat) :
   unfold rowBytes
   rw [Vector.flatMap_map, Vector.map_flatMap, Vector.map_flatMap]
 
-theorem row_to_words (p : RawPtr Row13) (base : BasePtr) (row : Row13)
+theorem row_to_words (p : RawPtr Row15) (base : BasePtr) (row : Row15)
     (depth : Nat) (h : Fragment) (hp : pointsTo rowRepr p base row depth h) :
     pointsToRange raw_box.u32Repr (p.cast U32) base (rowWords row) depth h := by
   obtain ⟨bytes, encoded, lower, aligned, cells⟩ := hp
@@ -37,7 +37,7 @@ theorem row_to_words (p : RawPtr Row13) (base : BasePtr) (row : Row13)
     rw [rowCells]
     exact cells
 
-theorem words_to_row (p : RawPtr Row13) (base : BasePtr) (v : Vector U32 16)
+theorem words_to_row (p : RawPtr Row15) (base : BasePtr) (v : Vector U32 16)
     (depth : Nat) (h : Fragment) (aligned : 32 ∣ p.address.val)
     (hp : pointsToRange raw_box.u32Repr (p.cast U32) base v depth h) :
     pointsTo rowRepr p base (rowOfWords v) depth h := by
@@ -57,7 +57,7 @@ theorem words_to_row (p : RawPtr Row13) (base : BasePtr) (v : Vector U32 16)
     rw [rowCells] at cells
     exact cells
 
-theorem rowRepr_noPointers (row : Row13) (p : RawPtr Unit) :
+theorem rowRepr_noPointers (row : Row15) (p : RawPtr Unit) :
     ¬ rowRepr.Carries row p := by
   rintro ⟨bytes, encoded, i, lane, hp⟩
   change bytes = (rowBytes (rowWords row)).map Aeneas.Std.Byte.data at encoded
@@ -102,7 +102,7 @@ theorem rowBytes_decodeRowWords (bytes : Vector U8 64) :
   · simp [h] at he ⊢
     agrind
 
-theorem rowRepr_calibrated (row : Row13) (bytes : Vector Aeneas.Std.Byte 64)
+theorem rowRepr_calibrated (row : Row15) (bytes : Vector Aeneas.Std.Byte 64)
     (decoded : rowRepr.decode bytes = some row)
     (carried : ∀ i : Fin 64, ∀ q lane,
       bytes[i.val] = .pointer q lane → rowRepr.Carries row q) :
@@ -166,7 +166,7 @@ private theorem vector_mapM_iff {α β : Type} (f : α → Option β)
   simp only [Option.map_some, list_mapM_iff, List.forall₂_iff_get]
   simp
 
-theorem readable_row_to_words (p : RawPtr Row13) (base : BasePtr) (row : Row13)
+theorem readable_row_to_words (p : RawPtr Row15) (base : BasePtr) (row : Row15)
     (depth : Nat) (h : Fragment) (hp : readable rowRepr p base row depth h) :
     readableRange raw_box.u32Repr (p.cast U32) base (rowWords row) depth h := by
   obtain ⟨bytes, decoded, lower, aligned, cells⟩ := hp

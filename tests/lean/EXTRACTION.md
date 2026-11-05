@@ -47,19 +47,143 @@ pure-to-heap reasoning uses `HeapWP.Spec.of_spec`. The full default backend and
 test-library builds pass, including the OOM, rejected-error, disabled-access,
 and universal-choice regressions in `Aeneas.Std.HeapTests`.
 
+## Ryu/Zmij scalar-memory MWEs
+
+`tests/src/raw_ryu_mwe.rs` and `tests/src/raw_zmij_mwe.rs` reduce the memory
+idioms of #1455 (`cezar/transmutes2`, pinned at
+`d613188e9e7493c4040ac80934be56ad5093cb11`). They are not implementations or
+proofs of the Ryu/Zmij floating-point conversion algorithms.
+
+**Extraction is still a known failure, not successful emission.** The checked-in
+`raw_ryu_mwe.lean.out` and `raw_zmij_mwe.lean.out` record the current failures.
+For example, the latter stops at the raw dereference in `digits2`
+(`InterpPaths.ml:197`). The `RawRyuMwe/` and `RawZmijMwe/` modules below are
+handwritten heap interpretations of the Rust; no raw-emission-to-patch
+correspondence or compiler-correctness theorem is claimed.
+
+| Rust entry | Lean contract | Scope |
+|---|---|---|
+| `out_parameters`, `initialized_outputs` | `Outputs.lean`, `SafeOutputs.lean`: `initialized_outputs_scoped.spec` | Both aligned u64 slots start uninitialized; actual writes and `assume_init` reads return exactly `(a,b)`, then both exposure views retire. |
+| `buffer_as`, `buffer_cast` | `Buffers.lean`: corresponding `.spec` | Two byte writes, raw-storage return/re-exposure, actual `from_raw_parts`, exact `(a,b)`, slice callback and scope return. Neither uninitialized suffix byte is read as u8. |
+| `copy_table` | `TableCopy.lean`: `copy_table.spec` | Assertion and checked `2 * pair`, two selected bytes of `b"0017"`, actual nonoverlapping copy, both returns. |
+| `digits2`, `read_digits2` | `Table.lean`: corresponding `.spec` | Actual u16-stride pointer addition, explicit static alignment, exact `0x3030` / `0x3731`; the reference case includes actual sharing and its matching callback. |
+| `write_digits` | `Writes.lean`, `SafeWrites.lean`: `write_digits_scoped.spec` | Eight little-endian lanes at offset one, both neighboring bytes unchanged, full materialization/snapshot/return. |
+| `write_exponent_data` | `SafeWrites.lean`: `write_exponent_data.spec` | Actual five-byte copy from the scalar's little-endian representation, preserving both destination neighbors, with both scope returns. |
+| `write_exponent` | `Writes.lean`, `SafeWrites.lean`: `write_exponent_scoped.spec` | Both unaligned u16 stores, including the one-byte overlap where the second store wins, with exact untouched bytes and full scope return. |
+| `write_decimal` | `Decimal.lean`: `write_decimal.spec` | Every u8 input: exact 1--3 digit decimal prefix, untouched suffix, exact end cursor and retained provenance. |
+| `DecimalBuffer::format` | `Formatter.lean`: `DecimalBuffer.format.spec` | Three fresh exposures, retirement of the writer view before subtraction, initialized-prefix borrow, exact decimal slice, and all heap cleanup before returning the slice value with a trivial updated-storage callback. Conditional on the address equality described below. |
+| One complete formatter borrow scope | `Formatter.lean`: `DecimalBuffer.format_and_return.spec` (`@[step]`) | Calls the preceding computation and its callback, yielding the exact slice value and raw updated buffer; suitable for repeated calls. |
+
+### Explicit interpretation boundaries
+
+The scalar descriptors select a **little-endian** target. Rust tests use
+`to_ne_bytes` / `from_ne_bytes`. The table's two-byte alignment and stack u64
+alignment come from explicit ghost-placement hypotheses, not from `Repr.u8`.
+Copy wrappers require disjoint numerical ranges; these represent distinct Rust
+local/static storage. Pointer casts erase to phantom-type changes but do not
+change addresses or provenance. `buffer_as` and `buffer_cast` share a transparent
+model because their only difference is the spelling of this cast.
+
+`Storage.lean` deliberately does **not** invent an exact ordinary
+`Repr (MaybeUninit u8)`: a decoder that distinguishes an uninitialized byte from
+its initialized replacement would violate `Repr.decode_mono`. Instead the local
+adapter stores `List Byte` / `Vector Byte n`, materializes them with `exposeBytes`,
+snapshots exact raw cells with `snapshotBytes`, and retires the view with the
+actual `Heap.endExposureAt`. Snapshot contracts require the complete storage
+footprint; this is not a typed read of invalid values. The clients exercise
+uninitialized/numeric bytes, not a general pointer-bearing-storage translation.
+Pure mutable-array outputs are represented by returned raw byte snapshots;
+their theorems identify every byte with initialized input/scalar bytes.
+The Ryu `assume_init` operations instead remain actual typed u64 reads.
+
+The formatter spells out the anticipated forward/backward interfaces:
+`DecimalBuffer.as_mut_ptr` returns `(start, start_back)`, and `start_back`
+snapshots the updated bytes and retires the mutable exposure before subtraction.
+Each `DecimalBuffer.as_ptr` returns a pointer and its matching shared-exposure
+return. `origin_back` runs immediately after subtraction. After materializing
+the slice, `bytes_back` and then `ptr_back` end the remaining heap borrows before
+returning `(bytes, .ok updated)`. No separate `format_back` is needed: the slice
+is a pure Lean value, not a live heap borrow, and the outer backward computation
+only returns the updated storage. This models pure safe consumption of the
+returned slice, not an escaping heap-borrow protocol for further raw accesses.
+These adapters and their lifetime placement are handwritten; they were not
+recovered from a successful extraction.
+
+Placements are explicit **ghost parameters**, not arguments in the Rust source.
+`exposeBytes` still issues fresh permission-view IDs and universally quantifies
+over compatible allocation-root choices. This restricted handwritten adapter
+does not establish the compiler's missing Rust-place identity tracking.
+The static reference is represented by a scalar value and a return for the
+temporary shared view; returning it does not physically free the static.
+Callback contracts hold at the state where the callback is produced; arbitrary
+intervening heap mutation is not covered without a preservation argument.
+
+### Repeated freshness and the exact address hypothesis
+
+The formatter's first mutable exposure is retired before `offset_from`.
+Its cursor retains the old permission-view ID. The first shared exposure has a
+fresh ID. The theorem assumes only
+`mutableAddress = firstSharedAddress`; it does **not** assume equal IDs or roots.
+The heap invariant, overlapping nonempty ranges and retained allocation lifetime
+then imply equal roots. `HeapWP.offset_from_reexposed.spec` derives the exact
+distance. Arithmetic consults allocation lifetime and bounds; reads/writes
+continue to require active access views.
+
+The third exposure is used for readback, not subtraction. Its contents come from
+the updated snapshot, so the general theorem does not require its address to
+equal the first two. `format_and_return` specializes all three placements to the
+same address, matching the intended unmoved Rust buffer.
+No global address axiom was added, especially not an axiom equating addresses
+of equal functional values. In the pinned original #1455 model, pointer
+subtraction requires identical allocation IDs: numerical equality alone would
+not repair its repeated-materialization failure.
+
+All contracts retain the backend's accepted-OOM policy: they prove exact results
+on successful returns, reject invalid accesses, and do not promise available
+placement or execution of callbacks after OOM. `Regression.lean` additionally
+executes a successful concrete heap-protocol trace for seven successive values
+covering all digit widths and reuse, with 21 fresh view IDs at one address,
+real retirement/subtraction/sharing/returns and the untouched uninitialized
+fourth byte. This is a concrete heap trace, not an interpreter for the `Result`
+formatter. The separate writer theorem proves its decimal algorithm.
+
+The root modules import all clients and contain exact axiom guards for the main
+contracts, allowing only `propext`, `Classical.choice`, and `Quot.sound`.
+The concrete regression alone uses `native_decide`; it is not a dependency of
+the correctness theorems. Rust's six tests passed in debug/release with warnings
+denied and under Miri, including every u8 value with one reused formatter.
+
+Reproducible integration commands:
+
+```sh
+cd backends/lean && lake build
+cd ../../tests/lean && lake build
+```
+
+Targeted checking: `cd tests/lean && lake build RawRyuMwe RawZmijMwe`.
+Both default integration builds above passed (1824 backend / 2165 test jobs),
+including the main-contract axiom guards and concrete successful protocol
+regression. A read-only correctness/correspondence review found no significant
+issues. The private decimal writer theorem specializes to the formatter's
+four-byte buffer; its more general Rust three-byte minimum is not separately proved.
+Extraction regeneration (expected failure, not emission):
+`gmake test-raw_ryu_mwe.rs test-raw_zmij_mwe.rs`, using the pinned
+Charon/Aeneas/test-runner executables configured for the repository.
+
 ## Scalar-vector paper example and complementary views
 
 `tests/src/raw_scale.rs` replaces the proposed increment toy with a single
 wrapping-u32 scaling kernel, disjoint and in-place safe wrappers, a shared raw
-row-wise outer loop, and a raw-to-safe-to-raw variant. `Row13` privately stores
-sixteen initialized u32s at 32-byte alignment; safe clients see `[u32; 13]`
-borrows. The three hidden zero lanes are array elements, not compiler padding.
+row-wise outer loop, and a raw-to-safe-to-raw variant. `Row15` privately stores
+sixteen initialized u32s at 32-byte alignment; safe clients see `[u32; 15]`
+borrows. There are 60 logical bytes and one 4-byte hidden zero lane, an explicit
+array element rather than compiler padding. The physical stride remains 64 bytes.
 Kernel lengths and matrix row counts are const parameters. Zero iterations
 need no pointer access or arithmetic. Its contract excludes partial overlap
 without claiming that every partial overlap is Rust UB.
 
-`tests/src/raw_matrix_view.rs` adds a two-row matrix with the same logical and
-physical row widths. It compares safe flattening with a raw matrix-to-flat
+`tests/src/raw_matrix_view.rs` adds a two-row matrix with thirteen logical words
+and sixteen physical words per row. It compares safe flattening with a raw matrix-to-flat
 borrow, a pure safe scaling call, and a raw aggregate read after the borrow ends.
 The manually adapted raw kernel and safe outer wrapper have checked framed
 proofs, including wrapping arithmetic. This is not unedited end-to-end extraction.
@@ -77,21 +201,24 @@ opaque Rust wrappers to conceal an unsupported primitive.
 |---|---|
 | Rust debug/release, warnings denied | All twelve pre-zeroization tests pass: five scaling, three matrix, four memory-view tests. |
 | Miri, default settings | All twelve pre-zeroization tests pass. This is finite execution evidence, not a proof of all safe API calls. |
-| AVX2 code generation | An optimized `Row13` disjoint wrapper uses two 256-bit `vpmulld` instructions and two aligned stores, without a scalar tail. This is a target-specific observation, not a compiler-correctness theorem. |
+| Current `Row15` scaling fixture | All six tests pass in debug, release (both with warnings denied), and Miri. The layout has sixty logical bytes plus four explicit initialized padding bytes, with size 64 and alignment 32 unchanged. |
+| AVX2 code generation | The earlier `Row13` disjoint wrapper used two 256-bit `vpmulld` instructions and two aligned stores, without a scalar tail. `Row15` retains its physical layout; the earlier observation is not new code-generation evidence or a compiler-correctness theorem. |
 | Current heap model | `RawPointerOps/Checks.lean` passes, including new scaling checks for disjoint shared-source ranges within one allocation, identical pointers, framing, overflow, zero length, and pure safe-update return followed by raw observation. |
 | Whole-file Charon | All three files translate with the pinned Charon. |
 | Whole-file Aeneas | All three are registered known failures. `RawMatrixView`, `RawScale`, and `RawMemoryViews` contain marked manual adaptations, not successful whole-file extraction. |
 | Matrix proof | `RawMatrixView.lean` checks the concrete descriptor, extracted safe loop/helper, patched raw kernel, and reconstructed safe wrapper, for all wrapping inputs. Exact axiom guards allow only `propext`, `Classical.choice`, and `Quot.sound`. |
 | Scaling proof | `RawScale.lean` checks the shared disjoint-or-equal raw kernel for every length, with exact wrapping results, source preservation in the disjoint case, and arbitrary frames. Same-allocation disjoint subranges are covered. `scale_into.spec`, `scale_in_place.spec`, and `scale_via_borrow.spec` prove the safe row wrappers without exposure-placement premises, accepting OOM. The reverse-boundary kernel and wrapper also cover every wrapping input. |
 | Memory-view proofs | `RawMemoryViews.lean` checks stored-pointer observation/reuse, the eight-u16/sixteen-u8 update and safe wrapper, first write/read/deallocation, nested Box return, and pointer-copy clients. Exact axiom guards allow only `propext`, `Classical.choice`, and `Quot.sound`. See the adaptation boundaries below. |
-| Integration | `cd backends/lean && lake build` and `cd tests/lean && lake build` pass after the relational WP migration. |
-| Remaining universal contracts | The outer row loop and its wrappers remain parked. `copy_after_deallocation` has a proved raw tail, not a complete allocation/stack-exposure wrapper theorem. |
+| Integration | `cd backends/lean && lake build` and `cd tests/lean && lake build` pass after heap-library consolidation, direct `step` integration, and the `Row15` outer-wrapper proofs (1824 and 2143 jobs respectively). |
+| Outer row composition | `scale_rows_raw.in_place_spec` and `scale_rows_raw.disjoint_spec` reuse the inner vector kernel. `scale_rows_in_place.spec` and `scale_rows_into.spec` prove both safe array wrappers, including zero rows and actual exposure cleanup. |
+| Remaining universal contracts | `copy_after_deallocation` has a proved raw tail, not a complete allocation/stack-exposure wrapper theorem. |
 
 The model checks are explicitly handwritten counterparts, with the existing
-four-byte little-endian `raw_box.u32Repr`. They do not validate extraction,
-establish the row-loop theorem, or derive target ABI layouts. Safe exposure
-wrappers cover every permitted forward successor, accepting OOM if placement
-is unavailable, and derive backward-return enabledness on continuing paths.
+four-byte little-endian `raw_box.u32Repr`. They do not validate extraction
+or derive target ABI layouts. The row-loop theorem is a separate proof of the
+marked adaptation. Safe exposure wrappers cover every permitted forward
+successor, accepting OOM if placement is unavailable, and derive backward-return
+enabledness on continuing paths.
 
 ### Checked lifecycle, nested views, and provenance
 
@@ -265,7 +392,7 @@ Using the rebuilt compiler and Charon pinned by `charon-pin`:
 
 | Entry point | Unedited-source extraction outcome |
 |---|---|
-| `raw_scale` (whole file) | Rejects a raw cast involving `Row13`: only casts between pointers to literal types are supported on this path. |
+| `raw_scale` (whole file) | Rejects a raw cast involving `Row15`: only casts between pointers to literal types are supported on this path. |
 | `raw_scale::scale_raw` (isolated root) | Name clash: const and mutable `add` both map to `RawPtr.add`. Recovered whole-file emission also reports a const/mutable `RawPtr.read` collision. |
 | `raw_scale::scale_via_borrow_raw` (isolated root) | Emits Lean with discarded updated slice/backward function and missing `Repr` on the final read; it is not a checked model of the Rust call. |
 | `raw_matrix_view` (whole file) | Rejects `&raw mut (*matrix)` in the safe wrapper. |
@@ -427,9 +554,9 @@ The checked proofs are:
 - `Scalar.lean`: the loop-free `scale_one_raw` with equal/disjoint/combined
   contracts, plus `scale_one_into.spec` and `scale_one_in_place.spec`. The safe
   contracts use `empty`, hiding the arbitrary frame without losing it.
-- `RangeAccess.lean`: framed indexed reads and pointer addition from range
+- Backend `Aeneas/Std/Heap/RangeAccess.lean`: framed indexed reads and pointer addition from range
   resources alone, without allocation-cleanup ownership.
-- `RangeWrite.lean`: an indexed write updates exactly one element while framing
+- Backend `Aeneas/Std/Heap/RangeWrite.lean`: an indexed write updates exactly one element while framing
   the rest of the range. This works for subranges of the same allocation.
 - `Properties.lean`: equality of the two emitted safe-loop fixed points, the
   safe scaling contract, zero-length behavior, the terminating heap loop rule,
@@ -439,15 +566,20 @@ The checked proofs are:
   algorithm, not a replacement borrow-and-map implementation.
 - `RowResources.lean`: row/word resource conversions, exclusive-exposure
   calibration, and read-only decoding of shared rows, including symbolic bytes.
-- `Exposure.lean`: shared exposure creates read-only resources, and matching
+- Backend `Aeneas/Std/Heap/SharedExposure.lean`: shared exposure creates read-only resources, and matching
   cleanup validates the original value and retires the exposure.
 - `Wrappers.lean`: `scale_into.spec` and `scale_in_place.spec` compose the raw
   kernel with actual exposures and backward computations. Both return `scaledRow`,
   preserve the external frame, and retire their temporary exposures.
-  `scaledRow_get` covers every physical lane (hence the thirteen visible lanes);
-  `scaledRow_zero_padding` preserves the three hidden zero lanes.
+  `scaledRow_get` covers every physical lane (hence the fifteen visible lanes);
+  `scaledRow_zero_padding` preserves the single hidden zero lane.
   `scale_via_borrow.spec` additionally proves the reverse-boundary wrapper,
   returning its first scaled word and the updated row.
+- `Rows.lean`: factors the outer iterator body through the existing vector
+  contract, framing all other rows. The raw equal/disjoint contracts and both
+  safe array wrappers return exact factorwise-scaled contents, including zero
+  rows. Backend `SliceExposure.lean` supplies range-wide exposure and matching
+  cleanup; neither wrapper adds a placement-existence precondition.
 
 The raw loop contracts use exact wrapping multiplication for every u32 input;
 they require address arithmetic to fit, not products to fit. `scaledWords_values`
@@ -456,7 +588,7 @@ preserves hidden zero lanes. The disjoint contract preserves the source at any
 sharing depth; the equal case owns only one exclusive range. All contracts
 preserve arbitrary disjoint frames.
 
-`RawScale/Notation.lean` provides scoped paper-facing notation, enabled by
+`Aeneas/Std/Heap/Notation.lean` provides scoped paper-facing notation, enabled by
 `open scoped Aeneas.Std.HeapWP`:
 
 ```lean
@@ -469,9 +601,10 @@ Here `∗` is separating conjunction, and the complete expression expands to
 `HeapWP.Triple`; its implicit arbitrary frame is unchanged. Typed result binders,
 tuple decomposition, and an explicit postcondition function are supported.
 The existing pure notation `c ⦃ result => proposition ⦄` is unchanged.
-This is concrete syntax only, not registration with the `step` tactic.
-`Scalar.lean`, `Kernel.lean`, and `Wrappers.lean` use it for the scalar, vector,
-and safe-wrapper contracts.
+`Aeneas/Std/Heap/Step.lean` registers these triples directly with `step`,
+including resource-preserving lifting of existing pure specs. The opening
+scalar proof and row pointer arithmetic exercise this support. Framing and
+nontrivial separation rearrangements still use explicit lemmas.
 
 ### Opening example: one scalar multiplication
 
@@ -552,7 +685,7 @@ boundary examples, rather than the main vector API.
 The adapted vector wrappers in `Funs.lean` expose both return paths explicitly:
 
 ```lean
-def scale_into (k : U32) (src : Row13) (dst : Row13) : Result Row13 := do
+def scale_into (k : U32) (src : Row15) (dst : Row15) : Result Row15 := do
   let (p, src_back) ← ext.row_as_ptr src
   let (p1, dst_back) ← ext.row_as_mut_ptr dst
   scale_raw 16#usize k p p1
@@ -560,7 +693,7 @@ def scale_into (k : U32) (src : Row13) (dst : Row13) : Result Row13 := do
   src_back
   ok dst
 
-def scale_in_place (k : U32) (buf : Row13) : Result Row13 := do
+def scale_in_place (k : U32) (buf : Row15) : Result Row15 := do
   let (p, back) ← ext.row_as_mut_ptr buf
   let p1 ← ext.cast U32 p
   scale_raw 16#usize k p1 p
@@ -596,16 +729,10 @@ read-only scalar exposure can legally retain in this model. It does not silently
 assume that every such exposure has a canonical numeric write encoding.
 The original canonical-range kernel theorems remain available unchanged.
 
-Validation passed using the already-built shared dependencies:
+Validate the current consolidated modules and exact root axiom guards with:
 
 ```bash
-cd tests/lean
-for module in Types Layout FunsExternal Funs RangeAccess RangeWrite Properties Notation Kernel RowResources Exposure Wrappers; do
-  lake env lean "RawScale/$module.lean" \
-    -o ".lake/build/lib/lean/RawScale/$module.olean" || exit 1
-done
-lake env lean RawScale.lean
-lake env lean RawMatrixView.lean
+cd tests/lean && lake build RawScale RawMatrixView RawMemoryViews
 ```
 
 The exact root axiom guards permit only `propext`, `Classical.choice`, and
@@ -620,20 +747,20 @@ its proof coverage is narrower than its source-code coverage:
 | Draft point | Example coverage | Remaining paper obligation |
 |---|---|---|
 | One disjoint-or-equal kernel, two safe interfaces | `raw_scale` | Shared raw loop and both safe row wrappers are proved on the marked adaptation; OOM is accepted without placement-existence premises. |
-| Compositional outer computation | Shared raw matrix loop in `raw_scale` | Row-wise theorem; a safe outer caller would separately illustrate heap-free composition. |
+| Compositional outer computation | Shared raw matrix loop in `raw_scale` | Raw row-loop and both safe array-wrapper contracts are proved, including empty arrays and matching callbacks. |
 | Pure safe baseline | In-place `scale_slice` and matrix `scale_safe` | A direct disjoint safe scaling baseline would mirror the draft more closely. |
 | Raw-to-safe borrow, update, then raw observation | Both scaling files | Both patched raw kernels and their safe wrappers are proved; automated backward plumbing remains open. |
-| Alignment and initialized padding | Private `Row13` and `Matrix` storage | Matrix representation and padding preservation are proved; general `Row<N>` extraction is not. |
+| Alignment and initialized padding | Private `Row15` and `Matrix` storage | Matrix representation and padding preservation are proved; general `Row<N>` extraction is not. |
 | Initialization, mixed-width access, stored pointer bytes | `raw_memory_views` | Mixed-width update and pointer observation are proved on explicit adaptations; the full allocator lifecycle remains open. |
 | Owned Box versus nested borrowed views | `raw_memory_views::nested_views` | Composable nested return authority and its client proof. |
 
-The current priority returns to the original, pre-paper roadmap: complete the
-first-write allocator lifecycle, then nested re-exposure. Row-wise composition
-is parked rather than complete. Compiler/model integration still needs descriptor
+Row-wise composition and both outer wrappers are now proved. Compiler/model
+integration remains separate work: it still needs descriptor
 plumbing, unambiguous primitive names, aggregate pointer casts, and effectful
 matched write-back. The draft itself leaves its loop/wrapper proofs as TODOs;
 the checked shared scaling loop and safe row wrappers discharge the corresponding
-obligations for this adapted example, subject to the stated placement assumptions.
+obligations for this adapted example, with OOM accepted instead of placement
+existence assumptions.
 
 Nested re-exposure additionally needs a library return-authority theorem usable
 after nested heap effects. `borrowRange_return.spec` captures return authority
@@ -644,7 +771,7 @@ interface, not evidence that the Rust example is invalid.
 
 A session-only `Row<N>` prototype with storage `[u32; n.div_ceil(8) * 8]`
 compiled natively, but pinned Charon rejected its computed const generic.
-The agreed paper fixture therefore uses concrete `Row13`, while retaining
+The agreed paper fixture therefore uses concrete `Row15`, while retaining
 const-generic kernel lengths and matrix row counts.
 
 ### Checked original memory-view clients
