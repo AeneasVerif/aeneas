@@ -110,7 +110,7 @@ type loop_info = {
 }
 [@@deriving show]
 
-type back_fun_info = { fvar : texpr; can_fail : bool } [@@deriving show]
+type back_fun_info = { fvar : texpr; is_effectful : bool } [@@deriving show]
 
 (** Some meta-information. See [bs_ctx.meta_symb_places] *)
 type meta_symb_place = texpr * string [@@deriving show, ord]
@@ -521,8 +521,16 @@ let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
         ^ V.SymbolicValueId.to_string id);
       None
 
-let mk_closed_checked_let file line ctx can_fail pat bound next =
-  mk_closed_checked_let file line ctx.span can_fail pat bound next
+let mk_closed_checked_let file line ctx is_effectful pat bound next =
+  [%cassert] ctx.span
+    ((not is_effectful) || (ctx_get_effect_info ctx).is_effectful)
+    "Cannot bind an effectful expression inside a pure backward function; \
+     mark the enclosing function #[verify::keep_alive]";
+  mk_closed_checked_let file line ctx.span is_effectful pat bound next
 
-let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
-  mk_closed_checked_lets file line ctx.span can_fail pat_bounds next
+let mk_closed_checked_lets file line ctx is_effectful pat_bounds next =
+  [%cassert] ctx.span
+    ((not is_effectful) || (ctx_get_effect_info ctx).is_effectful)
+    "Cannot bind an effectful expression inside a pure backward function; \
+     mark the enclosing function #[verify::keep_alive]";
+  mk_closed_checked_lets file line ctx.span is_effectful pat_bounds next

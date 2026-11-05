@@ -201,7 +201,7 @@ let function_entry_of_fun_decl (ctx : ExtractBase.extraction_ctx)
     is_local = def.item_meta.is_local;
     source = source_of_span span;
     is_opaque = Option.is_none def.body;
-    can_fail = eff.can_fail;
+    can_fail = eff.is_effectful;
     can_diverge = eff.can_diverge;
     is_rec = eff.is_rec;
     reducible = def.backend_attributes.reducible;

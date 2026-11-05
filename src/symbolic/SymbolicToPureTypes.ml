@@ -408,11 +408,11 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
           let sg = sigs.sg in
           (* Check that the function lives in the expected effect - otherwise we
                  have to lift it *)
-          [%cassert_opt_span] span sg.fwd_info.effect_info.can_fail
+          [%cassert_opt_span] span sg.fwd_info.effect_info.is_effectful
             "Unimplemented";
           [%cassert_opt_span] span
             (RegionGroupId.Map.for_all
-               (fun _ (e : fun_effect_info) -> not e.can_fail)
+               (fun _ (e : fun_effect_info) -> not e.is_effectful)
                sg.back_effect_info)
             "Unimplemented";
           (* Substitute *)
@@ -725,8 +725,9 @@ and compute_raw_fun_effect_info (span : Meta.span option)
           (lookup_pure_fn_ptr_info fun_infos fun_id)
       in
       {
-        (* Note that backward functions can't fail *)
-        can_fail = info.can_fail && gid = None;
+        is_effectful =
+          (info.can_fail && gid = None)
+          || (Option.is_some gid && Option.is_some info.alive_hint);
         can_diverge = info.can_diverge;
         is_rec = info.is_rec && gid = None;
       }
@@ -936,7 +937,18 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let back_effect_info =
       compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
     in
+    let alive_hint =
+      match lookup_pure_fn_ptr_info fun_infos fun_id with
+      | Some info -> info.alive_hint
+      | None -> None
+    in
     let inputs = translate_back_inputs_for_gid gid in
+    let outputs = compute_back_outputs_for_gid gid in
+    let inputs =
+      if Option.is_some alive_hint && inputs = [] && outputs <> [] then
+        [ (0, [ (None, mk_unit_ty) ]) ]
+      else inputs
+    in
     (* We consider a backward function as stateful and potentially failing
        **only if it has inputs** (for the "potentially failing": if it has
        not inputs, we directly evaluate it in the body of the forward function).
@@ -960,9 +972,11 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     *)
     let back_effect_info =
       let b = inputs <> [] in
-      { back_effect_info with can_fail = back_effect_info.can_fail && b }
+      {
+        back_effect_info with
+        is_effectful = back_effect_info.is_effectful && b;
+      }
     in
-    let outputs = compute_back_outputs_for_gid gid in
     let filter =
       !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
     in
@@ -1139,11 +1153,11 @@ and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
 
 and mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =
-  if effect_info.can_fail then mk_result_ty ty else ty
+  if effect_info.is_effectful then mk_result_ty ty else ty
 
 and mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
     (inputs : ty list) (ty : ty) : ty =
-  if effect_info.can_fail && inputs <> [] then mk_result_ty ty else ty
+  if effect_info.is_effectful && inputs <> [] then mk_result_ty ty else ty
 
 (** Compute the arrow types for all the backward functions.
 

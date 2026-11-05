@@ -415,9 +415,12 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
           | FVar fid when FVarId.Set.mem fid loop_conts ->
               (* Check if all the free variables which appear in the call
                  are loop outputs or were introduced before the loop: if yes,
-                 simplify. *)
+                 simplify (unless the call returns a Result, i.e., is effectful). *)
               let fvars = texpr_get_fvars e in
-              if FVarId.Set.subset fvars all_vars then (
+              if
+                FVarId.Set.subset fvars all_vars
+                && Option.is_none (opt_destruct_result span e.ty)
+              then (
                 (* Simplify: introduce a fresh output var *)
                 [%ldebug
                   "Simplifying call to backward function:\n"
@@ -1632,18 +1635,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
   (* Small helper: filter the variables which appear in [pat] and not in [next] *)
   let filter_useless (next : texpr) (pat : tpat) : tpat =
     let fvars = texpr_get_fvars next in
-
-    let visitor =
-      object
-        inherit [_] map_tpat
-
-        method! visit_POpen _ v mp =
-          if FVarId.Set.mem v.id fvars then POpen (v, mp) else PIgnored
-
-        method! visit_PBound _ _ _ = [%internal_error] span
-      end
-    in
-    visitor#visit_tpat () pat
+    fst (filter_tpat_by_fvars span fvars pat)
   in
 
   let rec update (e : texpr) : texpr =

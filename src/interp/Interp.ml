@@ -630,6 +630,26 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         in
         let ret_value = Option.get ret_value in
         let ctx_return = ctx in
+        let has_keep_alive =
+          match
+            FunsAnalysis.lookup_fun_decl_info decls_ctx.fun_ctx.fun_infos
+              fdef.def_id
+          with
+          | Some info -> Option.is_some info.alive_hint
+          | None -> false
+        in
+        if
+          (not has_keep_alive)
+          && List.exists
+               (function
+                 | EAbs abs -> Option.is_some abs.alive_hint
+                 | _ -> false)
+               ctx_return.env
+        then
+          [%craise] span
+            "This function returns while a #[verify::keep_alive] region \
+             abstraction is still active (so its backward function would \
+             need to end it); mark this function #[verify::keep_alive] as well";
         [%ltrace
           "after popping the frame:\n- returned value:\n"
           ^ tvalue_to_string ctx_return ret_value

@@ -742,6 +742,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           abs_id = ctx0.fresh_abs_id ();
           kind = S.fresh_abs_kind;
           can_end = true;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           regions = { owned = regions };
           ended_subabs = AbsLevelSet.empty;
@@ -896,6 +897,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             abs_id = ctx0.fresh_abs_id ();
             kind = S.fresh_abs_kind;
             can_end = true;
+            alive_hint = None;
             parents = AbsId.Set.empty;
             regions = { owned = RegionSet.singleton (RVar (Free rid)) };
             ended_subabs = AbsLevelSet.empty;
@@ -944,6 +946,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               abs_id = ctx0.fresh_abs_id ();
               kind = S.fresh_abs_kind;
               can_end = true;
+              alive_hint = None;
               parents = AbsId.Set.empty;
               regions = { owned = RegionSet.singleton (RVar (Free rid)) };
               ended_subabs = AbsLevelSet.empty;
@@ -1035,6 +1038,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           abs_id = ctx0.fresh_abs_id ();
           kind = S.fresh_abs_kind;
           can_end = true;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           regions = { owned = RegionSet.singleton (RVar (Free rid)) };
           ended_subabs = AbsLevelSet.empty;
@@ -1140,6 +1144,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           abs_id = ctx0.fresh_abs_id ();
           kind = S.fresh_abs_kind;
           can_end = true;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
@@ -1219,6 +1224,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           abs_id = ctx0.fresh_abs_id ();
           kind = S.fresh_abs_kind;
           can_end = true;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
@@ -1297,6 +1303,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           abs_id = ctx0.fresh_abs_id ();
           kind = S.fresh_abs_kind;
           can_end = true;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
@@ -1441,6 +1448,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 abs_id = ctx0.fresh_abs_id ();
                 kind = S.fresh_abs_kind;
                 can_end = true;
+                alive_hint = None;
                 parents = AbsId.Set.empty;
                 regions = { owned };
                 ended_subabs = AbsLevelSet.empty;
@@ -1573,6 +1581,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         abs_id = ctx0.fresh_abs_id ();
         kind = S.fresh_abs_kind;
         can_end = true;
+        alive_hint = None;
         parents = AbsId.Set.empty;
         regions = { owned };
         ended_subabs = AbsLevelSet.empty;
@@ -1673,6 +1682,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         abs_id = ctx0.fresh_abs_id ();
         kind = S.fresh_abs_kind;
         can_end = true;
+        alive_hint = None;
         parents = AbsId.Set.empty;
         regions = { owned };
         ended_subabs = AbsLevelSet.empty;
@@ -2320,6 +2330,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       abs_id = abs_id0;
       kind = kind0;
       can_end = can_end0;
+      alive_hint = alive_hint0;
       parents = parents0;
       regions = { owned = regions0 };
       ended_subabs = ended_subabs0;
@@ -2334,6 +2345,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       abs_id = abs_id1;
       kind = kind1;
       can_end = can_end1;
+      alive_hint = alive_hint1;
       parents = parents1;
       regions = { owned = regions1 };
       ended_subabs = ended_subabs1;
@@ -2364,6 +2376,8 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       raise_distinct "match_abstractions: kind";
     if check_can_end && can_end0 <> can_end1 then
       raise_distinct "match_abstractions: can_end";
+    if alive_hint0 <> alive_hint1 then
+      raise_distinct "match_abstractions: alive_hint";
     let _ = match_aids parents0 parents1 in
     if region_set_has_static regions0 <> region_set_has_static regions1 then
       raise_distinct "match_abstractions: static region";

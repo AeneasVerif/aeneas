@@ -1594,7 +1594,7 @@ and emeta =
 
 (** Information about the "effect" of a function *)
 type fun_effect_info = {
-  can_fail : bool;  (** [true] if the return type is a [result] *)
+  is_effectful : bool;  (** [true] if the return type is a [result] *)
   can_diverge : bool;
       (** [true] if the function can diverge (i.e., not terminate). It happens
           if the function is recursive or contains a loop but also if it

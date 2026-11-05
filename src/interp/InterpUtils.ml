@@ -227,6 +227,7 @@ let push_value_to_static_shared_loan (span : Meta.span) (ctx : eval_ctx)
       abs_id = ctx.fresh_abs_id ();
       kind = Static;
       can_end = true;
+      alive_hint = None;
       parents = AbsId.Set.empty;
       regions = { owned = RegionSet.singleton RStatic };
       ended_subabs = AbsLevelSet.empty;
@@ -331,6 +332,7 @@ let push_static_loans_proj_for_symbolic_value (span : Meta.span)
         abs_id = ctx.fresh_abs_id ();
         kind = Static;
         can_end = true;
+        alive_hint = None;
         parents = AbsId.Set.empty;
         regions = { owned = static_regions };
         ended_subabs = AbsLevelSet.empty;

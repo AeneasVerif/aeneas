@@ -164,6 +164,7 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         abs_id = ctx.fresh_abs_id ();
         kind;
         can_end;
+        alive_hint = None;
         parents = AbsId.Set.empty;
         ended_subabs = AbsLevelSet.empty;
         regions;
@@ -377,6 +378,7 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
           abs_id = ctx.fresh_abs_id ();
           kind;
           can_end;
+          alive_hint = None;
           parents = AbsId.Set.empty;
           ended_subabs = AbsLevelSet.empty;
           regions;
@@ -765,7 +767,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | (EAbs abs0 as abs) :: env0' ->
+    | EAbs abs0 :: env0' ->
         let abs1, env1' = pop_abs abs0.abs_id env1 in
 
         (* Debug *)
@@ -786,9 +788,14 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
            points we might remove/add continuations while the presence/absence
            shouldn't have an impact on the way we match/unify contexts. *)
         [%sanity_check] span
-          (equal_abs { abs0 with cont = None } { abs1 with cont = None });
+          (equal_abs
+             { abs0 with cont = None; alive_hint = None }
+             { abs1 with cont = None; alive_hint = None });
+        let alive_hint =
+          merge_alive_hints (Some span) abs0.alive_hint abs1.alive_hint
+        in
         (* Continue *)
-        abs :: join_prefixes env0' env1'
+        EAbs { abs0 with alive_hint } :: join_prefixes env0' env1'
     | [] ->
         if env1 = [] then []
         else
@@ -1075,7 +1082,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
   let ctxl', joined_ctx =
     join_ctxs_list config span (Loop loop_id) ~preprocess_first_ctx:false
-      ~recoverable:false ~with_abs_conts:false (ctx0 :: ctxl)
+      ~recoverable:config.keep_alive_hints ~with_abs_conts:false (ctx0 :: ctxl)
   in
   [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
@@ -1140,8 +1147,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
        *)
       let rec join_one_aux (ctx : eval_ctx) =
         match
-          join_ctxs span fresh_abs_kind ~recoverable:false ~with_abs_conts
-            !joined_ctx ctx
+          join_ctxs span fresh_abs_kind
+            ~recoverable:config.keep_alive_hints ~with_abs_conts !joined_ctx ctx
         with
         | Ok { joined_ctx = nctx; _ } ->
             joined_ctx := nctx;
@@ -1175,8 +1182,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Collapse to eliminate the markers *)
         joined_ctx :=
-          collapse_ctx config span fresh_abs_kind ~recoverable:false
-            ~with_abs_conts !joined_ctx;
+          collapse_ctx config span fresh_abs_kind
+            ~recoverable:config.keep_alive_hints ~with_abs_conts !joined_ctx;
         [%ltrace
           "join_one: after join-collapse:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -1423,7 +1430,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         tgt_ctx
     with
     | Ok x -> x
-    | Error _ -> [%craise] span "Could not join the contexts"
+    | Error _ -> [%craise_recover] recoverable span "Could not join the contexts"
   in
   let joined_ctx = join_info.joined_ctx in
   [%ltrace
@@ -1506,11 +1513,30 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         if AbsId.Set.mem a2 s then AbsId.Set.add a0 (AbsId.Set.add a1 s) else s)
       final_static (List.rev merge_seq)
   in
+  let alive_hints =
+    let final_hints =
+      AbsId.Map.of_list
+        (List.filter_map
+           (fun (abs : abs) ->
+             match abs.alive_hint with
+             | Some h -> Some (abs.abs_id, h)
+             | None -> None)
+           (AbsId.Map.values (ctx_get_abs joined_ctx_not_projected)))
+    in
+    (* Propagate backward: if the result of a merge has an alive_hint,
+       propagate it to the merged abstractions *)
+    List.fold_left
+      (fun m (a0, a1, a2) ->
+        match AbsId.Map.find_opt a2 m with
+        | Some h -> AbsId.Map.add a0 h (AbsId.Map.add a1 h m)
+        | None -> m)
+      final_hints (List.rev merge_seq)
+  in
 
   (* Apply the sequence of merges to the projected context *)
   let joined_ctx =
     collapse_ctx_no_markers_following_sequence span merge_seq static_aids
-      add_borrows_seq ~with_abs_conts:true fresh_abs_kind joined_ctx
+      alive_hints add_borrows_seq ~with_abs_conts:true fresh_abs_kind joined_ctx
   in
   [%ltrace
     "After collapsing the context: joined_ctx:\n"
@@ -1568,7 +1594,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         joined_ctx
     with
     | Some ctx -> ctx
-    | None -> [%craise] span "Could not match the contexts"
+    | None -> [%craise_recover] recoverable span "Could not match the contexts"
   in
   [%ltrace
     "The match was successful:" ^ "\n\n- src_ctx: "
@@ -1614,7 +1640,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
              with
              | Some v -> v
              | None ->
-                 [%craise] span
+                 [%craise_recover] recoverable span
                    ("Could not find symbolic value @"
                    ^ SymbolicValueId.to_string sid
                    ^ " in src_to_joined_map")
@@ -1677,4 +1703,4 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     ^ eval_ctx_to_string tgt_ctx];
 
   match_ctx_with_target config span WithCont fixed_aids fixed_dids fp_input_abs
-    fp_input_svalues ~recoverable:false src_ctx tgt_ctx
+    fp_input_svalues ~recoverable:config.keep_alive_hints src_ctx tgt_ctx

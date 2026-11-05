@@ -304,6 +304,10 @@ type abs_kind =
           computational content. *)
 [@@deriving show, eq, ord]
 
+(** Hint controlling whether a region abstraction without loans should be kept
+    alive, and if yes, for how long. *)
+type alive_hint = Long | Short [@@deriving show, eq, ord]
+
 module AbsBVarId = OrdIdGen ()
 module AbsFVarId = OrdIdGen ()
 
@@ -395,6 +399,7 @@ class ['self] iter_env_base =
     method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
     method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
+    method visit_alive_hint : 'env -> alive_hint -> unit = fun _ _ -> ()
     method visit_abs_level_set : 'env -> abs_level_set -> unit = fun _ _ -> ()
   end
 
@@ -459,6 +464,7 @@ class ['self] map_env_base =
       fun _ x -> x
 
     method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
+    method visit_alive_hint : 'env -> alive_hint -> alive_hint = fun _ x -> x
 
     method visit_abs_level_set : 'env -> abs_level_set -> abs_level_set =
       fun _ x -> x
@@ -1527,6 +1533,7 @@ and abs = {
           backward function for 'a, we have to make sure we don't need to end
           the return region for 'b (if it is the case, it means the function
           doesn't borrow check). *)
+  alive_hint : alive_hint option;
   parents : abs_id_set;  (** The parent abstractions *)
   regions : abs_regions;
       (** TODO: actually we also (only?) need to put the regions at the level of

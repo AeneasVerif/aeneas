@@ -93,8 +93,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Preemptively end borrows/move values by matching the current
      context with the target context *)
   let ctx, cf_prepare =
-    prepare_match_ctx_with_target config span (Loop loop_id) ~recoverable:false
-      fp_ctx ctx
+    prepare_match_ctx_with_target config span (Loop loop_id)
+      ~recoverable:config.keep_alive_hints fp_ctx ctx
   in
 
   (* Actually match *)
@@ -115,7 +115,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
       (match_ctx_with_target config span WithCont fixed_aids fixed_dids
-         fp_input_abs fp_input_svalues ~recoverable:false fp_ctx ctx)
+         fp_input_abs fp_input_svalues ~recoverable:config.keep_alive_hints
+         fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
@@ -205,6 +206,13 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             [%ltrace
               "- ctx after simplify_ended_shared_loans:\n"
               ^ eval_ctx_to_string ctx];
+
+            (* Destructure the abstraction. This is usually done by [join_ctxs] and relied on
+               by the rest of the translation, but since we do not call [join_ctxs] we need to
+               do it ourselves. *)
+            let ctx = InterpJoin.destructure_new_abs span fixed_aids ctx in
+            [%ltrace
+              "- ctx after destructure_new_abs:\n" ^ eval_ctx_to_string ctx];
 
             (* Reduce the context - TODO: generalize the join so that we don't need to do this *)
             let ctx =
@@ -319,7 +327,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
           match_ctx_with_target config span WithCont fixed_aids fixed_dids
-            fp_input_abs fp_input_svalues fp_ctx ~recoverable:false ctx
+            fp_input_abs fp_input_svalues fp_ctx
+            ~recoverable:config.keep_alive_hints ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in
         let input_abs = reorder_input_abs input_abs fp_input_abs in
@@ -510,41 +519,49 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
   match config.mode with
   | ConcreteMode -> (eval_loop_concrete span eval_loop_body) ctx
   | SymbolicMode ->
-      (* Preemptively simplify the context by ending the unnecessary borrows/loans and getting
-         rid of the useless symbolic values (which are in anonymous variables) *)
-      let ctx, cc =
-        InterpBorrows.simplify_dummy_values_useless_abs config span ctx
-      in
+      let eval_loop_sym (config : config) =
+        (* Preemptively simplify the context by ending the unnecessary borrows/loans and getting
+           rid of the useless symbolic values (which are in anonymous variables) *)
+        let ctx, cc =
+          InterpBorrows.simplify_dummy_values_useless_abs config span ctx
+        in
 
-      (* We want to make sure the loop will *not* manipulate shared avalues
-         themselves containing shared loans (i.e., nested shared loans in
-         the abstractions), because it complexifies the matches between values
-         (when joining environments, or checking that two environments are
-         equivalent).
+        (* We want to make sure the loop will *not* manipulate shared avalues
+           themselves containing shared loans (i.e., nested shared loans in
+           the abstractions), because it complexifies the matches between values
+           (when joining environments, or checking that two environments are
+           equivalent).
 
-         We thus call {!reborrow_ashared_loans_symbolic_mutable_borrows} once
-         *before* diving into the loop, to make sure the shared values are deconstructed.
+           We thus call {!reborrow_ashared_loans_symbolic_mutable_borrows} once
+           *before* diving into the loop, to make sure the shared values are deconstructed.
 
-         Note that we will call this function again inside {!eval_loop_symbolic},
-         to introduce fresh, non-fixed abstractions containing the shared values
-         which can be manipulated (and thus borrowed, expanded, etc.) so
-         that the fixed abstractions are never modified.
+           Note that we will call this function again inside {!eval_loop_symbolic},
+           to introduce fresh, non-fixed abstractions containing the shared values
+           which can be manipulated (and thus borrowed, expanded, etc.) so
+           that the fixed abstractions are never modified.
 
-         This is important to understand: we call this function once here to
-         introduce *fixed* abstractions, and again later to introduce
-         *non-fixed* abstractions.
-      *)
-      let ctx, cc =
-        comp cc
-          (reborrow_ashared_loans_symbolic_borrows span None
-             ~with_abs_conts:true ctx)
+           This is important to understand: we call this function once here to
+           introduce *fixed* abstractions, and again later to introduce
+           *non-fixed* abstractions.
+        *)
+        let ctx, cc =
+          comp cc
+            (reborrow_ashared_loans_symbolic_borrows span None
+               ~with_abs_conts:true ctx)
+        in
+        let (ctx, res), cc =
+          comp cc (eval_loop_symbolic config span eval_loop_body ctx)
+        in
+        let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
+          match el with
+          | [ e ] -> cc e
+          | _ -> [%internal_error] span
+        in
+        ([ (ctx, res) ], cf)
       in
-      let (ctx, res), cc =
-        comp cc (eval_loop_symbolic config span eval_loop_body ctx)
-      in
-      let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
-        match el with
-        | [ e ] -> cc e
-        | _ -> [%internal_error] span
-      in
-      ([ (ctx, res) ], cf)
+      (* TODO: check if there even are abstractions that have the alive_hint before we do this *)
+      if config.keep_alive_hints then
+        try eval_loop_sym config
+        with Errors.RFailure ->
+          eval_loop_sym { config with keep_alive_hints = false }
+      else eval_loop_sym config
