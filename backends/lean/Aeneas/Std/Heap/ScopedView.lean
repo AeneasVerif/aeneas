@@ -44,6 +44,36 @@ def NewView (s₀ s₁ : Heap) : Prop :=
   s₁.next = s₀.next + 1 ∧
     ∀ other, other ≠ s₀.next → s₁.allocations other = s₀.allocations other
 
+/-- Metadata relevant to return authority; contents may change independently. -/
+def returnShape (blk : Block) : BasePtr × Nat × Nat × Bool :=
+  (blk.bptr, blk.root, blk.repr.length, blk.active)
+
+/-- A completed collection of scopes. Old views retain their return metadata,
+    while every newly issued view is retired. Byte updates are unrestricted. -/
+def ClosedViews (s₀ s₁ : Heap) : Prop :=
+  s₀.next ≤ s₁.next ∧
+    (∀ id, id < s₀.next →
+      (s₁.allocations id).map returnShape = (s₀.allocations id).map returnShape) ∧
+    (∀ id blk, s₀.next ≤ id → s₁.allocations id = some blk → blk.active = false)
+
+theorem ClosedViews.trans (first : ClosedViews s₀ s₁) (second : ClosedViews s₁ s₂) :
+    ClosedViews s₀ s₂ := by
+  refine ⟨first.1.trans second.1, ?_, ?_⟩
+  · intro id bound
+    exact (second.2.1 id (Nat.lt_of_lt_of_le bound first.1)).trans
+      (first.2.1 id bound)
+  · intro id blk bound lookup
+    by_cases old : id < s₁.next
+    · have shape := second.2.1 id old
+      rw [lookup] at shape
+      cases hl : s₁.allocations id
+      · simp [hl] at shape
+      · rename_i prior
+        have eq := Option.some.inj (by simpa [hl] using shape)
+        have active := congrArg (fun x : BasePtr × Nat × Nat × Bool => x.2.2.2) eq
+        exact active.trans (first.2.2 id prior bound hl)
+    · exact second.2.2 id blk (Nat.le_of_not_gt old) lookup
+
 theorem newBlock_newView {repr : Repr T} {data : List (Vector Byte repr.size)}
     {bptr : BasePtr} {root : Option Nat} {s₀ s₁ : Heap} {p : RawPtr T}
     (run : newBlock repr data false bptr root s₀ = some (p, s₁)) :
@@ -75,6 +105,56 @@ theorem endExposure_retire {repr : Repr T} {p : RawPtr T} {count : Nat} {s₀ s�
 end Heap
 
 namespace SepLogic
+
+/-- Any number of retired child views may intervene, together with independent
+    byte updates to old allocations. No heap equality is required. -/
+theorem RootReturn.after_closed_views {s₀ s₁ : Heap} {base : Nat}
+    (hi : s₀.Inv) (bound : base < s₀.next) (authority : RootReturn s₀ base)
+    (scope : Heap.ClosedViews s₀ s₁) : RootReturn s₁ base := by
+  intro blk lookup
+  have shape := scope.2.1 base bound
+  rw [lookup] at shape
+  cases oldLookup : s₀.allocations base
+  · simp [oldLookup] at shape
+  · rename_i old
+    have same := Option.some.inj (by simpa [oldLookup] using shape)
+    have hb := congrArg Prod.fst same
+    have hr : blk.root = old.root :=
+      congrArg (fun x : BasePtr × Nat × Nat × Bool => x.2.1) same
+    have hlen := congrArg (fun x : BasePtr × Nat × Nat × Bool => x.2.2.1) same
+    obtain ⟨root, rootLookup, baseEq, lengthEq, aliases⟩ := authority old oldLookup
+    have rootShape := scope.2.1 old.root (hi.base_lt rootLookup)
+    rw [rootLookup] at rootShape
+    cases newRootLookup : s₁.allocations old.root
+    · simp [newRootLookup] at rootShape
+    · rename_i newRoot
+      have rootSame := Option.some.inj (by simpa [newRootLookup] using rootShape)
+      refine ⟨newRoot, by simpa [hr] using newRootLookup, ?_, ?_, ?_⟩
+      · exact hb.trans (baseEq.trans (congrArg Prod.fst rootSame).symm)
+      · exact hlen.trans (lengthEq.trans
+          (congrArg (fun x : BasePtr × Nat × Nat × Bool => x.2.2.1) rootSame).symm)
+      · apply List.all_eq_true.mpr
+        intro id member
+        by_cases prior : id < s₀.next
+        · have entry := List.all_eq_true.mp aliases id (List.mem_range.mpr prior)
+          have eq := scope.2.1 id prior
+          cases before : s₀.allocations id
+          · cases after : s₁.allocations id
+            · simp
+            · simp [before, after] at eq
+          · rename_i beforeBlock
+            cases after : s₁.allocations id
+            · simp [before, after] at eq
+            · rename_i afterBlock
+              have same := Option.some.inj (by simpa [before, after] using eq)
+              have roots : afterBlock.root = beforeBlock.root :=
+                congrArg (fun x : BasePtr × Nat × Nat × Bool => x.2.1) same
+              have active : afterBlock.active = beforeBlock.active :=
+                congrArg (fun x : BasePtr × Nat × Nat × Bool => x.2.2.2) same
+              simpa [before, after, roots, active, hr] using entry
+        · cases after : s₁.allocations id
+          · simp
+          · simp [scope.2.2 id _ (Nat.le_of_not_gt prior) after]
 
 /-- Retiring a nested exposure restores the outer root's no-alias authority;
     new metadata is retained, not erased or equated with the original heap. -/

@@ -89,6 +89,13 @@ impl DecimalBuffer {
         }
     }
 
+    /// Copy the first borrowed result before reusing the buffer.
+    pub fn format_twice(buffer: &mut DecimalBuffer, first: u8, second: u8) -> (Vec<u8>, Vec<u8>) {
+        let a = buffer.format(first).to_vec();
+        let b = buffer.format(second).to_vec();
+        (a, b)
+    }
+
     /// Return only the initialized decimal prefix, without allocating or copying.
     pub fn format(&mut self, value: u8) -> &[u8] {
         unsafe {
@@ -152,5 +159,10 @@ mod tests {
         }
         let mut fresh = DecimalBuffer::new();
         assert_eq!(fresh.format(0), b"0");
+        for (first, second) in [(255, 0), (0, 255), (10, 9), (99, 100)] {
+            let (a, b) = DecimalBuffer::format_twice(&mut fresh, first, second);
+            assert_eq!(a, first.to_string().as_bytes());
+            assert_eq!(b, second.to_string().as_bytes());
+        }
     }
 }

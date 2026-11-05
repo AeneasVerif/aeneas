@@ -1,4 +1,4 @@
-[[92mInfo[39m ] Imported: tests/llbc/raw_zmij_mwe.llbc
+[[92mInfo[39m ] Imported: /home/vscode/.copilot/session-state/00768208-7037-46b7-97f3-4eed9b9a98ae/files/assurance/llbc/raw_zmij_mwe.llbc
 [[91mError[39m] Aeneas does not yet support dereferencing raw pointers.
 Source: 'tests/src/raw_zmij_mwe.rs', lines 18:13-18:55
 Compiler source: interp/InterpPaths.ml, line 197

@@ -5,6 +5,11 @@ public import RawZmijMwe.SafeWrites
 public import RawZmijMwe.Table
 public import RawZmijMwe.Formatter
 public import RawZmijMwe.Regression
+public import RawZmijMwe.Execution
+
+/-- info: 'raw_zmij_mwe.DecimalBuffer.format_twice.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_zmij_mwe.DecimalBuffer.format_twice.spec
 
 /-- info: 'raw_zmij_mwe.write_digits.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in

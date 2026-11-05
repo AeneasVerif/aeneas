@@ -5,6 +5,55 @@ This replaces the byte model inspired by
 It is a design experiment, not a refinement proof of Rust or an automatically
 integrated extraction pipeline.
 
+## Assurance coverage
+
+The following evidence is deliberately layered. Generic contracts are
+kernel-checked and guarded against additional axioms; finite regression
+theorems use `native_decide` and are not dependencies of those contracts.
+Rust/Miri tests check valid executions of the companion fixtures, not a
+refinement between Rust and this prototype.
+
+| Milestone | Evidence | Boundary |
+|---|---|---|
+| Whole clients | `RawMemoryViews/ProvenanceScoped.lean` proves allocation, initialization, physical free, stack exposure, pointer-byte copy and both returns. `RawZmijMwe/Reuse.lean` proves two formatter calls with exact snapshots and final storage. | Handwritten models. Allocator outcome/placements are ghost parameters. Formatter address stability remains an explicit specialization/hypothesis. The first Rust slice must be copied before reborrowing. |
+| Successful executions | `Execution.lean` defines `HeapWP.Runs` directly over `Result` effects; `Runs.post` links it to universal WP. Client witnesses execute the real formatter, full deallocation/copy wrapper, owning-cell destructor client and list constructor. | Finite witnesses establish existence, not success for every placement. The formatter witness is one call; repeated calls also have a universal contract and a separate seven-call heap trace. |
+| Composable returns | `ScopedView.lean`: transitive `ClosedViews` and `RootReturn.after_closed_views` allow multiple fresh scopes and byte changes to old allocations. `HeapAssuranceTests.siblingScopes` exercises disjoint siblings, a shared child, an empty range and an unrelated write. | Old return metadata must be preserved; all fresh views must retire. Frame preservation and heap invariants are separate obligations. There is still no authenticated loan tree. |
+| Representation boundaries | Genuine ignored padding and partial initialization/copy, all 256 Bool bytes, all 256 numeric padding replacements, ZST lifecycle, and pointer-lane corruption/loan rejection. | Single ZST accesses and mutable U8 loans across pointer lanes are valid Rust patterns but unsupported. Invalid Bool/value-byte reads are rejected; unsupported does not mean Rust UB. |
+| Concrete ownership | `DoublyLinked/ConcreteLayout.lean` supplies a 24-byte, alignment-8 descriptor and `NodeLayout` proof. `RawMemoryViews/Ownership.lean` proves one destructor observation and physical reclamation with arbitrary frames. | Node calibration is 64-bit little-endian `repr(C)`, checked by Rust layout tests. Non-Copy/once-only ownership is enforced by the Rust API, not linear Lean types. Forget/abort paths do not promise cleanup. |
+
+`HeapAssuranceTests` is part of the default backend build; the client root
+modules import their new contracts and actual-computation witnesses. The paired
+Rust cases are in `raw_memory_views.rs`, `raw_zmij_mwe.rs` and `doubly_linked/`.
+See `tests/lean/EXTRACTION.md` for reproduction and correspondence assumptions.
+
+### Supported, unsupported, and invalid are distinct
+
+An uninitialized padding byte can be ignored by a typed decoder and copied as
+raw storage, but cannot be read as a `u8`. Uninitialized value-bearing bytes
+cannot be decoded. `no_exact_uninit_decoder` demonstrates why a decoder that
+distinguishes uninitialized storage from its initialized replacement conflicts
+with `decode_mono`; raw snapshots are the supported alternative.
+
+The node codec leaves bytes 20--23 as genuine padding, not a hidden initialized
+array element. Its canonical write encoding leaves them uninitialized; decoding
+ignores them. Its initial null links use the existing symbolic pointer payload
+`(provenance = 0, address = 0)`. First allocation issues record 0 before validating
+its bytes, so this representation is constructively usable even from an empty
+heap. Address-zero reads still fail. This is not a general provenance-free
+pointer or integer-to-pointer conversion rule.
+
+The mutable pointer-byte Rust regression separates a read-only use of `&mut u8`
+from writing back the same numeric byte. Only the former subsequently
+dereferences the original pointer. A pure returned U8 cannot distinguish those
+histories, so the current mutable-loan boundary conservatively rejects both.
+
+Nonempty duplicate returns, repeated exposure retirement, and parent cleanup
+with a live child are rejected in the tested scenarios. This does **not** make
+arbitrary low-level `endBorrow` calls safe: `HeapTests` retains the counterexample
+to premature restoration when a child is itself suspended. Empty-range returns
+also carry no consumable byte permission. Correct child-before-parent ordering
+and once-only callback use remain obligations of the translated/scoped protocol.
+
 ## The implicit safe heap
 
 Safe Rust holds an **unknown implicit part of the heap**. An absent explicit

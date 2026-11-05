@@ -18,3 +18,4 @@ public import Aeneas.Std.Target
 public import Aeneas.Data.Tuples
 public import Aeneas.Std.RangeIter
 import Aeneas.Std.HeapTests
+import Aeneas.Std.HeapAssuranceTests

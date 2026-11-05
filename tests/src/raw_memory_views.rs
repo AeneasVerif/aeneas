@@ -126,6 +126,69 @@ pub fn nested_views() -> Box<[u8; 16]> {
     }
 }
 
+/// Disjoint siblings, a shared child, an empty child, and a separate mutation.
+pub fn composed_views(bytes: &mut [u8; 4], unrelated: &mut u8) {
+    let (left, right) = bytes.split_at_mut(2);
+    unsafe {
+        let l = left.as_mut_ptr();
+        let r = right.as_mut_ptr();
+        {
+            let shared = std::slice::from_raw_parts(l, 2);
+            assert_eq!(shared.len(), 2);
+            let empty = std::slice::from_raw_parts(r, 0);
+            assert!(empty.is_empty());
+        }
+        l.write(10);
+        r.add(1).write(20);
+        *unrelated = 99;
+    }
+}
+
+#[repr(C, align(2))]
+struct Padded {
+    tag: u8,
+}
+
+/// Initialize fields without reading padding; copying preserves raw storage.
+pub fn padded_copy(tag: u8) -> u8 {
+    let mut source = std::mem::MaybeUninit::<Padded>::uninit();
+    let mut destination = std::mem::MaybeUninit::<Padded>::uninit();
+    unsafe {
+        std::ptr::addr_of_mut!((*source.as_mut_ptr()).tag).write(tag);
+        std::ptr::copy_nonoverlapping(source.as_ptr(), destination.as_mut_ptr(), 1);
+        let result = destination.assume_init();
+        result.tag
+    }
+}
+
+struct ObservedBox<'a> {
+    pointer: *mut u8,
+    events: &'a mut Vec<u8>,
+}
+
+impl Drop for ObservedBox<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            let value = self.pointer.read();
+            drop(Box::from_raw(self.pointer));
+            self.events.push(value);
+        }
+    }
+}
+
+/// A non-Copy owner is moved once and dropped once on this terminating path.
+/// Forgetting the owner or aborting is deliberately not a cleanup guarantee.
+pub fn drop_owned_byte(value: u8) -> Vec<u8> {
+    let mut events = Vec::with_capacity(1);
+    let owner = ObservedBox {
+        pointer: Box::into_raw(Box::new(value)),
+        events: &mut events,
+    };
+    let moved = owner;
+    drop(moved);
+    events
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +239,51 @@ mod tests {
         assert_eq!(*result, [1, 1, 2, 2, 2, 3, 3, 3, 3, 2, 2, 2, 4, 4, 1, 1]);
         result[15] = 5;
         assert_eq!(result[15], 5);
+    }
+
+    #[test]
+    fn composed_siblings_and_destructor() {
+        let mut bytes = [1, 2, 3, 4];
+        let mut unrelated = 5;
+        composed_views(&mut bytes, &mut unrelated);
+        assert_eq!(bytes, [10, 2, 3, 20]);
+        assert_eq!(unrelated, 99);
+        for value in [0, 37, u8::MAX] {
+            assert_eq!(drop_owned_byte(value), vec![value]);
+            assert_eq!(padded_copy(value), value);
+        }
+    }
+
+    #[test]
+    fn valid_restricted_values_and_zero_sized_access() {
+        for byte in [0u8, 1] {
+            let value = unsafe { (std::ptr::addr_of!(byte).cast::<bool>()).read() };
+            assert_eq!(value, byte == 1);
+        }
+        let mut units = [(); 4];
+        unsafe {
+            let p = units.as_mut_ptr();
+            assert_eq!(p.read(), ());
+            assert_eq!(std::slice::from_raw_parts(p, 0).len(), 0);
+            p.write(());
+        }
+    }
+
+    #[test]
+    fn mutable_pointer_byte_views() {
+        let mut target = 37u8;
+        let mut pointer = &mut target as *mut u8;
+        let before = pointer.addr();
+        unsafe {
+            let byte = &mut *std::ptr::addr_of_mut!(pointer).cast::<u8>();
+            std::hint::black_box(*byte);
+            // No write: the original pointer is still usable.
+            assert_eq!(pointer.read(), 37);
+            let byte = &mut *std::ptr::addr_of_mut!(pointer).cast::<u8>();
+            let saved = *byte;
+            *byte = saved;
+        }
+        // Same numerical value is not a justification for dereferencing it.
+        assert_eq!(pointer.addr(), before);
     }
 }

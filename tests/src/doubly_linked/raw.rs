@@ -1,9 +1,20 @@
 /// Intrusive circular links. Linked nodes must remain at stable addresses.
 #[derive(Clone, Copy)]
+#[repr(C)]
 pub struct Node {
     pub prev: *mut Node,
     pub next: *mut Node,
     pub value: u32,
+}
+
+#[cfg(all(test, target_pointer_width = "64", target_endian = "little"))]
+#[test]
+fn concrete_node_layout() {
+    assert_eq!(std::mem::size_of::<Node>(), 24);
+    assert_eq!(std::mem::align_of::<Node>(), 8);
+    assert_eq!(std::mem::offset_of!(Node, prev), 0);
+    assert_eq!(std::mem::offset_of!(Node, next), 8);
+    assert_eq!(std::mem::offset_of!(Node, value), 16);
 }
 
 pub mod ext {

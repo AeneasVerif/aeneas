@@ -19,7 +19,9 @@ enabledness; allocation and exposure accept OOM without placement-existence
 premises. Owned lifecycles retain
 lexical root authority; `ListState` encapsulates it for the safe list API.
 Pointer writes use local provenance evidence, including already-stored pointers
-to retired views. Generic node proofs take an explicit `NodeLayout` calibration.
+to retired views. Generic node proofs take an explicit `NodeLayout` calibration;
+`DoublyLinked/ConcreteLayout.lean` now supplies the checked 64-bit little-endian
+`repr(C)` instance, including genuine padding and initial null links.
 Applicable exact axiom guards allow only standard Lean logical axioms.
 
 These are checks of the marked, manually adapted translations, not of a repaired
@@ -73,6 +75,7 @@ correspondence or compiler-correctness theorem is claimed.
 | `write_decimal` | `Decimal.lean`: `write_decimal.spec` | Every u8 input: exact 1--3 digit decimal prefix, untouched suffix, exact end cursor and retained provenance. |
 | `DecimalBuffer::format` | `Formatter.lean`: `DecimalBuffer.format.spec` | Three fresh exposures, retirement of the writer view before subtraction, initialized-prefix borrow, exact decimal slice, and all heap cleanup before returning the slice value with a trivial updated-storage callback. Conditional on the address equality described below. |
 | One complete formatter borrow scope | `Formatter.lean`: `DecimalBuffer.format_and_return.spec` (`@[step]`) | Calls the preceding computation and its callback, yielding the exact slice value and raw updated buffer; suitable for repeated calls. |
+| `DecimalBuffer::format_twice` | `Reuse.lean`: `DecimalBuffer.format_twice.spec` (`@[step]`) | Two actual formatter scopes, with a checked/proved length recovery between them; exact saved first result, second result, and final storage including the stale suffix. Rust copies each slice into a Vec; the model represents these as pure snapshots, not overlapping live borrows. |
 
 ### Explicit interpretation boundaries
 
@@ -146,6 +149,12 @@ covering all digit widths and reuse, with 21 fresh view IDs at one address,
 real retirement/subtraction/sharing/returns and the untouched uninitialized
 fourth byte. This is a concrete heap trace, not an interpreter for the `Result`
 formatter. The separate writer theorem proves its decimal algorithm.
+`Execution.lean` now additionally proves `format_zero_runs` for the **actual
+Result computation**, including the writer and every backward computation.
+The reusable backend relation `HeapWP.Runs` has constructors only for successful
+returns and witnessed effect transitions. `Runs.post` connects such a run to
+the universal WP. OOM cannot masquerade as a successful run. This single-call
+witness does not replace the two-call universal contract or the multi-call trace.
 
 The root modules import all clients and contain exact axiom guards for the main
 contracts, allowing only `propext`, `Classical.choice`, and `Quot.sound`.
@@ -211,7 +220,7 @@ opaque Rust wrappers to conceal an unsupported primitive.
 | Memory-view proofs | `RawMemoryViews.lean` checks stored-pointer observation/reuse, the eight-u16/sixteen-u8 update and safe wrapper, first write/read/deallocation, nested Box return, and pointer-copy clients. Exact axiom guards allow only `propext`, `Classical.choice`, and `Quot.sound`. See the adaptation boundaries below. |
 | Integration | `cd backends/lean && lake build` and `cd tests/lean && lake build` pass after heap-library consolidation, direct `step` integration, and the `Row15` outer-wrapper proofs (1824 and 2143 jobs respectively). |
 | Outer row composition | `scale_rows_raw.in_place_spec` and `scale_rows_raw.disjoint_spec` reuse the inner vector kernel. `scale_rows_in_place.spec` and `scale_rows_into.spec` prove both safe array wrappers, including zero rows and actual exposure cleanup. |
-| Remaining universal contracts | `copy_after_deallocation` has a proved raw tail, not a complete allocation/stack-exposure wrapper theorem. |
+| Complete provenance wrapper | `ProvenanceScoped.lean` proves `copy_after_deallocation.spec`, including allocation, physical deallocation before stack exposure, pointer copy and both retirements. `Execution.lean` witnesses a successful run of that actual Result model. |
 
 The model checks are explicitly handwritten counterparts, with the existing
 four-byte little-endian `raw_box.u32Repr`. They do not validate extraction
@@ -249,9 +258,65 @@ lanes and returns the exact pointer. Dereferencing the copied pointer requires
 separate pointee ownership. Pointer metadata can remain valid after retirement
 or physical deallocation; live access cannot. Checked negative contracts reject
 reads through retired views and unissued provenance, even at the same numerical
-address as a valid pointer. The deallocation/copy/address-observation theorem
-starts with exposed stack slots and an owned pointee. It proves that raw tail,
-not the complete surrounding Rust allocation and stack-exposure wrapper.
+address as a valid pointer. The original raw-tail theorem remains available.
+`ProvenanceScoped.lean` now proves the complete handwritten allocation and
+stack-exposure wrapper, with explicit allocator outcome and aligned stack
+placements. `Execution.lean` witnesses it from `Heap.empty` and separately
+checks the original root is dead and unreadable.
+
+### Semantic-assurance extensions (no compiler changes)
+
+The coverage/assumption matrix is in
+[`Heap/README.md`](../../backends/lean/Aeneas/Std/Heap/README.md#assurance-coverage).
+These additions do not claim new successful whole-file extraction.
+
+- `Heap.ClosedViews` preserves old return metadata while allowing byte changes
+  and multiple retired fresh views; it composes transitively.
+  `RootReturn.after_closed_views` restores outer authority. The executable
+  sibling/shared/empty-slice scenario also mutates an independent allocation.
+  No dynamic loan-tree authentication or linear callback type is claimed.
+- Representation regressions distinguish genuinely ignored padding, initialized
+  value bytes, invalid Bool encodings, unsupported single-ZST accesses, and
+  conservative rejection of mutable pointer-byte loans. The Rust counterparts
+  run only valid operations; invalid accesses are confined to model rejection
+  checks. The Bool and padding explorations each enumerate all 256 bytes.
+- Rust `Node` now explicitly has `#[repr(C)]`. Native/Miri checks calibrate
+  size 24, alignment 8 and field offsets 0/8/16 on a 64-bit little-endian target.
+  `ConcreteLayout.lean` proves the descriptor laws and `NodeLayout`.
+  `ConcreteExecution.lean` instantiates the public constructor contract and
+  witnesses its actual allocation with null links followed by self-linking.
+  Canonical null payloads are not dereferenceable and do not provide general
+  integer-to-pointer recovery.
+- `ObservedBox` is a private, non-Copy Rust owner, moved and dropped once.
+  `Ownership.lean` proves the complete handwritten `drop_owned_byte` client:
+  allocation, payload read, physical deallocation, exactly one destructor event,
+  and arbitrary-frame preservation. The event Vec is represented by a pure list;
+  its safe allocation/capacity management and compiler-generated Drop glue are
+  not verified. The destructor-path theorem also proves the pointer unreadable
+  afterwards; a concrete actual-computation witness checks death and rejects
+  repeat deallocation. Forgetting or aborting is outside the cleanup promise.
+  This does not change the older linked-list `take_node` boundary, which models
+  logical owning return rather than physical reclamation.
+
+Validation uses the default backend and fixture `lake build` commands above,
+and debug/release Rust plus default Miri on `raw_ryu_mwe.rs`,
+`raw_zmij_mwe.rs`, `raw_memory_views.rs`, and `doubly_linked.rs` (18 tests).
+For a reproducible Cargo harness, add one `[[test]]` entry per source file with
+its absolute `path`, then run `RUSTFLAGS=-Dwarnings cargo test`,
+`RUSTFLAGS=-Dwarnings cargo test --release`, and
+`RUSTFLAGS=-Dwarnings cargo miri test`.
+`gmake format` ran rustfmt; its ignored OCaml stages reported missing
+`ocamlformat` (no OCaml files changed).
+
+Controlled regeneration used `gmake test-raw_zmij_mwe.rs
+test-raw_memory_views.rs test-doubly_linked.rs IN_CI=1`, with `AENEAS_EXE`
+pointing to a wrapper that redirects **only** `-dest` into a disposable directory,
+and `LLBC_DIR` also outside the checked-in fixtures. All Charon steps succeeded;
+Zmij/memory views retained their expected Aeneas failures; doubly-linked emission
+succeeded. Fresh output did not overwrite handwritten adaptations. These
+results are emission checks, not unmodified-Lean compilation or correspondence
+proofs. Generic new contracts have exact standard-axiom guards; concrete native
+witnesses are deliberately a separate assurance layer.
 
 `ByteFill.lean` proves the raw byte loop over arbitrary writable bytes, including
 uninitialized bytes and symbolic pointer lanes, without reading an old typed

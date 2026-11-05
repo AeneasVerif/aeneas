@@ -3,6 +3,24 @@ import RawMemoryViews.ByteView
 import RawMemoryViews.Initialization
 import RawMemoryViews.Provenance
 import RawMemoryViews.NestedBox
+import RawMemoryViews.Execution
+import RawMemoryViews.Ownership
+
+/-- info: 'raw_memory_views.copy_after_deallocation.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_memory_views.copy_after_deallocation.spec
+
+/-- info: 'raw_memory_views.ownership.dispose.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_memory_views.ownership.dispose.spec
+
+/-- info: 'raw_memory_views.ownership.drop_owned_byte.spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_memory_views.ownership.drop_owned_byte.spec
+
+/-- info: 'Aeneas.Std.HeapWP.Runs.post' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Aeneas.Std.HeapWP.Runs.post
 
 /-- info: 'raw_memory_views.usizeRepr' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
