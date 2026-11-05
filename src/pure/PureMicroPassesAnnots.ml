@@ -3,6 +3,9 @@ open PureUtils
 open TranslateCore
 open PureMicroPassesBase
 
+(** A type parameter or a const generic parameter of an ADT, by position *)
+type adt_param = TyParam of int | CgParam of int
+
 (** Introduce type annotations.
 
     See [add_type_annotations].
@@ -58,9 +61,165 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     { e = Meta (TypeAnnot, e); ty = e.ty }
   in
 
+  (* Collect the type variables and the const generic variables which appear
+     in a list of types *)
+  let collect_vars (tys : ty list) : TypeVarId.Set.t * ConstGenericVarId.Set.t =
+    let ty_vars = ref TypeVarId.Set.empty in
+    let cg_vars = ref ConstGenericVarId.Set.empty in
+    let visitor =
+      object
+        inherit [_] iter_ty
+
+        method! visit_type_var_id _ id =
+          ty_vars := TypeVarId.Set.add id !ty_vars
+
+        method! visit_const_generic_var_id _ id =
+          cg_vars := ConstGenericVarId.Set.add id !cg_vars
+      end
+    in
+    List.iter (visitor#visit_ty ()) tys;
+    (!ty_vars, !cg_vars)
+  in
+  let hole_id = TypeVarId.of_int (-1) in
+  let is_known (ty : ty) : bool =
+    not (TypeVarId.Set.mem hole_id (fst (collect_vars [ ty ])))
+  in
+
+  (* Pair the elements of two lists, stopping at the end of the shorter one
+     (applications may be partial) *)
+  let rec zip_prefix l0 l1 =
+    match (l0, l1) with
+    | x0 :: l0, x1 :: l1 -> (x0, x1) :: zip_prefix l0 l1
+    | _ -> []
+  in
+
+  (* In Lean, the type parameters and the const generics of an ADT are
+     implicit parameters of its constructors. Given the fields of a value of
+     the ADT, as pairs of a field index and an expression, compute the
+     parameters which Lean can't infer from those fields. A parameter can be
+     inferred if it appears in the type of a field whose value has a type that
+     Lean can infer by itself. *)
+  let rec undetermined_params (adt_id : type_id)
+      (variant_id : VariantId.id option) (generics : generic_args)
+      (fields : (int * texpr) list) : adt_param list =
+    (* Instantiate the fields with markers to find out which parameters they
+       use *)
+    let ty_marker i = TypeVarId.of_int (-2 - i) in
+    let cg_marker i = ConstGenericVarId.of_int (-2 - i) in
+    let markers =
+      {
+        generics with
+        types =
+          List.mapi (fun i _ -> TVar (T.Free (ty_marker i))) generics.types;
+        const_generics =
+          List.mapi
+            (fun i _ -> CgVar (T.Free (cg_marker i)))
+            generics.const_generics;
+      }
+    in
+    let field_tys =
+      PureTypeCheck.get_adt_field_types span type_decls adt_id variant_id
+        markers
+    in
+    let ty_vars, cg_vars =
+      collect_vars
+        (List.filter_map
+           (fun (i, field) ->
+             if synthesizable field then List.nth_opt field_tys i else None)
+           fields)
+    in
+    let indices l = List.init (List.length l) (fun i -> i) in
+    List.filter_map
+      (fun i ->
+        if TypeVarId.Set.mem (ty_marker i) ty_vars then None
+        else Some (TyParam i))
+      (indices generics.types)
+    @ List.filter_map
+        (fun i ->
+          if ConstGenericVarId.Set.mem (cg_marker i) cg_vars then None
+          else Some (CgParam i))
+        (indices generics.const_generics)
+  (* The undetermined parameters of the application of a constructor, or
+     [None] for the kinds of ADTs we don't handle *)
+  and cons_undetermined_params (e : texpr) (adt_cons_id : adt_cons_id)
+      (args : texpr list) : adt_param list option =
+    match (adt_cons_id.adt_id, e.ty) with
+    | TAdtId _, TAdt (adt_id, generics) when adt_id = adt_cons_id.adt_id ->
+        Some
+          (undetermined_params adt_id adt_cons_id.variant_id generics
+             (List.mapi (fun i arg -> (i, arg)) args))
+    | _ -> None
+  (* The undetermined parameters of a structure built from its fields, or
+     [None] for the kinds of ADTs we don't handle *)
+  and struct_undetermined_params (e : texpr) (supd : struct_update) :
+      adt_param list option =
+    match (supd.init, e.ty) with
+    | None, TAdt ((TAdtId _ as adt_id), generics) ->
+        Some
+          (undetermined_params adt_id None generics
+             (List.map
+                (fun (fid, field) -> (FieldId.to_int fid, field))
+                supd.updates))
+    | _ -> None
+  (* Whether Lean can infer the type of an expression without any information
+     from the context. This is an approximation: we only return [false] for
+     the values of ADTs with parameters which are not determined by their
+     fields (in particular the ones we annotate), and for the tuples which
+     contain such values. *)
+  and synthesizable (e : texpr) : bool =
+    match e.e with
+    | Meta (TypeAnnot, _) -> true
+    | Meta (_, e') -> synthesizable e'
+    | StructUpdate supd -> begin
+        match struct_undetermined_params e supd with
+        | None -> true
+        | Some undetermined -> undetermined = []
+      end
+    | Qualif _ | App _ -> begin
+        let f, args = destruct_apps e in
+        match f.e with
+        | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } ->
+            List.for_all synthesizable args
+        | Qualif { id = AdtCons adt_cons_id; _ } -> begin
+            match cons_undetermined_params e adt_cons_id args with
+            | None -> true
+            | Some undetermined -> undetermined = []
+          end
+        | _ -> true
+      end
+    | _ -> true
+  in
+
+  (* Lean needs a type annotation on a value of an ADT when one of the
+     parameters of the ADT is neither determined by the fields nor known from
+     the context. This happens for instance with [None], or with [Ok x] when
+     the error type is unknown. *)
+  let needs_annot (ty : ty) (adt_id : type_id)
+      (undetermined : adt_param list option) : bool =
+    Config.backend () = Lean
+    &&
+    match undetermined with
+    | None -> false
+    | Some undetermined ->
+        let known_from_context (p : adt_param) : bool =
+          match ty with
+          | TAdt (adt_id', generics) when adt_id' = adt_id -> begin
+              match p with
+              | TyParam i -> is_known (List.nth generics.types i)
+              | CgParam i -> List.nth generics.const_generics i <> cg_hole
+            end
+          | _ -> false
+        in
+        List.exists (fun p -> not (known_from_context p)) undetermined
+  in
+
   let rec visit (ty : ty) (e : texpr) : texpr =
     [%ldebug "visit:\n- ty: " ^ ty_to_string ty ^ "\n- e: " ^ texpr_to_string e];
     match e.e with
+    | Qualif { id = AdtCons _; _ } ->
+        (* A constructor without arguments, like [None], may need a type
+           annotation *)
+        visit_App ty e
     | FVar _ | CVar _ | Const _ | EError _ | Qualif _ -> e
     | BVar _ -> [%internal_error] span
     | App _ -> visit_App ty e
@@ -102,6 +261,19 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
         begin
           match ty with
           | TAdt (adt_id, generics) ->
+              (* In Lean, if some parameters of a new structure are neither
+                 determined by its fields nor known from the context, we add a
+                 type annotation. Either way, the full type of the structure,
+                 and thus the type of its fields, is then known. *)
+              let undetermined = struct_undetermined_params e supd in
+              let annot = needs_annot ty adt_id undetermined in
+              let generics =
+                match e.ty with
+                | TAdt (_, generics')
+                  when Config.backend () = Lean && Option.is_some undetermined
+                  -> generics'
+                | _ -> generics
+              in
               (* The type is known: let's compute the type of the fields and recurse *)
               let field_tys =
                 (* There are two cases: the ADT may be an array (it happens when
@@ -133,7 +305,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                     | Some field_ty -> (fid, visit field_ty fe))
                   supd.updates
               in
-              { e with e = StructUpdate { supd with updates } }
+              let e = { e with e = StructUpdate { supd with updates } } in
+              if annot then mk_type_annot e else e
           | _ ->
               (* The type of the structure is unknown: we add a type annotation.
                  From there, the type of the field updates is known *)
@@ -262,23 +435,44 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           (* Replace all the unknown implicit type variables with holes.
              Note that we assume that all the trait refs are there, meaning
              we can use them to infer some implicit variables.
+             In Lean, an implicit type variable is also known if it appears
+             in the type of an argument whose type Lean can infer by itself.
           *)
           let known = sg.known_from_trait_refs in
+          let determined_tys, determined_cgs =
+            if Config.backend () = Lean then
+              collect_vars
+                (List.filter_map
+                   (fun (input_ty, arg) ->
+                     if synthesizable arg then Some input_ty else None)
+                   (zip_prefix sg.inputs args))
+            else (TypeVarId.Set.empty, ConstGenericVarId.Set.empty)
+          in
           let types =
             List.map
-              (fun (known, ty) ->
+              (fun ((known, ty), (param : type_param)) ->
                 match known with
                 | Known -> ty
-                | Unknown -> hole)
-              (List.combine known.known_types generics.types)
+                | Unknown ->
+                    if TypeVarId.Set.mem param.index determined_tys then ty
+                    else hole)
+              (List.combine
+                 (List.combine known.known_types generics.types)
+                 sg.generics.types)
           in
           let const_generics =
             List.map
-              (fun (known, cg) ->
+              (fun ((known, cg), (param : const_generic_param)) ->
                 match known with
                 | Known -> cg
-                | Unknown -> cg_hole)
-              (List.combine known.known_const_generics generics.const_generics)
+                | Unknown ->
+                    if ConstGenericVarId.Set.mem param.index determined_cgs then
+                      cg
+                    else cg_hole)
+              (List.combine
+                 (List.combine known.known_const_generics
+                    generics.const_generics)
+                 sg.generics.const_generics)
           in
           let generics = { qualif.generics with types; const_generics } in
           (* Compute the types of the arguments *)
@@ -310,8 +504,27 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
             end
           | Global _ -> (f.ty, mk_known (), false)
           | AdtCons adt_cons_id -> begin
+              (* In Lean, the full type of the constructor of a regular ADT
+                 is known: its type parameters are known from the context or
+                 determined by the arguments, otherwise we add a type
+                 annotation. The types of the fields are thus known. *)
+              let lean_field_tys =
+                match (adt_cons_id.adt_id, e.ty) with
+                | TAdtId _, TAdt (adt_id, generics)
+                  when Config.backend () = Lean && adt_id = adt_cons_id.adt_id
+                  ->
+                    Some
+                      (PureTypeCheck.get_adt_field_types span type_decls adt_id
+                         adt_cons_id.variant_id generics)
+                | _ -> None
+              in
               (* We extract the type of the arguments from the known type *)
               match ty with
+              | _ when Option.is_some lean_field_tys ->
+                  ( hole,
+                    Option.get lean_field_tys,
+                    needs_annot ty adt_cons_id.adt_id
+                      (cons_undetermined_params e adt_cons_id args) )
               | TAdt (TBuiltin (TArray | TSlice), _) ->
                   (hole, mk_holes (), false)
               | TAdt (adt_id, generics)
@@ -377,7 +590,13 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     let args =
       List.map (fun (ty, arg) -> visit ty arg) (List.combine args_tys args)
     in
-    let f = visit f_ty f in
+    (* The function itself is left unchanged if it is a qualified identifier:
+       this avoids looping on constructors, which [visit] sends back here *)
+    let f =
+      match f.e with
+      | Qualif _ -> f
+      | _ -> visit f_ty f
+    in
     let e = [%add_loc] mk_apps span f args in
     if need_annot then mk_type_annot e else e
   and visit_switch_body (ty : ty) (body : switch_body) : switch_body =
