@@ -188,8 +188,14 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       TTraitType (trait_ref, type_name)
   | TFnDef _ | TFnPtr _ ->
       [%craise_opt_span] span "Arrow types are not supported yet"
-  | TDynTrait _ ->
-      [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TDynTrait { binder } ->
+      (* Opaque function signatures can contain trait objects, for instance
+         `Error::new`'s `Into<Box<dyn Error>>` bound. Forward types already use
+         the same representation. *)
+      let params, _predicates =
+        translate_generic_params span binder.binder_params
+      in
+      TDynTrait { params }
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
   | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
@@ -202,28 +208,28 @@ and translate_strait_ref (span : Meta.span option) (tr : T.trait_ref) :
     trait_ref =
   translate_trait_ref span (translate_sty span) tr
 
-let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
+and translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
     : trait_decl_ref =
   translate_trait_decl_ref span (translate_sty span) tr
 
-let translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
+and translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
     trait_param =
   let { T.clause_id; span = _; origin = _; trait } = clause in
   let trait = translate_region_binder (translate_strait_decl_ref span) trait in
   { clause_id; trait_id = trait.trait_decl_id; generics = trait.decl_generics }
 
-let translate_strait_type_constraint (span : Meta.span option)
+and translate_strait_type_constraint (span : Meta.span option)
     (ttc : T.trait_type_constraint) : trait_type_constraint =
   let { T.trait_ref; type_id; ty } = ttc in
   let trait_ref = translate_strait_ref span trait_ref in
   let ty = translate_sty span ty in
   { trait_ref; type_id; ty }
 
-let translate_type_param (p : T.type_param) : type_param =
+and translate_type_param (p : T.type_param) : type_param =
   let { index; name; variance = _ } : T.type_param = p in
   { index; name }
 
-let translate_generic_params (span : Meta.span option)
+and translate_generic_params (span : Meta.span option)
     (generics : T.generic_params) : generic_params * predicates =
   let {
     T.regions = _;
@@ -539,7 +545,9 @@ and compute_back_ty_num_levels (span : Meta.span option)
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
-        [%craise_opt_span] span "Dynamic trait types are not supported yet"
+        (* The trait object is opaque here. Enclosing mutable borrows are
+           counted by the `TRef` case. *)
+        save_count outer_regions
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
     | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
@@ -674,7 +682,9 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
-        [%craise_opt_span] span "Dynamic trait types are not supported yet"
+        (* Preserve the object when an enclosing mutable borrow requires a
+           backward value. *)
+        stop outer_regions ty
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
     | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
