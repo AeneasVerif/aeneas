@@ -887,6 +887,49 @@ def core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator
         if b then ok (some x, ⟨it, false, p⟩)
         else ok (none, ⟨it, true, p⟩)
 
+/-- A `TakeWhile` step over any iterator. The predicate postcondition describes its
+    returned boolean and updated state. It is required only for items allowed by
+    `nextPost`; the inner iterator may be a slice iterator, a reversed iterator, or
+    another `Iterator` implementation. -/
+@[step]
+theorem core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next.spec
+    {I P Item : Type _}
+    (IterInst : core.iter.traits.iterator.Iterator I Item)
+    (PredInst : core.ops.function.FnMut P Item Bool)
+    (tw : core.iter.adapters.take_while.TakeWhile I P)
+    (nextPost : Option Item × I → Prop)
+    (predPost : Item → Bool × P → Prop)
+    (hnext : ¬tw.flag → IterInst.next tw.iter ⦃ nextPost ⦄)
+    (hpred : ¬tw.flag → ∀ x it, nextPost (some x, it) →
+      PredInst.call_mut tw.predicate x ⦃ predPost x ⦄) :
+    core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
+      IterInst PredInst tw
+    ⦃ r => if tw.flag then r = (none, tw)
+           else ∃ o it, nextPost (o, it) ∧
+             match o with
+             | none => r = (none, ⟨it, false, tw.predicate⟩)
+             | some x => ∃ b p, predPost x (b, p) ∧
+                 r = (if b then some x else none, ⟨it, !b, p⟩) ⦄ := by
+  by_cases hf : tw.flag
+  · simp [core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next,
+      hf, WP.spec_ok]
+  · simp only [core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next,
+      hf, Bool.false_eq_true, ↓reduceIte]
+    apply WP.spec_bind (hnext hf)
+    intro ⟨o, it⟩ ho
+    cases o with
+    | none =>
+      simp [uncurry, WP.spec_ok]
+      exact ⟨none, it, ho, rfl⟩
+    | some x =>
+      apply WP.spec_bind (hpred hf x it ho)
+      intro ⟨b, p⟩ hbp
+      cases b
+      · simp [uncurry, WP.spec_ok]
+        exact ⟨some x, it, ho, hbp, rfl⟩
+      · simp [uncurry, WP.spec_ok]
+        exact ⟨some x, it, ho, hbp, rfl, rfl⟩
+
 /-- `Iterator::next` on `Rev<I>`: delegates to the inner `next_back`. -/
 @[rust_fun
   "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::next"]

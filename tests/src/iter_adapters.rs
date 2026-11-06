@@ -392,11 +392,13 @@ pub fn test_take_while_empty() {
     assert!(it.next().is_none());
 }
 
+// TODO: Turn this into a `#[verify::test]` when `Option::copied` is modelled.
 pub fn take_while_lt_ten(v: &[u32]) -> Option<u32> {
     let mut it = v.iter().take_while(|x| **x < 10);
     it.next().copied()
 }
 
+// TODO: Turn this into a `#[verify::test]` when `Option::copied` is modelled.
 pub fn take_while_twice(v: &[u32]) -> (Option<u32>, Option<u32>) {
     let mut it = v.iter().take_while(|x| **x < 10);
     let a = it.next().copied();
