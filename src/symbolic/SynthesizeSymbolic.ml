@@ -32,7 +32,7 @@ let mk_opt_mplace (span : Meta.span) (p : place option)
 let mk_opt_place_from_op (span : Meta.span) (op : operand)
     (ctx : Contexts.eval_ctx) : mplace option =
   match op with
-  | Copy p | Move p -> Some (mk_mplace span p ctx)
+  | Copy (p, _) | Read p | Move p -> Some (mk_mplace span p ctx)
   | Constant _ -> None
 
 let mk_emeta (m : emeta) (e : expr) : expr = Meta (m, e)
