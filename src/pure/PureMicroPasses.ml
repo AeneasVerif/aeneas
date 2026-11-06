@@ -29,7 +29,7 @@ let passes :
       intro_target_feature_asserts );
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
-    (None, "unit_vars_to_unit", unit_vars_to_unit);
+    (None, "unit_vars_to_unit", unit_vars_to_unit ~visit_all_binders:false);
     (* Introduce [massert] - we do this early because it makes the AST nicer to
        read by removing indentation. *)
     (Some (fun _ -> !Config.intro_massert), "intro_massert", intro_massert);
@@ -62,7 +62,7 @@ let passes :
       "merge_let_app_then_decompose_tuple",
       merge_let_app_then_decompose_tuple );
     (* Filter the useless variables, assignments, function calls, etc. *)
-    (None, "filter_useless", filter_useless);
+    (None, "filter_useless", filter_useless ~visit_all_binders:false);
     (* Do the following kind of transformations (note that such expressions
        are frequently introduced when joining the contexts after a branching
        expression):
@@ -184,7 +184,7 @@ let passes :
         ~inline_pure:false ~inline_identity:true ~inline_loop_back_calls:false
     );
     (* Filter the useless variables again *)
-    (None, "filter_useless (pass 2)", filter_useless);
+    (None, "filter_useless (pass 2)", filter_useless ~visit_all_binders:false);
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
     ( None,
@@ -197,7 +197,10 @@ let passes :
     (* Recover the array and slice indexing primitives from the standard calls
        that Charon introduces when lowering MIR indexing. *)
     (None, "recover_builtin_index_functions", recover_builtin_index_functions);
-    (None, "filter_useless (after index recovery)", filter_useless);
+    (* Remove some useless binders, but not all of them. *)
+    ( None,
+      "filter_useless (after index recovery)",
+      filter_useless ~visit_all_binders:false );
     (* Index recovery can expose eta-reducible backward functions. *)
     (None, "simplify_lambdas (after index recovery)", simplify_lambdas);
     ( None,
@@ -232,6 +235,11 @@ let passes :
       lift_pure_function_calls );
     (* Update the matches over [isize] and [usize] *)
     (None, "update_match_over_isize_usize", update_match_over_isize_usize);
+    (* Convert the unused unit parameters in lambdas and function definitions to [_].
+      We do this now, because e.g. `apply_beta_reduction` or `loops_to_recursive have run.
+      These passes required that lambdas and function definitions did not have ignored 
+      binders. *)
+    (None, "unit_vars_to_unit (pass 2)", unit_vars_to_unit ~visit_all_binders:true);
   ]
 
 (** Apply all the micro-passes to a function.

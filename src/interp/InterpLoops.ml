@@ -206,6 +206,13 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
               "- ctx after simplify_ended_shared_loans:\n"
               ^ eval_ctx_to_string ctx];
 
+            (* Destructure the abstraction. This is usually done by [join_ctxs] and relied on
+               by the rest of the translation, but since we do not call [join_ctxs] we need to
+               do it ourselves. *)
+            let ctx = InterpJoin.destructure_new_abs span fixed_aids ctx in
+            [%ltrace
+              "- ctx after destructure_new_abs:\n" ^ eval_ctx_to_string ctx];
+
             (* Reduce the context - TODO: generalize the join so that we don't need to do this *)
             let ctx =
               InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true
