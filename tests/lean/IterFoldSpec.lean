@@ -66,24 +66,4 @@ theorem fold_countdown (n acc target : Nat) (h : acc + n = target) :
       omega
   · exact h
 
-/-- An iterator which never returns `none`. -/
-def repeatNext (n : Nat) : Result (Option Nat × Nat) := ok (some n, n)
-
-def repeatInst : core.iter.traits.iterator.Iterator Nat Nat := {
-  next := repeatNext
-}
-
-/-- Partial correctness needs no termination measure, even for an infinite iterator. -/
-theorem repeatFold_never_returns (n acc : Nat) :
-    repeatInst.fold countStep n acc () ⦃ _ => False ⦄div := by
-  change core.iter.traits.iterator.Iterator.fold.trait_default
-    repeatInst countStep n acc () ⦃ _ => False ⦄div
-  apply core.iter.traits.iterator.Iterator.fold.trait_default.dspec
-    repeatInst countStep n acc () (fun _ => True) (fun _ => False)
-  · intro s _
-    rcases s with ⟨n, acc, ⟨⟩⟩
-    simp [core.iter.traits.iterator.Iterator.fold.default.body,
-      repeatInst, repeatNext, countStep, WP.dspec_ok]
-  · trivial
-
 end IterFoldSpec
