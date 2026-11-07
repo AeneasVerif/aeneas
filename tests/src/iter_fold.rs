@@ -80,3 +80,20 @@ pub fn fold_stateful_closure() {
     });
     assert!(sum == 12);
 }
+
+#[verify::test]
+pub fn fold_rev_slice() {
+    let values = [1u32, 2, 3];
+    let value = values.iter().rev().fold(0u32, |acc, item| acc * 10 + *item);
+    assert!(value == 321);
+}
+
+#[verify::test]
+pub fn fold_take_while() {
+    let values = [1u32, 2, 0, 3];
+    let value = values
+        .iter()
+        .take_while(|item| **item != 0)
+        .fold(0u32, |acc, item| acc + *item);
+    assert!(value == 3);
+}
