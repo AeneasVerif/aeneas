@@ -198,6 +198,65 @@ theorem core.iter.traits.iterator.Iterator.fold.default.body.spec
     simp [WP.spec_ok]
     exact ⟨some x, self1, ho, hcf, rfl⟩
 
+/-- Partial correctness of one `fold` iteration. The calls to `next` and the
+    closure may themselves diverge. -/
+theorem core.iter.traits.iterator.Iterator.fold.default.body.dspec
+    {Self Item Acc F : Type _}
+    (next : Self → Result ((Option Item) × Self))
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (self : Self) (acc : Acc) (f : F)
+    (nextPost : Option Item × Self → Prop)
+    (callPost : Item → Acc × F → Prop)
+    (hnext : next self ⦃ nextPost ⦄div)
+    (hcall : ∀ x self1, nextPost (some x, self1) →
+      FnMutInst.call_mut f (acc, x) ⦃ callPost x ⦄div) :
+    core.iter.traits.iterator.Iterator.fold.default.body next FnMutInst (self, acc, f)
+      ⦃ r => ∃ o self1, nextPost (o, self1) ∧
+        match o with
+        | none => r = .done acc
+        | some x => ∃ acc1 f1, callPost x (acc1, f1) ∧
+            r = .cont (self1, acc1, f1) ⦄div := by
+  unfold core.iter.traits.iterator.Iterator.fold.default.body
+  apply WP.dspec_bind hnext
+  intro ⟨o, self1⟩ ho
+  cases o with
+  | none =>
+    simp [WP.dspec_ok]
+    exact ⟨none, ⟨self1, ho⟩, trivial⟩
+  | some x =>
+    apply WP.dspec_bind (hcall x self1 ho)
+    intro ⟨acc1, f1⟩ hcf
+    simp [WP.dspec_ok]
+    exact ⟨some x, self1, ho, hcf, rfl⟩
+
+/-- If the default `fold` returns, its accumulator satisfies `post`.
+    Divergence is allowed and no termination measure is needed. -/
+theorem core.iter.traits.iterator.Iterator.fold.trait_default.dspec
+    {Self Item Acc F : Type _}
+    (IterInst : core.iter.traits.iterator.Iterator Self Item)
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (self : Self) (init : Acc) (f : F)
+    (inv : Self × Acc × F → Prop)
+    (post : Acc → Prop)
+    (hBody : ∀ s, inv s →
+      core.iter.traits.iterator.Iterator.fold.default.body IterInst.next FnMutInst s
+        ⦃ r => match r with
+          | .done y => post y
+          | .cont s1 => inv s1 ⦄div)
+    (hInit : inv (self, init, f)) :
+    core.iter.traits.iterator.Iterator.fold.trait_default IterInst FnMutInst self init f
+      ⦃ post ⦄div := by
+  unfold core.iter.traits.iterator.Iterator.fold.trait_default
+    core.iter.traits.iterator.Iterator.fold.default.loop
+  apply loop.dspec inv post
+    (core.iter.traits.iterator.Iterator.fold.default.body IterInst.next FnMutInst)
+    (self, init, f)
+  · intro s hs
+    apply WP.dspec_mono (hBody s hs)
+    intro r hr
+    cases r <;> exact hr
+  · exact hInit
+
 /-- To prove a result for the default `fold`, give a loop invariant, a decreasing
     measure, and a `WP` spec for one iteration of the body. This works directly
     with `@[step]` specs for `next` and `FnMut.call_mut`. -/

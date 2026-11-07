@@ -749,6 +749,35 @@ namespace Aeneas.Std
 # Loops
 -/
 
+/-- Partial correctness for a loop: if it returns, its result satisfies `post`.
+    Divergence is allowed, so the invariant does not need a termination measure. -/
+theorem loop.dspec {α : Type u} {β : Type v}
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ⦄div)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄div := by
+  suffices ∀ x, inv x → loop body x ⦃ post ⦄div from this x hInv
+  apply loop.fixpoint_induct
+    (motive := fun loop' => ∀ x, inv x → loop' x ⦃ post ⦄div)
+  · apply Lean.Order.admissible_pi
+    intro x
+    apply Lean.Order.admissible_pi
+    intro _
+    apply WP.dspec_func_admissible
+  · intro loop' ih x hx
+    simp only
+    apply WP.dspec_bind (hBody x hx)
+    intro r hr
+    cases r with
+    | done y => simpa using hr
+    | cont x' => exact ih x' hr
+
 /-- General spec for loops with a termination measure.
 
 It is meant to derive lemmas to reason about loops: in most situations, one shouldn't

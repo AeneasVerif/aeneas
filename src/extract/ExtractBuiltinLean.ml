@@ -36,7 +36,7 @@ let lean_builtin_types =
     mk_type "core::iter::adapters::enumerate::Enumerate"
       "core.iter.adapters.enumerate.Enumerate"
       ~kind:(KStruct [ ("iter", Some "iter"); ("count", Some "count") ]);
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1100 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1159 *)
     mk_type "core::iter::adapters::map::Map" "core.iter.adapters.map.Map"
       ~kind:(KStruct [ ("iter", Some "iter"); ("f", Some "f") ]);
     (* file: "Aeneas/Std/Core/Iter.lean", line: 56 *)
@@ -617,272 +617,272 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 28 *)
     mk_fun "core::intrinsics::discriminant_value"
       "core.intrinsics.discriminant_value";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 641 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 700 *)
     mk_fun
       "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
        (usize, @Clause0_Item)>}::next"
       "core.iter.adapters.enumerate.IteratorEnumerate.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1034 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1093 *)
     mk_fun
       "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, \
        @Clause0_Clause0_Item>}::next"
       "core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 243 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 302 *)
     mk_fun
       "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, \
        @Clause0_Item>}::next"
       "core.iter.adapters.step_by.IteratorStepBy.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 674 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 733 *)
     mk_fun
       "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
        @Clause0_Item>}::next"
       "core.iter.adapters.take.IteratorTake.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 971 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1030 *)
     mk_fun
       "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, \
        @P>, @Clause0_Item>}::next"
       "core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 738 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 797 *)
     mk_fun
       "core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, \
        @B>, (@Clause0_Item, @Clause1_Item)>}::next"
       "core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 627 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 686 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i128>}::backward_checked"
       "core.iter.range.StepI128.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 631 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 690 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i128>}::backward_overflowing"
       "core.iter.range.StepI128.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 625 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 684 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i128>}::forward_checked"
       "core.iter.range.StepI128.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 629 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 688 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i128>}::forward_overflowing"
       "core.iter.range.StepI128.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 623 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 682 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i128>}::steps_between"
       "core.iter.range.StepI128.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 588 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 647 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i16>}::backward_checked"
       "core.iter.range.StepI16.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 592 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 651 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i16>}::backward_overflowing"
       "core.iter.range.StepI16.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 586 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 645 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i16>}::forward_checked"
       "core.iter.range.StepI16.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 590 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 649 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i16>}::forward_overflowing"
       "core.iter.range.StepI16.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 584 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 643 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i16>}::steps_between"
       "core.iter.range.StepI16.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 601 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 660 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"
       "core.iter.range.StepI32.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 605 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 664 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i32>}::backward_overflowing"
       "core.iter.range.StepI32.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 599 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 658 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i32>}::forward_checked"
       "core.iter.range.StepI32.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 603 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 662 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i32>}::forward_overflowing"
       "core.iter.range.StepI32.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 597 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 656 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i32>}::steps_between"
       "core.iter.range.StepI32.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 614 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 673 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i64>}::backward_checked"
       "core.iter.range.StepI64.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 618 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 677 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i64>}::backward_overflowing"
       "core.iter.range.StepI64.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 612 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 671 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i64>}::forward_checked"
       "core.iter.range.StepI64.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 616 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 675 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i64>}::forward_overflowing"
       "core.iter.range.StepI64.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 610 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 669 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i64>}::steps_between"
       "core.iter.range.StepI64.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 575 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 634 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i8>}::backward_checked"
       "core.iter.range.StepI8.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 579 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 638 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i8>}::backward_overflowing"
       "core.iter.range.StepI8.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 573 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 632 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i8>}::forward_checked"
       "core.iter.range.StepI8.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 577 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 636 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<i8>}::forward_overflowing"
       "core.iter.range.StepI8.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 571 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 630 *)
     mk_fun "core::iter::range::{core::iter::range::Step<i8>}::steps_between"
       "core.iter.range.StepI8.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 562 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 621 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<isize>}::backward_checked"
       "core.iter.range.StepIsize.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 566 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 625 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<isize>}::backward_overflowing"
       "core.iter.range.StepIsize.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 560 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 619 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<isize>}::forward_checked"
       "core.iter.range.StepIsize.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 564 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 623 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<isize>}::forward_overflowing"
       "core.iter.range.StepIsize.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 558 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 617 *)
     mk_fun "core::iter::range::{core::iter::range::Step<isize>}::steps_between"
       "core.iter.range.StepIsize.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 549 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 608 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u128>}::backward_checked"
       "core.iter.range.StepU128.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 553 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 612 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u128>}::backward_overflowing"
       "core.iter.range.StepU128.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 547 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 606 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u128>}::forward_checked"
       "core.iter.range.StepU128.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 551 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 610 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u128>}::forward_overflowing"
       "core.iter.range.StepU128.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 545 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 604 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u128>}::steps_between"
       "core.iter.range.StepU128.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 510 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 569 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u16>}::backward_checked"
       "core.iter.range.StepU16.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 514 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 573 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u16>}::backward_overflowing"
       "core.iter.range.StepU16.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 508 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 567 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u16>}::forward_checked"
       "core.iter.range.StepU16.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 512 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 571 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u16>}::forward_overflowing"
       "core.iter.range.StepU16.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 506 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 565 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u16>}::steps_between"
       "core.iter.range.StepU16.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 523 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 582 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u32>}::backward_checked"
       "core.iter.range.StepU32.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 527 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 586 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u32>}::backward_overflowing"
       "core.iter.range.StepU32.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 521 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 580 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u32>}::forward_checked"
       "core.iter.range.StepU32.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 525 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 584 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u32>}::forward_overflowing"
       "core.iter.range.StepU32.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 519 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 578 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u32>}::steps_between"
       "core.iter.range.StepU32.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 536 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 595 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u64>}::backward_checked"
       "core.iter.range.StepU64.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 540 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 599 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u64>}::backward_overflowing"
       "core.iter.range.StepU64.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 534 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 593 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u64>}::forward_checked"
       "core.iter.range.StepU64.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 538 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 597 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u64>}::forward_overflowing"
       "core.iter.range.StepU64.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 532 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 591 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u64>}::steps_between"
       "core.iter.range.StepU64.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 497 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 556 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u8>}::backward_checked"
       "core.iter.range.StepU8.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 501 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 560 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u8>}::backward_overflowing"
       "core.iter.range.StepU8.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 495 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 554 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u8>}::forward_checked"
       "core.iter.range.StepU8.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 499 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 558 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<u8>}::forward_overflowing"
       "core.iter.range.StepU8.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 493 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 552 *)
     mk_fun "core::iter::range::{core::iter::range::Step<u8>}::steps_between"
       "core.iter.range.StepU8.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 484 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 543 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<usize>}::backward_checked"
       "core.iter.range.StepUsize.backward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 488 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 547 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing"
       "core.iter.range.StepUsize.backward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 482 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 541 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<usize>}::forward_checked"
       "core.iter.range.StepUsize.forward_checked";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 486 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 545 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing"
       "core.iter.range.StepUsize.forward_overflowing";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 480 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 539 *)
     mk_fun "core::iter::range::{core::iter::range::Step<usize>}::steps_between"
       "core.iter.range.StepUsize.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1047 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1106 *)
     mk_fun
       "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, \
        @A>}::next_back"
       "core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1081 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1140 *)
     mk_fun
       "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, \
        @A>}::next_back"
       "core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_back";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 702 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 761 *)
     mk_fun
       "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, \
        @A>}::next"
       "core.iter.range.IteratorRange.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 785 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 844 *)
     mk_fun
       "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, \
        @A>}::next"
       "core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 293 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 352 *)
     mk_fun
       "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, \
        @Item, @I>}::into_iter"
       "core.iter.traits.collect.IntoIterator.Blanket.into_iter";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 310 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 369 *)
     mk_fun "core::iter::traits::iterator::Iterator::collect"
       "core.iter.traits.iterator.Iterator.collect.default";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 146 *)
@@ -891,7 +891,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 162 *)
     mk_fun "core::iter::traits::iterator::Iterator::fold"
       "core.iter.traits.iterator.Iterator.fold.trait_default";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 831 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 890 *)
     mk_fun "core::iter::traits::iterator::Iterator::rev"
       "core.iter.traits.iterator.Iterator.rev.trait_default";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 138 *)
@@ -900,10 +900,10 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 154 *)
     mk_fun "core::iter::traits::iterator::Iterator::take"
       "core.iter.traits.iterator.Iterator.take.trait_default";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 845 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 904 *)
     mk_fun "core::iter::traits::iterator::Iterator::take_while"
       "core.iter.traits.iterator.Iterator.take_while.trait_default";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 817 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 876 *)
     mk_fun "core::iter::traits::iterator::Iterator::zip"
       "core.iter.traits.iterator.Iterator.zip.trait_default";
     (* file: "Aeneas/Std/Core/Core.lean", line: 56 *)
@@ -1065,11 +1065,11 @@ let lean_builtin_funs =
       "SharedUsize.Insts.CoreOpsArithAddUsizeUsize.add";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 39 *)
     mk_fun "core::ops::drop::Drop::drop" "core.ops.drop.Drop.drop.default";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 760 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 819 *)
     mk_fun
       "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"
       "core.ops.range.RangeInclusive.is_empty";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 755 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 814 *)
     mk_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"
       "core.ops.range.RangeInclusive.new";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 14 *)
@@ -1456,31 +1456,31 @@ let lean_builtin_trait_decls =
           ("forward_checked", "forward_checked");
           ("backward_checked", "backward_checked");
         ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 276 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 335 *)
     mk_trait_decl "core::iter::traits::accum::Product"
       "core.iter.traits.accum.Product"
       ~methods:[ ("product", "product") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 272 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 331 *)
     mk_trait_decl "core::iter::traits::accum::Sum" "core.iter.traits.accum.Sum"
       ~methods:[ ("sum", "sum") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 319 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 378 *)
     mk_trait_decl "core::iter::traits::collect::Extend"
       "core.iter.traits.collect.Extend"
       ~methods:[ ("extend", "extend") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 287 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 346 *)
     mk_trait_decl "core::iter::traits::collect::FromIterator"
       "core.iter.traits.collect.FromIterator"
       ~methods:[ ("from_iter", "from_iter") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 280 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 339 *)
     mk_trait_decl "core::iter::traits::collect::IntoIterator"
       "core.iter.traits.collect.IntoIterator" ~parent_clauses:[ "iteratorInst" ]
       ~methods:[ ("into_iter", "into_iter") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 324 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 383 *)
     mk_trait_decl "core::iter::traits::double_ended::DoubleEndedIterator"
       "core.iter.traits.double_ended.DoubleEndedIterator"
       ~parent_clauses:[ "iteratorInst" ]
       ~methods:[ ("next_back", "next_back") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 330 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 389 *)
     mk_trait_decl "core::iter::traits::exact_size::ExactSizeIterator"
       "core.iter.traits.exact_size.ExactSizeIterator"
       ~parent_clauses:[ "iteratorInst" ];
@@ -1682,29 +1682,29 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::fmt::Debug<u8>" "core.fmt.DebugU8";
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 75 *)
     mk_trait_impl "core::fmt::Debug<usize>" "core.fmt.DebugUsize";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 633 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 692 *)
     mk_trait_impl "core::iter::range::Step<i128>" "core.iter.range.StepI128";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 594 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 653 *)
     mk_trait_impl "core::iter::range::Step<i16>" "core.iter.range.StepI16";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 607 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 666 *)
     mk_trait_impl "core::iter::range::Step<i32>" "core.iter.range.StepI32";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 620 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 679 *)
     mk_trait_impl "core::iter::range::Step<i64>" "core.iter.range.StepI64";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 581 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 640 *)
     mk_trait_impl "core::iter::range::Step<i8>" "core.iter.range.StepI8";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 568 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 627 *)
     mk_trait_impl "core::iter::range::Step<isize>" "core.iter.range.StepIsize";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 555 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 614 *)
     mk_trait_impl "core::iter::range::Step<u128>" "core.iter.range.StepU128";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 516 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 575 *)
     mk_trait_impl "core::iter::range::Step<u16>" "core.iter.range.StepU16";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 529 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 588 *)
     mk_trait_impl "core::iter::range::Step<u32>" "core.iter.range.StepU32";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 542 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 601 *)
     mk_trait_impl "core::iter::range::Step<u64>" "core.iter.range.StepU64";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 503 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 562 *)
     mk_trait_impl "core::iter::range::Step<u8>" "core.iter.range.StepU8";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 490 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 549 *)
     mk_trait_impl "core::iter::range::Step<usize>" "core.iter.range.StepUsize";
     (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 75 *)
     mk_trait_impl
@@ -1720,7 +1720,7 @@ let lean_builtin_trait_impls =
       "core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, \
        core::slice::iter::Iter<'a, @T>>"
       "SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 301 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 360 *)
     mk_trait_impl "core::iter::traits::collect::IntoIterator<@I, @Item, @I>"
       "core.iter.traits.collect.IntoIterator.Blanket";
     (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 42 *)
@@ -1740,22 +1740,22 @@ let lean_builtin_trait_impls =
        @A>, @T>"
       "core.iter.traits.iterator.IteratorVecIntoIter"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 655 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 714 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
        (usize, @Clause0_Item)>"
       "core.iter.traits.iterator.IteratorEnumerate";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 258 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 317 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, \
        @Clause0_Item>"
       "core.iter.traits.iterator.IteratorStepBy";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 688 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 747 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
        @Clause0_Item>"
       "core.iter.traits.iterator.IteratorTake";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 717 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 776 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"
       "core.iter.traits.iterator.IteratorRange";
