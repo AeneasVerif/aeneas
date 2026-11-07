@@ -91,7 +91,7 @@ one, and `i` is left untouched, as `ptr` is. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>}::next_back"]
 def core.slice.iter.IteratorSliceIter.next_back
-  {T : Type} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
+  {T : Type _} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
   if h : it.i < it.slice.val.length then
     let n := it.slice.val.length - 1
     let x := it.slice[n]'(by scalar_tac)
@@ -101,7 +101,7 @@ def core.slice.iter.IteratorSliceIter.next_back
 
 @[step]
 theorem core.slice.iter.IteratorSliceIter.next_back.spec
-    {T : Type} (it : core.slice.iter.Iter T) (h : it.i < it.slice.val.length) :
+    {T : Type _} (it : core.slice.iter.Iter T) (h : it.i < it.slice.val.length) :
     core.slice.iter.IteratorSliceIter.next_back it
     ⦃ r => r.1 = it.slice.val.getLast? ∧
            r.2.slice.val = it.slice.val.take (it.slice.val.length - 1) ∧
