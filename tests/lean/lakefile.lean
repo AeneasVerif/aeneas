@@ -9,6 +9,7 @@ package «tests» {}
 
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
+@[default_target] lean_lib ArrayConstructors
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib ArraySliceIndex
@@ -19,6 +20,7 @@ package «tests» {}
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib BoolCmp
+@[default_target] lean_lib Borrow
 @[default_target] lean_lib Bst
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib BuiltinAuto
@@ -103,6 +105,7 @@ package «tests» {}
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
 @[default_target] lean_lib RenameAttribute
+@[default_target] lean_lib Results
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib Slices
@@ -114,5 +117,7 @@ package «tests» {}
 @[default_target] lean_lib TargetFeatures
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
+@[default_target] lean_lib UintDivOps
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecIter
+@[default_target] lean_lib VecMethods

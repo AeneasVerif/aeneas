@@ -18,20 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace issue_804_closure_return_ref
-
-/-- [core::array::from_fn]:
-    Source: '/rustc/library/core/src/array/mod.rs', lines 109:0-111:52
-    Name pattern: [core::array::from_fn]
-    Visibility: public -/
-@[rust_fun "core::array::from_fn"]
-axiom core.array.from_fn
-  {T : Type _} {F : Type _} (N : Std.Usize) (opsfunctionFnMutFTupleUsizeTInst :
-  core.ops.function.FnMut F Std.Usize T) :
-  F → Result (Array T N)
 
 /-- [issue_804_closure_return_ref::each_ref::{closure}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
