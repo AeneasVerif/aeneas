@@ -1030,32 +1030,6 @@ theorem core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIter
       · simp [uncurry, WP.spec_ok]
         exact ⟨some x, it, ho, hbp, rfl, rfl⟩
 
-/-- Behavioural model of `TakeWhile::fold`. Rust implements it through `try_fold`;
-    the observable accumulator follows the items returned by `TakeWhile::next`. -/
-@[rust_fun
-  "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, @P>, @Clause0_Item>}::fold"]
-def core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold
-  {I P Acc F Item : Type _}
-  (IterInst : core.iter.traits.iterator.Iterator I Item)
-  (PredInst : core.ops.function.FnMut P Item Bool)
-  (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
-  (self : core.iter.adapters.take_while.TakeWhile I P) (init : Acc) (f : F) : Result Acc :=
-  core.iter.traits.iterator.Iterator.fold.default.loop
-    (core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
-      IterInst PredInst) FnMutInst self init f
-
-@[reducible, rust_trait_impl
-  "core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, @P>, @Clause0_Item>"]
-impl_def core.iter.traits.iterator.IteratorTakeWhile {I P Item : Type _}
-    (IterInst : core.iter.traits.iterator.Iterator I Item)
-    (PredInst : core.ops.function.FnMut P Item Bool) :
-    core.iter.traits.iterator.Iterator (core.iter.adapters.take_while.TakeWhile I P) Item := {
-  next := core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
-    IterInst PredInst
-  fold := core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold
-    IterInst PredInst
-}
-
 /-- `Iterator::next` on `Rev<I>`: delegates to the inner `next_back`. -/
 @[rust_fun
   "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::next"]
@@ -1067,28 +1041,6 @@ def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
   fun self => do
     let (o, it) ← DEInst.next_back self.iter
     ok (o, ⟨it⟩)
-
-/-- Behavioural model of `Rev::fold`. Rust delegates to the inner `rfold`,
-    which consumes the same sequence as repeated `Rev::next` calls. -/
-@[rust_fun
-  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::fold"]
-def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold
-  {I Acc F Item : Type _}
-  (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
-  (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
-  (self : core.iter.adapters.rev.Rev I) (init : Acc) (f : F) : Result Acc :=
-  core.iter.traits.iterator.Iterator.fold.default.loop
-    (core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next DEInst)
-    FnMutInst self init f
-
-@[reducible, rust_trait_impl
-  "core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>"]
-impl_def core.iter.traits.iterator.IteratorRev {I Item : Type _}
-    (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item) :
-    core.iter.traits.iterator.Iterator (core.iter.adapters.rev.Rev I) Item := {
-  next := core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next DEInst
-  fold := core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold DEInst
-}
 
 /-- `Range<A>::next_back` (`DoubleEndedIterator`): if `start < end`, decrement
     `end` by one and yield the new `end`; otherwise `none`. -/
@@ -1172,39 +1124,6 @@ theorem core.iter.traits.iterator.Iterator.fold.default.loop.spec_decr_nat
   apply Aeneas.Std.loop.spec_decr_nat measure inv post
     (core.iter.traits.iterator.Iterator.fold.default.body next FnMutInst)
     (self, init, f)
-  · intro s hs
-    apply WP.spec_mono (hBody s hs)
-    intro r hr
-    cases r <;> exact hr
-  · exact hInit
-
-/-- The `TakeWhile.fold` loop rule combines with `TakeWhile.next.spec` to
-    establish the predicate state and stopping condition at each step. -/
-theorem core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold.spec_decr_nat
-    {I P Acc F Item : Type _}
-    (IterInst : core.iter.traits.iterator.Iterator I Item)
-    (PredInst : core.ops.function.FnMut P Item Bool)
-    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
-    (self : core.iter.adapters.take_while.TakeWhile I P) (init : Acc) (f : F)
-    (measure : core.iter.adapters.take_while.TakeWhile I P × Acc × F → Nat)
-    (inv : core.iter.adapters.take_while.TakeWhile I P × Acc × F → Prop)
-    (post : Acc → Prop)
-    (hBody : ∀ s, inv s →
-      core.iter.traits.iterator.Iterator.fold.default.body
-        (core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
-          IterInst PredInst) FnMutInst s
-        ⦃ r => match r with
-          | .done y => post y
-          | .cont s1 => inv s1 ∧ measure s1 < measure s ⦄)
-    (hInit : inv (self, init, f)) :
-    core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold
-      IterInst PredInst FnMutInst self init f ⦃ post ⦄ := by
-  unfold core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold
-    core.iter.traits.iterator.Iterator.fold.default.loop
-  apply Aeneas.Std.loop.spec_decr_nat measure inv post
-    (core.iter.traits.iterator.Iterator.fold.default.body
-      (core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
-        IterInst PredInst) FnMutInst) (self, init, f)
   · intro s hs
     apply WP.spec_mono (hBody s hs)
     intro r hr

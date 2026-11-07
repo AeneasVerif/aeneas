@@ -36,7 +36,7 @@ let lean_builtin_types =
     mk_type "core::iter::adapters::enumerate::Enumerate"
       "core.iter.adapters.enumerate.Enumerate"
       ~kind:(KStruct [ ("iter", Some "iter"); ("count", Some "count") ]);
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1148 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1100 *)
     mk_type "core::iter::adapters::map::Map" "core.iter.adapters.map.Map"
       ~kind:(KStruct [ ("iter", Some "iter"); ("f", Some "f") ]);
     (* file: "Aeneas/Std/Core/Iter.lean", line: 56 *)
@@ -622,12 +622,7 @@ let lean_builtin_funs =
       "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
        (usize, @Clause0_Item)>}::next"
       "core.iter.adapters.enumerate.IteratorEnumerate.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1073 *)
-    mk_fun
-      "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, \
-       @Clause0_Clause0_Item>}::fold"
-      "core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1060 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1034 *)
     mk_fun
       "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, \
        @Clause0_Clause0_Item>}::next"
@@ -642,11 +637,6 @@ let lean_builtin_funs =
       "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
        @Clause0_Item>}::next"
       "core.iter.adapters.take.IteratorTake.next";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1035 *)
-    mk_fun
-      "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, \
-       @P>, @Clause0_Item>}::fold"
-      "core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 971 *)
     mk_fun
       "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, \
@@ -867,12 +857,12 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 480 *)
     mk_fun "core::iter::range::{core::iter::range::Step<usize>}::steps_between"
       "core.iter.range.StepUsize.steps_between";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1095 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1047 *)
     mk_fun
       "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, \
        @A>}::next_back"
       "core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1129 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 1081 *)
     mk_fun
       "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, \
        @A>}::next_back"
@@ -1760,11 +1750,6 @@ let lean_builtin_trait_impls =
       "core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
        (usize, @Clause0_Item)>"
       "core.iter.traits.iterator.IteratorEnumerate";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1084 *)
-    mk_trait_impl
-      "core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, \
-       @Clause0_Clause0_Item>"
-      "core.iter.traits.iterator.IteratorRev";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 258 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, \
@@ -1775,11 +1760,6 @@ let lean_builtin_trait_impls =
       "core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
        @Clause0_Item>"
       "core.iter.traits.iterator.IteratorTake";
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 1047 *)
-    mk_trait_impl
-      "core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, \
-       @P>, @Clause0_Item>"
-      "core.iter.traits.iterator.IteratorTakeWhile";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 717 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"
