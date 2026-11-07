@@ -326,6 +326,18 @@ structure core.iter.traits.collect.Extend (Self : Type _) (A : Type _) where
 structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
   next_back : Self → Result ((Option Item) × Self)
+  rfold : ∀ {Acc F : Type}, core.ops.function.FnMut F (Acc × Item) Acc →
+    Self → Acc → F → Result Acc :=
+      fun FnMutInst self acc f =>
+        core.iter.traits.iterator.Iterator.fold.default.loop next_back FnMutInst self acc f
+
+@[trait_default, rust_fun "core::iter::traits::double_ended::DoubleEndedIterator::rfold"]
+def core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default
+  {Self Item Acc F : Type _}
+  (DEInst : core.iter.traits.double_ended.DoubleEndedIterator Self Item)
+  (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+  (self : Self) (init : Acc) (f : F) : Result Acc :=
+  core.iter.traits.iterator.Iterator.fold.default.loop DEInst.next_back FnMutInst self init f
 
 @[rust_trait "core::iter::traits::exact_size::ExactSizeIterator"
   (parentClauses := ["iteratorInst"])]
@@ -1042,6 +1054,25 @@ def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
     let (o, it) ← DEInst.next_back self.iter
     ok (o, ⟨it⟩)
 
+/-- `Rev::fold` delegates to the inner iterator's `rfold`, including any override. -/
+@[rust_fun
+  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::fold"]
+def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold
+  {I Acc F Item : Type _}
+  (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
+  (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+  (self : core.iter.adapters.rev.Rev I) (init : Acc) (f : F) : Result Acc :=
+  DEInst.rfold FnMutInst self.iter init f
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>"]
+impl_def core.iter.traits.iterator.IteratorRev {I Item : Type _}
+    (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item) :
+    core.iter.traits.iterator.Iterator (core.iter.adapters.rev.Rev I) Item := {
+  next := core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next DEInst
+  fold := core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold DEInst
+}
+
 /-- `Range<A>::next_back` (`DoubleEndedIterator`): if `start < end`, decrement
     `end` by one and yield the new `end`; otherwise `none`. -/
 @[rust_fun
@@ -1129,3 +1160,25 @@ theorem core.iter.traits.iterator.Iterator.fold.default.loop.spec_decr_nat
     intro r hr
     cases r <;> exact hr
   · exact hInit
+
+/-- Prove a result for the default `rfold` using a decreasing measure and a
+    specification for each `next_back` and closure call. -/
+theorem core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default.spec_decr_nat
+    {Self Item Acc F : Type _}
+    (DEInst : core.iter.traits.double_ended.DoubleEndedIterator Self Item)
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (self : Self) (init : Acc) (f : F)
+    (measure : Self × Acc × F → Nat)
+    (inv : Self × Acc × F → Prop)
+    (post : Acc → Prop)
+    (hBody : ∀ s, inv s →
+      core.iter.traits.iterator.Iterator.fold.default.body DEInst.next_back FnMutInst s
+        ⦃ r => match r with
+          | .done y => post y
+          | .cont s1 => inv s1 ∧ measure s1 < measure s ⦄)
+    (hInit : inv (self, init, f)) :
+    core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default
+      DEInst FnMutInst self init f ⦃ post ⦄ := by
+  unfold core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default
+  exact core.iter.traits.iterator.Iterator.fold.default.loop.spec_decr_nat
+    DEInst.next_back FnMutInst self init f measure inv post hBody hInit

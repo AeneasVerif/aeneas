@@ -77,6 +77,7 @@ package «tests» {}
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib IterFold
 @[default_target] lean_lib IterFoldSpec
+@[default_target] lean_lib IterRfold
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
 @[default_target] lean_lib LeanKeywords
