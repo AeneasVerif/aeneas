@@ -97,3 +97,21 @@ pub fn fold_take_while() {
         .fold(0u32, |acc, item| acc + *item);
     assert!(value == 3);
 }
+
+#[verify::test]
+pub fn fold_slice() {
+    let values = [1u32, 2, 3];
+    let value = values.iter().fold(0u32, |acc, item| acc * 10 + *item);
+    assert!(value == 123);
+}
+
+#[verify::test]
+pub fn fold_rev_take_while() {
+    let values = [4u32, 2, 0, 3];
+    let value = values
+        .iter()
+        .rev()
+        .take_while(|item| **item != 0)
+        .fold(0u32, |acc, item| acc * 10 + *item);
+    assert!(value == 3);
+}
