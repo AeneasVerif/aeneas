@@ -80,7 +80,7 @@ def OneShot.Insts.CoreIterTraitsIteratorIteratorU32.next
 /-- Trait implementation: [iter_fold::{impl core::iter::traits::iterator::Iterator<u32> for iter_fold::OneShot}]
     Source: 'tests/src/iter_fold.rs', lines 28:0-46:1 -/
 @[reducible]
-def OneShot.Insts.CoreIterTraitsIteratorIteratorU32 :
+impl_def OneShot.Insts.CoreIterTraitsIteratorIteratorU32 :
   core.iter.traits.iterator.Iterator OneShot Std.U32 := {
   next := OneShot.Insts.CoreIterTraitsIteratorIteratorU32.next
   fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPU32PInst :
@@ -422,5 +422,124 @@ def fold_slice : Result Unit := do
 
 /- Unit test for [iter_fold::fold_slice] -/
 #guard (fold_slice).reducesTo ()
+
+/-- [iter_fold::fold_take_while::{closure#1}]
+    Source: 'tests/src/iter_fold.rs', lines 97:20-97:43 -/
+@[reducible]
+def fold_take_while.closure_1 := Unit
+
+/-- [iter_fold::fold_take_while::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_fold::fold_take_while::{closure#1}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_fold.rs', lines 97:20-97:43 -/
+def
+  fold_take_while.closure_1.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+  (c : fold_take_while.closure_1) (tupled_args : (Std.U32 × Std.U32)) :
+  Result (Std.U32 × fold_take_while.closure_1)
+  := do
+  let (acc, item) := tupled_args
+  let i ← acc + item
+  ok (i, ())
+
+/-- [iter_fold::fold_take_while::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_fold::fold_take_while::{closure#1}<'_0>}::call_once]:
+    Source: 'tests/src/iter_fold.rs', lines 97:20-97:43 -/
+def
+  fold_take_while.closure_1.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
+  (c : fold_take_while.closure_1) (p : (Std.U32 × Std.U32)) :
+  Result Std.U32
+  := do
+  let (i, _) ←
+    fold_take_while.closure_1.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+      () p
+  ok i
+
+/-- Trait implementation: [iter_fold::fold_take_while::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_fold::fold_take_while::{closure#1}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 97:20-97:43 -/
+@[reducible]
+def fold_take_while.closure_1.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
+  core.ops.function.FnOnce fold_take_while.closure_1 (Std.U32 × Std.U32)
+  Std.U32 := {
+  call_once :=
+    fold_take_while.closure_1.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
+}
+
+/-- Trait implementation: [iter_fold::fold_take_while::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_fold::fold_take_while::{closure#1}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 97:20-97:43 -/
+@[reducible]
+def fold_take_while.closure_1.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
+  core.ops.function.FnMut fold_take_while.closure_1 (Std.U32 × Std.U32)
+  Std.U32 := {
+  FnOnceInst :=
+    fold_take_while.closure_1.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32
+  call_mut :=
+    fold_take_while.closure_1.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+}
+
+/-- [iter_fold::fold_take_while::{closure}]
+    Source: 'tests/src/iter_fold.rs', lines 96:20-96:38 -/
+@[reducible]
+def fold_take_while.closure := Unit
+
+/-- [iter_fold::fold_take_while::{impl core::ops::function::FnMut<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_fold.rs', lines 96:20-96:38 -/
+def
+  fold_take_while.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool.call_mut
+  (c : fold_take_while.closure) (tupled_args : Std.U32) :
+  Result (Bool × fold_take_while.closure)
+  := do
+  ok (tupled_args != 0#u32, ())
+
+/-- [iter_fold::fold_take_while::{impl core::ops::function::FnOnce<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_fold.rs', lines 96:20-96:38 -/
+def
+  fold_take_while.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool.call_once
+  (c : fold_take_while.closure) (i : Std.U32) : Result Bool := do
+  let (b, _) ←
+    fold_take_while.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool.call_mut
+      () i
+  ok b
+
+/-- Trait implementation: [iter_fold::fold_take_while::{impl core::ops::function::FnOnce<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while::{closure}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 96:20-96:38 -/
+@[reducible]
+def
+  fold_take_while.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool
+  : core.ops.function.FnOnce fold_take_while.closure Std.U32 Bool := {
+  call_once :=
+    fold_take_while.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool.call_once
+}
+
+/-- Trait implementation: [iter_fold::fold_take_while::{impl core::ops::function::FnMut<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while::{closure}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 96:20-96:38 -/
+@[reducible]
+def
+  fold_take_while.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool
+  : core.ops.function.FnMut fold_take_while.closure Std.U32 Bool := {
+  FnOnceInst :=
+    fold_take_while.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool
+  call_mut :=
+    fold_take_while.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool.call_mut
+}
+
+/-- [iter_fold::fold_take_while]:
+    Source: 'tests/src/iter_fold.rs', lines 92:0-99:1
+    Visibility: public -/
+def fold_take_while : Result Unit := do
+  let s ←
+    lift (Array.to_slice (Array.make 4#usize [ 1#u32, 2#u32, 0#u32, 3#u32 ]))
+  let i ← core.slice.Slice.iter s
+  let tw ←
+    core.iter.traits.iterator.Iterator.take_while.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      fold_take_while.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool
+      i ()
+  let value ←
+    core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      fold_take_while.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool
+      fold_take_while.closure_1.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32
+      tw 0#u32 ()
+  massert (value = 3#u32)
+
+/- Unit test for [iter_fold::fold_take_while] -/
+#guard (fold_take_while).reducesTo ()
 
 end iter_fold
