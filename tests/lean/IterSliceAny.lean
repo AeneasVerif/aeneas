@@ -151,4 +151,73 @@ def any_exhausts_without_match : Result Unit := do
 /- Unit test for [iter_slice_any::any_exhausts_without_match] -/
 #guard (any_exhausts_without_match).reducesTo ()
 
+/-- [iter_slice_any::any_threads_owned_predicate_state::{closure}]
+    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+@[reducible]
+def any_threads_owned_predicate_state.closure := Std.U8
+
+/-- [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+def
+  any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+  (c : any_threads_owned_predicate_state.closure) (tupled_args : Std.U8) :
+  Result (Bool × any_threads_owned_predicate_state.closure)
+  := do
+  let i ← c + 1#u8
+  ok (i = 2#u8, i)
+
+/-- [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+def
+  any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
+  (c : any_threads_owned_predicate_state.closure) (i : Std.U8) :
+  Result Bool
+  := do
+  let (b, _) ←
+    any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+      c i
+  ok b
+
+/-- Trait implementation: [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}]
+    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+@[reducible]
+def
+  any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
+  : core.ops.function.FnOnce any_threads_owned_predicate_state.closure Std.U8
+  Bool := {
+  call_once :=
+    any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
+}
+
+/-- Trait implementation: [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}]
+    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+@[reducible]
+def
+  any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
+  : core.ops.function.FnMut any_threads_owned_predicate_state.closure Std.U8
+  Bool := {
+  FnOnceInst :=
+    any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
+  call_mut :=
+    any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+}
+
+/-- [iter_slice_any::any_threads_owned_predicate_state]:
+    Source: 'tests/src/iter_slice_any.rs', lines 23:0-32:1
+    Visibility: public -/
+def any_threads_owned_predicate_state : Result Unit := do
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 10#u8, 20#u8, 30#u8 ]))
+  let iter ← core.slice.Slice.iter s
+  let (b, iter1) ←
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+      any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
+      iter 0#u8
+  massert b
+  let (o, _) ← core.slice.iter.IteratorSliceIter.next iter1
+  let i ← core.option.Option.unwrap o
+  massert (i = 30#u8)
+
+/- Unit test for [iter_slice_any::any_threads_owned_predicate_state] -/
+#guard (any_threads_owned_predicate_state).reducesTo ()
+
 end iter_slice_any
