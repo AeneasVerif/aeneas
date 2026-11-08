@@ -116,6 +116,16 @@ def core.iter.traits.iterator.Iterator.fold.default.loop
   Aeneas.Std.loop (core.iter.traits.iterator.Iterator.fold.default.body next FnMutInst)
     (self, acc, f)
 
+/-- The closure passed to `fold` by Rust's default `Iterator::count` implementation.
+    Aeneas models the `usize` addition with its checked scalar operation. -/
+def core.iter.traits.iterator.Iterator.count.stepFnMut (Item : Type _) :
+    core.ops.function.FnMut Unit (Usize × Item) Usize := {
+  FnOnceInst := { call_once := fun _ (acc, _) => acc + 1#usize }
+  call_mut := fun _ (acc, _) => do
+    let acc1 ← acc + 1#usize
+    ok (acc1, ())
+}
+
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _)
   where
@@ -127,6 +137,9 @@ structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _
     Self → Acc → F → Result Acc :=
       fun FnMutInst self acc f =>
         core.iter.traits.iterator.Iterator.fold.default.loop next FnMutInst self acc f
+  count : Self → Result Usize :=
+    fun self => fold (core.iter.traits.iterator.Iterator.count.stepFnMut Self_Item)
+      self 0#usize ()
   -- TODO: adding more fields like rev leads to a circularity.
   -- As an approximation we could only require these methods to implement a smaller version of
   -- `Iterator` with, e.g., only the `next` method. Most implementations should satisfy this
@@ -834,16 +847,6 @@ def core.iter.traits.iterator.Iterator.zip.trait_default
   Self → U → Result (core.iter.adapters.zip.Zip Self IntoIter) :=
   core.iter.traits.iterator.Iterator.zip.default IntoIterInst.into_iter
 
-/-- The closure passed to `fold` by Rust's default `Iterator::count` implementation.
-    The increment is checked, as in `library/core/src/iter/traits/iterator.rs`. -/
-def core.iter.traits.iterator.Iterator.count.stepFnMut (Item : Type _) :
-    core.ops.function.FnMut Unit (Usize × Item) Usize := {
-  FnOnceInst := { call_once := fun _ (acc, _) => acc + 1#usize }
-  call_mut := fun _ (acc, _) => do
-    let acc1 ← acc + 1#usize
-    ok (acc1, ())
-}
-
 /-- The count closure increments the accumulator, provided that it fits in `usize`. -/
 @[step]
 theorem core.iter.traits.iterator.Iterator.count.stepFnMut.spec
@@ -871,7 +874,8 @@ def core.iter.traits.iterator.Iterator.count.trait_default
   {Self Item : Type _}
   (IterInst : core.iter.traits.iterator.Iterator Self Item) :
   Self → Result Std.Usize :=
-  core.iter.traits.iterator.Iterator.count.default IterInst
+  fun self => IterInst.fold (core.iter.traits.iterator.Iterator.count.stepFnMut Item)
+    self 0#usize ()
 
 /-- `Iterator::rev` default body: `Rev { iter: self }`. -/
 def core.iter.traits.iterator.Iterator.rev.default

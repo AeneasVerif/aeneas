@@ -167,6 +167,7 @@ impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type _) :
   core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
   next := core.slice.iter.IteratorSliceIter.next
   fold := core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+  count := core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.count
   step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
     (core.iter.traits.iterator.IteratorSliceIter T)
   enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
