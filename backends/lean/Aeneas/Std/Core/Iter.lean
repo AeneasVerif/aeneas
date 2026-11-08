@@ -834,6 +834,45 @@ def core.iter.traits.iterator.Iterator.zip.trait_default
   Self → U → Result (core.iter.adapters.zip.Zip Self IntoIter) :=
   core.iter.traits.iterator.Iterator.zip.default IntoIterInst.into_iter
 
+/-- The closure passed to `fold` by Rust's default `Iterator::count` implementation.
+    The increment is checked, as in `library/core/src/iter/traits/iterator.rs`. -/
+def core.iter.traits.iterator.Iterator.count.stepFnMut (Item : Type _) :
+    core.ops.function.FnMut Unit (Usize × Item) Usize := {
+  FnOnceInst := { call_once := fun _ (acc, _) => acc + 1#usize }
+  call_mut := fun _ (acc, _) => do
+    let acc1 ← acc + 1#usize
+    ok (acc1, ())
+}
+
+/-- The count closure increments the accumulator, provided that it fits in `usize`. -/
+@[step]
+theorem core.iter.traits.iterator.Iterator.count.stepFnMut.spec
+    {Item : Type _} (acc : Usize) (x : Item) (hmax : acc.val + 1 ≤ Usize.max) :
+    (core.iter.traits.iterator.Iterator.count.stepFnMut Item).call_mut () (acc, x)
+      ⦃ r => r.1.val = acc.val + 1 ∧ r.2 = () ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.count.stepFnMut
+  apply WP.spec_bind (Usize.add_spec (x := acc) (y := 1#usize) hmax)
+  intro acc1 hacc
+  simp [WP.spec_ok]
+  simp at hacc
+  omega
+
+/-- Rust's default `count` calls `self.fold(0, |acc, _| acc + 1)`.
+    Dispatching through `IterInst.fold` also respects specialised `fold` methods. -/
+def core.iter.traits.iterator.Iterator.count.default
+  {Self Item : Type _}
+  (IterInst : core.iter.traits.iterator.Iterator Self Item) :
+  Self → Result Std.Usize :=
+  fun self => IterInst.fold (core.iter.traits.iterator.Iterator.count.stepFnMut Item)
+    self 0#usize ()
+
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::count"]
+def core.iter.traits.iterator.Iterator.count.trait_default
+  {Self Item : Type _}
+  (IterInst : core.iter.traits.iterator.Iterator Self Item) :
+  Self → Result Std.Usize :=
+  core.iter.traits.iterator.Iterator.count.default IterInst
+
 /-- `Iterator::rev` default body: `Rev { iter: self }`. -/
 def core.iter.traits.iterator.Iterator.rev.default
   {Self : Type _} :
