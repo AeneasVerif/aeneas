@@ -97,3 +97,18 @@ pub fn fold_take_while() {
         .fold(0u32, |acc, item| acc + *item);
     assert!(value == 3);
 }
+
+fn fold_refs<'a, I: Iterator<Item = &'a u32>>(iter: I) -> u32 {
+    iter.fold(0u32, |acc, item| acc + *item)
+}
+
+#[verify::test]
+pub fn fold_take_while_generic_stateful() {
+    let values = [1u32, 2, 3, 4];
+    let mut seen = 0u32;
+    let iter = values.iter().take_while(move |_| {
+        seen += 1;
+        seen <= 2
+    });
+    assert!(fold_refs(iter) == 3);
+}

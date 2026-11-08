@@ -542,4 +542,145 @@ def fold_take_while : Result Unit := do
 /- Unit test for [iter_fold::fold_take_while] -/
 #guard (fold_take_while).reducesTo ()
 
+/-- [iter_fold::fold_refs::{closure}]
+    Source: 'tests/src/iter_fold.rs', lines 102:20-102:43 -/
+@[reducible]
+def fold_refs.closure (I : Type _) := Unit
+
+/-- [iter_fold::fold_refs::{impl core::ops::function::FnMut<(u32, &'_2 u32), u32> for iter_fold::fold_refs::{closure}<'a, '_1, '_2, I>}::call_mut]:
+    Source: 'tests/src/iter_fold.rs', lines 102:20-102:43 -/
+def fold_refs.closure.Insts.CoreOpsFunctionFnMutPairU32Shared1U32U32.call_mut
+  {I : Type _} (coreitertraitsiteratorIteratorISharedAU32Inst :
+  core.iter.traits.iterator.Iterator I Std.U32) (c : fold_refs.closure I)
+  (tupled_args : (Std.U32 × Std.U32)) :
+  Result (Std.U32 × (fold_refs.closure I))
+  := do
+  let (acc, item) := tupled_args
+  let i ← acc + item
+  ok (i, ())
+
+/-- [iter_fold::fold_refs::{impl core::ops::function::FnOnce<(u32, &'_2 u32), u32> for iter_fold::fold_refs::{closure}<'a, '_1, '_2, I>}::call_once]:
+    Source: 'tests/src/iter_fold.rs', lines 102:20-102:43 -/
+def fold_refs.closure.Insts.CoreOpsFunctionFnOncePairU32Shared1U32U32.call_once
+  {I : Type _} (coreitertraitsiteratorIteratorISharedAU32Inst :
+  core.iter.traits.iterator.Iterator I Std.U32) (c : fold_refs.closure I)
+  (p : (Std.U32 × Std.U32)) :
+  Result Std.U32
+  := do
+  let (i, _) ←
+    fold_refs.closure.Insts.CoreOpsFunctionFnMutPairU32Shared1U32U32.call_mut
+      coreitertraitsiteratorIteratorISharedAU32Inst () p
+  ok i
+
+/-- Trait implementation: [iter_fold::fold_refs::{impl core::ops::function::FnOnce<(u32, &'_2 u32), u32> for iter_fold::fold_refs::{closure}<'a, '_1, '_2, I>}]
+    Source: 'tests/src/iter_fold.rs', lines 102:20-102:43 -/
+@[reducible]
+def fold_refs.closure.Insts.CoreOpsFunctionFnOncePairU32Shared1U32U32 {I :
+  Type _} (coreitertraitsiteratorIteratorISharedAU32Inst :
+  core.iter.traits.iterator.Iterator I Std.U32) : core.ops.function.FnOnce
+  (fold_refs.closure I) (Std.U32 × Std.U32) Std.U32 := {
+  call_once :=
+    fold_refs.closure.Insts.CoreOpsFunctionFnOncePairU32Shared1U32U32.call_once
+    coreitertraitsiteratorIteratorISharedAU32Inst
+}
+
+/-- Trait implementation: [iter_fold::fold_refs::{impl core::ops::function::FnMut<(u32, &'_2 u32), u32> for iter_fold::fold_refs::{closure}<'a, '_1, '_2, I>}]
+    Source: 'tests/src/iter_fold.rs', lines 102:20-102:43 -/
+@[reducible]
+def fold_refs.closure.Insts.CoreOpsFunctionFnMutPairU32Shared1U32U32 {I :
+  Type _} (coreitertraitsiteratorIteratorISharedAU32Inst :
+  core.iter.traits.iterator.Iterator I Std.U32) : core.ops.function.FnMut
+  (fold_refs.closure I) (Std.U32 × Std.U32) Std.U32 := {
+  FnOnceInst :=
+    fold_refs.closure.Insts.CoreOpsFunctionFnOncePairU32Shared1U32U32
+    coreitertraitsiteratorIteratorISharedAU32Inst
+  call_mut :=
+    fold_refs.closure.Insts.CoreOpsFunctionFnMutPairU32Shared1U32U32.call_mut
+    coreitertraitsiteratorIteratorISharedAU32Inst
+}
+
+/-- [iter_fold::fold_refs]:
+    Source: 'tests/src/iter_fold.rs', lines 101:0-103:1 -/
+def fold_refs
+  {I : Type _} (coreitertraitsiteratorIteratorISharedAU32Inst :
+  core.iter.traits.iterator.Iterator I Std.U32) (iter : I) :
+  Result Std.U32
+  := do
+  coreitertraitsiteratorIteratorISharedAU32Inst.fold
+    (fold_refs.closure.Insts.CoreOpsFunctionFnMutPairU32Shared1U32U32
+    coreitertraitsiteratorIteratorISharedAU32Inst) iter 0#u32 ()
+
+/-- [iter_fold::fold_take_while_generic_stateful::{closure}]
+    Source: 'tests/src/iter_fold.rs', lines 109:40-112:5 -/
+@[reducible]
+def fold_take_while_generic_stateful.closure := Std.U32
+
+/-- [iter_fold::fold_take_while_generic_stateful::{impl core::ops::function::FnMut<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while_generic_stateful::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_fold.rs', lines 109:40-112:5 -/
+def
+  fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool.call_mut
+  (c : fold_take_while_generic_stateful.closure) (tupled_args : Std.U32) :
+  Result (Bool × fold_take_while_generic_stateful.closure)
+  := do
+  let i ← c + 1#u32
+  ok (i <= 2#u32, i)
+
+/-- [iter_fold::fold_take_while_generic_stateful::{impl core::ops::function::FnOnce<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while_generic_stateful::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_fold.rs', lines 109:40-112:5 -/
+def
+  fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool.call_once
+  (c : fold_take_while_generic_stateful.closure) (i : Std.U32) :
+  Result Bool
+  := do
+  let (b, _) ←
+    fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool.call_mut
+      c i
+  ok b
+
+/-- Trait implementation: [iter_fold::fold_take_while_generic_stateful::{impl core::ops::function::FnOnce<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while_generic_stateful::{closure}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 109:40-112:5 -/
+@[reducible]
+def
+  fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool
+  : core.ops.function.FnOnce fold_take_while_generic_stateful.closure Std.U32
+  Bool := {
+  call_once :=
+    fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool.call_once
+}
+
+/-- Trait implementation: [iter_fold::fold_take_while_generic_stateful::{impl core::ops::function::FnMut<(&'_1 &'_0 u32,), bool> for iter_fold::fold_take_while_generic_stateful::{closure}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 109:40-112:5 -/
+@[reducible]
+def
+  fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool
+  : core.ops.function.FnMut fold_take_while_generic_stateful.closure Std.U32
+  Bool := {
+  FnOnceInst :=
+    fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnOnceTupleShared1Shared0U32Bool
+  call_mut :=
+    fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool.call_mut
+}
+
+/-- [iter_fold::fold_take_while_generic_stateful]:
+    Source: 'tests/src/iter_fold.rs', lines 106:0-114:1
+    Visibility: public -/
+def fold_take_while_generic_stateful : Result Unit := do
+  let s ←
+    lift (Array.to_slice (Array.make 4#usize [ 1#u32, 2#u32, 3#u32, 4#u32 ]))
+  let i ← core.slice.Slice.iter s
+  let iter ←
+    core.iter.traits.iterator.Iterator.take_while.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool
+      i 0#u32
+  let i1 ←
+    fold_refs (core.iter.traits.iterator.IteratorTakeWhile
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      fold_take_while_generic_stateful.closure.Insts.CoreOpsFunctionFnMutTupleShared1Shared0U32Bool)
+      iter
+  massert (i1 = 3#u32)
+
+/- Unit test for [iter_fold::fold_take_while_generic_stateful] -/
+#guard (fold_take_while_generic_stateful).reducesTo ()
+
 end iter_fold

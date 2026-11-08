@@ -1042,8 +1042,8 @@ theorem core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIter
       · simp [uncurry, WP.spec_ok]
         exact ⟨some x, it, ho, hbp, rfl, rfl⟩
 
-/-- Behavioural model of `TakeWhile::fold`. Rust implements it through `try_fold`;
-    the observable accumulator follows the items returned by `TakeWhile::next`. -/
+/-- Behavioural model of `TakeWhile::fold`. Rust implements it through `try_fold`.
+    This model assumes the inner `try_fold` traverses the same items as repeated `next`. -/
 @[rust_fun
   "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, @P>, @Clause0_Item>}::fold"]
 def core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold
@@ -1187,8 +1187,8 @@ theorem core.iter.traits.iterator.Iterator.fold.default.loop.spec_decr_nat
     cases r <;> exact hr
   · exact hInit
 
-/-- The `TakeWhile.fold` loop rule combines with `TakeWhile.next.spec` to
-    establish the predicate state and stopping condition at each step. -/
+/-- A decreasing-measure rule for the `TakeWhile.fold` model.
+    `TakeWhile.next.spec` can discharge the one-step premise. -/
 theorem core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.fold.spec_decr_nat
     {I P Acc F Item : Type _}
     (IterInst : core.iter.traits.iterator.Iterator I Item)
