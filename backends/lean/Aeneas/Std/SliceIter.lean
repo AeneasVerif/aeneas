@@ -73,6 +73,31 @@ def core.slice.iter.IteratorSliceIter.next
     ok (some x, it)
   else ok (none, it)
 
+/-- A slice iterator returns the element at its current index and advances by one
+    while elements remain. -/
+@[step]
+theorem core.slice.iter.IteratorSliceIter.next.spec
+    {T : Type _} (it : core.slice.iter.Iter T) :
+    core.slice.iter.IteratorSliceIter.next it
+      ⦃ r => if h : it.i < it.slice.val.length
+        then r = (some (it.slice.val[it.i]'h), { it with i := it.i + 1 })
+        else r = (none, it) ⦄ := by
+  by_cases h : it.i < it.slice.val.length
+  · simp [core.slice.iter.IteratorSliceIter.next, h, WP.spec_ok]
+    exact Slice.getElem_Nat_eq it.slice it.i h
+  · simp [core.slice.iter.IteratorSliceIter.next, h, WP.spec_ok]
+
+/-- Behavioural model of the optimised slice-iterator `fold`. It visits the
+    remaining elements in the same order as repeated `next` calls. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::fold"]
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+    {T Acc F : Type _}
+    (FnMutInst : core.ops.function.FnMut F (Acc × T) Acc)
+    (it : core.slice.iter.Iter T) (init : Acc) (f : F) : Result Acc :=
+  core.iter.traits.iterator.Iterator.fold.default.loop
+    core.slice.iter.IteratorSliceIter.next FnMutInst it init f
+
 /-- `DoubleEndedIterator::next_back` on `slice::Iter`.
 
 The standard library generates this impl with the `iterator!` macro
@@ -116,6 +141,7 @@ theorem core.slice.iter.IteratorSliceIter.next_back.spec
 impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type _) :
   core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
   next := core.slice.iter.IteratorSliceIter.next
+  fold := core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
   step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
     (core.iter.traits.iterator.IteratorSliceIter T)
   enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
