@@ -1410,6 +1410,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
               name = None;
               span = f.item_meta.span;
               is_mutable = true;
+              borrowck_constraints = [];
               drop_flag_for = None;
             }
           in
@@ -2201,6 +2202,7 @@ let anon_consts_to_calls (crate : crate) : crate =
               name = None;
               span = f.item_meta.span;
               is_mutable = true;
+              borrowck_constraints = [];
               drop_flag_for = None;
             }
           in
