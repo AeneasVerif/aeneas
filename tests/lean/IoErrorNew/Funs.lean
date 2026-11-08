@@ -42,4 +42,13 @@ def make_invalid_data (text : Str) : Result core.io.error.Error := do
     Box.Insts.CoreConvertFromShared0Str) core.io.error.ErrorKind.InvalidData
     text
 
+/-- [io_error_new::touch_dyn_error]:
+    Source: 'tests/src/io_error_new.rs', lines 11:0-11:61
+    Visibility: public -/
+def touch_dyn_error
+  (_error : Dyn (fun _dyn => core.error.Error _dyn)) :
+  Result (Dyn (fun _dyn => core.error.Error _dyn))
+  := do
+  ok _error
+
 end io_error_new
