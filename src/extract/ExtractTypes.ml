@@ -1325,7 +1325,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t)
     ?(use_forall = false) ?(use_fun = false) ?(use_forall_use_sep = true)
     ?(use_arrows = false) ?(as_implicits : bool = false)
-    ?(space : bool ref option = None) ?(pointee_binders = false)
+    ?(space : bool ref option = None)
+    ?(pointee_binders : TypeVarId.id -> bool = fun _ -> false)
     (origin : generic_origin)
     (generics : generic_params) (explicit : explicit_info option)
     (type_params : string list) (cg_params : string list)
@@ -1390,12 +1391,14 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
             type_params;
           (* Lean: the functions which access the heap receive the [Pointee]
              instances of their type parameters (see [Pointee.lean]) *)
-          if pointee_binders then
-            List.iter
-              (fun (_, s) ->
-                insert_req_space ();
-                F.pp_print_string fmt ("[Pointee " ^ s ^ "]"))
-              type_params;
+          List.iteri
+            (fun i (_, s) ->
+              match List.nth_opt generics.types i with
+              | Some (tv : type_param) when pointee_binders tv.index ->
+                  insert_req_space ();
+                  F.pp_print_string fmt ("[Pointee " ^ s ^ "]")
+              | _ -> ())
+            type_params;
           if use_arrows then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->"));

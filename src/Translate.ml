@@ -1559,11 +1559,35 @@ let extract_translated_crate (filename : string) (dest_dir : string)
                   match decl.body with
                   | None -> acc
                   | Some body ->
-                      ReorderDecls.FunIdSet.fold
-                        (fun (fid : ReorderDecls.fun_id) acc ->
-                          FunDeclId.TreeSet.add fid.def_id acc)
-                        (ReorderDecls.compute_body_fun_deps body.body)
-                        acc)
+                      let acc =
+                        ReorderDecls.FunIdSet.fold
+                          (fun (fid : ReorderDecls.fun_id) acc ->
+                            FunDeclId.TreeSet.add fid.def_id acc)
+                          (ReorderDecls.compute_body_fun_deps body.body)
+                          acc
+                      in
+                      (* The globals are evaluated where they are used: a
+                         global whose initializer exposes safe places receives
+                         a placement from its users *)
+                      let acc = ref acc in
+                      let visitor =
+                        object
+                          inherit [_] Pure.iter_expr
+
+                          method! visit_qualif _ q =
+                            match q.id with
+                            | Global gid -> (
+                                match
+                                  GlobalDeclId.Map.find_opt gid trans_globals
+                                with
+                                | Some g ->
+                                    acc := FunDeclId.TreeSet.add g.body_id !acc
+                                | None -> ())
+                            | _ -> ()
+                        end
+                      in
+                      visitor#visit_texpr () body.body;
+                      !acc)
                 FunDeclId.TreeSet.empty decls
             in
             if Option.is_some trans.f.body then (id, callees) :: acc else acc)
@@ -1585,12 +1609,119 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       in
       fixpoint FunDeclId.TreeSet.empty
     in
+    (* The type parameters of the transparent functions which need a [Pointee]
+       instance (Lean only, see [Pointee.lean]): the ones which appear in the
+       type arguments of the stateful models they call, or in the type
+       arguments which instantiate the [Pointee] parameters of the transparent
+       functions they call. A type parameter which is only used as a value
+       type (ex.: a float type) doesn't need one. *)
+    let funs_pointee_params =
+      let ty_vars (ty : Pure.ty) : TypeVarId.Set.t =
+        let vars = ref TypeVarId.Set.empty in
+        let visitor =
+          object
+            inherit [_] Pure.iter_expr
+
+            method! visit_TVar _ v =
+              match v with
+              | Free id | Bound (_, id) -> vars := TypeVarId.Set.add id !vars
+          end
+        in
+        visitor#visit_ty () ty;
+        !vars
+      in
+      (* For every transparent function: the calls in its bodies (callee and
+         type arguments) *)
+      let calls =
+        FunDeclId.Map.fold
+          (fun id (trans : pure_fun_translation) acc ->
+            if Option.is_none trans.f.body then acc
+            else
+              let decls = (trans.f :: trans.loops) @ trans.bodies in
+              let calls = ref [] in
+              let visitor =
+                object
+                  inherit [_] Pure.iter_expr
+
+                  method! visit_qualif _ q =
+                    match q.id with
+                    | FunOrOp (Fun (FromLlbc (FunId fid, _))) ->
+                        calls := (fid, q.generics.types) :: !calls
+                    | _ -> ()
+                end
+              in
+              List.iter
+                (fun (decl : Pure.fun_decl) ->
+                  match decl.body with
+                  | None -> ()
+                  | Some body -> visitor#visit_texpr () body.body)
+                decls;
+              (id, !calls) :: acc)
+          trans_funs []
+      in
+      let is_transparent (id : FunDeclId.id) : bool =
+        match FunDeclId.Map.find_opt id trans_funs with
+        | Some trans -> Option.is_some trans.f.body
+        | None -> false
+      in
+      (* The models which need the [Pointee] instances of their type arguments
+         although they don't access the heap *)
+      let pointee_models =
+        List.map NameMatcher.parse_pattern
+          [ "core::mem::size_of"; "core::mem::align_of" ]
+      in
+      let stateful (id : FunDeclId.id) : bool =
+        FunsAnalysis.is_stateful trans_ctx.fun_ctx.fun_infos id
+        ||
+        match FunDeclId.Map.find_opt id trans_funs with
+        | Some trans ->
+            List.exists
+              (fun pat ->
+                ExtractName.match_name crate pat trans.f.item_meta.name)
+              pointee_models
+        | None -> false
+      in
+      let lookup m id =
+        Option.value ~default:TypeVarId.Set.empty (FunDeclId.TreeMap.find_opt id m)
+      in
+      let step (m : TypeVarId.Set.t FunDeclId.TreeMap.t) =
+        List.fold_left
+          (fun m' (id, calls) ->
+            let needed =
+              List.fold_left
+                (fun acc (callee, (tys : Pure.ty list)) ->
+                  if is_transparent callee then
+                    let callee_needed = lookup m callee in
+                    List.fold_left
+                      (fun acc (i, ty) ->
+                        if TypeVarId.Set.mem (TypeVarId.of_int i) callee_needed
+                        then TypeVarId.Set.union acc (ty_vars ty)
+                        else acc)
+                      acc
+                      (List.mapi (fun i ty -> (i, ty)) tys)
+                  else if stateful callee then
+                    List.fold_left
+                      (fun acc ty -> TypeVarId.Set.union acc (ty_vars ty))
+                      acc tys
+                  else acc)
+                TypeVarId.Set.empty calls
+            in
+            FunDeclId.TreeMap.add id needed m')
+          FunDeclId.TreeMap.empty calls
+      in
+      let rec fixpoint m =
+        let m' = step m in
+        if FunDeclId.TreeMap.equal TypeVarId.Set.equal m m' then m else fixpoint m'
+      in
+      fixpoint FunDeclId.TreeMap.empty
+    in
     {
       ExtractBase.crate;
       trans_ctx;
       names_maps;
       indent_incr = 2;
       funs_with_placement;
+      funs_pointee_params;
       placement = None;
       use_dep_ite =
         Config.backend () = Lean && !Config.extract_decreases_clauses;
