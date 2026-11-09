@@ -50,6 +50,7 @@ an undefined operation (a checked operation with no successor).
 | `ptr_read_copy`                        | ok(2)       | ok(2)      |
 | `ptr_as_mut_write` (borrow model)      | ok(6)       | INCOMPLETE |
 | `ptr_as_mut_twice` (borrow model)      | UB          | fails      |
+| `handle_write`                         | ok(4)       | ok(4)      |
 
 The verdicts are the same as in the previous (first-order) heap model; the reason of
 `from_raw_parts_read_while_shared` changed (see its docstring).
@@ -676,5 +677,17 @@ theorem ptr_as_mut_twice.ub
   rw [read_borrowed] at hy
   · simp at hy
   · simp [Block.bytes, show 0 < (Pointee.repr (T := U32)).size by decide]
+
+/-! ## A raw pointer hidden in a type which keeps the borrow alive -/
+
+/-- The backward function of `Handle::new` ends the borrow of `x` with the backward function of
+`from_mut`, which reads the value written through the hidden pointer. -/
+theorem handle_write.spec : ⦃ emp ⦄ handle_write ⦃ r => ⌜r = 4#u32⌝ ⦄ := by
+  unfold handle_write Handle.new Handle.as_ptr
+  step as ⟨r, hBack⟩
+  obtain ⟨p, back⟩ := r
+  simp only at hBack ⊢
+  subst hBack
+  step*
 
 end safe_unsafe.Proofs

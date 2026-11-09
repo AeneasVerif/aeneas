@@ -3,7 +3,7 @@
 //! Adequacy of the raw-pointer model: small programs mixing safe code with
 //! `unsafe` raw-pointer primitives (`ptr::from_mut`, `as_ptr`/`as_mut_ptr`,
 //! `slice::from_raw_parts(_mut)`, `Box::into_raw`/`from_raw`, `ptr::read`,
-//! `as_mut`).
+//! `as_mut`), and a raw pointer hidden in a type which keeps the borrow alive.
 //!
 //! Every function is closed, so that its behaviour is fixed. Each one documents what Miri reports, with Stacked Borrows (the
 //! default) and Tree Borrows alike: `ok(n)` (no UB, returns `n`) or `UB`. The
@@ -16,6 +16,7 @@
 //! `cargo +nightly miri test -- --exact safe_unsafe::miri::<name>`, with
 //! `MIRIFLAGS=-Zmiri-tree-borrows` for Tree Borrows. Leaked memory makes Miri
 //! report an error at exit; `-Zmiri-ignore-leaks` silences it.
+use core::marker::PhantomData;
 use core::ptr;
 use core::slice;
 
@@ -315,6 +316,38 @@ pub fn ptr_as_mut_twice() -> u32 {
     x
 }
 
+// ---------------------------------------------------------------------------
+// A raw pointer hidden in a type which keeps the borrow alive (like
+// `NonNull::from(&mut x)`, with the lifetime of the borrow)
+// ---------------------------------------------------------------------------
+
+pub struct Handle<'a> {
+    ptr: *mut u32,
+    _borrow: PhantomData<&'a mut u32>,
+}
+
+impl<'a> Handle<'a> {
+    pub fn new(x: &'a mut u32) -> Self {
+        Handle {
+            ptr: ptr::from_mut(x),
+            _borrow: PhantomData,
+        }
+    }
+
+    pub fn as_ptr(&self) -> *mut u32 {
+        self.ptr
+    }
+}
+
+/// The write through the hidden pointer is visible through the local once the
+/// handle is dropped. ok(4)
+pub fn handle_write() -> u32 {
+    let mut x = 1u32;
+    let h = Handle::new(&mut x);
+    unsafe { *h.as_ptr() = 4 };
+    x
+}
+
 #[cfg(miri)]
 mod miri {
     macro_rules! verdicts {
@@ -351,6 +384,7 @@ mod miri {
         ptr_read_box_double_free,
         ptr_read_copy,
         ptr_as_mut_write,
-        ptr_as_mut_twice
+        ptr_as_mut_twice,
+        handle_write
     );
 }
