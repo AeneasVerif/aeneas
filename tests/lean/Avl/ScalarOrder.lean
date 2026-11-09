@@ -17,6 +17,13 @@ instance {ty} : LinearOrder (UScalar ty) where
   toDecidableLE := UScalarDecidableLE
 
 instance : OrdSpecLinearOrderEq I32.Insts.AvlOrd where
+  no_oom := fun a b => by
+    simp [I32.Insts.AvlOrd.cmp, Result.oom]
+    split
+    · simp
+    · split
+      · simp
+      · simp
   infallible := fun a b => by
     unfold Ord.cmp I32.Insts.AvlOrd I32.Insts.AvlOrd.cmp
     simp only
