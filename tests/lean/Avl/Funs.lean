@@ -172,8 +172,8 @@ def Node.insert_in_left
             left.val.balance_factor))
         ok (false, node1)
     else
-      ok (i != 0#i8, Box.mk (Node.mk node.val.val.value o node.val.val.right
-        i))
+      ok ((i != 0#i8 : Bool), Box.mk (Node.mk node.val.val.value o
+        node.val.val.right i))
   else
     ok (false, Box.mk (Node.mk node.val.val.value o node.val.val.right
       node.val.val.balance_factor))
@@ -210,7 +210,8 @@ def Node.insert_in_right
             right.val.balance_factor))
         ok (false, node1)
     else
-      ok (i != 0#i8, Box.mk (Node.mk node.val.val.value node.val.val.left o i))
+      ok ((i != 0#i8 : Bool), Box.mk (Node.mk node.val.val.value
+        node.val.val.left o i))
   else
     ok (false, Box.mk (Node.mk node.val.val.value node.val.val.left o
       node.val.val.balance_factor))

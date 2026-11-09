@@ -48,9 +48,9 @@ def call_inner_mut : Result Unit := do
   let (_, inner_mut_back, inner_mut_back1) ←
     inner_mut (MutBorrow.mk (MutBorrow.mk 0#u32))
   let px := inner_mut_back 1#u32
-  massert (px.val = 1#u32)
+  massert (px.val = 1#u32 : Bool)
   let px1 := inner_mut_back1 2#u32
-  massert (px1 = 2#u32)
+  massert (px1 = 2#u32 : Bool)
 
 /-- [nested_borrows::inner_mut_swap]:
     Source: 'tests/src/nested-borrows.rs', lines 28:0-32:1 -/
@@ -68,10 +68,10 @@ def call_inner_mut_swap : Result Unit := do
   let (_, inner_mut_swap_back, inner_mut_swap_back1) ←
     inner_mut_swap (MutBorrow.mk (MutBorrow.mk 0#u32)) (MutBorrow.mk 1#u32)
   let px := inner_mut_swap_back 2#u32
-  massert (px.val = 2#u32)
+  massert (px.val = 2#u32 : Bool)
   let (px1, y) := inner_mut_swap_back1 3#u32
-  massert (px1 = 10#u32)
-  massert (y = 3#u32)
+  massert (px1 = 10#u32 : Bool)
+  massert (y = 3#u32 : Bool)
 
 /-- [nested_borrows::incr_inner]:
     Source: 'tests/src/nested-borrows.rs', lines 47:0-49:1 -/
