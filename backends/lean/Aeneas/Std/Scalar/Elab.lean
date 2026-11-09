@@ -50,6 +50,10 @@ with either "U8", or "U16", etc.
 - `%BitWidth`: term to be replaced with a scalar bitwidth (e.g., `8`, `16`, ..., `System.Platform.numBits`)
 - `%Size`: term to be replaced with a size (in bytes)
 
+# Pairs of Scalars
+`scalar_rhs` works like `scalar` with the keywords `«%R»` and `'R`, and can be nested inside
+`scalar`, etc. (e.g., for `Shl<Rhs> for Self`).
+
 -/
 
 meta def isSubstring (sub str : List Char) : Option (List Char) :=
@@ -60,9 +64,9 @@ meta def isSubstring (sub str : List Char) : Option (List Char) :=
     else none
   | _, _ => none
 
-meta partial def elabString (ty : String) (str : String) : String :=
+meta partial def elabString (ty : String) (str : String) (pat : String := "'S") : String :=
   let rec replace (str : List Char) : List Char :=
-    match isSubstring "'S".toList str with
+    match isSubstring pat.toList str with
     | some str => ty.toList ++ replace str
     | none =>
       match str with
@@ -70,17 +74,23 @@ meta partial def elabString (ty : String) (str : String) : String :=
       | c :: str => c :: replace str
   String.ofList (replace str.toList)
 
-meta def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
+/-- The keywords to substitute: `«%S»` and `'S`, or `«%R»` and `'R`. -/
+structure Keywords where
+  ident : String := "%S"
+  str : String := "'S"
+
+meta def elabSpecialName (ty : String) (n : Name) (kw : Keywords := {}) : CommandElabM Name := do
   trace[ScalarElabSubst] "elabSpecialName: {n}"
   match n with
   | .anonymous => pure .anonymous
   | .str pre str =>
     trace[ScalarElabSubst] "elabSpecialName: str case: {str}"
-    let str := if str == "%S" then ty else elabString ty str
-    pure (.str (← elabSpecialName ty pre) str)
-  | .num pre i => pure (.num (← elabSpecialName ty pre) i)
+    let str := if str == kw.ident then ty else elabString ty str kw.str
+    pure (.str (← elabSpecialName ty pre kw) str)
+  | .num pre i => pure (.num (← elabSpecialName ty pre kw) i)
 
-meta partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : CommandElabM Syntax := do
+meta partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) (kw : Keywords := {}) :
+  CommandElabM Syntax := do
   trace[ScalarElabSubst] "elabSpecial: stx: {stx}"
   match stx with
   | .missing => pure .missing
@@ -91,7 +101,7 @@ meta partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : C
     pure size
   | .node info kind args =>
     trace[ScalarElabSubst] "elabSpecial: node: {stx}"
-    let args ← args.mapM (elabSpecial ty bw size)
+    let args ← args.mapM (elabSpecial ty bw size · kw)
     pure (.node info kind args)
   | .atom info val =>
     trace[ScalarElabSubst] "elabSpecial: atom: {val}"
@@ -101,16 +111,20 @@ meta partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : C
     else pure (.atom info val)
   | .ident info rawVal val preresolved =>
     trace[ScalarElabSubst] "elabSpecial: ident: {stx}"
-    let val ← elabSpecialName ty val
+    let val ← elabSpecialName ty val kw
     pure (.ident info rawVal val preresolved)
 
-meta def elabCommand (tysBws : List (String × Syntax × Syntax)) (cmd : TSyntax `command) : CommandElabM Unit := do
+meta def elabCommand (tysBws : List (String × Syntax × Syntax)) (cmd : TSyntax `command)
+  (kw : Keywords := {}) : CommandElabM Unit := do
   let elabOne (tyBw : String × Syntax × Syntax) : CommandElabM Unit := do
     let (ty, bw, size) := tyBw
     ---let cmd0 := cmd
-    let cmd ← elabSpecial ty bw size cmd
+    let cmd ← elabSpecial ty bw size cmd kw
     trace[ScalarElab] "Final declaration for {ty}:\n{cmd}"
-    let cmd ← liftMacroM (expandNamespacedDeclaration cmd)
+    -- The command may be another scalar command (e.g., `scalar_rhs`): we only expand declarations
+    let cmd ← if cmd.isOfKind ``Lean.Parser.Command.declaration then
+        liftMacroM (expandNamespacedDeclaration cmd)
+      else pure cmd
     Command.elabCommand cmd
   for tyBw in tysBws do
     elabOne tyBw
@@ -177,6 +191,23 @@ meta def scalarCommandImpl : CommandElab := fun stx => do
                  ("I8", ←`(8), ←`(1)), ("I16", ←`(16), ←`(2)), ("I32", ←`(32), ←`(4)),
                  ("I64", ←`(64), ←`(8)), ("I128", ←`(128), ←`(16)),
                  ("Isize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] cmd
+  | _ => throwUnsupportedSyntax
+
+meta def rhsKeywords : Keywords := { ident := "%R", str := "'R" }
+
+scoped syntax (name := scalarRhsCommand) "scalar_rhs" command : command
+
+@[command_elab scalarRhsCommand]
+meta def scalarRhsCommandImpl : CommandElab := fun stx => do
+  match stx with
+  | `(scalarRhsCommand| scalar_rhs $cmd) =>
+    elabCommand [("U8", ←`(8), ←`(1)), ("U16", ←`(16), ←`(2)), ("U32", ←`(32), ←`(4)),
+                 ("U64", ←`(64), ←`(8)), ("U128", ←`(128), ←`(16)),
+                 ("Usize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8)),
+                 ("I8", ←`(8), ←`(1)), ("I16", ←`(16), ←`(2)), ("I32", ←`(32), ←`(4)),
+                 ("I64", ←`(64), ←`(8)), ("I128", ←`(128), ←`(16)),
+                 ("Isize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))]
+      cmd rhsKeywords
   | _ => throwUnsupportedSyntax
 
 end Aeneas.Std.ScalarElab
