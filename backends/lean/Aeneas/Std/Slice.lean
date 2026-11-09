@@ -444,12 +444,19 @@ def core.slice.Slice.get
   (s : SharedBorrow (Slice T)) (i : I) : Result (Option (SharedBorrow Output)) :=
   inst.get i s
 
-@[rust_fun "core::slice::{[@T]}::get_unchecked"]
-opaque core.slice.Slice.get_unchecked
+@[expose, rust_fun "core::slice::{[@T]}::get_unchecked"]
+def core.slice.Slice.get_unchecked
   {T : Type _} {I : Type _} {Output : Type _}
   (SliceIndexInst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : SharedBorrow (Slice T)) (i : I) : Result (SharedBorrow Output)
-  -- TODO: we need to model the heap to call `SliceIndexInst.get_unchecked`
+  (s : SharedBorrow (Slice T)) (i : I) : Result (SharedBorrow Output) := do
+  -- `get_unchecked` is the unchecked counterpart of `get`: in bounds the two
+  -- agree, and out of bounds Rust has UB, which we model as `fail .undef`.
+  -- (We do not use `SliceIndexInst.get_unchecked`, which is stated over raw
+  -- pointers.)
+  let o ← SliceIndexInst.get i s
+  match o with
+  | some x => ok x
+  | none => fail .undef
 
 @[expose, rust_fun "core::slice::{[@T]}::get_mut"]
 def core.slice.Slice.get_mut
@@ -709,11 +716,12 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type _) :
 }
 
 @[step]
-axiom core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
+theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
   (h : i.val < s.val.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
-  ⦃ x => x.val = s.val[i] ⦄
-  -- TODO: awaiting a full definition for `core.slice.Slice.get_unchecked`
+  ⦃ x => x.val = s.val[i] ⦄ := by
+  simp only [core.slice.Slice.get_unchecked, core.slice.index.Usize.get]
+  simp [h]
 
 @[expose, rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type _} (_ : core.marker.Copy T)
