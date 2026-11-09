@@ -4,9 +4,8 @@ import Aeneas.Std.Array
 import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result Std.Do
-set_option mvcgen.warning false
 /- TODO: `mvcgen` is deprecated in favor of `vcgen`, but `vcgen` cannot determine the program
-   type of these goals yet (Lean v4.35.0). -/
+   type of these goals yet (Lean v4.36.0-rc2). -/
 set_option linter.deprecated.syntax false
 
 /-!
