@@ -66,4 +66,20 @@ def in_range (x : Std.I32) : Result Bool := do
     core.cmp.PartialOrdI32 core.cmp.PartialOrdI32 (SharedBorrow.mk ri)
     (SharedBorrow.mk x)
 
+/-- [std_models_zmij::from_bool]:
+    Source: 'tests/src/std-models-zmij.rs', lines 29:0-31:1
+    Visibility: public -/
+def from_bool
+  {T : Type _} (coreconvertFromTBoolInst : core.convert.From T Bool) 
+  (b : Bool) :
+  Result T
+  := do
+  coreconvertFromTBoolInst.«from» b
+
+/-- [std_models_zmij::from_bool_u32]:
+    Source: 'tests/src/std-models-zmij.rs', lines 33:0-35:1
+    Visibility: public -/
+def from_bool_u32 (b : Bool) : Result Std.U32 := do
+  from_bool core.convert.FromU32Bool b
+
 end std_models_zmij
