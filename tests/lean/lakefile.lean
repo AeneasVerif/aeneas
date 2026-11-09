@@ -28,6 +28,7 @@ package «tests» {}
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib ConstShadow
+@[default_target] lean_lib CoreOps
 @[default_target] lean_lib Curve25519
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
@@ -39,6 +40,7 @@ package «tests» {}
 @[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib FloatBits
 @[default_target] lean_lib FnPtrGeneric
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib GenericUnitOutput
@@ -119,6 +121,7 @@ package «tests» {}
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
 @[default_target] lean_lib StaticRetStateful
+@[default_target] lean_lib StdModelsZmij
 @[default_target] lean_lib StepBy
 @[default_target] lean_lib StepOverflowing
 @[default_target] lean_lib StringChars
