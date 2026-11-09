@@ -11,6 +11,7 @@ public import Aeneas.SepLogic.RangeWrite
 public import Aeneas.SepLogic.SliceExposure
 public import Aeneas.SepLogic.SharedExposure
 public import Aeneas.SepLogic.Allocation
+public import Aeneas.SepLogic.Lifecycle
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Alloc.Boxed
 import all Aeneas.Std.Slice
@@ -77,18 +78,474 @@ namespace Aeneas.Std
 
 open Aeneas.SepLogic Aeneas.Std.WP
 
+/-! ## The authority of the owned exclusive blocks
+
+`Realizes` asks the owned blocks whose cleanup is owned, and whose cells are all exclusive, to have
+the authority to be returned (`AuthOK`). The specifications show that their operations keep it
+(`Bytes.AuthPres`): an operation either doesn't change the heap, changes cells which it owns (a write
+keeps them exclusive, a borrow or a share makes them non-exclusive), creates a block (a non-empty
+exposure can't be a view of a block whose cells are exclusive) or retires a block. -/
+
+/-- The fragment contains no owned cleanup. -/
+def NoOwned (a : Fragment) : Prop := ∀ base size bptr, ¬ a (.cleanup base size bptr true)
+
+theorem NoOwned.cellsHeap {bptr : BasePtr} {base start : Nat} {cells : List Cell} :
+    NoOwned (Bytes.cellsHeap bptr base start cells) := by
+  rintro _ _ _ ⟨i, hi, h⟩
+  cases h
+
+theorem NoOwned.block {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {cells : List Cell} {a : Fragment} (h : Bytes.block repr p bptr cells a) : NoOwned a := by
+  obtain ⟨_, _, rfl⟩ := h
+  exact NoOwned.cellsHeap
+
+theorem NoOwned.pointsTo {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr} {value : T}
+    {depth : Nat} {a : Fragment} (h : Bytes.pointsTo repr p bptr value depth a) : NoOwned a :=
+  let ⟨_, _, hb⟩ := h; NoOwned.block hb
+
+theorem NoOwned.pointsToRange {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {values : Vector T count} {depth : Nat} {a : Fragment}
+    (h : Bytes.pointsToRange repr p bptr values depth a) : NoOwned a :=
+  let ⟨_, _, hb⟩ := h; NoOwned.block hb
+
+theorem NoOwned.readableRange {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {values : Vector T count} {depth : Nat} {a : Fragment}
+    (h : readableRange repr p bptr values depth a) : NoOwned a :=
+  let ⟨_, _, hb⟩ := h; NoOwned.block hb
+
+theorem NoOwned.alloc_false {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr} {n : Nat}
+    {a : Fragment} (h : Bytes.alloc repr p bptr n false a) : NoOwned a := by
+  obtain ⟨_, rfl⟩ := h
+  rintro _ _ _ h
+  simp [Bytes.allocHeap, Fragment.single] at h
+
+theorem NoOwned.union {a b : Fragment} (ha : NoOwned a) (hb : NoOwned b) : NoOwned (a ∪ b) := by
+  rintro base size bptr (h | h)
+  · exact ha base size bptr h
+  · exact hb base size bptr h
+
+theorem NoOwned.sep {A B : Fragment → Prop} (hA : ∀ a, A a → NoOwned a)
+    (hB : ∀ b, B b → NoOwned b) {h : Fragment} (hAB : Bytes.sep A B h) : NoOwned h := by
+  obtain ⟨a, b, _, rfl, ha, hb⟩ := hAB
+  exact (hA a ha).union (hB b hb)
+
+theorem NoOwned.empty {a : Fragment} (h : Bytes.empty a) : NoOwned a := by
+  rw [h]
+  rintro _ _ _ h
+  exact h
+
+/-- The authority is kept, from the cleanups of the frame. -/
+theorem Bytes.AuthPres.of_step {α : Type} {A : Fragment → Prop} {op : Heap → α → Heap → Prop}
+    {B : α → Fragment → Prop} (hB : ∀ x a', B x a' → NoOwned a')
+    (hStep : ∀ a F s, A a → a.Disjoint F → Fragment.Matches s (a ∪ F) → s.Inv →
+      ∀ x s', op s x s' → ∀ a', a'.Disjoint F → Fragment.Matches s' (a' ∪ F) → s'.Inv → B x a' →
+      ∀ base, AllExclusive s' base → s.allocations base ≠ none →
+        AllExclusive s base ∧ (Bytes.RootReturn s base → Bytes.RootReturn s' base)) :
+    Bytes.AuthPres A op B := by
+  unfold Bytes.AuthPres
+  intro a F s hA hd hm hi hAuth x s' a' hx hd' hm' hi' hB'
+  unfold AuthOK
+  intro base size bptr hc hEx
+  rcases hc with hc | hc
+  · exact (hB x a' hB' base size bptr hc).elim
+  · have hHolds := ((Fragment.matches_union _ _ _).mp hm).2 _ hc
+    obtain ⟨blk, hl, _⟩ := hHolds
+    obtain ⟨hEx₀, hRet⟩ := hStep a F s hA hd hm hi x s' hx a' hd' hm' hi' hB' base hEx
+      (by simp [hl])
+    exact hRet (hAuth base size bptr (Or.inr hc) hEx₀)
+
+/-- The operations which don't change the heap keep the authority. -/
+theorem Bytes.AuthPres.of_eq {α : Type} {A : Fragment → Prop} {op : Heap → α → Heap → Prop}
+    {B : α → Fragment → Prop} (hB : ∀ x a', B x a' → NoOwned a')
+    (hop : ∀ s x s', op s x s' → s' = s) : Bytes.AuthPres A op B :=
+  Bytes.AuthPres.of_step hB fun _ _ _ _ _ _ _ x s' hx _ _ _ _ _ _ hEx _ => by
+    obtain rfl := hop _ x s' hx
+    exact ⟨hEx, id⟩
+
+theorem Heap.modify_run {T : Type} {repr : Repr T} {p : RawPtr T}
+    {change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)} {s s' : Heap}
+    (run : Heap.modify repr p change s = some s') :
+    ∃ blk bytes, s.allocations p.provenance = some blk ∧
+      change blk.bytes (p.offsetFrom blk.bptr) = some bytes ∧
+      s' = s.storeRepr p.provenance bytes.toList := by
+  unfold Heap.modify at run
+  cases hl : s.allocations p.provenance
+  · simp [hl] at run
+  · rename_i blk
+    simp only [hl, Bind.bind, Option.bind] at run
+    split at run
+    · cases hc : change blk.bytes (p.offsetFrom blk.bptr)
+      · simp [hc] at run
+      · rename_i bytes
+        simp only [hc] at run
+        exact ⟨blk, bytes, rfl, hc, (Heap.commit_success _ _ run).1⟩
+    · contradiction
+
+theorem Heap.storeRepr_allocations_ne {s : Heap} {id base : Nat} {bytes : List Cell}
+    (hne : base ≠ id) : (s.storeRepr id bytes).allocations base = s.allocations base := by
+  simp [Heap.storeRepr, update, hne]
+
+/-- A modification of the cells of `p.provenance` keeps the authority, provided that it doesn't make
+the block exclusive. -/
+theorem modify_step {T : Type} {repr : Repr T} {p : RawPtr T}
+    {change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)} {s s' : Heap}
+    (run : Heap.modify repr p change s = some s')
+    (hEx : AllExclusive s' p.provenance → AllExclusive s p.provenance) :
+    ∀ base, AllExclusive s' base →
+      AllExclusive s base ∧ (Bytes.RootReturn s base → Bytes.RootReturn s' base) := by
+  intro base hEx'
+  refine ⟨?_, fun h => Bytes.RootReturn.modify h run⟩
+  by_cases hb : base = p.provenance
+  · subst hb; exact hEx hEx'
+  · obtain ⟨_, _, _, _, rfl⟩ := Heap.modify_run run
+    intro blk hl
+    exact hEx' blk (by rw [Heap.storeRepr_allocations_ne hb]; exact hl)
+
+/-- A block with a cell which is not exclusive is not exclusive. -/
+theorem not_allExclusive_of_cell {s : Heap} {a : Fragment} {base index : Nat} {bptr : BasePtr}
+    {c : Cell} (hm : Fragment.Matches s a) (hc : a (.cell base index bptr c))
+    (hdepth : c.depth ≠ some 0) : ¬ AllExclusive s base := by
+  intro hEx
+  obtain ⟨blk, hl, _, _, hcell⟩ := hm _ hc
+  obtain ⟨hi, hget⟩ := List.getElem?_eq_some_iff.mp hcell
+  have := hEx blk hl index hi
+  rw [hget] at this
+  exact hdepth this
+
+/-- A write keeps the cells exclusive. -/
+theorem write_step {T : Type} {repr : Repr T} {q : RawPtr T} {bptr : BasePtr}
+    {old : Vector Byte repr.size} {value : T} {s s' : Heap} (hsize : 0 < repr.size)
+    (hm : Fragment.Matches s
+      (Bytes.cellsHeap bptr q.provenance (q.offsetFrom bptr) (old.map (Cell.shared 0)).toList))
+    (run : State.write repr q value s () s') :
+    ∀ base, AllExclusive s' base →
+      AllExclusive s base ∧ (Bytes.RootReturn s base → Bytes.RootReturn s' base) := by
+  obtain ⟨data, encoded, hrun⟩ := run
+  apply modify_step hrun
+  intro hEx' blk hl i hi
+  obtain ⟨blk₀, hb, hl₀, _, hbase, selected⟩ := Bytes.bytes_of_matches (data := old.map (Cell.shared 0))
+    hsize hm
+  have hblk := Option.some.inj (hl₀.symm.trans hl)
+  subst hblk
+  subst hbase
+  obtain ⟨blk', bytes, hl', hc, rfl⟩ := Heap.modify_run hrun
+  have hblk' := Option.some.inj (hl₀.symm.trans hl')
+  subst hblk'
+  have hc' : bytes = repr.update blk₀.bytes (q.offsetFrom blk₀.bptr) hb
+      ((data.map (Cell.shared 0))) := by
+    simp only [Repr.write, hsize, hb, and_self, dite_true, selected,
+      Repr.writeBytes_shared, Option.map_some, Option.some.injEq] at hc
+    exact hc.symm
+  subst hc'
+  have hs' : (s.storeRepr q.provenance (repr.update blk₀.bytes (q.offsetFrom blk₀.bptr) hb
+      (data.map (Cell.shared 0))).toList).allocations q.provenance =
+      some { blk₀ with repr := (repr.update blk₀.bytes (q.offsetFrom blk₀.bptr) hb
+        (data.map (Cell.shared 0))).toList } := by
+    simp [Heap.storeRepr, update, hl₀]
+  have hEx'' := hEx' _ hs'
+  have hb2 : blk₀.bytes.toList = blk₀.repr := by simp [Block.bytes]
+  by_cases hin : q.offsetFrom blk₀.bptr ≤ i ∧ i < q.offsetFrom blk₀.bptr + repr.size
+  · have hsel := Repr.select_getElem? repr blk₀.bytes (q.offsetFrom blk₀.bptr) hb
+      (i - q.offsetFrom blk₀.bptr) (by omega)
+    rw [selected, show q.offsetFrom blk₀.bptr + (i - q.offsetFrom blk₀.bptr) = i by omega,
+      Vector.getElem?_map, hb2] at hsel
+    rw [List.getElem?_eq_getElem hi] at hsel
+    simp only [Vector.getElem?_eq_getElem (show i - q.offsetFrom blk₀.bptr < repr.size by omega),
+      Option.map_some, Option.some.injEq] at hsel
+    rw [← hsel]
+    rfl
+  · have hout := Repr.update_outside repr blk₀.bytes (q.offsetFrom blk₀.bptr) hb
+      (data.map (Cell.shared 0)) i (by omega)
+    have hlen : i < (repr.update blk₀.bytes (q.offsetFrom blk₀.bptr) hb
+        (data.map (Cell.shared 0))).toList.length := by
+      rw [Vector.length_toList]; exact hi
+    have := hEx'' i hlen
+    rw [hb2, List.getElem?_eq_getElem hlen, List.getElem?_eq_getElem hi] at hout
+    rw [Option.some.inj hout] at this
+    exact this
+
+theorem retire_step {s : Heap} {id : Nat} :
+    ∀ base, AllExclusive (s.retire id) base →
+      AllExclusive s base ∧ (Bytes.RootReturn s base → Bytes.RootReturn (s.retire id) base) := by
+  intro base hEx
+  refine ⟨fun blk hl => ?_, fun h => Bytes.RootReturn.retire h id⟩
+  by_cases hne : base = id
+  · subst hne
+    exact hEx { blk with active := false } (by simp [Heap.retire, update, hl])
+  · exact hEx blk (by simp [Heap.retire, update, hne, hl])
+
+theorem Heap.endExposureAt_run {T : Type} {repr : Repr T} {p : RawPtr T} {count depth : Nat}
+    {s s' : Heap} (run : Heap.endExposureAt repr p count depth s = some s') :
+    s' = s.retire p.provenance := by
+  unfold Heap.endExposureAt at run
+  cases hl : s.allocations p.provenance
+  · simp [hl] at run
+  · simp only [hl, Bind.bind, Option.bind] at run
+    split at run
+    · exact (Heap.commit_success _ _ run).1
+    · contradiction
+
+/-- A block, with some cell which is not exclusive. -/
+theorem Bytes.block_cell {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {cells : List Cell} {a : Fragment} (h : Bytes.block repr p bptr cells a)
+    (hne : 0 < cells.length) :
+    a (.cell p.provenance (p.offsetFrom bptr + 0) bptr (cells[0]'hne)) := by
+  obtain ⟨_, _, rfl⟩ := h
+  exact ⟨0, hne, rfl⟩
+
+theorem flatMap_shared_getElem_depth {n k : Nat} {size : Nat} (data : Vector (Vector Byte size) n)
+    (i : Nat) (hi : i < (data.flatMap (fun bytes => bytes.map (Cell.shared k))).toList.length) :
+    ((data.flatMap (fun bytes => bytes.map (Cell.shared k))).toList[i]).depth = some k := by
+  rw [Vector.getElem_toList, Vector.getElem_flatMap (by simpa using hi)]
+  simp
+
+/-- The operations whose post fragments have a cell of the block which is not exclusive keep the
+authority. -/
+theorem modify_step_nonExclusive {T : Type} {repr : Repr T} {p : RawPtr T}
+    {change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r)} {s s' : Heap} {a' : Fragment}
+    {index : Nat} {bptr : BasePtr} {c : Cell}
+    (run : Heap.modify repr p change s = some s') (hm' : Fragment.Matches s' a')
+    (hc : a' (.cell p.provenance index bptr c)) (hdepth : c.depth ≠ some 0) :
+    ∀ base, AllExclusive s' base →
+      AllExclusive s base ∧ (Bytes.RootReturn s base → Bytes.RootReturn s' base) :=
+  modify_step run fun hEx => (not_allExclusive_of_cell hm' hc hdepth hEx).elim
+
+/-! ### The authority, for each operation -/
+
+theorem Bytes.read.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr) (value : T)
+    (depth : Nat) :
+    Bytes.AuthPres (Bytes.pointsTo repr p bptr value depth) (State.read repr p)
+      (fun x h => x = value ∧ Bytes.pointsTo repr p bptr value depth h) :=
+  Bytes.AuthPres.of_eq (fun _ _ h => NoOwned.pointsTo h.2) (fun _ _ _ h => h.2)
+
+theorem Bytes.write_pointsTo.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (old value : T) (hsize : 0 < repr.size) :
+    Bytes.AuthPres (Bytes.pointsTo repr p bptr old) (State.write repr p value)
+      (fun _ => Bytes.pointsTo repr p bptr value) := by
+  refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.pointsTo h) ?_
+  rintro a F s ⟨bytes, _, hblock⟩ hd hm hi x s' hx a' hd' hm' hi' hB' base hEx _
+  obtain ⟨_, _, rfl⟩ := hblock
+  exact write_step hsize ((Fragment.matches_union _ _ _).mp hm).1 hx base hEx
+
+theorem Bytes.readRange.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat) :
+    Bytes.AuthPres (Bytes.pointsToRange repr p bptr values depth) (State.readRange repr p count)
+      (fun result h => result = values.toList ∧ Bytes.pointsToRange repr p bptr values depth h) :=
+  Bytes.AuthPres.of_eq (fun _ _ h => NoOwned.pointsToRange h.2) (fun _ _ _ h => h.2)
+
+theorem Bytes.borrowRange.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (hcount : 0 < count) (hsize : 0 < repr.size) :
+    Bytes.AuthPres (Bytes.pointsToRange repr p bptr values) (State.borrowRange repr p count)
+      (fun result h => result = values.toList ∧
+        Bytes.block repr p bptr (List.replicate (count * repr.size) .borrowed) h) := by
+  refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.block h.2) ?_
+  rintro a F s _ _ _ _ x s' hx a' _ hm' _ hB' base hEx _
+  have hlen : 0 < (List.replicate (count * repr.size) Cell.borrowed).length := by
+    simp; first | exact ⟨hcount, hsize⟩ | exact Nat.mul_pos hcount hsize
+  have run := hx.2.2
+  unfold Heap.borrowRange Heap.modifyRange at run
+  exact modify_step_nonExclusive run ((Fragment.matches_union _ _ _).mp hm').1
+    (Bytes.block_cell hB'.2 hlen) (by simp) base hEx
+
+theorem Bytes.shareRange.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat) (hcount : 0 < count) (hsize : 0 < repr.size) :
+    Bytes.AuthPres (Bytes.pointsToRange repr p bptr values depth) (State.shareRange repr p count)
+      (fun result h => result = values.toList ∧
+        Bytes.pointsToRange repr p bptr values (depth + 1) h) := by
+  refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.pointsToRange h.2) ?_
+  rintro a F s _ _ _ _ x s' hx a' _ hm' _ ⟨_, data, _, hblock⟩ base hEx _
+  have hlen : 0 < (data.flatMap (fun bytes => bytes.map (Cell.shared (depth + 1)))).toList.length := by
+    simp; first | exact ⟨hcount, hsize⟩ | exact Nat.mul_pos hcount hsize
+  have run := hx.2
+  unfold Heap.shareRange Heap.modifyRange at run
+  exact modify_step_nonExclusive run ((Fragment.matches_union _ _ _).mp hm').1
+    (Bytes.block_cell hblock hlen) (by rw [flatMap_shared_getElem_depth]; simp) base hEx
+
+theorem Bytes.endShareRange.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat) (positive : 0 < depth) (hcount : 0 < count)
+    (hsize : 0 < repr.size) :
+    Bytes.AuthPres (Bytes.pointsToRange repr p bptr values (depth + 1))
+      (State.endShareRange repr p values.toList)
+      (fun _ => Bytes.pointsToRange repr p bptr values depth) := by
+  refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.pointsToRange h) ?_
+  rintro a F s _ _ _ _ x s' hx a' _ hm' _ ⟨data, _, hblock⟩ base hEx _
+  have hlen : 0 < (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList.length := by
+    simp; first | exact ⟨hcount, hsize⟩ | exact Nat.mul_pos hcount hsize
+  have run := hx.2
+  unfold Heap.endShareRange Heap.modifyRange at run
+  exact modify_step_nonExclusive run ((Fragment.matches_union _ _ _).mp hm').1
+    (Bytes.block_cell hblock hlen) (by rw [flatMap_shared_getElem_depth]; simp; omega) base hEx
+
+/-- Retiring an exposure keeps the authority. -/
+theorem Bytes.endExposure.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat)
+    {op : Heap → Unit → Heap → Prop}
+    (hop : ∀ s x s', op s x s' → Heap.endExposureAt repr p count depth s = some s') :
+    Bytes.AuthPres
+      (Bytes.alloc repr p p.address count false ∗ᵇ readableRange repr p bptr values depth) op
+      (fun _ => Bytes.empty) := by
+  refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.empty h) ?_
+  rintro a F s _ _ _ _ x s' hx _ _ _ _ _ base hEx _
+  obtain rfl := Heap.endExposureAt_run (hop s x s' hx)
+  exact retire_step base hEx
+
+theorem Bytes.add.auth {T : Type} (repr : Repr T) (p : RawPtr T) (base : BasePtr)
+    (values : Vector T count) (depth : Nat) (i : Usize) (P : Fragment → Prop)
+    (view : ∀ h, P h → readableRange repr p base values depth h) :
+    Bytes.AuthPres P (State.offset repr p i.val)
+      (fun result h => result.provenance = p.provenance ∧
+        result.address.val = p.address.val + i.val * repr.size ∧ P h) :=
+  Bytes.AuthPres.of_eq (fun _ _ h => NoOwned.readableRange (view _ h.2.2)) (fun _ _ _ h => h.2)
+
+theorem Bytes.readElem.auth {T : Type} [Pointee T] (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat) (i : Fin count) (P : Fragment → Prop)
+    (view : ∀ h, P h → readableRange (Pointee.repr (T := T)) p bptr values depth h) :
+    Bytes.AuthPres P (State.read (Pointee.repr (T := T)) (p.elem i.val))
+      (fun result h => result = values[i.val] ∧ P h) :=
+  Bytes.AuthPres.of_eq (fun _ _ h => NoOwned.readableRange (view _ h.2)) (fun _ _ _ h => h.2)
+
+
+/-! ### The authority, for the allocations -/
+
+theorem Heap.newBlock_fresh {T : Type} {repr : Repr T} {data : List (Vector Byte repr.size)}
+    {own : Bool} {bptr : BasePtr} {root : Option Nat} {s s' : Heap} {p : RawPtr T}
+    (run : Heap.newBlock repr data own bptr root s = some (p, s')) :
+    s' = ⟨update s.allocations s.next
+      (some ⟨bptr, root.getD s.next, repr.create data 0, own, true, true⟩), s.next + 1⟩ := by
+  cases hcr : s.createRepr ⟨bptr, root.getD s.next, repr.create data 0, own, true, true⟩ with
+  | none => simp [Heap.newBlock, hcr] at run
+  | some r =>
+    obtain ⟨id, s₁⟩ := r
+    simp only [Heap.newBlock, hcr, Option.map_some] at run
+    rw [Option.ite_none_right_eq_some] at run
+    obtain ⟨_, hrun⟩ := run
+    simp only [Option.some.injEq, Prod.mk.injEq] at hrun
+    obtain ⟨_, rfl⟩ := hrun
+    exact (Heap.createRepr.success hcr).2
+
+theorem Heap.newSharedExposure_fresh {T : Type} {repr : Repr T}
+    {data : List (Vector Byte repr.size)} {bptr : BasePtr} {root : Option Nat} {s s' : Heap}
+    {p : RawPtr T} (run : Heap.newSharedExposure repr data bptr root s = some (p, s')) :
+    s' = ⟨update s.allocations s.next
+      (some ⟨bptr, root.getD s.next, repr.create data 1, false, true, true⟩), s.next + 1⟩ := by
+  cases hcr : s.createRepr ⟨bptr, root.getD s.next, repr.create data 1, false, true, true⟩ with
+  | none => simp [Heap.newSharedExposure, hcr] at run
+  | some r =>
+    obtain ⟨id, s₁⟩ := r
+    simp only [Heap.newSharedExposure, hcr, Option.map_some] at run
+    rw [Option.ite_none_right_eq_some] at run
+    obtain ⟨_, hrun⟩ := run
+    simp only [Option.some.injEq, Prod.mk.injEq] at hrun
+    obtain ⟨_, rfl⟩ := hrun
+    exact (Heap.createRepr.success hcr).2
+
+theorem Repr.create_shared {T : Type} {repr : Repr T} {data : List (Vector Byte repr.size)}
+    {depth : Nat} : ∀ c ∈ repr.create data depth, ∃ b, c = Cell.shared depth b := by
+  intro c hc
+  simp only [Repr.create, List.mem_flatMap, List.mem_map] at hc
+  obtain ⟨_, _, b, _, rfl⟩ := hc
+  exact ⟨b, rfl⟩
+
+/-- A fresh non-empty block (whose cells are not borrowed) can't be a view of the root of an active
+block whose cells are all exclusive: it would overlap one of its cells. -/
+theorem fresh_block_authority {s : Heap} {E : Block} {base : Nat} {blk : Block}
+    (hi : s.Inv) (hi' : (Heap.mk (update s.allocations s.next (some E)) (s.next + 1)).Inv)
+    (hE : 0 < E.repr.length) (hshared : ∀ c ∈ E.repr, ∃ d b, c = Cell.shared d b)
+    (hl : s.allocations base = some blk) (hActive : blk.active = true)
+    (hEx : ∀ (i : Nat) (hi : i < blk.repr.length), blk.repr[i].depth = some 0)
+    (hAuth : Bytes.RootReturn s base) :
+    Bytes.RootReturn (Heap.mk (update s.allocations s.next (some E)) (s.next + 1)) base := by
+  have hbase := hi.base_lt hl
+  intro blk' hl'
+  have hlb : (update s.allocations s.next (some E)) base = s.allocations base := by
+    simp [update, Nat.ne_of_lt hbase]
+  change (update s.allocations s.next (some E)) base = some blk' at hl'
+  rw [hlb, hl] at hl'
+  cases hl'
+  obtain ⟨root, hr, hbptr, hlen, hna⟩ := hAuth blk hl
+  have hroot := hi.base_lt hr
+  have hlr : (update s.allocations s.next (some E)) blk.root = some root := by
+    simp [update, Nat.ne_of_lt hroot, hr]
+  refine ⟨root, hlr, hbptr, hlen, ?_⟩
+  unfold Heap.noAliases at hna ⊢
+  simp only [List.range_succ, List.all_append, List.all_cons, List.all_nil, Bool.and_true,
+    Bool.and_eq_true]
+  refine ⟨?_, ?_⟩
+  · apply List.all_eq_true.mpr
+    intro j hj
+    have hj' := List.mem_range.mp hj
+    have := List.all_eq_true.mp hna j hj
+    simpa [update, Nat.ne_of_lt hj'] using this
+  · have hfresh₀ : (update s.allocations s.next (some E)) s.next = some E := by simp [update]
+    rw [hfresh₀]
+    by_cases hb : s.next = base
+    · simp [hb]
+    · have hNot : E.active = false ∨ E.root ≠ blk.root := by
+        cases hEa : E.active
+        · exact Or.inl rfl
+        · refine Or.inr fun hER => ?_
+          -- `E` is within the range of the root, which is the range of `blk`
+          have hvalid := hi'.validBlock hfresh₀
+          simp only [Heap.validBlock, Bool.and_eq_true] at hvalid
+          have hRange := hvalid.1.2
+          rw [hER, hlr] at hRange
+          simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hRange
+          have hcompat := (Heap.compatible_iff _ _).mp
+            (hi'.compatible (i := s.next) (j := base) hfresh₀ (hlb.trans hl) hb)
+          rcases hcompat with h | h | h
+          · simp [hEa] at h
+          · simp [hActive] at h
+          · obtain ⟨⟨⟨_, hlo⟩, hhi⟩, _⟩ := hRange
+            rw [← hbptr] at hlo hhi
+            rw [← hlen] at hhi
+            have hj : E.bptr.val - blk.bptr.val < blk.repr.length := by omega
+            have hc := h 0 hE (E.bptr.val - blk.bptr.val) hj (by omega)
+            obtain ⟨d, x, hx⟩ := hshared _ (List.getElem_mem hE)
+            have hd := hEx _ hj
+            cases hy : blk.repr[E.bptr.val - blk.bptr.val] with
+            | borrowed => simp [hy] at hd
+            | shared n y =>
+              simp [hy] at hd
+              subst hd
+              simp [hx, hy, Cell.compatible] at hc
+      rcases hNot with h | h <;> simp [h, hb]
+
+/-- A fresh block without owned cleanup (an exposure) keeps the authority of the owned exclusive
+blocks of the frame. -/
+theorem authOK_fresh {s : Heap} {E : Block} {h F : Fragment}
+    (hi : s.Inv) (hi' : (Heap.mk (update s.allocations s.next (some E)) (s.next + 1)).Inv)
+    (hE : 0 < E.repr.length) (hshared : ∀ c ∈ E.repr, ∃ d b, c = Cell.shared d b)
+    (hm : Fragment.Matches s F) (hAuth : AuthOK s F) (hNo : NoOwned h) :
+    AuthOK (Heap.mk (update s.allocations s.next (some E)) (s.next + 1)) (h ∪ F) := by
+  intro base size bptr hc hEx
+  rcases hc with hc | hc
+  · exact (hNo base size bptr hc).elim
+  · obtain ⟨blk, hl, _, hlive, _, _⟩ := hm _ hc
+    have hbase := hi.base_lt hl
+    have hlb : (update s.allocations s.next (some E)) base = s.allocations base := by
+      simp [update, Nat.ne_of_lt hbase]
+    have hEx' : AllExclusive s base := fun b hb => hEx b (by
+      change (update s.allocations s.next (some E)) base = some b
+      rw [hlb]; exact hb)
+    have hActive : blk.active = true := by
+      simp only [Heap.live, Bool.and_eq_true] at hlive
+      exact hlive.1
+    exact fresh_block_authority hi hi' hE hshared hl hActive (hEx' blk hl)
+      (hAuth base size bptr hc hEx')
+
 /-! ## Lifting local heap operations -/
 
 /-- A family of local heap operations, indexed by the base pointer of the block, lifted to the
 upward closures. -/
 theorem ispec_checked_local {α : Type} {A : BasePtr → Fragment → Prop}
     {modify : Heap → α → Heap → Prop} {B : BasePtr → α → Fragment → Prop}
-    (hLocal : ∀ bptr, Bytes.LocalOp (A bptr) modify (B bptr)) :
+    (hLocal : ∀ bptr, Bytes.LocalOp (A bptr) modify (B bptr))
+    (hAuth : ∀ bptr, Bytes.AuthPres (A bptr) modify (B bptr)) :
     ispec (iexists fun bptr => upClose (A bptr)) (Result.checkedModify modify)
       (fun x => iexists fun bptr => upClose (B bptr x)) := by
   apply ispec_exists.mpr
   intro bptr
-  exact ispec_conseq (ispec_checkedModify (Bytes.LocalOp.upClose (hLocal bptr)))
+  exact ispec_conseq (ispec_checkedModify (Bytes.LocalOp.upClose (hLocal bptr) (hAuth bptr)))
     (entails_refl _) (fun _ _ hB => ⟨bptr, hB⟩)
 
 /-- A pure fact of a postcondition on fragments. -/
@@ -108,17 +565,19 @@ theorem iexists_upClose_pure_and {P : Prop} {A : BasePtr → Fragment → Prop} 
 @[step]
 theorem RawPtr.read.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T) (value : T) :
     ⦃ p ↦ value ⦄ RawPtr.read p ⦃ result => ⌜result = value⌝ ∗ p ↦ value ⦄ :=
-  ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.read.spec _ p bptr value 0 Pointee.Sized.pos)
+  ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.read.spec _ p bptr value 0 Pointee.Sized.pos)
+      (fun bptr => Bytes.read.auth _ p bptr value 0))
     (entails_refl _) (fun _ => iexists_upClose_pure_and)
 
 @[step]
 theorem MutRawPtr.write.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.NoPointers T]
     (p : MutRawPtr T) (oldValue newValue : T) :
     ⦃ p ↦ oldValue ⦄ MutRawPtr.write p newValue ⦃ p ↦ newValue ⦄ :=
-  ispec_checked_local fun bptr =>
-    Bytes.write_pointsTo.spec _ p bptr oldValue newValue
-      (Pointee.NoPointers.no_pointers newValue) Pointee.Sized.pos
+  ispec_checked_local
+    (fun bptr => Bytes.write_pointsTo.spec _ p bptr oldValue newValue
+      (Pointee.NoPointers.no_pointers newValue) Pointee.Sized.pos)
+    (fun bptr => Bytes.write_pointsTo.auth _ p bptr oldValue newValue Pointee.Sized.pos)
 
 /-! ## Ranges -/
 
@@ -137,8 +596,9 @@ theorem RawPtr.readRange.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawP
     (values : List T) (hne : 0 < values.length) :
     ⦃ p ↦* values ⦄ RawPtr.readRange (Pointee.repr (T := T)) p values.length
       ⦃ result => ⌜result = values⌝ ∗ p ↦* values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.readRange.local _ p bptr (listVec values) 0 hne Pointee.Sized.pos)
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.readRange.local _ p bptr (listVec values) 0 hne Pointee.Sized.pos)
+      (fun bptr => Bytes.readRange.auth _ p bptr (listVec values) 0))
     (entails_refl _) (fun _ => ?_)
   simp only [listVec_toList]
   exact iexists_upClose_pure_and
@@ -180,8 +640,9 @@ theorem RawPtr.borrowRange.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : Ra
     (values : List T) (hne : 0 < values.length) :
     ⦃ p ↦* values ⦄ RawPtr.borrowRange (Pointee.repr (T := T)) p values.length
       ⦃ result => ⌜result = values⌝ ∗ p ↦† values.length ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.borrowRange.local _ p bptr (listVec values) hne Pointee.Sized.pos)
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.borrowRange.local _ p bptr (listVec values) hne Pointee.Sized.pos)
+      (fun bptr => Bytes.borrowRange.auth _ p bptr (listVec values) hne Pointee.Sized.pos))
     (entails_refl _) (fun _ => ?_)
   simp only [listVec_toList]
   exact iexists_upClose_pure_and
@@ -202,8 +663,9 @@ theorem RawPtr.shareRange.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : Raw
     (depth : Nat) (values : List T) (hne : 0 < values.length) :
     ⦃ p.range depth values ⦄ RawPtr.shareRange (Pointee.repr (T := T)) p values.length
       ⦃ result => ⌜result = values⌝ ∗ p.range (depth + 1) values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.shareRange.local _ p bptr (listVec values) depth hne Pointee.Sized.pos)
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.shareRange.local _ p bptr (listVec values) depth hne Pointee.Sized.pos)
+      (fun bptr => Bytes.shareRange.auth _ p bptr (listVec values) depth hne Pointee.Sized.pos))
     (entails_refl _) (fun _ => ?_)
   simp only [listVec_toList]
   exact iexists_upClose_pure_and
@@ -232,9 +694,11 @@ theorem RawPtr.endShareRange.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : 
     (depth : Nat) (values : List T) (positive : 0 < depth) (hne : 0 < values.length) :
     ⦃ p.range (depth + 1) values ⦄ RawPtr.endShareRange (Pointee.repr (T := T)) p values
       ⦃ p.range depth values ⦄ := by
-  have h := ispec_checked_local fun bptr =>
-    Bytes.endShareRange.local (Pointee.repr (T := T)) p bptr (listVec values) depth positive hne
-      Pointee.Sized.pos
+  have h := ispec_checked_local
+    (fun bptr => Bytes.endShareRange.local (Pointee.repr (T := T)) p bptr (listVec values) depth
+      positive hne Pointee.Sized.pos)
+    (fun bptr => Bytes.endShareRange.auth (Pointee.repr (T := T)) p bptr (listVec values) depth
+      positive hne Pointee.Sized.pos)
   simp only [listVec_toList] at h
   exact h
 
@@ -318,9 +782,11 @@ theorem RawPtr.add.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
     (hCount : count.val ≤ values.length) :
     ⦃ p ↦* values ⦄ RawPtr.add p count
       ⦃ result => ⌜result = p.elem count.val⌝ ∗ p ↦* values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.add.local _ p bptr (listVec values) 0 count hne Pointee.Sized.pos hCount _
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.add.local _ p bptr (listVec values) 0 count hne Pointee.Sized.pos hCount _
         (fun _ hp => pointsToRange_readable hp))
+      (fun bptr => Bytes.add.auth _ p bptr (listVec values) 0 count _
+        (fun _ hp => pointsToRange_readable hp)))
     (entails_refl _) (fun result => ?_)
   rintro h ⟨bptr, a, ⟨hprov, haddr, hA⟩, hSub⟩
   exact (sep_pure_l _ _ h).mpr ⟨RawPtr.eq_elem hprov haddr, bptr, a, hA, hSub⟩
@@ -359,16 +825,17 @@ theorem upClose_sep {A B : Fragment → Prop} : upClose (Bytes.sep A B) ⊢ upCl
 `A`, keeping every frame. -/
 theorem ispec_allocating_emp {α : Type} {modify : Heap → α → Heap → Prop}
     {A : α → Fragment → Prop}
-    (hPost : ∀ s F, s.Inv → Fragment.Matches s F → ∀ x s', modify s x s' →
-      ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧ A x h) :
+    (hPost : ∀ s F, s.Inv → Fragment.Matches s F → AuthOK s F → ∀ x s', modify s x s' →
+      ∃ h, h.Disjoint F ∧ Fragment.Matches s' (h ∪ F) ∧ s'.Inv ∧ AuthOK s' (h ∪ F) ∧ A x h) :
     ispec emp (Result.allocatingModify modify) (fun x => upClose (A x)) := by
   apply ispec_allocatingModify
-  intro s h frame _ hd hm hi x s' hx
-  obtain ⟨h', hd', hm', hi', hA⟩ := hPost s (h ∪ frame) hi hm x s' hx
+  intro s h frame _ hd hm hi hAuth x s' hx
+  obtain ⟨h', hd', hm', hi', hAuth', hA⟩ := hPost s (h ∪ frame) hi hm hAuth x s' hx
   have hd'' := Fragment.disjoint_union_right.mp hd'
-  refine ⟨h' ∪ h, Fragment.disjoint_union_left.mpr ⟨hd''.2, hd⟩, ?_, hi',
+  refine ⟨h' ∪ h, Fragment.disjoint_union_left.mpr ⟨hd''.2, hd⟩, ?_, hi', ?_,
     h', hA, PartialCommMonoid.Subheap.union_left hd''.1⟩
-  rwa [Fragment.union_assoc]
+  · rwa [Fragment.union_assoc]
+  · rwa [Fragment.union_assoc]
 
 /-- The cells of a block and its cleanup, which hold in the same heap, have the same base pointer.
 -/
@@ -444,33 +911,77 @@ theorem Bytes.allocSharedExposure.post {T : Type} (repr : Repr T) (values : Vect
     simpa [bytes] using (each i.val (by simp)).1
   · contradiction
 
+theorem Repr.create_length {T : Type} {repr : Repr T} (data : List (Vector Byte repr.size))
+    (depth : Nat) : (repr.create data depth).length = data.length * repr.size := by
+  induction data with
+  | nil => simp [Repr.create]
+  | cons x xs ih =>
+    simp only [Repr.create, List.flatMap_cons, List.length_append, List.length_map,
+      Vector.length_toList, List.length_cons] at ih ⊢
+    rw [ih, Nat.add_mul, Nat.one_mul, Nat.add_comm]
+
+theorem exposure_authOK {T : Type} {repr : Repr T} {data : List (Vector Byte repr.size)}
+    {bptr : BasePtr} {root : Option Nat} {depth : Nat} {s : Heap} {h F : Fragment}
+    (hi : s.Inv) (hm : Fragment.Matches s F) (hAuth : AuthOK s F) (hNo : NoOwned h)
+    (hlen : 0 < data.length) (hsize : 0 < repr.size)
+    (hi' : (Heap.mk (update s.allocations s.next
+      (some ⟨bptr, root.getD s.next, repr.create data depth, false, true, true⟩))
+        (s.next + 1)).Inv) :
+    AuthOK (Heap.mk (update s.allocations s.next
+      (some ⟨bptr, root.getD s.next, repr.create data depth, false, true, true⟩))
+        (s.next + 1)) (h ∪ F) :=
+  authOK_fresh hi hi' (by rw [Repr.create_length]; exact Nat.mul_pos hlen hsize)
+    (fun c hc => let ⟨b, hb⟩ := Repr.create_shared c hc; ⟨depth, b, hb⟩) hm hAuth hNo
+
 /-- Exposes a mutable safe place, whose values are `values`. -/
 @[step]
-theorem RawPtr.allocExposure.spec {T : Type} [Pointee T] [Pointee.Calibrated T] (values : List T) :
+theorem RawPtr.allocExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
+    (values : List T) (hne : 0 < values.length) :
     ⦃ emp ⦄ RawPtr.allocExposure (Pointee.repr (T := T)) values
       ⦃ p => p.exposure values.length ∗ p ↦* values ⦄ := by
   have h := ispec_allocating_emp (A := fun p => Bytes.alloc (Pointee.repr (T := T)) p p.address
       values.length false ∗ᵇ Bytes.pointsToRange (Pointee.repr (T := T)) p p.address
         (listVec values) 0)
     (modify := State.newBlock (Pointee.repr (T := T)) values false)
-    (fun s F hi hm => by
-      simpa using Bytes.allocExposure.post (Pointee.repr (T := T)) (listVec values)
-        Pointee.Calibrated.calibrated s F hi hm)
+    (fun s F hi hm hAuth p s₁ hx => by
+      have hx' : State.newBlock (Pointee.repr (T := T)) (listVec values).toList false s p s₁ := by
+        simpa using hx
+      obtain ⟨h, hd, hm', hi', hA⟩ := Bytes.allocExposure.post (Pointee.repr (T := T))
+        (listVec values) Pointee.Calibrated.calibrated s F hi hm p s₁ hx'
+      refine ⟨h, hd, hm', hi', ?_, hA⟩
+      obtain ⟨data, bptr, root, exposed, created⟩ := hx
+      obtain ⟨len, _⟩ := exposesList_index _ s bptr.val values data exposed
+      have hs := Heap.newBlock_fresh created
+      subst hs
+      exact exposure_authOK hi hm hAuth
+        (NoOwned.sep (fun _ ha => NoOwned.alloc_false ha) (fun _ hb => NoOwned.pointsToRange hb) hA)
+        (by omega) Pointee.Sized.pos hi')
   refine ispec_conseq h (entails_refl _) (fun p => entails_trans upClose_sep ?_)
   exact sep_mono (entails_refl _) (fun h hU => ⟨p.address, hU⟩)
 
 /-- Exposes a shared safe place, whose values are `values`. -/
 @[step]
-theorem RawPtr.allocSharedExposure.spec {T : Type} [Pointee T] (values : List T) :
+theorem RawPtr.allocSharedExposure.spec {T : Type} [Pointee T] [Pointee.Sized T]
+    (values : List T) (hne : 0 < values.length) :
     ⦃ emp ⦄ RawPtr.allocSharedExposure (Pointee.repr (T := T)) values
       ⦃ p => p.exposure values.length ∗ p.readable 1 values ⦄ := by
   have h := ispec_allocating_emp (A := fun p => Bytes.alloc (Pointee.repr (T := T)) p p.address
       values.length false ∗ᵇ readableRange (Pointee.repr (T := T)) p p.address
         (listVec values) 1)
     (modify := State.newSharedExposure (Pointee.repr (T := T)) values)
-    (fun s F hi hm => by
-      simpa using Bytes.allocSharedExposure.post (Pointee.repr (T := T)) (listVec values)
-        s F hi hm)
+    (fun s F hi hm hAuth p s₁ hx => by
+      have hx' : State.newSharedExposure (Pointee.repr (T := T)) (listVec values).toList s p s₁ := by
+        simpa using hx
+      obtain ⟨h, hd, hm', hi', hA⟩ := Bytes.allocSharedExposure.post (Pointee.repr (T := T))
+        (listVec values) s F hi hm p s₁ hx'
+      refine ⟨h, hd, hm', hi', ?_, hA⟩
+      obtain ⟨data, bptr, root, exposed, created⟩ := hx
+      obtain ⟨len, _⟩ := exposesList_index _ s bptr.val values data exposed
+      have hs := Heap.newSharedExposure_fresh created
+      subst hs
+      exact exposure_authOK hi hm hAuth
+        (NoOwned.sep (fun _ ha => NoOwned.alloc_false ha) (fun _ hb => NoOwned.readableRange hb) hA)
+        (by omega) Pointee.Sized.pos hi')
   refine ispec_conseq h (entails_refl _) (fun p => entails_trans upClose_sep ?_)
   exact sep_mono (entails_refl _) (fun h hU => ⟨p.address, hU⟩)
 
@@ -523,7 +1034,8 @@ theorem RawPtr.endSharedExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] (
     rintro h ⟨h₁, h₂, hd, rfl, hE, bptr, hR⟩
     exact ⟨bptr, hsep bptr _ ⟨h₁, h₂, hd, rfl, hE, hR⟩⟩
   refine ispec_conseq (ispec_checked_local (modify := State.endSharedExposure
-    (Pointee.repr (T := T)) p values) (B := fun _ _ => Bytes.empty) fun bptr => ?_) hEq
+    (Pointee.repr (T := T)) p values) (B := fun _ _ => Bytes.empty) (fun bptr => ?_)
+    (fun bptr => Bytes.endExposure.auth _ p bptr (listVec values) 1 (fun _ _ _ h => h.2))) hEq
     (fun _ _ _ => trivial)
   intro h F s hp hd hm hi
   obtain ⟨_, b, _, rfl, _, hb⟩ := id hp
@@ -542,9 +1054,10 @@ theorem RawPtr.add.spec_readable {T : Type} [Pointee T] [Pointee.Sized T] (p : R
     (hCount : count.val ≤ values.length) :
     ⦃ p.readable depth values ⦄ RawPtr.add p count
       ⦃ result => ⌜result = p.elem count.val⌝ ∗ p.readable depth values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.add.local _ p bptr (listVec values) depth count hne Pointee.Sized.pos hCount _
-        (fun _ hp => hp))
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.add.local _ p bptr (listVec values) depth count hne Pointee.Sized.pos
+        hCount _ (fun _ hp => hp))
+      (fun bptr => Bytes.add.auth _ p bptr (listVec values) depth count _ (fun _ hp => hp)))
     (entails_refl _) (fun result => ?_)
   rintro h ⟨bptr, a, ⟨hprov, haddr, hA⟩, hSub⟩
   exact (sep_pure_l _ _ h).mpr ⟨RawPtr.eq_elem hprov haddr, bptr, a, hA, hSub⟩
@@ -583,9 +1096,10 @@ theorem RawPtr.endExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : Ra
       _ ⟨h₁, h₂, hd, rfl, hE, a, pointsToRange_readable ha, hsa⟩
     exact ⟨bptr, c, hc, hsc⟩
   refine ispec_conseq (ispec_checked_local (modify := State.removeExposure
-    (Pointee.repr (T := T)) p values.length) (B := fun _ _ => Bytes.empty) fun bptr => ?_) hEq
+    (Pointee.repr (T := T)) p values.length) (B := fun _ _ => Bytes.empty)
+    (fun bptr => Bytes.endExposure.local _ p bptr (listVec values) 0 hne Pointee.Sized.pos)
+    (fun bptr => Bytes.endExposure.auth _ p bptr (listVec values) 0 (fun _ _ _ h => h))) hEq
     (fun _ _ _ => trivial)
-  exact Bytes.endExposure.local _ p bptr (listVec values) 0 hne Pointee.Sized.pos
 
 theorem Bytes.pointsToRange_singleton {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
     {value : T} {depth : Nat} {h : Fragment} :
@@ -657,9 +1171,10 @@ theorem RawPtr.read.spec_readable {T : Type} [Pointee T] [Pointee.Sized T] (p : 
     (depth : Nat) (values : List T) (i : Nat) (hi : i < values.length) :
     ⦃ p.readable depth values ⦄ RawPtr.read (p.elem i)
       ⦃ result => ⌜result = values[i]⌝ ∗ p.readable depth values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.readElem.local p bptr (listVec values) depth ⟨i, hi⟩ Pointee.Sized.pos _
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.readElem.local p bptr (listVec values) depth ⟨i, hi⟩ Pointee.Sized.pos _
         (fun _ h => h))
+      (fun bptr => Bytes.readElem.auth p bptr (listVec values) depth ⟨i, hi⟩ _ (fun _ h => h)))
     (entails_refl _) (fun _ => ?_)
   have : (listVec values)[i] = values[i] := by simp [listVec]
   simp only [this]
@@ -671,9 +1186,11 @@ theorem RawPtr.read.spec_range {T : Type} [Pointee T] [Pointee.Sized T] (p : Raw
     (values : List T) (i : Nat) (hi : i < values.length) :
     ⦃ p ↦* values ⦄ RawPtr.read (p.elem i)
       ⦃ result => ⌜result = values[i]⌝ ∗ p ↦* values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.readElem.local p bptr (listVec values) 0 ⟨i, hi⟩ Pointee.Sized.pos _
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.readElem.local p bptr (listVec values) 0 ⟨i, hi⟩ Pointee.Sized.pos _
         (fun _ hp => pointsToRange_readable hp))
+      (fun bptr => Bytes.readElem.auth p bptr (listVec values) 0 ⟨i, hi⟩ _
+        (fun _ hp => pointsToRange_readable hp)))
     (entails_refl _) (fun _ => ?_)
   have : (listVec values)[i] = values[i] := by simp [listVec]
   simp only [this]
@@ -713,14 +1230,35 @@ theorem Bytes.writeElem.local {T : Type} [Pointee T] (p : RawPtr T) (bptr : Base
   obtain ⟨h', hd', hm', hi', hq⟩ := hPost x s' hx
   exact ⟨h', hd', hm', hi', rebuild value h' hq⟩
 
+theorem Bytes.writeElem.auth {T : Type} [Pointee T] (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (i : Fin count) (value : T)
+    (hsize : 0 < (Pointee.repr (T := T)).size) :
+    Bytes.AuthPres (Bytes.pointsToRange (Pointee.repr (T := T)) p bptr values 0)
+      (State.write (Pointee.repr (T := T)) (p.elem i.val) value)
+      (fun _ => Bytes.pointsToRange (Pointee.repr (T := T)) p bptr (values.set i.val value i.isLt) 0) := by
+  refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.pointsToRange h) ?_
+  rintro h F s hp hd hm hi x s' hx a' _ _ _ _ base hEx _
+  have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
+  have bound := readableRange_bound _ p bptr values 0 (Nat.lt_of_le_of_lt (Nat.zero_le _) i.isLt)
+    hsize h s (pointsToRange_readable hp) localMatch hi
+  have hfit : p.address.val + i.val * (Pointee.repr (T := T)).size <
+      2 ^ UScalarTy.numBits .Usize :=
+    Nat.lt_of_le_of_lt (Nat.add_le_add_left
+      (Nat.mul_le_mul_right (Pointee.repr (T := T)).size (Nat.le_of_lt i.isLt)) _) bound
+  obtain ⟨rest, ⟨c, r, _, rfl, ⟨bytes, _, hblock⟩, _⟩, _⟩ := pointsToRange_focus _ p (p.elem i.val)
+    bptr values 0 i hsize rfl (p.elem_address i.val hfit) h hp
+  obtain ⟨_, _, rfl⟩ := hblock
+  exact write_step hsize ((Fragment.matches_union _ _ _).mp localMatch).1 hx base hEx
+
 /-- Writes the `i`-th value of a range. -/
 @[step]
 theorem MutRawPtr.write.spec_range {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.NoPointers T]
     (p : MutRawPtr T) (values : List T) (i : Nat) (value : T) (hi : i < values.length) :
     ⦃ p ↦* values ⦄ MutRawPtr.write (p.elem i) value ⦃ p ↦* values.set i value ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.writeElem.local p bptr (listVec values) ⟨i, hi⟩ value
+  refine ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.writeElem.local p bptr (listVec values) ⟨i, hi⟩ value
         (Pointee.NoPointers.no_pointers value) Pointee.Sized.pos)
+      (fun bptr => Bytes.writeElem.auth p bptr (listVec values) ⟨i, hi⟩ value Pointee.Sized.pos))
     (entails_refl _) (fun _ => ?_)
   rintro h ⟨bptr, a, ha, hsa⟩
   refine ⟨bptr, a, ?_, hsa⟩
@@ -747,18 +1285,42 @@ theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] (b : Box T) :
   have h := ispec_allocating_emp (A := fun p => Bytes.alloc (Pointee.repr (T := T)) p p.address
       1 true ∗ᵇ Bytes.pointsTo (Pointee.repr (T := T)) p p.address b.val)
     (modify := State.newBlock (Pointee.repr (T := T)) [b.val] true)
-    (fun s F hi hm => Bytes.newOwned.post (Pointee.repr (T := T)) b.val s F hi hm)
+    (fun s F hi hm hAuth p s₁ hx => by
+      obtain ⟨h, hd, hm', hi', hA⟩ := Bytes.newOwned.post (Pointee.repr (T := T)) b.val s F hi hm
+        p s₁ hx
+      refine ⟨h, hd, hm', hi', ?_, hA⟩
+      obtain ⟨data, bptr, root, _, created⟩ := hx
+      intro base size bptr' hc hEx
+      rcases hc with hc | hc
+      · obtain ⟨a, c, _, rfl, ⟨_, rfl⟩, hc'⟩ := hA
+        rcases hc with hc | hc
+        · simp only [Bytes.allocHeap, Fragment.single, Resource.cleanup.injEq] at hc
+          obtain ⟨rfl, _⟩ := hc
+          exact Bytes.owned_newBlock_root hi created
+        · exact (NoOwned.pointsTo hc' base size bptr' hc).elim
+      · obtain ⟨blk, hl, _, hlive, _, _⟩ := hm _ hc
+        have hbase := hi.base_lt hl
+        have hs := Heap.newBlock_fresh created
+        have hlb : s₁.allocations base = s.allocations base := by
+          subst hs; simp [update, Nat.ne_of_lt hbase]
+        have hActive : blk.active = true := by
+          simp only [Heap.live, Bool.and_eq_true] at hlive
+          exact hlive.1
+        have hEx' : AllExclusive s base := fun b hb => hEx b (by rw [hlb]; exact hb)
+        exact Bytes.RootReturn.newOwned hi (hAuth base size bptr' hc hEx') hl hActive created)
   refine ispec_conseq h (entails_refl _) (fun p => entails_trans upClose_sep ?_)
   refine entails_trans (entails_of_eq (sep_comm_eq _ _)) ?_
   exact sep_mono (fun h hU => ⟨p.address, hU⟩) (entails_refl _)
 
 /-- `ptr::from_mut`: exposes the place of a mutable borrow. -/
 @[step]
-theorem core.ptr.from_mut.spec {T : Type} [Pointee T] [Pointee.Calibrated T] (r : MutBorrow T) :
+theorem core.ptr.from_mut.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
+    (r : MutBorrow T) :
     ⦃ emp ⦄ core.ptr.from_mut r
       ⦃ (p, back) => ⌜back = core.ptr.end_from_mut p⌝ ∗ p ↦ r.val ∗ p.exposure 1 ⦄ := by
   unfold core.ptr.from_mut
-  apply ispec_bind (RawPtr.allocExposure.spec [r.val]) (entails_of_eq (sep_emp_r_eq emp).symm)
+  apply ispec_bind (RawPtr.allocExposure.spec [r.val] (by simp))
+    (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok
   simp only [RawPtr.range_singleton, List.length_singleton, uncurry_apply_pair]
@@ -785,13 +1347,13 @@ theorem core.ptr.end_from_mut.spec {T : Type} [Pointee T] [Pointee.Sized T] (p :
 
 /-- `as_mut_ptr`: exposes the cells of a mutable slice. -/
 @[step]
-theorem Slice.as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Calibrated T]
-    (s : MutBorrow (Slice T)) :
+theorem Slice.as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
+    (s : MutBorrow (Slice T)) (hne : 0 < s.val.length) :
     ⦃ emp ⦄ Slice.as_mut_ptr s
       ⦃ (p, back) => ⌜back = Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p ↦* s.val.val ∗ p.exposure s.val.length ⦄ := by
   unfold Slice.as_mut_ptr
-  apply ispec_bind (RawPtr.allocExposure.spec s.val.val) (entails_of_eq (sep_emp_r_eq emp).symm)
+  apply ispec_bind (RawPtr.allocExposure.spec s.val.val hne) (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok
   simp only [uncurry_apply_pair]
@@ -821,12 +1383,13 @@ theorem Slice.end_as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (s : 
 
 /-- `as_ptr`: exposes the cells of a shared slice, read-only. -/
 @[step]
-theorem Slice.as_ptr.spec {T : Type} [Pointee T] (s : SharedBorrow (Slice T)) :
+theorem Slice.as_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (s : SharedBorrow (Slice T))
+    (hne : 0 < s.val.length) :
     ⦃ emp ⦄ Slice.as_ptr s
       ⦃ (p, back) => ⌜back = Slice.end_as_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p.readable 1 s.val.val ∗ p.exposure s.val.length ⦄ := by
   unfold Slice.as_ptr
-  apply ispec_bind (RawPtr.allocSharedExposure.spec s.val.val)
+  apply ispec_bind (RawPtr.allocSharedExposure.spec s.val.val hne)
     (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok
@@ -901,6 +1464,89 @@ theorem core.slice.raw.from_raw_parts_mut.spec {T : Type} [Pointee T] [Pointee.S
   intro hs
   apply ispec_ok
   simp only [uncurry_apply_pair, hs]
+  iframe
+
+/-! ## Freeing an owned block -/
+
+/-- Returns an owned block of one value to the allocator. Owning its cleanup and its (exclusive)
+cells gives the authority to do so (see `AuthOK`); the proof is that of fournet/wip-memory-model
+(`Bytes.returnView.spec`). -/
+theorem RawPtr.returnOwned.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : MutRawPtr T)
+    (value : T) :
+    ⦃ p ↦ value ∗ p.freeable 1 ⦄
+      Result.checkedModify (State.returnOwned (Pointee.repr (T := T)) p 1) ⦃ emp ⦄ := by
+  have hEq : p ↦ value ∗ p.freeable 1 ⊢
+      iexists fun bptr => upClose (Bytes.sep (Bytes.alloc (Pointee.repr (T := T)) p p.address 1
+        true) (Bytes.pointsTo (Pointee.repr (T := T)) p bptr value)) := by
+    rintro h ⟨h₁, h₂, hd, rfl, ⟨bptr, hP⟩, hF⟩
+    refine ⟨bptr, sep_upClose (A := Bytes.alloc (Pointee.repr (T := T)) p p.address 1 true)
+      (B := Bytes.pointsTo (Pointee.repr (T := T)) p bptr value) _
+      ⟨h₂, h₁, hd.symm, Fragment.union_comm _ _, hF, hP⟩⟩
+  refine ispec_conseq (ispec_exists.mpr fun bptr => ?_) hEq (fun _ => entails_refl _)
+  apply ispec_checkedModify
+  rintro s _ frame ⟨e, he, hse⟩ hd hm hi hAuth
+  obtain ⟨rest, hrest, rfl⟩ := PartialCommMonoid.subheap_iff.mp hse
+  have hdParts := Fragment.disjoint_union_left.mp hd
+  have hme : Fragment.Matches s e :=
+    ((Fragment.matches_union _ _ _).mp ((Fragment.matches_union _ _ _).mp hm).1).1
+  have hsize := (Pointee.Sized.pos (T := T))
+  -- The cells and the cleanup are in the same block: same base pointer
+  obtain ⟨c, a, hca, rfl, hc, ⟨bytes, encoded, hblock⟩⟩ := he
+  have hbptr : bptr = p.address := by
+    have hmca := (Fragment.matches_union _ _ _).mp hme
+    exact Bytes.bptr_eq_of_matches (by simpa using hsize) hc hblock hmca.1 hmca.2
+  subst hbptr
+  have hp' : Bytes.sep (Bytes.alloc (Pointee.repr (T := T)) p p.address 1 true)
+      (Bytes.readable (Pointee.repr (T := T)) p p.address value) (c ∪ a) :=
+    ⟨c, a, hca, rfl, hc, bytes, (Pointee.repr (T := T)).encode_decode _ _ encoded, hblock⟩
+  obtain ⟨blk, hl, _, _, _, hown, _, hdepth, hh⟩ := Bytes.whole_readable hsize hp' hme
+  -- The authority to return the block
+  have hEx : AllExclusive s p.provenance := by
+    intro blk' hl' i hi'
+    rw [hl] at hl'
+    cases hl'
+    have := List.all_eq_true.mp hdepth _ (List.getElem_mem hi')
+    simpa using this
+  have hcl : ((c ∪ a ∪ rest) ∪ frame)
+      (.cleanup p.provenance blk.repr.length blk.bptr true) := by
+    left; left
+    rw [hh, ← hown]
+    left; rfl
+  have authority := hAuth _ _ _ hcl hEx
+  have hdA : (c ∪ a).Disjoint (rest ∪ frame) :=
+    Fragment.disjoint_union_right.mpr ⟨hrest, hdParts.1⟩
+  have hmA : Fragment.Matches s ((c ∪ a) ∪ (rest ∪ frame)) := by
+    rwa [← Fragment.union_assoc]
+  obtain ⟨⟨_, s₁, hrun⟩, post⟩ := Bytes.returnView.spec (Pointee.repr (T := T)) p p.address value
+    true s hsize (fun _ => authority) (c ∪ a) (rest ∪ frame) hp' hdA hmA hi
+  refine ⟨⟨(), s₁, by unfold State.returnOwned; simpa using hrun⟩, fun x s' hx => ?_⟩
+  have hx' : Heap.returnOwned (Pointee.repr (T := T)) p 1 s = some s' := hx
+  obtain ⟨a', _, hm', hi', ha'⟩ := post x s' (by simpa using hx')
+  rw [ha', Fragment.empty_union] at hm'
+  refine ⟨rest, hdParts.2, hm', hi', ?_, trivial⟩
+  have hs' : s' = s.retire p.provenance := Heap.returnOwned_retire hx'
+  intro base size bptr' hb hEx'
+  rw [hs'] at hEx' ⊢
+  obtain ⟨hEx₀, hRet⟩ := retire_step base hEx'
+  apply hRet
+  apply hAuth base size bptr' _ hEx₀
+  rcases hb with hb | hb
+  · exact Or.inl (Or.inr hb)
+  · exact Or.inr hb
+
+/-- `Box::from_raw`: reads the value, and returns the owned block to the allocator. -/
+@[step]
+theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : MutRawPtr T)
+    (value : T) :
+    ⦃ p ↦ value ∗ p.freeable 1 ⦄ alloc.boxed.Box.from_raw p ⦃ b => ⌜b.val = value⌝ ⦄ := by
+  unfold alloc.boxed.Box.from_raw
+  apply ispec_bind (RawPtr.read.spec p value) (entails_refl _)
+  intro v
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro rfl
+  apply ispec_bind (RawPtr.returnOwned.spec p v) (entails_of_eq (sep_emp_r_eq _).symm)
+  intro _
+  apply ispec_ok
   iframe
 
 end Aeneas.Std
