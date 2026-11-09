@@ -1058,6 +1058,10 @@ let lean_builtin_funs =
     mk_fun "core::num::{u32}::is_multiple_of" "core.num.U32.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 23 *)
     mk_fun "core::num::{u32}::is_power_of_two" "core.num.U32.is_power_of_two";
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 40 *)
+    mk_fun "core::num::{u32}::to_be" "core.num.U32.to_be" ~can_fail:false;
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 37 *)
+    mk_fun "core::num::{u32}::to_le" "core.num.U32.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 38 *)
     mk_fun "core::num::{u32}::wrapping_shl" "core.num.U32.wrapping_shl"
       ~can_fail:false;
@@ -1070,9 +1074,9 @@ let lean_builtin_funs =
     mk_fun "core::num::{u64}::is_multiple_of" "core.num.U64.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 26 *)
     mk_fun "core::num::{u64}::is_power_of_two" "core.num.U64.is_power_of_two";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 40 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 46 *)
     mk_fun "core::num::{u64}::to_be" "core.num.U64.to_be" ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 37 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 43 *)
     mk_fun "core::num::{u64}::to_le" "core.num.U64.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 39 *)
     mk_fun "core::num::{u64}::wrapping_shl" "core.num.U64.wrapping_shl"
