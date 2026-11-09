@@ -70,8 +70,8 @@ def Buffer.format_finite
     Source: 'tests/src/static-ret-stateful.rs', lines 27:4-33:5
     Visibility: public -/
 def Buffer.format
-  {F : Type _} [Pointee F] (FloatInst : Float F) (self : MutBorrow Buffer)
-  (f : F) (b : Bool) :
+  {F : Type _} (FloatInst : Float F) (self : MutBorrow Buffer) (f : F)
+  (b : Bool) :
   Result ((SharedBorrow Str) × (Result Buffer))
   := do
   if b
