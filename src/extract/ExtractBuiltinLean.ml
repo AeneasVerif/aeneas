@@ -190,30 +190,30 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Alloc/Alloc.lean", line: 15 *)
     mk_fun "alloc::alloc::{core::clone::Clone<alloc::alloc::Global>}::clone"
       "alloc.alloc.CloneGlobal.clone";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 112 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 92 *)
     mk_fun "alloc::boxed::{Box<@T>}::from_raw" "alloc.boxed.Box.from_raw";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 103 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 83 *)
     mk_fun "alloc::boxed::{Box<@T>}::into_raw" "alloc.boxed.Box.into_raw";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 68 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 48 *)
     mk_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
       "alloc.boxed.CloneBox.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 82 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 62 *)
     mk_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq"
       "alloc.boxed.PartialEqBox.eq"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 58 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 38 *)
     mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
       "alloc.boxed.AsMutBox.as_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 34 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 14 *)
     mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
       "alloc.boxed.Box.deref"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 38 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 18 *)
     mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
       "alloc.boxed.Box.deref_mut"
       ~keep_params:(Some [ true; false ])
@@ -1065,9 +1065,12 @@ let lean_builtin_funs =
     mk_fun "core::ptr::const_ptr::{*const @T}::add" "RawPtr.add";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 116 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::offset" "RawPtr.offset";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 126 *)
+    (* file: "Aeneas/Std/Core/PtrMovement.lean", line: 61 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::offset_from"
+      "MutRawPtr.offset_from";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 124 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 260 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 258 *)
     mk_fun "core::ptr::from_mut" "core.ptr.from_mut" ~stateful_lifetimes:[0]
       ~placement:true;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 106 *)
@@ -1079,13 +1082,15 @@ let lean_builtin_funs =
       ~lift:false;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 112 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::offset" "RawPtr.offset";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 130 *)
+    (* file: "Aeneas/Std/Core/PtrMovement.lean", line: 57 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::offset_from" "MutRawPtr.offset_from";
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 128 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 135 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 133 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write" "MutRawPtr.write";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 131 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 129 *)
     mk_fun "core::ptr::read" "RawPtr.read";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 139 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 137 *)
     mk_fun "core::ptr::write" "MutRawPtr.write";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 109 *)
     mk_fun
@@ -1568,7 +1573,7 @@ let lean_builtin_trait_decls =
 
 let lean_builtin_trait_impls =
   [
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 75 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 55 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
@@ -1589,7 +1594,7 @@ let lean_builtin_trait_impls =
       "core.cmp.PartialEqShared";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 231 *)
     mk_trait_impl "core::cmp::PartialEq<(), ()>" "core.cmp.PartialEqUnit";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 88 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 68 *)
     mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
       "core.cmp.PartialEqBox"
       ~keep_params:(Some [ true; false ]);
@@ -1603,7 +1608,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 303 *)
     mk_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"
       "core.cmp.PartialOrdShared";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 63 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 43 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 516 *)
     mk_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"
@@ -1776,7 +1781,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::marker::Copy<[@T; @N]>" "Array.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::marker::Copy<bool>" "core.marker.CopyBool";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 44 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 24 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"
       ~keep_params:(Some [ true; false ]);
@@ -1784,7 +1789,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 51 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 31 *)
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
       "core.ops.deref.DerefMutBoxInst"
       ~keep_params:(Some [ true; false ]);
