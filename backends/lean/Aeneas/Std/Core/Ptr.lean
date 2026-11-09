@@ -115,9 +115,11 @@ def RawPtr.offset [Pointee T] (q : RawPtr T) (count : Isize) : Result (RawPtr T)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset"] RawPtr.offset
 
-@[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
+@[expose, rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
 def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
   q
+
+@[simp] theorem RawPtr.cast_const_eq (q : MutRawPtr T) : q.cast_const = q := rfl
 
 namespace RawPtr
 
