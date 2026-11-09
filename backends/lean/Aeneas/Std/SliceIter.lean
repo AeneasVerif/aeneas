@@ -393,6 +393,88 @@ private def collectNestedStepBy
 -- Step specs for SharedArray.into_iter and SharedSlice.into_iter
 -- ============================================================================
 
+/-- The loop of `Iterator::any` on `slice::Iter`, over the remaining elements `l`.
+
+Calls the predicate on each element in order, threading its `FnMut` state, and stops at the first
+`true`. Returns whether an element matched and how many elements were consumed, including the
+match. -/
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop
+  {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) :
+  List T → F → Result (Bool × Nat)
+  | [], _ => ok (false, 0)
+  | x :: xs, f => do
+    let (b, f1) ← FnMutInst.call_mut f x
+    if b then ok (true, 1)
+    else do
+      let (b1, k) ← core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop FnMutInst xs f1
+      ok (b1, k + 1)
+
+/-- `Iterator::any` on `slice::Iter`.
+
+The standard library overrides this in the `iterator!` macro
+(`library/core/src/slice/iter/macros.rs`):
+```rust
+fn any<F>(&mut self, mut f: F) -> bool
+where
+    Self: Sized,
+    F: FnMut(Self::Item) -> bool,
+{
+    while let Some(x) = self.next() {
+        if f(x) {
+            return true;
+        }
+    }
+    false
+}
+```
+The loop runs over the remaining elements `slice[i..]`; `i` then advances past every element
+consumed, so the matching element is consumed and the ones after it remain. A failing predicate
+call fails the whole call. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::any"]
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+  {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) :
+  core.slice.iter.Iter T → F → Result (Bool × (core.slice.iter.Iter T)) :=
+  fun it f => do
+    let (b, k) ← core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop FnMutInst (it.slice.val.drop it.i) f
+    ok (b, { it with i := it.i + k })
+
+/-- With a pure predicate `p`, the loop returns `l.any p`, and the elements left after it are
+    those after the first match (none, if nothing matched). -/
+theorem core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop.spec
+    {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) (p : T → Bool) (f : F)
+    (hf : ∀ x, FnMutInst.call_mut f x = ok (p x, f)) (l : List T) :
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop FnMutInst l f
+    ⦃ r => r.1 = l.any p ∧ l.drop r.2 = (l.dropWhile (fun x => !p x)).drop 1 ⦄ := by
+  induction l with
+  | nil => simp [core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop, WP.spec_ok]
+  | cons x xs ih =>
+    simp only [core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop, hf]
+    by_cases hx : p x
+    · simp [hx, WP.spec_ok]
+    · simp only [hx, Bool.false_eq_true, ↓reduceIte, bind_ok, uncurry_apply_pair]
+      apply WP.spec_bind ih
+      intro ⟨b1, k⟩ hr
+      simp_all [WP.spec_ok]
+
+/-- `any` on a slice iterator with a pure predicate `p`: the result is whether any remaining
+    element satisfies `p`, and the iterator is left just after the first match (exhausted, if
+    nothing matched). -/
+@[step]
+theorem core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.spec
+    {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) (p : T → Bool) (f : F)
+    (hf : ∀ x, FnMutInst.call_mut f x = ok (p x, f)) (it : core.slice.iter.Iter T) :
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any FnMutInst it f
+    ⦃ r => r.1 = (it.slice.val.drop it.i).any p ∧ r.2.slice = it.slice ∧
+           r.2.slice.val.drop r.2.i =
+             ((it.slice.val.drop it.i).dropWhile (fun x => !p x)).drop 1 ⦄ := by
+  unfold core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+  apply WP.spec_bind (core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop.spec FnMutInst p f hf _)
+  intro ⟨b, k⟩ hr
+  simp only [uncurry_apply_pair, WP.spec_ok]
+  refine ⟨hr.1, trivial, ?_⟩
+  simpa [List.drop_drop, Nat.add_comm] using hr.2
+
 namespace core.slice
 
 @[step]
@@ -408,7 +490,6 @@ theorem SharedSlice.into_iter.spec {T : Type _} (s : Slice T) :
     ⦃ (iter : iter.Iter T) =>
       iter.slice = s ∧ iter.i = 0 ⦄ := by
   simp [SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
-
 /-- `<&mut [T; N] as IntoIterator>::into_iter`: the iterator ranges over the array from index `0`,
 and the back function writes the iterator's slice back into the array. -/
 @[step]
