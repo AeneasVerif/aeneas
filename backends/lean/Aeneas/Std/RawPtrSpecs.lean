@@ -933,17 +933,55 @@ theorem exposure_authOK {T : Type} {repr : Repr T} {data : List (Vector Byte rep
   authOK_fresh hi hi' (by rw [Repr.create_length]; exact Nat.mul_pos hlen hsize)
     (fun c hc => let ⟨b, hb⟩ := Repr.create_shared c hc; ⟨depth, b, hb⟩) hm hAuth hNo
 
+/-- An exposure at an address is an exposure. -/
+theorem State.exposeAt_newBlock {T : Type} {repr : Repr T} {values : List T} {address : BasePtr}
+    {s₀ s₁ : Heap} {p : RawPtr T} (h : State.exposeAt repr values address s₀ p s₁) :
+    State.newBlock repr values false s₀ p s₁ := by
+  obtain ⟨data, root, hexp, hnew⟩ := h
+  exact ⟨data, address, root, by simpa using hexp, hnew⟩
+
+/-- An exposure at an address is there. -/
+theorem State.exposeAt_address {T : Type} {repr : Repr T} {values : List T} {address : BasePtr}
+    {s₀ s₁ : Heap} {p : RawPtr T} (h : State.exposeAt repr values address s₀ p s₁) :
+    p.address = address := by
+  obtain ⟨data, root, -, hnew⟩ := h
+  unfold Heap.newBlock at hnew
+  split_ifs at hnew
+  obtain ⟨_, _, h⟩ := Option.map_eq_some_iff.mp hnew
+  cases h
+  rfl
+
+/-- A shared exposure at an address is a shared exposure. -/
+theorem State.sharedExposeAt_newSharedExposure {T : Type} {repr : Repr T} {values : List T}
+    {address : BasePtr} {s₀ s₁ : Heap} {p : RawPtr T}
+    (h : State.sharedExposeAt repr values address s₀ p s₁) :
+    State.newSharedExposure repr values s₀ p s₁ := by
+  obtain ⟨data, root, hexp, hnew⟩ := h
+  exact ⟨data, address, root, hexp, hnew⟩
+
+/-- A shared exposure at an address is there. -/
+theorem State.sharedExposeAt_address {T : Type} {repr : Repr T} {values : List T}
+    {address : BasePtr} {s₀ s₁ : Heap} {p : RawPtr T}
+    (h : State.sharedExposeAt repr values address s₀ p s₁) : p.address = address := by
+  obtain ⟨data, root, -, hnew⟩ := h
+  unfold Heap.newSharedExposure at hnew
+  split_ifs at hnew
+  obtain ⟨_, _, h⟩ := Option.map_eq_some_iff.mp hnew
+  cases h
+  rfl
+
 /-- Exposes a mutable safe place, whose values are `values`. -/
 @[step]
 theorem RawPtr.allocExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
-    (values : List T) (hne : 0 < values.length) :
-    ⦃ emp ⦄ RawPtr.allocExposure (Pointee.repr (T := T)) values
+    (values : List T) (address : BasePtr) (hne : 0 < values.length) :
+    ⦃ emp ⦄ RawPtr.allocExposure (Pointee.repr (T := T)) values address
       ⦃ p => p.exposure values.length ∗ p ↦* values ⦄ := by
   have h := ispec_allocating_emp (A := fun p => Bytes.alloc (Pointee.repr (T := T)) p p.address
       values.length false ∗ᵇ Bytes.pointsToRange (Pointee.repr (T := T)) p p.address
         (listVec values) 0)
-    (modify := State.newBlock (Pointee.repr (T := T)) values false)
+    (modify := State.exposeAt (Pointee.repr (T := T)) values address)
     (fun s F hi hm hAuth p s₁ hx => by
+      replace hx := State.exposeAt_newBlock hx
       have hx' : State.newBlock (Pointee.repr (T := T)) (listVec values).toList false s p s₁ := by
         simpa using hx
       obtain ⟨h, hd, hm', hi', hA⟩ := Bytes.allocExposure.post (Pointee.repr (T := T))
@@ -962,14 +1000,15 @@ theorem RawPtr.allocExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] [Poin
 /-- Exposes a shared safe place, whose values are `values`. -/
 @[step]
 theorem RawPtr.allocSharedExposure.spec {T : Type} [Pointee T] [Pointee.Sized T]
-    (values : List T) (hne : 0 < values.length) :
-    ⦃ emp ⦄ RawPtr.allocSharedExposure (Pointee.repr (T := T)) values
+    (values : List T) (address : BasePtr) (hne : 0 < values.length) :
+    ⦃ emp ⦄ RawPtr.allocSharedExposure (Pointee.repr (T := T)) values address
       ⦃ p => p.exposure values.length ∗ p.readable 1 values ⦄ := by
   have h := ispec_allocating_emp (A := fun p => Bytes.alloc (Pointee.repr (T := T)) p p.address
       values.length false ∗ᵇ readableRange (Pointee.repr (T := T)) p p.address
         (listVec values) 1)
-    (modify := State.newSharedExposure (Pointee.repr (T := T)) values)
+    (modify := State.sharedExposeAt (Pointee.repr (T := T)) values address)
     (fun s F hi hm hAuth p s₁ hx => by
+      replace hx := State.sharedExposeAt_newSharedExposure hx
       have hx' : State.newSharedExposure (Pointee.repr (T := T)) (listVec values).toList s p s₁ := by
         simpa using hx
       obtain ⟨h, hd, hm', hi', hA⟩ := Bytes.allocSharedExposure.post (Pointee.repr (T := T))
@@ -1326,11 +1365,11 @@ theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] (b : Box T) :
 /-- `ptr::from_mut`: exposes the place of a mutable borrow. -/
 @[step]
 theorem core.ptr.from_mut.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
-    (r : MutBorrow T) :
-    ⦃ emp ⦄ core.ptr.from_mut r
+    (address : BasePtr) (r : MutBorrow T) :
+    ⦃ emp ⦄ core.ptr.from_mut address r
       ⦃ (p, back) => ⌜back = core.ptr.end_from_mut p⌝ ∗ p ↦ r.val ∗ p.exposure 1 ⦄ := by
   unfold core.ptr.from_mut
-  apply ispec_bind (RawPtr.allocExposure.spec [r.val] (by simp))
+  apply ispec_bind (RawPtr.allocExposure.spec [r.val] address (by simp))
     (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok
@@ -1359,12 +1398,12 @@ theorem core.ptr.end_from_mut.spec {T : Type} [Pointee T] [Pointee.Sized T] (p :
 /-- `as_mut_ptr`: exposes the cells of a mutable slice. -/
 @[step]
 theorem Slice.as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
-    (s : MutBorrow (Slice T)) (hne : 0 < s.val.length) :
-    ⦃ emp ⦄ Slice.as_mut_ptr s
+    (address : BasePtr) (s : MutBorrow (Slice T)) (hne : 0 < s.val.length) :
+    ⦃ emp ⦄ Slice.as_mut_ptr address s
       ⦃ (p, back) => ⌜back = Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p ↦* s.val.val ∗ p.exposure s.val.length ⦄ := by
   unfold Slice.as_mut_ptr
-  apply ispec_bind (RawPtr.allocExposure.spec s.val.val hne) (entails_of_eq (sep_emp_r_eq emp).symm)
+  apply ispec_bind (RawPtr.allocExposure.spec s.val.val address hne) (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok
   simp only [uncurry_apply_pair]
@@ -1394,13 +1433,13 @@ theorem Slice.end_as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (s : 
 
 /-- `as_ptr`: exposes the cells of a shared slice, read-only. -/
 @[step]
-theorem Slice.as_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (s : SharedBorrow (Slice T))
-    (hne : 0 < s.val.length) :
-    ⦃ emp ⦄ Slice.as_ptr s
+theorem Slice.as_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (address : BasePtr)
+    (s : SharedBorrow (Slice T)) (hne : 0 < s.val.length) :
+    ⦃ emp ⦄ Slice.as_ptr address s
       ⦃ (p, back) => ⌜back = Slice.end_as_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p.readable 1 s.val.val ∗ p.exposure s.val.length ⦄ := by
   unfold Slice.as_ptr
-  apply ispec_bind (RawPtr.allocSharedExposure.spec s.val.val hne)
+  apply ispec_bind (RawPtr.allocSharedExposure.spec s.val.val address hne)
     (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok

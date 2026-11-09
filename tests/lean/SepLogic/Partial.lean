@@ -19,8 +19,8 @@ example (p : MutRawPtr U32) (value : U32) (h : value.val + 1 ≤ U32.max) :
     ⦃ p ↦ value ⦄ Fixtures.incr_ptr p ⦃ ∃ v, ⌜v.val = value.val + 1⌝ ∗ p ↦ v⦄div := by
   step*
 
-example (value : U32) (h : value.val + 1 ≤ U32.max) :
-    ⦃ emp ⦄ Fixtures.incr_borrow value ⦃ result => ⌜result.val = value.val + 1⌝⦄div := by
+example (placement : Aeneas.Std.Placement) (value : U32) (h : value.val + 1 ≤ U32.max) :
+    ⦃ emp ⦄ Fixtures.incr_borrow placement value ⦃ result => ⌜result.val = value.val + 1⌝⦄div := by
   step*
 
 example (x : Nat) :
@@ -43,8 +43,9 @@ theorem roundTripPartial.spec :
   unfold roundTripPartial
   step*
 
-example : ⦃ emp ⦄ Fixtures.incr_borrow 1#u32 ⦃ result => ⌜result.val = 1 + 1⌝⦄div :=
-  ispec_dispec (Fixtures.incr_borrow.spec 1#u32 (by scalar_tac))
+example (placement : Aeneas.Std.Placement) :
+    ⦃ emp ⦄ Fixtures.incr_borrow placement 1#u32 ⦃ result => ⌜result.val = 1 + 1⌝⦄div :=
+  ispec_dispec (Fixtures.incr_borrow.spec placement 1#u32 (by scalar_tac))
 
 example (p : MutRawPtr U32) :
     ⦃ p ↦ 1#u32 ⦄ (pure 5 : Result Nat) ⦃ v => ⌜v = 5⌝ ∗ p ↦ 1#u32⦄div := by
