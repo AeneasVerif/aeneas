@@ -63,7 +63,7 @@ theorem toDualOrderingIdempotency (o: _root_.Ordering): o.toDualOrdering.toDualO
 -- refined bundling: lifted hypothesis with Lean native objects.
 class OrdSpec [_root_.Ord T] where
   infallible: ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ ⦃ o => compare a b = o.toLeanOrdering ⦄
-  no_oom: ∀ a b, H.cmp ⟨a⟩ ⟨b⟩ ≠ Result.oom
+  returns: ∀ a b, ∃ o, H.cmp ⟨a⟩ ⟨b⟩ = .ok o
 
 class OrdSpecSymmetry [O: _root_.Ord T] extends OrdSpec H where
   symmetry: ∀ a b, O.compare a b = (O.opposite.compare a b).toDualOrdering
@@ -84,8 +84,10 @@ theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]:
     H.cmp ⟨a⟩ ⟨b⟩ ⦃ o' => o' = o ⦄ <-> compare a b = o.toLeanOrdering := by
   apply Iff.intro
   . intro Hcmp
-    obtain ⟨ o', Ho', Hcompare ⟩ :=
-      WP.spec_exists (WP.spec_and Hcmp (O.infallible a b)) (O.no_oom a b)
+    obtain ⟨ o', hRet ⟩ := O.returns a b
+    have h := WP.spec_and Hcmp (O.infallible a b)
+    rw [hRet, WP.spec_ok] at h
+    obtain ⟨ Ho', Hcompare ⟩ := h
     rw [Hcompare, Ho']
   . intro Hcompare
     step with O.infallible a b as ⟨ o', Ho' ⟩

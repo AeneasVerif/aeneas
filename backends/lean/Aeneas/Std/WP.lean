@@ -1,7 +1,10 @@
 module
+public import Aeneas.Std.WPDef
+public import Mathlib.Data.Nat.Notation
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.Delab
 public import Std.Do
+public meta import AeneasMeta.Simp
 public import Aeneas.Tactic.Solver.Grind.Init
 public import Aeneas.Tactic.Step.DspecInduction
 public meta import Aeneas.Std.Spec
@@ -9,6 +12,12 @@ public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
 public import Aeneas.Data.Coinductive.ITreeWP
+public import Aeneas.SepLogic.Lemmas
+public import Aeneas.SepLogic.Delab
+public import Aeneas.SepLogic.Tactic.IFrame
+public import Aeneas.SepLogic.Tactic.IIntro
+public import Aeneas.SepLogic.Tactic.IRewrite
+public import Aeneas.SepLogic.Tactic.ISimp
 import all Init.Internal.Order.Basic
 public section
 
@@ -17,13 +26,7 @@ namespace Aeneas.Std.WP
 open Aeneas.Std Result
 open Aeneas.Data.Coinductive
 open Lean.Order
-
-@[expose, implicit_reducible] def Post α := (α -> Prop)
-@[expose, implicit_reducible] def Pre := Prop
-
-@[expose, implicit_reducible] def Wp α := Post α → Pre
-
-@[expose] def wp_return (x:α) : Wp α := fun p => p x
+open Aeneas.SepLogic
 
 section ResultImplementation
 
@@ -31,42 +34,140 @@ unseal Result
 
 @[expose] section
 
-/-- The WP of the effects of Rust programs (`RustEffect`). -/
-@[reducible]
-def effectWP : EffectWP RustEffect where
-  State := Unit
-  wp effect _ _ :=
-    match effect with
-    | .guardedModify .. => False
-    | .fail e => e = .oom
-
-instance : EffectWP.Monotonic effectWP where
-  wp_monotonic := by
-    intro effect _ _ _ _ h
-    cases effect
-    · exact h
-    · exact h
-
 instance : EffectWP.Conjunctive effectWP where
-  wp_conj := by
-    intro effect _ _ hNonempty hAll
-    obtain ⟨C₀, hC₀⟩ := hNonempty
-    cases effect
-    · exact hAll C₀ hC₀
-    · exact hAll C₀ hC₀
+  wp_conj {effect} _ _ := by
+    rintro ⟨C₀, hC₀⟩ hAll
+    cases effect with
+    | guardedModify =>
+        exact ⟨(hAll C₀ hC₀).1, fun x s' hx C hC => (hAll C hC).2 x s' hx⟩
+    | fail => exact hAll C₀ hC₀
 
-def spec (m : Result α) (p : Post α) : Prop :=
-  DWP effectWP m (fun value _ => p value) ()
+/-! ### Realization of assertions by heaps -/
 
-def dspec (m : Result α) (p : Post α) : Prop :=
-  DWLP effectWP m (fun value _ => p value) ()
+theorem realizes_emp_empty : Realizes emp Heap.empty :=
+  ⟨Heap.inv_empty, ∅, trivial, Fragment.matches_empty _⟩
 
-theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
-  DWP.toPartial
+theorem realizes_sep_emp {H : IProp} {s : Heap} : Realizes (H ∗ emp) s ↔ Realizes H s := by
+  rw [sep_emp_r_eq]
+
+theorem Realizes.pure {P : Prop} {s : Heap} (h : Realizes ⌜P⌝ s) : P :=
+  let ⟨_, _, hP, _⟩ := h; hP
+
+/-- Two resources of the same key which hold in the same heap are equal. -/
+theorem Resource.Holds.unique {s : Heap} {r r' : Resource}
+    (h : r.Holds s) (h' : r'.Holds s) (hIncompatible : ¬ r.Compatible r') : r = r' := by
+  simp only [Resource.Compatible, not_or, Decidable.not_not] at hIncompatible
+  obtain ⟨hBase, hKey⟩ := hIncompatible
+  cases r <;> cases r' <;>
+    simp only [Resource.base, Resource.key, reduceCtorEq, Option.some.injEq] at hBase hKey
+  · obtain ⟨b, hb, _, hbptr, hc⟩ := h
+    obtain ⟨b', hb', _, hbptr', hc'⟩ := h'
+    subst hBase hKey
+    rw [hb] at hb'; cases hb'
+    rw [hc] at hc'; cases hc'
+    subst hbptr hbptr'; rfl
+  · obtain ⟨b, hb, hlen, _, hbptr, hown⟩ := h
+    obtain ⟨b', hb', hlen', _, hbptr', hown'⟩ := h'
+    subst hBase
+    rw [hb] at hb'; cases hb'
+    subst hlen hlen' hbptr hbptr' hown hown'; rfl
+
+/-- The union of the parts of two fragments which hold in the same heap, and which are
+disjoint from the same fragment. -/
+theorem Fragment.join_of_matches {s : Heap} {o₁ o₂ frame : Fragment}
+    (hMatches₁ : Fragment.Matches s o₁) (hMatches₂ : Fragment.Matches s o₂)
+    (hDisjoint₁ : o₁.Disjoint frame) (hDisjoint₂ : o₂.Disjoint frame) :
+    ∃ o, o.Disjoint frame ∧ Fragment.Matches s o ∧
+      PartialCommMonoid.Subheap o₁ o ∧ PartialCommMonoid.Subheap o₂ o := by
+  classical
+  -- The resources of `o₂` which are not in `o₁`
+  let rest₂ : Fragment := fun r => o₂ r ∧ ¬ o₁ r
+  let rest₁ : Fragment := fun r => o₁ r ∧ ¬ o₂ r
+  have hCompat {a b : Fragment} (ha : Fragment.Matches s a) (hb : Fragment.Matches s b) :
+      a.Disjoint (fun r => b r ∧ ¬ a r) := by
+    intro r hr r' ⟨hr', hNot⟩
+    refine Classical.byContradiction fun hInc => ?_
+    exact hNot (Resource.Holds.unique (ha r hr) (hb r' hr') hInc ▸ hr)
+  have hEq₁ : o₁ ∪ rest₂ = o₁ ∪ o₂ := by
+    funext r; apply propext
+    show (o₁ r ∨ (o₂ r ∧ ¬ o₁ r)) ↔ (o₁ r ∨ o₂ r)
+    by_cases h : o₁ r <;> simp [h]
+  have hEq₂ : o₂ ∪ rest₁ = o₁ ∪ o₂ := by
+    funext r; apply propext
+    show (o₂ r ∨ (o₁ r ∧ ¬ o₂ r)) ↔ (o₁ r ∨ o₂ r)
+    by_cases h : o₂ r <;> simp [h]
+  refine ⟨o₁ ∪ o₂, Fragment.disjoint_union_left.mpr ⟨hDisjoint₁, hDisjoint₂⟩,
+    (Fragment.matches_union _ _ _).mpr ⟨hMatches₁, hMatches₂⟩,
+    PartialCommMonoid.subheap_iff.mpr ⟨rest₂, hCompat hMatches₁ hMatches₂, hEq₁.symm⟩,
+    PartialCommMonoid.subheap_iff.mpr ⟨rest₁, hCompat hMatches₂ hMatches₁, hEq₂.symm⟩⟩
+
+theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
+    ispec P m Q ↔
+      ∀ F s, Realizes (P ∗ F) s →
+        DWP effectWP m (fun value s' => Realizes ((Q ∗+ F) value) s') s := by
+  constructor
+  · rintro hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+    exact hSpec h₁ hP F s
+      ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, PartialCommMonoid.Subheap.refl _, hF⟩, hMatches⟩
+  · intro hSpec owned hP F s
+    rintro ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩, hMatches⟩
+    exact hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩, hMatches⟩
+
+theorem dispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
+    dispec P m Q ↔
+      ∀ F s, Realizes (P ∗ F) s →
+        DWLP effectWP m (fun value s' => Realizes ((Q ∗+ F) value) s') s := by
+  constructor
+  · rintro hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+    exact hSpec h₁ hP F s
+      ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, PartialCommMonoid.Subheap.refl _, hF⟩, hMatches⟩
+  · intro hSpec owned hP F s
+    rintro ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩, hMatches⟩
+    exact hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩, hMatches⟩
+
+theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) : dispec P m Q := by
+  rw [ispec_iff] at hTriple
+  rw [dispec_iff]
+  intro F s hPre
+  exact (hTriple F s hPre).toPartial
+
+theorem spec_ispec (m : Result α) (Q : Post α) : spec m Q → ispec emp m (fun value => ⌜Q value⌝) := id
+
+theorem dspec_dispec (m : Result α) (Q : Post α) : dspec m Q → dispec emp m (fun value => ⌜Q value⌝) := id
+
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := ispec_dispec
+
+theorem spec_dispec (m : Result α) (Q : Post α) : spec m Q → dispec emp m (fun value => ⌜Q value⌝) :=
+  ispec_dispec
+
+theorem ispec_spec (m : Result α) (Q : Post α) :
+    ispec emp m (fun value => ⌜Q value⌝) → spec m Q := id
+
+theorem ispec_dspec (m : Result α) (Q : Post α) :
+    ispec emp m (fun value => ⌜Q value⌝) → dspec m Q := ispec_dispec
+
+theorem dispec_dspec (m : Result α) (Q : Post α) :
+    dispec emp m (fun value => ⌜Q value⌝) → dspec m Q := id
+
+private theorem rawIwp_admissible (Q : IPost α) (s : Heap) :
+    admissible (fun m : Result α => rawIwp false m Q s) :=
+  DWLP.admissible effectWP _ s
+
+theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
+    admissible (fun m : Result α => dispec P m Q) := by
+  simp only [dispec_iff]
+  intro c hc hAll F s hPre
+  exact rawIwp_admissible (Q ∗+ F) s c hc fun x hx => hAll x hx F s hPre
+
+@[dspec_admissible]
+theorem dispec_func_admissible {ι : Sort v} {α : Type u} (arg : ι) (P : IPre) (Q : IPost α) :
+    admissible (fun f : ι → Result α => dispec P (f arg) Q) :=
+  admissible_apply (fun _ m => dispec P m Q) arg (dispec_admissible P Q)
 
 theorem dspec_admissible {α} (p : Post α) :
     admissible (fun x => dspec x p) :=
-  DWLP.admissible effectWP _ ()
+  dispec_admissible emp (fun value => ⌜p value⌝)
 
 end
 
@@ -77,44 +178,327 @@ theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
     admissible (fun f : α → Result β => dspec (f arg) p) :=
   admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
-/-- Variant of `uncurry` used to decompose tuples in post-conditions.
-
-Similar to `uncurry` but delaborated differently:
-`uncurry'` is delaborated as `x y => ...` (separate binders), while
-`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
-We use this in the Hoare triple notation `⦃ ⦄`.
-
-Example: `f 0 ⦃ x y z => ... ⦄` desugars to
-`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
--/
-
-@[expose]
-def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
-  fun (x, y) => p x y
-
 @[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
-@[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := DWP.ret_iff
+/-- A value satisfies the postcondition if the precondition entails it. (The converse doesn't hold:
+the precondition may only hold of fragments which no heap realizes.) -/
+theorem ispec_ok (x : α) (hPost : P ⊢ Q x) : ispec P (ok x) Q := by
+  rw [ispec_iff]
+  intro F s hPre
+  exact DWP.ret_iff.mpr (Realizes.mono (sep_mono hPost (entails_refl F)) hPre)
 
-@[simp, grind =, agrind =]
-theorem spec_vis (e : RustEffect.Input) (k : RustEffect.Output e → Result α) : spec (.vis e k) p ↔
-    (match e with | .guardedModify .. => False | .fail error => error = .oom) := by
-  cases e
-  · exact ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
-  · exact ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
+/-- A heap operation, given as a relation between the initial heap, the result and the final heap,
+is correct iff it is local: from every heap which realizes the precondition with a frame fragment,
+it is enabled, and it keeps the frame and establishes the postcondition. -/
+theorem ispec_guardedModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre} {Q : IPost α}
+    (hLocal : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      (∃ x s', modify s x s') ∧
+      ∀ x s', modify s x s' →
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ Q x h') :
+    ispec P (Result.guardedModify modify) Q := by
+  rw [ispec_iff]
+  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+  obtain ⟨hEnabled, hPost⟩ := hLocal s owned framed hP hDisjoint hMatches hInv
+  refine DWP.vis (θ := effectWP)
+    (effect := RustEffect.Input.guardedModify _ modify) ⟨hEnabled, fun x s' hx => ?_⟩
+  obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hx
+  exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
 
-@[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ e = .oom :=
-  ⟨fun h => DWP.vis_view h, fun h => DWP.vis h⟩
+/-- Out-of-memory aborts are accepted. -/
+@[simp]
+theorem ispec_oom : ispec P (Result.oom : Result α) Q := by
+  rw [ispec_iff]
+  intro F s _
+  exact DWP.vis (θ := effectWP) (effect := RustEffect.Input.fail .oom) rfl
+
+theorem ispec_fail (e : Error) (hFalse : P ⊢ ⌜False⌝) : ispec P (fail e) Q :=
+  fun h hP => (hFalse h hP).elim
+
+theorem ispec_div (hFalse : P ⊢ ⌜False⌝) : ispec P (div : Result α) Q :=
+  fun h hP => (hFalse h hP).elim
+
+theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) (H : IProp) :
+    ispec (P ∗ H) m (Q ∗+ H) := by
+  rw [ispec_iff] at hTriple ⊢
+  intro F s hPre
+  have hSpec := hTriple (H ∗ F) s (Realizes.mono (entails_of_eq (sep_assoc_eq P H F)) hPre)
+  exact hSpec.mono fun value _ =>
+    Realizes.mono (entails_of_eq (sep_assoc_eq (Q value) H F).symm)
+
+theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) (H : IProp) :
+    ispec (H ∗ P) m (fun value => H ∗ Q value) := by
+  rw [ispec_iff] at hTriple ⊢
+  intro F s hPre
+  have hSwapped : Realizes (P ∗ (H ∗ F)) s :=
+    Realizes.mono (entails_trans
+      (sep_mono (entails_of_eq (sep_comm_eq H P)) (entails_refl F))
+      (entails_of_eq (sep_assoc_eq P H F))) hPre
+  refine (hTriple (H ∗ F) s hSwapped).mono fun value _ hPost => ?_
+  exact Realizes.mono (entails_trans (entails_of_eq (sep_assoc_eq (Q value) H F).symm)
+    (sep_mono (entails_of_eq (sep_comm_eq (Q value) H)) (entails_refl F))) hPost
+
+/-- Mono rule used by `step`. -/
+theorem ispec_mono {α : Type u} {P Pm F : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
+    (hStep : ispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hPost : F ⊢ Qm -∗+ Q) :
+    ispec P m Q := by
+  have hFramed := ispec_frame hStep F
+  rw [ispec_iff] at hFramed ⊢
+  intro F' s hP
+  have hSpec := hFramed F' s (Realizes.mono (sep_mono hPre (entails_refl F')) hP)
+  exact hSpec.mono fun value _ => Realizes.mono (sep_mono
+    (entails_trans (sep_mono (entails_refl _) hPost) (postWand_cancel Qm Q value)) (entails_refl F'))
+
+/-- The conjunction of two postconditions which are realized by the same heap with the same frame
+fragment. -/
+private theorem realizes_iand_owns {Q₁ Q₂ F : IProp} {framed : Fragment} {s : Heap}
+    (hF : F framed)
+    (h₁ : Realizes (Q₁ ∗ owns framed) s) (h₂ : Realizes (Q₂ ∗ owns framed) s) :
+    Realizes (iprop(Q₁ ∧ Q₂) ∗ F) s := by
+  obtain ⟨hInv, _, ⟨o₁, f₁, hd₁, rfl, hQ₁, hf₁⟩, hm₁⟩ := h₁
+  obtain ⟨_, _, ⟨o₂, f₂, hd₂, rfl, hQ₂, hf₂⟩, hm₂⟩ := h₂
+  obtain ⟨r₁, hr₁, rfl⟩ := PartialCommMonoid.subheap_iff.mp hf₁
+  obtain ⟨r₂, hr₂, rfl⟩ := PartialCommMonoid.subheap_iff.mp hf₂
+  have hm₁' := (Fragment.matches_union _ _ _).mp hm₁
+  have hm₂' := (Fragment.matches_union _ _ _).mp hm₂
+  -- The owned parts, extended with the extra resources of the frames
+  have hd₁' : (o₁ ∪ r₁).Disjoint framed := by
+    have := (PartialCommMonoid.compatible_assoc o₁ framed r₁)
+    exact Fragment.disjoint_union_left.mpr ⟨
+      (Fragment.disjoint_union_right.mp hd₁).1, (hr₁.symm)⟩
+  have hd₂' : (o₂ ∪ r₂).Disjoint framed :=
+    Fragment.disjoint_union_left.mpr ⟨(Fragment.disjoint_union_right.mp hd₂).1, hr₂.symm⟩
+  have hmo₁ : Fragment.Matches s (o₁ ∪ r₁) :=
+    (Fragment.matches_union _ _ _).mpr ⟨hm₁'.1, ((Fragment.matches_union _ _ _).mp hm₁'.2).2⟩
+  have hmo₂ : Fragment.Matches s (o₂ ∪ r₂) :=
+    (Fragment.matches_union _ _ _).mpr ⟨hm₂'.1, ((Fragment.matches_union _ _ _).mp hm₂'.2).2⟩
+  have hdo₁ : o₁.Disjoint r₁ := (Fragment.disjoint_union_right.mp hd₁).2
+  have hdo₂ : o₂.Disjoint r₂ := (Fragment.disjoint_union_right.mp hd₂).2
+  obtain ⟨o, hdo, hmo, hsub₁, hsub₂⟩ := Fragment.join_of_matches hmo₁ hmo₂ hd₁' hd₂'
+  refine ⟨hInv, o ∪ framed, ⟨o, framed, hdo, rfl,
+    ⟨Q₁.up_closed hQ₁ ((PartialCommMonoid.Subheap.union_left hdo₁).trans hsub₁),
+     Q₂.up_closed hQ₂ ((PartialCommMonoid.Subheap.union_left hdo₂).trans hsub₂)⟩, hF⟩,
+    (Fragment.matches_union _ _ _).mpr ⟨hmo, ((Fragment.matches_union _ _ _).mp hm₁'.2).1⟩⟩
+
+theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
+    (h₁ : ispec P m Q₁) (h₂ : ispec P m Q₂) :
+    ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
+  rw [ispec_iff] at h₁ h₂ ⊢
+  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches⟩
+  have hPre : Realizes (P ∗ owns framed) s :=
+    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches⟩
+  have hBoth := DWP.and_iff.mpr ⟨h₁ (owns framed) s hPre, h₂ (owns framed) s hPre⟩
+  exact hBoth.mono fun _ _ hPost => realizes_iand_owns hF hPost.1 hPost.2
+
+theorem ispec_and_dispec {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
+    (h₁ : ispec P m Q₁) (h₂ : dispec P m Q₂) :
+    ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
+  rw [ispec_iff] at h₁ ⊢
+  rw [dispec_iff] at h₂
+  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches⟩
+  have hPre : Realizes (P ∗ owns framed) s :=
+    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches⟩
+  have hBoth := DWP.and_partial (h₁ (owns framed) s hPre) (h₂ (owns framed) s hPre)
+  exact hBoth.mono fun _ _ hPost => realizes_iand_owns hF hPost.1 hPost.2
+
+/-- Bind rule used by `step`. -/
+theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+    {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
+    (hStep : ispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
+    ispec P (Aeneas.Std.bind m next) Q := by
+  have hFirst : ispec P m (Qm ∗+ F) :=
+    ispec_mono hStep hPre (postWand_intro fun _ => entails_refl _)
+  simp only [ispec_iff] at hFirst hNext ⊢
+  intro frame s hP
+  apply (hFirst frame s hP).bind
+  intro value s' hPost
+  exact hNext value frame s' (Realizes.mono (entails_of_eq rfl) hPost)
+
+theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
+  constructor
+  · intro hTriple hP
+    exact ispec_mono hTriple (entails_trans (pure_sep_intro H hP) (entails_of_eq (sep_emp_r_eq _).symm))
+      (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
+  · intro hTriple owned hOwned
+    have ⟨hP, hH⟩ := (sep_pure_l P H owned).mp hOwned
+    exact hTriple hP owned hH
+
+theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
+    ispec ⌜P⌝ m Q ↔ (P → ispec emp m Q) := by
+  rw [← sep_emp_r_eq ⌜P⌝]
+  exact ispec_ipure
+
+/-- Copy a pure fact of the precondition into the context without consuming it. -/
+theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec (⌜P⌝ ∗ H) m Q) :=
+  ⟨fun hTriple _ => hTriple,
+   fun hTriple => ispec_ipure.mpr fun hP => ispec_ipure.mp (hTriple hP) hP⟩
+
+theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α} :
+    ispec iprop(∃ x, J x) m Q ↔ ∀ x, ispec (J x) m Q := by
+  constructor
+  · intro hTriple x
+    exact fun h hJ => hTriple h ⟨x, hJ⟩
+  · intro hTriple h ⟨x, hJ⟩
+    exact hTriple x h hJ
+
+private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : dispec P m Q) {s : Heap} (hPre : Realizes P s) :
+    rawIwp false m Q s := by
+  rw [dispec_iff] at hTriple
+  have hSpec := hTriple emp s (realizes_sep_emp.mpr hPre)
+  exact hSpec.mono fun value _ => Realizes.mono (sep_elim_right (Q value) emp)
+
+private theorem ispec_apply {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) {s : Heap} (hPre : Realizes P s) :
+    rawIwp true m Q s := by
+  rw [ispec_iff] at hTriple
+  have hSpec := hTriple emp s (realizes_sep_emp.mpr hPre)
+  exact hSpec.mono fun value _ => Realizes.mono (sep_elim_right (Q value) emp)
+
+theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) (hPost : P ⊢ Q x) :
+    dispec P (ok x) Q := by
+  rw [dispec_iff]
+  intro F s hPre
+  exact DWLP.ret_iff.mpr (Realizes.mono (sep_mono hPost (entails_refl F)) hPre)
 
 @[simp]
-theorem spec_oom : spec (Result.oom : Result α) p :=
-  (spec_fail .oom).mpr rfl
+theorem dispec_oom : dispec P (Result.oom : Result α) Q :=
+  ispec_dispec ispec_oom
+
+theorem dispec_fail {P : IPre} {Q : IPost α} (e : Error) (hFalse : P ⊢ ⌜False⌝) :
+    dispec P (fail e) Q :=
+  fun h hP => (hFalse h hP).elim
+
+theorem dispec_div {P : IPre} {Q : IPost α} :
+    dispec P (div : Result α) Q := by
+  rw [dispec_iff]
+  intro _ _ _
+  exact DWLP.div
+
+theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : dispec P m Q) (H : IProp) : dispec (P ∗ H) m (Q ∗+ H) := by
+  rw [dispec_iff] at hTriple ⊢
+  intro F s hPre
+  have hSpec := hTriple (H ∗ F) s (Realizes.mono (entails_of_eq (sep_assoc_eq P H F)) hPre)
+  exact hSpec.mono fun value _ =>
+    Realizes.mono (entails_of_eq (sep_assoc_eq (Q value) H F).symm)
+
+/-- Mono rule used by `step`. -/
+theorem dispec_mono {α : Type u} {P Pm F : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
+    (hStep : dispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hPost : F ⊢ Qm -∗+ Q) :
+    dispec P m Q := by
+  have hFramed := dispec_frame hStep F
+  rw [dispec_iff] at hFramed ⊢
+  intro F' s hP
+  have hSpec := hFramed F' s (Realizes.mono (sep_mono hPre (entails_refl F')) hP)
+  exact hSpec.mono fun value _ => Realizes.mono (sep_mono
+    (entails_trans (sep_mono (entails_refl _) hPost) (postWand_cancel Qm Q value)) (entails_refl F'))
+
+theorem dispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
+    (h₁ : dispec P m Q₁) (h₂ : dispec P m Q₂) :
+    dispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
+  rw [dispec_iff] at h₁ h₂ ⊢
+  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches⟩
+  have hPre : Realizes (P ∗ owns framed) s :=
+    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches⟩
+  have hBoth := DWLP.and_iff.mpr ⟨h₁ (owns framed) s hPre, h₂ (owns framed) s hPre⟩
+  exact hBoth.mono fun _ _ hPost => realizes_iand_owns hF hPost.1 hPost.2
+
+theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+    {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
+    (hStep : dispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
+    dispec P (Aeneas.Std.bind m next) Q := by
+  have hFirst : dispec P m (Qm ∗+ F) :=
+    dispec_mono hStep hPre (postWand_intro fun _ => entails_refl _)
+  simp only [dispec_iff] at hFirst hNext ⊢
+  intro frame s hP
+  apply (hFirst frame s hP).bind
+  intro value s' hPost
+  exact hNext value frame s' (Realizes.mono (entails_of_eq rfl) hPost)
+
+theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec H m Q) := by
+  constructor
+  · intro hTriple hP
+    exact dispec_mono hTriple (entails_trans (pure_sep_intro H hP) (entails_of_eq (sep_emp_r_eq _).symm))
+      (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
+  · intro hTriple owned hOwned
+    have ⟨hP, hH⟩ := (sep_pure_l P H owned).mp hOwned
+    exact hTriple hP owned hH
+
+theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
+    dispec ⌜P⌝ m Q ↔ (P → dispec emp m Q) := by
+  rw [← sep_emp_r_eq ⌜P⌝]
+  exact dispec_ipure
+
+theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec (⌜P⌝ ∗ H) m Q) :=
+  ⟨fun hTriple _ => hTriple,
+   fun hTriple => dispec_ipure.mpr fun hP => dispec_ipure.mp (hTriple hP) hP⟩
+
+theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α} :
+    dispec iprop(∃ x, J x) m Q ↔ ∀ x, dispec (J x) m Q := by
+  constructor
+  · intro hTriple x
+    exact fun h hJ => hTriple h ⟨x, hJ⟩
+  · intro hTriple h ⟨x, hJ⟩
+    exact hTriple x h hJ
+
+theorem dispec_admissible_pi {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
+    Lean.Order.admissible
+      (fun f : ι → Result α => ∀ x, dispec (P x) (f x) (Q x)) :=
+  Lean.Order.admissible_pi_apply (fun x m => dispec (P x) m (Q x))
+    fun x => dispec_admissible (P x) (Q x)
+
+theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
+    Lean.Order.admissible (fun m : Result α => ∀ x, dispec (P x) m (Q x)) :=
+  Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
+
+attribute [simp] entails_emp_ipure_iff
+
+/-! ### Pure specifications
+
+The empty heap realizes `emp`: the pure specifications are characterized exactly. -/
+
+private theorem spec_apply {m : Result α} {p : Post α} (h : spec m p) :
+    DWP effectWP m (fun value s' => Realizes ⌜p value⌝ s') Heap.empty :=
+  ispec_apply h realizes_emp_empty
+
+private theorem dspec_apply {m : Result α} {p : Post α} (h : dspec m p) :
+    DWLP effectWP m (fun value s' => Realizes ⌜p value⌝ s') Heap.empty :=
+  dispec_apply h realizes_emp_empty
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := ⟨DWP.div_false, False.elim⟩
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x :=
+  ⟨fun h => (DWP.ret_iff.mp (spec_apply h)).pure,
+   fun hp => ispec_ok x ((entails_emp_ipure_iff (p x)).mpr hp)⟩
+
+@[simp, grind =, agrind =]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ e = .oom := by
+  constructor
+  · intro h
+    exact DWP.vis_view (spec_apply h)
+  · rintro rfl
+    exact ispec_oom
+
+@[simp]
+theorem spec_oom : spec (Result.oom : Result α) p := ispec_oom
+
+@[simp, grind =, agrind =]
+theorem spec_div : spec div p ↔ False :=
+  ⟨fun h => DWP.div_false (spec_apply h), False.elim⟩
 
 /-! ### `spec_*` for tuple posts
 
@@ -135,206 +519,72 @@ theorem spec_div_pair (f : α → β → Prop) :
 
 /-- Mono rule used by `step`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
-  (∀ x, P₀ x → P₁ x) → spec m P₁ :=
-  fun HMonPost => DWP.mono h fun value _ => HMonPost value
+    (∀ x, P₀ x → P₁ x) → spec m P₁ :=
+  fun hMonPost => ispec_mono h (entails_of_eq (sep_emp_r_eq _).symm)
+    (postWand_intro fun value => entails_trans (entails_of_eq (sep_emp_r_eq _)) fun _ => hMonPost value)
+
+theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
+    spec m (fun value => p value ∧ q value) :=
+  ispec_and h₁ h₂
+
+theorem spec_and_dspec {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : dspec m q) :
+    spec m (fun value => p value ∧ q value) :=
+  ispec_and_dispec h₁ h₂
 
 /-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
-  spec m Pₘ →
-  (∀ x, Pₘ x → spec (k x) Pₖ) →
-  spec (Std.bind m k) Pₖ :=
-  fun Hm Hk => DWP.bind (k := k) Hm fun value _ => Hk value
-
-theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
-    spec m (fun value => p value ∧ q value) :=
-  DWP.and_iff.mpr ⟨h₁, h₂⟩
-
-/-- An effect-free specification either returns the specified value or aborts
-    with OOM. A specification alone no longer establishes successful return. -/
-theorem spec_ok_or_oom {m : Result α} {p : Post α} (h : spec m p) :
-    (∃ value, m = .ok value ∧ p value) ∨ m = Result.oom := by
-  cases m
-  · rename_i value
-    exact .inl ⟨value, rfl, (spec_ok value).mp h⟩
-  · rename_i effect k
-    cases effect
-    · exact False.elim ((spec_vis _ _).mp h)
-    · rename_i error
-      have he : error = .oom := (spec_vis _ _).mp h
-      subst error
-      exact .inr (Result.vis_fail _ _)
-  · exact False.elim (spec_div.mp h)
-
-theorem spec_exists {m : Result α} {p : Post α} (h : spec m p)
-    (noOOM : m ≠ Result.oom) : ∃ value, p value := by
-  rcases spec_ok_or_oom h with ⟨value, _, hp⟩ | oom
-  · exact ⟨value, hp⟩
-  · exact (noOOM oom).elim
+    spec m Pₘ →
+    (∀ x, Pₘ x → spec (k x) Pₖ) →
+    spec (Std.bind m k) Pₖ :=
+  fun hm hk =>
+    ispec_bind hm (entails_of_eq (sep_emp_r_eq emp).symm) fun value =>
+      ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_refl _)
+        (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
 
 -- `dspec` theorems
+@[simp, grind =, agrind =]
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x :=
+  ⟨fun h => (DWLP.ret_iff.mp (dspec_apply h)).pure,
+   fun hp => dispec_ok x ((entails_emp_ipure_iff (p x)).mpr hp)⟩
+
+@[simp, grind =, agrind =]
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ e = .oom := by
+  constructor
+  · intro h
+    exact DWLP.vis_view (dspec_apply h)
+  · rintro rfl
+    exact dispec_oom
+
+@[simp, grind =, agrind =]
+theorem dspec_div : dspec (div : Result α) p ↔ True :=
+  iff_true_intro dispec_div
+
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
-  (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
-  fun HMonPost => DWLP.mono h fun value _ => HMonPost value
-
-theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
-  dspec m Pₘ →
-  (∀ x, Pₘ x → dspec (k x) Pₖ) →
-  dspec (Std.bind m k) Pₖ :=
-  fun Hm Hk => DWLP.bind (k := k) Hm fun value _ => Hk value
-
-@[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := DWLP.ret_iff
-
-@[simp, grind =, agrind =]
-theorem dspec_vis (e : RustEffect.Input) (k : RustEffect.Output e → Result α) : dspec (.vis e k) p ↔
-    (match e with | .guardedModify .. => False | .fail error => error = .oom) := by
-  cases e
-  · exact ⟨fun h => DWLP.vis_view h, fun h => DWLP.vis h⟩
-  · exact ⟨fun h => DWLP.vis_view h, fun h => DWLP.vis h⟩
-
-@[simp, grind =, agrind =]
-theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.div
-
-@[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (fail e) p ↔ e = .oom :=
-  ⟨fun h => DWLP.vis_view h, fun h => DWLP.vis h⟩
+    (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
+  fun hMonPost => dispec_mono h (entails_of_eq (sep_emp_r_eq _).symm)
+    (postWand_intro fun value => entails_trans (entails_of_eq (sep_emp_r_eq _)) fun _ => hMonPost value)
 
 theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
     dspec m (fun value => p value ∧ q value) :=
-  DWLP.and_iff.mpr ⟨h₁, h₂⟩
+  dispec_and h₁ h₂
+
+theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+    dspec m Pₘ →
+    (∀ x, Pₘ x → dspec (k x) Pₖ) →
+    dspec (Std.bind m k) Pₖ :=
+  fun hm hk =>
+    dispec_bind hm (entails_of_eq (sep_emp_r_eq emp).symm) fun value =>
+      dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_refl _)
+        (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
 
 end ResultImplementation
 
 end Aeneas.Std.WP
 
-/-
-We want the notations to live in the namespace `Aeneas`, not `Aeneas.Std.WP`
-TODO: use https://github.com/leanprover/lean4/pull/11355
--/
 namespace Aeneas
 
 open Aeneas.Std WP Result
-
-/-!
-# Hoare triple notation and elaboration
--/
-
-/- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
-This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/
-scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄" : term
-scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
-
--- for dspec
-scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄div" : term
-scoped syntax:54 term:55 " ⦃ " term " ⦄div" : term
-
-open Lean PrettyPrinter
-
-/-- Build a `Std.uncurry` chain wrapping a curried lambda over `xs`.
-
-Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
--/
-meta partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
-    MacroM (TSyntax `term) := do
-  let uncurryIdent := mkIdent ``Std.uncurry
-  match xs with
-  | [] => pure body
-  | [x] => `(fun $x => $body)
-  | [a, b] => `($uncurryIdent (fun $a $b => $body))
-  | a :: rest =>
-    let inner ← buildUncurryLam rest body
-    `($uncurryIdent (fun $a => $inner))
-
-/-- Helper to elaborate `binder => body` when binder is a tuple - this supports nested tuples. -/
-meta partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
-  match binder with
-  | `( ($a, $bs,*) ) =>
-    let xs : List Term := a :: bs.getElems.toList
-    let mut leafIdents : List Term := []
-    let mut wrappedBody := body
-    for (x, idx) in xs.zipIdx.reverse do
-      match x with
-      | `( ($_, $_,*) ) =>
-        -- Fresh identifier from depth + index
-        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
-        let inner ← mkBinderFun (depth + 1) x wrappedBody
-        wrappedBody ← `($inner $freshIdent)
-        leafIdents := freshIdent :: leafIdents
-      | _ =>
-        leafIdents := x :: leafIdents
-    buildUncurryLam leafIdents wrappedBody
-  | _ => `(fun $binder => $body)
-
-meta def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : MacroM Term := do
-  match xs with
-  | [] => `($p)
-  | [x] => mkBinderFun depth x p
-  | x :: xs =>
-    let xs ← mk_function_syntax p (depth + 1) xs
-    let inner ← mkBinderFun depth x xs
-    `(uncurry' $inner)
-
-/-- If `stx` is a bare identifier or a juxtaposition (application) of bare
-identifiers — i.e. a binder group like `a b c` — return the identifiers in
-order.  Otherwise return `none`, so anonymous constructors `⟨a, b⟩`, tuple
-patterns, and other structured terms are left untouched. -/
-private meta partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
-  if stx.isIdent then some #[⟨stx⟩]
-  else if stx.getKind == ``Lean.Parser.Term.app || stx.getKind == Lean.nullKind then
-    stx.getArgs.foldlM (init := (#[] : Array Term)) fun acc s =>
-      (binderGroupIdents? s).map (acc ++ ·)
-  else none
-
-/-- Expand a binder that shares one type ascription across several names —
-`(a b c : T)` — into the list of single binders `[(a : T), (b : T), (c : T)]`,
-so each name becomes its own product component (exactly as if written
-separately).  Tuple/pattern binders `(a, b)`, `(⟨a, b⟩ : T)`, single binders
-`(a : T)`, and bare identifiers are returned unchanged. -/
-private meta def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
-  match binder with
-  | `(($e : $t)) =>
-    match binderGroupIdents? e.raw with
-    | some ids =>
-      if ids.size ≤ 1 then pure [binder]
-      else ids.toList.mapM fun id => `(($id : $t))
-    | none => pure [binder]
-  | _ => pure [binder]
-
-/-- Flatten grouped binders across the whole binder list. -/
-private meta def expandBinders (xs : List Term) : MacroM (List Term) := do
-  let mut out : Array Term := #[]
-  for x in xs do
-    out := out ++ (← expandGroupedBinder x).toArray
-  pure out.toList
-
-/-- Build the postcondition term for `⦃ xs => p ⦄`, expanding grouped binders
-into one component per name first. -/
-private meta def mkPost (p : Term) (xs : List Term) : MacroM Term := do
-  mk_function_syntax p 0 (← expandBinders xs)
-
-/-- Macro expansion for a single element (may expand to several via a grouped binder) -/
-macro_rules
-  | `($e ⦃ $x => $p ⦄) => do
-    let post ← mkPost p [x]
-    `(Aeneas.Std.WP.spec $e $post)
-  | `($e ⦃ $x => $p ⦄div) => do
-    let post ← mkPost p [x]
-    `(Aeneas.Std.WP.dspec $e $post)
-
-/-- Macro expansion for multiple elements -/
-macro_rules
-  | `($e ⦃ $x $xs:term* => $p ⦄) => do
-    let post ← mkPost p (x :: xs.toList)
-    `(Aeneas.Std.WP.spec $e $post)
-  | `($e ⦃ $x $xs:term* => $p ⦄div) => do
-    let post ← mkPost p (x :: xs.toList)
-    `(Aeneas.Std.WP.dspec $e $post)
-
-/-- Macro expansion for predicate with no arrow -/
-macro_rules
-  | `($e ⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e $p)
-  | `($e ⦃ $p ⦄div) => do `(_root_.Aeneas.Std.WP.dspec $e $p)
 
 /-!
 # Pretty-printing
@@ -363,13 +613,14 @@ top-level product components. `uncurry` can be nested inside `uncurry'` or other
 The delaborator reverses this: given a `spec e post` expression, it peels the
 wrapper layers to recover the binder patterns and body, producing `⦃ ... => ... ⦄`.
 
-The `uncurry`/lambda machinery (`enterLams`, `enterUncurryChain`, `delabBinders`)
+The `uncurry`/lambda machinery (`enterLams`, `delabBinders`)
 is reused from `Do.Delab` (which handles the same `uncurry` chains in `do`-notation).
 The only WP-specific logic is the `uncurry'`-peeling loop on top.
 -/
 
+open Lean PrettyPrinter
 open Delaborator SubExpr
-open Std.Delab (enterLams enterUncurryChain delabBinders buildTupleTerm delabUncurryAsTuple)
+open Std.Delab (enterLams delabBinders buildTupleTerm delabUncurryAsTuple)
 
 /-- Enter exactly the binders of a single `uncurry` level (up to 2).
 Unlike `enterUncurryChain` (which flattens everything), this stops after 2 binders
@@ -451,6 +702,42 @@ where
           return (pats, body)
     else
       return (#[], ← delab)
+
+/-- `⦃P⦄ m ⦃ binders => Q ⦄`, or `⦃P⦄ m ⦃ Q ⦄` for a constant postcondition `fun _ => Q`. Any
+other postcondition (e.g. a variable `Q : IPost α`) is left to the default `ispec P m Q`: the
+binder-less notation would read it back as `fun _ => Q`. -/
+private meta def delabSLISpecPost (pre monadExpr : Term) (isPartial : Bool) :
+    DelabM Term := do
+  let post := (← getExpr).consumeMData
+  let (binders, body) ←
+    if post.isLambda && !post.bindingBody!.hasLooseBVars then
+      pure (#[], ← withBindingBodyUnusedName fun _ => delab)
+    else if post.isLambda || isPostBinderWrapper post then
+      delabPostBinders
+    else failure
+  if h : binders.size > 0 then
+    if isPartial then
+      `(⦃$pre⦄ $monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body⦄div)
+    else
+      `(⦃$pre⦄ $monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body⦄)
+  else if isPartial then
+    `(⦃$pre⦄ $monadExpr ⦃ $body⦄div)
+  else
+    `(⦃$pre⦄ $monadExpr ⦃ $body⦄)
+
+private meta def delabSLISpecCore (ispecName : Name) (isPartial : Bool) : Delab := do
+  guard ((← getExpr).isAppOfArity ispecName 4)
+  let monadExpr ← withNaryArg 2 delab
+  let pre ← withNaryArg 1 delab
+  withNaryArg 3 <| delabSLISpecPost pre monadExpr isPartial
+
+@[app_delab Aeneas.Std.WP.ispec]
+meta def delabSLISpec : Delab :=
+  delabSLISpecCore ``Aeneas.Std.WP.ispec false
+
+@[app_delab Aeneas.Std.WP.dispec]
+meta def delabSLDispec : Delab :=
+  delabSLISpecCore ``Aeneas.Std.WP.dispec true
 
 /-- Delaborator for `WP.spec e post` → `e ⦃ binders => body ⦄`. -/
 @[scoped delab app.Aeneas.Std.WP.spec]
@@ -587,7 +874,110 @@ example : ok ((0, (1, (2, 3))), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 
 #guard_msgs in example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
     a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by done
 
+/-! ### Separation-logic postconditions without binders -/
+
+-- not a lambda: printed as an application, since `⦃ P ⦄ m ⦃ Q ⦄` would mean `fun _ => Q`
+/-- error: unsolved goals
+P : SepLogic.IProp
+m : Result ℕ
+Q : SepLogic.IPost ℕ
+⊢ ispec P m Q -/
+#guard_msgs in
+example (P : SepLogic.IProp) (m : Result Nat) (Q : SepLogic.IPost Nat) : Std.WP.ispec P m Q := by
+  done
+
+/-- error: unsolved goals
+P Q : SepLogic.IProp
+m : Result ℕ
+⊢ ⦃ P ⦄
+    m
+    ⦃ Q ⦄ -/
+#guard_msgs in example (P Q : SepLogic.IProp) (m : Result Nat) : ⦃ P ⦄ m ⦃ Q ⦄ := by done
+
+/-- error: unsolved goals
+P Q : SepLogic.IProp
+m : Result ℕ
+⊢ ⦃ P ⦄
+    m
+    ⦃ Q ⦄div -/
+#guard_msgs in example (P Q : SepLogic.IProp) (m : Result Nat) : ⦃ P ⦄ m ⦃ Q ⦄div := by done
 end Aeneas
+
+namespace Aeneas.Std.WP
+
+open Std Result
+open Aeneas.Data.Coinductive
+open Lean.Order
+open Aeneas.SepLogic
+
+theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
+  ⟨fun h => h (), fun h value => match value with | () => h⟩
+
+/-- Keeps pure returns in the pure judgment, so `step` introduces no spatial entailment for them. -/
+theorem ok_spec (value : α) :
+    spec (Result.ok value) (fun result => result = value) :=
+  ispec_ok value fun _ _ => rfl
+
+theorem pure_spec (value : α) :
+    spec (Pure.pure value : Result α) (fun result => result = value) :=
+  ok_spec value
+
+end Aeneas.Std.WP
+
+namespace Aeneas.Std
+
+/-!
+# Loops
+-/
+
+/-- General spec for loops with a termination measure.
+
+It is meant to derive lemmas to reason about loops: in most situations, one shouldn't
+have to use it directly when verifying programs.
+-/
+theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
+  (measure : α → γ)
+  [wf : WellFoundedRelation γ]
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ wf.rel (measure x') (measure x) ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  suffices ∀ x' x, measure x = x' → inv x → loop body x ⦃ post ⦄
+    by apply this <;> first | rfl | assumption
+  apply @wf.wf.fix γ (fun x' =>
+    ∀ x, measure x = x' →
+    inv x → loop body x ⦃ post ⦄)
+  intro y ih x eq ix
+  subst eq
+  unfold loop
+  apply WP.spec_bind (hBody x ix)
+  intro r hr
+  cases r with
+  | done z => simpa using hr
+  | cont x' => exact ih (measure x') hr.2 x' rfl hr.1
+
+theorem loop.spec_decr_nat {α : Type u} {β : Type v}
+  (measure : α → Nat)
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ measure x' < measure x ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  have := loop.spec measure inv post body x hBody hInv
+  apply this
+
+end Aeneas.Std
 
 namespace Aeneas.Std.WP
 
@@ -710,148 +1100,90 @@ namespace Aeneas.Std.WP
 # mvcgen
 -/
 
-open Aeneas.Std Result
+open Std Result
 open Std.Do
 
--- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.
--- This option is set here so that this same code works for any extension to RustEffect.Input
-set_option match.ignoreUnusedAlts true
--- There are three types of exceptions in the type: the Error from Result.fail,
--- a dummy exception thrown when any other effect is used, and Result.div.
-instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
+def _root_.Aeneas.Std.Result.terminates {α : Type u} (x : Result α) : Prop :=
+  spec x (fun _ => True)
+
+/-- The `Std.Do` view of `Result` used by `mvcgen`: `x` satisfies `Q` when it terminates in `Q.1`
+(`spec`), or, if `Q.2.1` holds, when its terminating runs end in `Q.1` (`dspec`, which allows
+divergence). The exception layer is `PUnit`, so postconditions cannot mention which `Error` was
+raised. There is no `WPMonad` instance (hence no `Result.of_wp`, nor the `Std.Do` lemmas that
+require one): `spec` quantifies over all heaps, so `wp (x >>= f)` is not `wp x` followed by
+`wp (f ·)`. For example `into_raw v >>= read` satisfies `spec`, but `read p` does not for every `p`. -/
+instance Result.instWP : WP Result.{u} (.except PUnit .pure) where
   wp x := {
-    trans Q := match x.match with
-      | .ok a => Q.1 a
-      | .vis eff _ =>
-        match eff with
-        | .fail e => Q.2.1 (ULift.up e)
-        | _ => Q.2.2.1 PUnit.unit
-      | .div => Q.2.2.2.1 .unit
+    trans Q := ⟨spec x (fun a => (Q.1 a).down) ∨
+      ((Q.2.1 ⟨⟩).down ∧ dspec x (fun a => (Q.1 a).down))⟩
     conjunctiveRaw Q₁ Q₂ := by
-      apply SPred.bientails.of_eq
-      cases x
-      · simp
-      · rename_i i _
-        cases i <;> simp
-      · simp
+      simp only [SPred.bientails_nil, SPred.and_nil, ExceptConds.and]
+      constructor
+      · rintro (h | ⟨⟨d₁, d₂⟩, h⟩)
+        · exact ⟨.inl (spec_mono h fun _ h => h.1), .inl (spec_mono h fun _ h => h.2)⟩
+        · exact ⟨.inr ⟨d₁, dspec_mono h fun _ h => h.1⟩, .inr ⟨d₂, dspec_mono h fun _ h => h.2⟩⟩
+      · rintro ⟨h₁ | ⟨d₁, h₁⟩, h₂ | ⟨d₂, h₂⟩⟩
+        · exact .inl (spec_and h₁ h₂)
+        · exact .inl (spec_and_dspec h₁ h₂)
+        · exact .inl (spec_mono (spec_and_dspec h₂ h₁) fun _ h => ⟨h.2, h.1⟩)
+        · exact .inr ⟨⟨d₁, d₂⟩, dspec_and h₁ h₂⟩
   }
-set_option match.ignoreUnusedAlts false
 
-instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
-  wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
-  wp_bind x f := by
-    apply PredTrans.ext
-    intro Q
-    simp [PredTrans.apply, wp, WP.wp]
-    cases x
-    · cbv
-    · simp
-      rename_i i k
-      cases i <;> cbv
-    · cbv
+@[spec]
+theorem Result.ok_mvcgen_spec {α : Type u} {a : α} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (Result.ok a) (Q.1 a) Q :=
+  fun h => .inl ((spec_ok a).mpr h)
 
+@[spec]
+theorem Result.pure_mvcgen_spec {α : Type u} {a : α} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (pure a : Result α) (Q.1 a) Q :=
+  Result.ok_mvcgen_spec
 
-theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
-    (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
-                  fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- unreacheable
-                  fun .unit => ⌜P .div⌝, .unit)) → P x := by
-    intro hspec
-    simp only [WP.wp, PredTrans.apply] at hspec
-    split at hspec <;> simp_all
-    rename_i x eff heq a
-    cases eff with
-    | guardedModify => simp_all
-    | fail =>
-      have : heq = PEmpty.elim := by funext; contradiction
-      simp [*] at *
-      try trivial
+@[spec]
+theorem Result.fail_mvcgen_spec {α : Type u} {e : Error} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (Result.fail e : Result α) ⌜False⌝ Q :=
+  False.elim
+
+@[spec]
+theorem Result.div_mvcgen_spec {α : Type u} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (ps := .except PUnit .pure) (Result.div : Result α) (Q.2.1 ⟨⟩) Q :=
+  fun h => .inr ⟨h, dspec_div.mpr trivial⟩
+
+theorem Result.bind_wp {α β : Type u} {x : Result α} {f : α → Result β}
+    {Q : PostCond β (.except PUnit .pure)} :
+    (wp⟦x⟧ (fun a => wp⟦f a⟧ Q, Q.2)).down → (wp⟦Std.bind x f⟧ Q).down := by
+  rintro (h | ⟨d, h⟩)
+  · by_cases d : (Q.2.1 ⟨⟩).down
+    · refine .inr ⟨d, dspec_bind (spec_dspec _ _ _ h) fun _ h => ?_⟩
+      exact h.elim (spec_dspec _ _ _) And.right
+    · exact .inl (spec_bind h fun _ h => h.resolve_right fun h => d h.1)
+  · exact .inr ⟨d, dspec_bind h fun _ h => h.elim (spec_dspec _ _ _) And.right⟩
+
+@[spec]
+theorem Result.std_bind_mvcgen_spec {α β : Type u} {x : Result α} {f : α → Result β}
+    {Q : PostCond β (.except PUnit .pure)} :
+    Triple (Std.bind x f) (wp⟦x⟧ (fun a => wp⟦f a⟧ Q, Q.2)) Q :=
+  Result.bind_wp
+
+@[spec]
+theorem Result.bind_mvcgen_spec {α β : Type u} {x : Result α} {f : α → Result β}
+    {Q : PostCond β (.except PUnit .pure)} :
+    Triple (x >>= f) (wp⟦x⟧ (fun a => wp⟦f a⟧ Q, Q.2)) Q :=
+  Result.bind_wp
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : spec x Q) :
-    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure))) x ⌜True⌝
-      (fun r => ⌜Q r⌝, fun e => ⌜e.down = Error.oom⌝,
-        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
-  rcases spec_ok_or_oom h with ⟨value, rfl, hp⟩ | rfl
-  · simpa [Triple, WP.wp, PredTrans.apply] using hp
-  · simp [Triple, WP.wp, PredTrans.apply, Result.oom]
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ :=
+  fun _ => .inl h
 
 theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : dspec x Q) :
-    Triple (m := Result) (ps := .except (ULift Error) (.except PUnit (.except PUnit .pure))) x ⌜x ≠ .div⌝
-      (fun r => ⌜Q r⌝, fun e => ⌜e.down = Error.oom⌝,
-        fun _ => ⌜False⌝, fun _ => ⌜False⌝, .unit) := by
-  cases x
-  · simpa [Triple, WP.wp, PredTrans.apply] using h
-  · rename_i effect k
-    cases effect
-    · exact False.elim ((dspec_vis _ _).mp h)
-    · simpa [Triple, WP.wp, PredTrans.apply] using h
-  · simp [Triple]
-
-end Aeneas.Std.WP
-
-namespace Aeneas.Std
-
-/-!
-# Loops
--/
-
-/-- General spec for loops with a termination measure.
-
-It is meant to derive lemmas to reason about loops: in most situations, one shouldn't
-have to use it directly when verifying programs.
--/
-theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
-  (measure : α → γ)
-  [wf : WellFoundedRelation γ]
-  (inv : α → Prop)
-  (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
-  (hBody :
-    ∀ x, inv x → body x ⦃ r =>
-      match r with
-      | .done y => post y
-      | .cont x' => inv x' ∧ wf.rel (measure x') (measure x) ⦄)
-  (hInv : inv x) :
-  loop body x ⦃ post ⦄ := by
-  suffices ∀ x' x, measure x = x' → inv x → loop body x ⦃ post ⦄
-    by apply this <;> first | rfl | assumption
-  apply @wf.wf.fix γ (fun x' =>
-    ∀ x, measure x = x' →
-    inv x → loop body x ⦃ post ⦄)
-  intro y ih x eq ix
-  subst eq
-  unfold loop
-  apply WP.spec_bind (hBody x ix)
-  intro r hr
-  cases r with
-  | done z => simpa using hr
-  | cont x' => exact ih (measure x') hr.2 x' rfl hr.1
-
-theorem loop.spec_decr_nat {α : Type u} {β : Type v}
-  (measure : α → Nat)
-  (inv : α → Prop)
-  (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
-  (hBody :
-    ∀ x, inv x → body x ⦃ r =>
-      match r with
-      | .done y => post y
-      | .cont x' => inv x' ∧ measure x' < measure x ⦄)
-  (hInv : inv x) :
-  loop body x ⦃ post ⦄ := by
-  have := loop.spec measure inv post body x hBody hInv
-  apply this
-
-end Aeneas.Std
-
-namespace Aeneas.Std.WP
-
-/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
-want to introduce in the context -/
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ (fun r => ⌜ Q r ⌝, fun _ => ⌜ ¬ x.terminates ⌝, ⟨⟩) ⦄ := by
+  intro _
+  by_cases hTerm : x.terminates
+  · exact .inl (spec_mono (spec_and_dspec hTerm h) fun _ h => h.2)
+  · exact .inr ⟨hTerm, h⟩
 
 end Aeneas.Std.WP
