@@ -46,7 +46,7 @@ instance : EffectWP.Conjunctive effectWP where
 /-! ### Realization of assertions by heaps -/
 
 theorem realizes_emp_empty : Realizes emp Heap.empty :=
-  ⟨Heap.inv_empty, ∅, trivial, Fragment.matches_empty _⟩
+  ⟨Heap.inv_empty, ∅, trivial, Fragment.matches_empty _, fun _ _ _ h => h.elim⟩
 
 theorem realizes_sep_emp {H : IProp} {s : Heap} : Realizes (H ∗ emp) s ↔ Realizes H s := by
   rw [sep_emp_r_eq]
@@ -78,7 +78,7 @@ disjoint from the same fragment. -/
 theorem Fragment.join_of_matches {s : Heap} {o₁ o₂ frame : Fragment}
     (hMatches₁ : Fragment.Matches s o₁) (hMatches₂ : Fragment.Matches s o₂)
     (hDisjoint₁ : o₁.Disjoint frame) (hDisjoint₂ : o₂.Disjoint frame) :
-    ∃ o, o.Disjoint frame ∧ Fragment.Matches s o ∧
+    ∃ o, o = o₁ ∪ o₂ ∧ o.Disjoint frame ∧ Fragment.Matches s o ∧
       PartialCommMonoid.Subheap o₁ o ∧ PartialCommMonoid.Subheap o₂ o := by
   classical
   -- The resources of `o₂` which are not in `o₁`
@@ -97,7 +97,7 @@ theorem Fragment.join_of_matches {s : Heap} {o₁ o₂ frame : Fragment}
     funext r; apply propext
     show (o₂ r ∨ (o₁ r ∧ ¬ o₂ r)) ↔ (o₁ r ∨ o₂ r)
     by_cases h : o₂ r <;> simp [h]
-  refine ⟨o₁ ∪ o₂, Fragment.disjoint_union_left.mpr ⟨hDisjoint₁, hDisjoint₂⟩,
+  refine ⟨o₁ ∪ o₂, rfl, Fragment.disjoint_union_left.mpr ⟨hDisjoint₁, hDisjoint₂⟩,
     (Fragment.matches_union _ _ _).mpr ⟨hMatches₁, hMatches₂⟩,
     PartialCommMonoid.subheap_iff.mpr ⟨rest₂, hCompat hMatches₁ hMatches₂, hEq₁.symm⟩,
     PartialCommMonoid.subheap_iff.mpr ⟨rest₁, hCompat hMatches₂ hMatches₁, hEq₂.symm⟩⟩
@@ -107,24 +107,24 @@ theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
       ∀ F s, Realizes (P ∗ F) s →
         DWP effectWP m (fun value s' => Realizes ((Q ∗+ F) value) s') s := by
   constructor
-  · rintro hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+  · rintro hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩, hMatches, hAuth⟩
     exact hSpec h₁ hP F s
-      ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, PartialCommMonoid.Subheap.refl _, hF⟩, hMatches⟩
+      ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, PartialCommMonoid.Subheap.refl _, hF⟩, hMatches, hAuth⟩
   · intro hSpec owned hP F s
-    rintro ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩, hMatches⟩
-    exact hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩, hMatches⟩
+    rintro ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩, hMatches, hAuth⟩
+    exact hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩, hMatches, hAuth⟩
 
 theorem dispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
     dispec P m Q ↔
       ∀ F s, Realizes (P ∗ F) s →
         DWLP effectWP m (fun value s' => Realizes ((Q ∗+ F) value) s') s := by
   constructor
-  · rintro hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+  · rintro hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩, hMatches, hAuth⟩
     exact hSpec h₁ hP F s
-      ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, PartialCommMonoid.Subheap.refl _, hF⟩, hMatches⟩
+      ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, PartialCommMonoid.Subheap.refl _, hF⟩, hMatches, hAuth⟩
   · intro hSpec owned hP F s
-    rintro ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩, hMatches⟩
-    exact hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩, hMatches⟩
+    rintro ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩, hMatches, hAuth⟩
+    exact hSpec F s ⟨hInv, _, ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩, hMatches, hAuth⟩
 
 theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) : dispec P m Q := by
@@ -194,50 +194,69 @@ is correct iff it is local: from every heap which realizes the precondition with
 it is enabled, and it keeps the frame and establishes the postcondition. -/
 theorem ispec_guardedModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre} {Q : IPost α}
     (hLocal : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      AuthOK s (h ∪ frame) →
       (∃ x s', modify s x s') ∧
       ∀ x s', modify s x s' →
-        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ Q x h') :
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧
+          AuthOK s' (h' ∪ frame) ∧ Q x h') :
     ispec P (Result.guardedModify modify) Q := by
   rw [ispec_iff]
-  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches⟩
-  obtain ⟨hEnabled, hPost⟩ := hLocal s owned framed hP hDisjoint hMatches hInv
+  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches, hAuth⟩
+  obtain ⟨hEnabled, hPost⟩ := hLocal s owned framed hP hDisjoint hMatches hInv hAuth
   refine DWP.vis (θ := effectWP)
     (effect := RustEffect.Input.guardedModify _ modify) ⟨hEnabled, fun x s' hx => ?_⟩
-  obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hx
-  exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
+  obtain ⟨h', hDisjoint', hMatches', hInv', hAuth', hQ⟩ := hPost x s' hx
+  exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches', hAuth'⟩
 
-/-- A local heap operation on fragments is local on the upward closures. -/
+/-- The heap operation `op` keeps the authority of the owned exclusive blocks (see `AuthOK`), from
+the fragments of `A` to those of `B`, for every frame. -/
+@[expose] def Bytes.AuthPres {α : Type} (A : Fragment → Prop) (op : Heap → α → Heap → Prop)
+    (B : α → Fragment → Prop) : Prop :=
+  ∀ a F s, A a → a.Disjoint F → Fragment.Matches s (a ∪ F) → s.Inv → AuthOK s (a ∪ F) →
+    ∀ x s' a', op s x s' → a'.Disjoint F → Fragment.Matches s' (a' ∪ F) → s'.Inv → B x a' →
+      AuthOK s' (a' ∪ F)
+
+/-- A local heap operation on fragments, which keeps the authority of the owned exclusive blocks, is
+local on the upward closures. -/
 theorem Bytes.LocalOp.upClose {α : Type} {A : Fragment → Prop} {op : Heap → α → Heap → Prop}
-    {B : α → Fragment → Prop} (hLocal : Bytes.LocalOp A op B) :
+    {B : α → Fragment → Prop} (hLocal : Bytes.LocalOp A op B) (hAuthPres : Bytes.AuthPres A op B) :
     ∀ s h frame, upClose A h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      AuthOK s (h ∪ frame) →
       (∃ x s', op s x s') ∧
       ∀ x s', op s x s' →
-        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ upClose (B x) h' := by
-  rintro s _ frame ⟨a, hA, hSub⟩ hd hm hInv
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧
+          AuthOK s' (h' ∪ frame) ∧ upClose (B x) h' := by
+  rintro s _ frame ⟨a, hA, hSub⟩ hd hm hInv hAuth
   obtain ⟨rest, hRest, rfl⟩ := PartialCommMonoid.subheap_iff.mp hSub
   have hdParts := Fragment.disjoint_union_left.mp hd
   have hdA : a.Disjoint (rest ∪ frame) := Fragment.disjoint_union_right.mpr ⟨hRest, hdParts.1⟩
   have hmA : Fragment.Matches s (a ∪ (rest ∪ frame)) := by
     rwa [← Fragment.union_assoc]
+  have hAuthA : AuthOK s (a ∪ (rest ∪ frame)) := by
+    rwa [← Fragment.union_assoc]
   obtain ⟨hEnabled, hPost⟩ := hLocal a (rest ∪ frame) s hA hdA hmA hInv
   refine ⟨hEnabled, fun x s' hx => ?_⟩
   obtain ⟨a', hdNew, hmNew, hInv', hB⟩ := hPost x s' hx
+  have hAuth' := hAuthPres a (rest ∪ frame) s hA hdA hmA hInv hAuthA x s' a' hx hdNew hmNew hInv' hB
   have hdNewParts := Fragment.disjoint_union_right.mp hdNew
-  refine ⟨a' ∪ rest, Fragment.disjoint_union_left.mpr ⟨hdNewParts.2, hdParts.2⟩, ?_, hInv',
+  refine ⟨a' ∪ rest, Fragment.disjoint_union_left.mpr ⟨hdNewParts.2, hdParts.2⟩, ?_, hInv', ?_,
     a', hB, PartialCommMonoid.Subheap.union_left hdNewParts.1⟩
-  rwa [Fragment.union_assoc]
+  · rwa [Fragment.union_assoc]
+  · rwa [Fragment.union_assoc]
 
 /-- A heap operation, totalized: it fails with undefined behavior if it is not enabled. It is
 correct if it is local (in which case it is enabled). -/
 theorem ispec_checkedModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre} {Q : IPost α}
     (hLocal : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      AuthOK s (h ∪ frame) →
       (∃ x s', modify s x s') ∧
       ∀ x s', modify s x s' →
-        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ Q x h') :
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧
+          AuthOK s' (h' ∪ frame) ∧ Q x h') :
     ispec P (Result.checkedModify modify) Q := by
   rw [ispec_iff]
-  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches⟩
-  obtain ⟨⟨x₀, s₀, hx₀⟩, hPost⟩ := hLocal s owned framed hP hDisjoint hMatches hInv
+  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches, hAuth⟩
+  obtain ⟨⟨x₀, s₀, hx₀⟩, hPost⟩ := hLocal s owned framed hP hDisjoint hMatches hInv hAuth
   unfold Result.checkedModify
   refine DWP.vis (θ := effectWP)
     (effect := RustEffect.Input.guardedModify _ (State.checked modify))
@@ -245,20 +264,22 @@ theorem ispec_checkedModify {α : Type} {modify : Heap → α → Heap → Prop}
   cases answer with
   | none => exact (hAnswer.1 ⟨x₀, s₀, hx₀⟩).elim
   | some x =>
-    obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hAnswer
-    exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
+    obtain ⟨h', hDisjoint', hMatches', hInv', hAuth', hQ⟩ := hPost x s' hAnswer
+    exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches', hAuth'⟩
 
 /-- An allocation: it aborts with out-of-memory if it is not enabled. -/
 theorem ispec_allocatingModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre}
     {Q : IPost α}
     (hLocal : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      AuthOK s (h ∪ frame) →
       ∀ x s', modify s x s' →
-        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ Q x h') :
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧
+          AuthOK s' (h' ∪ frame) ∧ Q x h') :
     ispec P (Result.allocatingModify modify) Q := by
   classical
   rw [ispec_iff]
-  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches⟩
-  have hPost := hLocal s owned framed hP hDisjoint hMatches hInv
+  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches, hAuth⟩
+  have hPost := hLocal s owned framed hP hDisjoint hMatches hInv hAuth
   unfold Result.allocatingModify
   refine DWP.vis (θ := effectWP)
     (effect := RustEffect.Input.guardedModify _ (State.checked modify))
@@ -270,8 +291,8 @@ theorem ispec_allocatingModify {α : Type} {modify : Heap → α → Heap → Pr
   · cases answer with
     | none => exact DWP.vis (θ := effectWP) (effect := RustEffect.Input.fail .oom) rfl
     | some x =>
-      obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hAnswer
-      exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
+      obtain ⟨h', hDisjoint', hMatches', hInv', hAuth', hQ⟩ := hPost x s' hAnswer
+      exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches', hAuth'⟩
 
 /-- Out-of-memory aborts are accepted. -/
 @[simp]
@@ -333,8 +354,8 @@ private theorem realizes_iand_owns {Q₁ Q₂ F : IProp} {framed : Fragment} {s 
     (hF : F framed)
     (h₁ : Realizes (Q₁ ∗ owns framed) s) (h₂ : Realizes (Q₂ ∗ owns framed) s) :
     Realizes (iprop(Q₁ ∧ Q₂) ∗ F) s := by
-  obtain ⟨hInv, _, ⟨o₁, f₁, hd₁, rfl, hQ₁, hf₁⟩, hm₁⟩ := h₁
-  obtain ⟨_, _, ⟨o₂, f₂, hd₂, rfl, hQ₂, hf₂⟩, hm₂⟩ := h₂
+  obtain ⟨hInv, _, ⟨o₁, f₁, hd₁, rfl, hQ₁, hf₁⟩, hm₁, hAuth₁⟩ := h₁
+  obtain ⟨_, _, ⟨o₂, f₂, hd₂, rfl, hQ₂, hf₂⟩, hm₂, hAuth₂⟩ := h₂
   obtain ⟨r₁, hr₁, rfl⟩ := PartialCommMonoid.subheap_iff.mp hf₁
   obtain ⟨r₂, hr₂, rfl⟩ := PartialCommMonoid.subheap_iff.mp hf₂
   have hm₁' := (Fragment.matches_union _ _ _).mp hm₁
@@ -352,19 +373,27 @@ private theorem realizes_iand_owns {Q₁ Q₂ F : IProp} {framed : Fragment} {s 
     (Fragment.matches_union _ _ _).mpr ⟨hm₂'.1, ((Fragment.matches_union _ _ _).mp hm₂'.2).2⟩
   have hdo₁ : o₁.Disjoint r₁ := (Fragment.disjoint_union_right.mp hd₁).2
   have hdo₂ : o₂.Disjoint r₂ := (Fragment.disjoint_union_right.mp hd₂).2
-  obtain ⟨o, hdo, hmo, hsub₁, hsub₂⟩ := Fragment.join_of_matches hmo₁ hmo₂ hd₁' hd₂'
+  obtain ⟨o, ho, hdo, hmo, hsub₁, hsub₂⟩ := Fragment.join_of_matches hmo₁ hmo₂ hd₁' hd₂'
   refine ⟨hInv, o ∪ framed, ⟨o, framed, hdo, rfl,
     ⟨Q₁.up_closed hQ₁ ((PartialCommMonoid.Subheap.union_left hdo₁).trans hsub₁),
      Q₂.up_closed hQ₂ ((PartialCommMonoid.Subheap.union_left hdo₂).trans hsub₂)⟩, hF⟩,
-    (Fragment.matches_union _ _ _).mpr ⟨hmo, ((Fragment.matches_union _ _ _).mp hm₁'.2).1⟩⟩
+    (Fragment.matches_union _ _ _).mpr ⟨hmo, ((Fragment.matches_union _ _ _).mp hm₁'.2).1⟩, ?_⟩
+  intro base size bptr hc
+  rw [ho] at hc
+  rcases hc with ((hc | hc) | (hc | hc)) | hc
+  · exact hAuth₁ base size bptr (Or.inl hc)
+  · exact hAuth₁ base size bptr (Or.inr (Or.inr hc))
+  · exact hAuth₂ base size bptr (Or.inl hc)
+  · exact hAuth₂ base size bptr (Or.inr (Or.inr hc))
+  · exact hAuth₁ base size bptr (Or.inr (Or.inl hc))
 
 theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
     (h₁ : ispec P m Q₁) (h₂ : ispec P m Q₂) :
     ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
   rw [ispec_iff] at h₁ h₂ ⊢
-  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches⟩
+  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches, hAuth⟩
   have hPre : Realizes (P ∗ owns framed) s :=
-    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches⟩
+    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches, hAuth⟩
   have hBoth := DWP.and_iff.mpr ⟨h₁ (owns framed) s hPre, h₂ (owns framed) s hPre⟩
   exact hBoth.mono fun _ _ hPost => realizes_iand_owns hF hPost.1 hPost.2
 
@@ -373,9 +402,9 @@ theorem ispec_and_dispec {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : I
     ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
   rw [ispec_iff] at h₁ ⊢
   rw [dispec_iff] at h₂
-  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches⟩
+  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches, hAuth⟩
   have hPre : Realizes (P ∗ owns framed) s :=
-    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches⟩
+    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches, hAuth⟩
   have hBoth := DWP.and_partial (h₁ (owns framed) s hPre) (h₂ (owns framed) s hPre)
   exact hBoth.mono fun _ _ hPost => realizes_iand_owns hF hPost.1 hPost.2
 
@@ -482,9 +511,9 @@ theorem dispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost �
     (h₁ : dispec P m Q₁) (h₂ : dispec P m Q₂) :
     dispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
   rw [dispec_iff] at h₁ h₂ ⊢
-  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches⟩
+  rintro F s ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, hF⟩, hMatches, hAuth⟩
   have hPre : Realizes (P ∗ owns framed) s :=
-    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches⟩
+    ⟨hInv, _, ⟨owned, framed, hCompatible, rfl, hP, PartialCommMonoid.Subheap.refl framed⟩, hMatches, hAuth⟩
   have hBoth := DWLP.and_iff.mpr ⟨h₁ (owns framed) s hPre, h₂ (owns framed) s hPre⟩
   exact hBoth.mono fun _ _ hPost => realizes_iand_owns hF hPost.1 hPost.2
 
