@@ -1403,7 +1403,7 @@ theorem Slice.as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.
     ⦃ emp ⦄ Slice.as_mut_ptr address s
       ⦃ (p, back) => ⌜back = Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p ↦* s.val.val ∗ p.exposure s.val.length ⦄ := by
-  unfold Slice.as_mut_ptr
+  rw [Slice.as_mut_ptr_eq]
   apply ispec_bind (RawPtr.allocExposure.spec s.val.val address hne) (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
   apply ispec_ok
@@ -1439,7 +1439,7 @@ theorem Slice.as_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (address : Ba
     ⦃ emp ⦄ Slice.as_ptr address s
       ⦃ (p, back) => ⌜back = Slice.end_as_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p.readable 1 s.val.val ∗ p.exposure s.val.length ⦄ := by
-  unfold Slice.as_ptr
+  rw [Slice.as_ptr_eq]
   apply ispec_bind (RawPtr.allocSharedExposure.spec s.val.val address hne)
     (entails_of_eq (sep_emp_r_eq emp).symm)
   intro p
@@ -1967,7 +1967,7 @@ theorem Slice.as_mut_ptr.spec_at {T : Type} [Pointee T] [Pointee.Sized T] [Point
       ⦃ (p, back) => ⌜p.address = address⌝ ∗
         ⌜back = Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p ↦* s.val.val ∗ p.exposure s.val.length ⦄ := by
-  unfold Slice.as_mut_ptr
+  rw [Slice.as_mut_ptr_eq]
   apply ispec_bind (ispec_allocatingModify_rel
     (R := State.exposeAt (Pointee.repr (T := T)) s.val.val address)
     (RawPtr.allocExposure.spec s.val.val address hne)) (entails_of_eq (sep_emp_r_eq emp).symm)
@@ -1986,7 +1986,7 @@ theorem Slice.as_ptr.spec_at {T : Type} [Pointee T] [Pointee.Sized T] (address :
       ⦃ (p, back) => ⌜p.address = address⌝ ∗
         ⌜back = Slice.end_as_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
         p.readable 1 s.val.val ∗ p.exposure s.val.length ⦄ := by
-  unfold Slice.as_ptr
+  rw [Slice.as_ptr_eq]
   apply ispec_bind (ispec_allocatingModify_rel
     (R := State.sharedExposeAt (Pointee.repr (T := T)) s.val.val address)
     (RawPtr.allocSharedExposure.spec s.val.val address hne))
