@@ -2367,21 +2367,31 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
     }
   else f
 
-(** [&*(&raw const *r)] is [&*r]: a raw pointer to the place behind a shared
-    reference which is only reborrowed as a shared reference (ex.:
-    [let d = ptr::addr_of!(STATIC); let d = &*d;]) doesn't need to expose the
-    place as raw memory. We replace the reborrows of [*d] by reborrows of [*r]
-    and remove the assignment to [d], when [d] is assigned once and only used in
-    those reborrows. *)
+(** [&*(&raw const p)] is [&p]: a raw pointer to a global, or to the place
+    behind a shared reference, which is only reborrowed as a shared reference
+    (ex.: [let d = ptr::addr_of!(STATIC_DATA); let d = &*d;]) doesn't need to
+    expose the place as raw memory. We replace the reborrows of [*d] by borrows
+    of [p] and remove the assignment to [d] (and its fake reads), when [d] is
+    assigned once and only used in those reborrows. *)
 let simplify_raw_reborrows (f : fun_decl) : fun_decl =
   match f.body with
   | StructuredBody body ->
+      let rec stable (p : place) : bool =
+        match p.kind with
+        | PlaceGlobal _ -> true
+        | PlaceProjection ({ kind = PlaceLocal _; ty = TRef (_, _, RShared) }, Deref)
+          ->
+            true
+        | PlaceProjection (q, Field _) -> stable q
+        | _ -> false
+      in
       let assigns : (LocalId.id, place) Hashtbl.t = Hashtbl.create 4 in
       let num_assigns : (LocalId.id, int) Hashtbl.t = Hashtbl.create 4 in
       let uses : (LocalId.id, int) Hashtbl.t = Hashtbl.create 4 in
       let reborrows : (LocalId.id, int) Hashtbl.t = Hashtbl.create 4 in
       let incr tbl id =
-        Hashtbl.replace tbl id (1 + Option.value ~default:0 (Hashtbl.find_opt tbl id))
+        Hashtbl.replace tbl id
+          (1 + Option.value ~default:0 (Hashtbl.find_opt tbl id))
       in
       let count tbl id = Option.value ~default:0 (Hashtbl.find_opt tbl id) in
       let collector =
@@ -2389,24 +2399,16 @@ let simplify_raw_reborrows (f : fun_decl) : fun_decl =
           inherit [_] iter_statement as super
 
           method! visit_statement env st =
-            (match st.kind with
-            | Assign
-                ( { kind = PlaceLocal d; _ },
-                  RawPtr
-                    ( {
-                        kind =
-                          PlaceProjection
-                            (({ kind = PlaceLocal _; ty = TRef (_, _, RShared) }
-                              as r),
-                             Deref);
-                        _;
-                      },
-                      RShared,
-                      _ ) ) ->
-                Hashtbl.replace assigns d r
-            | Assign ({ kind = PlaceLocal d; _ }, _) -> incr num_assigns d
-            | _ -> ());
-            super#visit_statement env st
+            match st.kind with
+            | StorageLive _ | StorageDead _ | PlaceMention _ | Borrowck _ -> ()
+            | Assign ({ kind = PlaceLocal d; _ }, RawPtr (p, RShared, _))
+              when stable p ->
+                Hashtbl.replace assigns d p;
+                super#visit_statement env st
+            | Assign ({ kind = PlaceLocal d; _ }, _) ->
+                incr num_assigns d;
+                super#visit_statement env st
+            | _ -> super#visit_statement env st
 
           method! visit_rvalue env rv =
             (match rv with
@@ -2429,14 +2431,19 @@ let simplify_raw_reborrows (f : fun_decl) : fun_decl =
       (* [d] occurs once in its assignment and once in each reborrow *)
       let candidates =
         Hashtbl.fold
-          (fun d r acc ->
+          (fun d p acc ->
             if count num_assigns d = 0 && count uses d = 1 + count reborrows d
-            then (d, r) :: acc
+            then (d, p) :: acc
             else acc)
           assigns []
       in
       if candidates = [] then f
       else
+        let mentions (p : place) =
+          match p.kind with
+          | PlaceLocal d -> List.mem_assoc d candidates
+          | _ -> false
+        in
         let mapper =
           object
             inherit [_] map_statement as super
@@ -2446,22 +2453,26 @@ let simplify_raw_reborrows (f : fun_decl) : fun_decl =
               | Assign ({ kind = PlaceLocal d; _ }, RawPtr _)
                 when List.mem_assoc d candidates ->
                   { st with kind = Nop }
+              | PlaceMention p | Borrowck (FakeRead p) when mentions p ->
+                  { st with kind = Nop }
               | _ -> super#visit_statement env st
 
             method! visit_rvalue env rv =
               match rv with
               | RvRef
-                  ( ({ kind = PlaceProjection ({ kind = PlaceLocal d; _ }, Deref); _ }
-                     as p),
+                  ( { kind = PlaceProjection ({ kind = PlaceLocal d; _ }, Deref); _ },
                     BShared,
                     metadata )
                 when List.mem_assoc d candidates ->
-                  let r = List.assoc d candidates in
-                  RvRef ({ p with kind = PlaceProjection (r, Deref) }, BShared, metadata)
+                  RvRef (List.assoc d candidates, BShared, metadata)
               | _ -> super#visit_rvalue env rv
           end
         in
-        { f with body = StructuredBody { body with body = mapper#visit_block () body.body } }
+        {
+          f with
+          body =
+            StructuredBody { body with body = mapper#visit_block () body.body };
+        }
   | _ -> f
 
 (** Decompose the accesses to the places behind raw pointers.
