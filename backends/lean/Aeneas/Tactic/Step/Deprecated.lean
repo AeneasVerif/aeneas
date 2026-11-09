@@ -52,8 +52,9 @@ elab tk:"progress?" args:Step.stepArgs : tactic => do
   let stats ← Step.evalStep config none withArg ids idsUserProvided postsBasename byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
-    stxArgs := stxArgs.setArg 1 withArg
+    if let some stats := stats then
+      let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
+      stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Step.step #[mkAtom "step", stxArgs]
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
