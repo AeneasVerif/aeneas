@@ -1,6 +1,7 @@
 /- Specifications of the raw-pointer functions, in the separation logic over the byte heap. -/
 module
 public import Aeneas.Std.Core.Ptr
+public import Aeneas.Std.Core.PtrMovement
 public import Aeneas.Std.Slice
 public import Aeneas.Std.Alloc.Boxed
 public import Aeneas.Std.WP
@@ -1598,5 +1599,655 @@ theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] [Pointee.Sized T] (
   intro _
   apply ispec_ok
   iframe
+
+/-! ## Prefixes of readable ranges, pointer distance, and heap-level reasoning
+
+Lemmas for the proof of `DecimalBuffer.format` (`tests/lean/RawZmijMweProofs.lean`), the formatter
+of the Zmij MWE of fournet/wip-memory-model:
+- `p.readable2 d₁ d₂ xs ys`: a readable range of `xs ++ ys` whose prefix `xs` is shared `d₁` times
+  and whose suffix is shared `d₂` times, so that `from_raw_parts` can share a prefix of the cells of
+  an `as_ptr` exposure;
+- `RawPtr.add.spec_elem`: pointer arithmetic from an element of a range;
+- `Slice.as_ptr.spec_at`, `Slice.as_mut_ptr.spec_at`: the exposures are at their placement;
+- heap-level reasoning (`DWP`) about retired views, whose base pointer, length and allocation remain
+  observable (`Heap.Retained`), and `offset_from` between a retired view and a re-exposure at the
+  same address (`offset_from_reexposed`, after fournet/wip-memory-model). -/
+
+theorem Vector.toList_flatMap' {α β : Type _} {n m : Nat} (xs : Vector α n) (f : α → Vector β m) :
+    (xs.flatMap f).toList = xs.toList.flatMap (fun a => (f a).toList) := by
+  rw [Vector.flatMap]; simp only [Array.toList_flatMap, Vector.toList]
+
+theorem flatMap_shared_length {size : Nat} (l : List (Vector Byte size)) (d : Nat) :
+    (l.flatMap (fun b => (b.map (Cell.shared d)).toList)).length = l.length * size := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.flatMap_cons, List.length_append, Vector.toList_map, List.length_map,
+      Vector.length_toList, List.length_cons, Nat.succ_mul] at ih ⊢
+    omega
+
+/-- A readable range of `xs ++ ys` is a readable range of `xs` and a readable range of `ys` after
+it, in the same block. -/
+theorem readableRange_append {T : Type} (repr : Repr T) (p q : RawPtr T) (bptr : BasePtr)
+    (xs ys : List T) (d : Nat) (hprov : q.provenance = p.provenance)
+    (hoff : q.address.val = p.address.val + xs.length * repr.size) (h : Fragment) :
+    readableRange repr p bptr (listVec (xs ++ ys)) d h ↔
+      (readableRange repr p bptr (listVec xs) d ∗ᵇ readableRange repr q bptr (listVec ys) d) h := by
+  have hcells : ∀ {n} (data : Vector (Vector Byte repr.size) n),
+      (data.flatMap (fun b => b.map (Cell.shared d))).toList =
+        data.toList.flatMap (fun b => (b.map (Cell.shared d)).toList) :=
+    fun data => Vector.toList_flatMap' _ _
+  constructor
+  · rintro ⟨data, dec, hb⟩
+    have hL : data.toList.length = xs.length + ys.length := by simp
+    let data₁ : Vector (Vector Byte repr.size) xs.length :=
+      ⟨(data.toList.take xs.length).toArray, by simp [hL]⟩
+    let data₂ : Vector (Vector Byte repr.size) ys.length :=
+      ⟨(data.toList.drop xs.length).toArray, by simp [hL]⟩
+    have h₁ : data₁.toList = data.toList.take xs.length := by simp [data₁, Vector.toList]
+    have h₂ : data₂.toList = data.toList.drop xs.length := by simp [data₂, Vector.toList]
+    have hsplit : (data.flatMap (fun b => b.map (Cell.shared d))).toList =
+        (data₁.flatMap (fun b => b.map (Cell.shared d))).toList ++
+          (data₂.flatMap (fun b => b.map (Cell.shared d))).toList := by
+      rw [hcells, hcells, hcells, h₁, h₂, ← List.flatMap_append, List.take_append_drop]
+    rw [hsplit] at hb
+    obtain ⟨a, b, hab, rfl, ha, hb'⟩ := (Bytes.block_append repr p q bptr _ _ hprov
+      (by rw [hoff, hcells, flatMap_shared_length, h₁]; simp [hL])
+      (by rw [hcells, flatMap_shared_length]; exact Repr.aligned_stride repr _) h).mp hb
+    refine ⟨a, b, hab, rfl, ⟨data₁, fun i => ?_, ha⟩, ⟨data₂, fun i => ?_, hb'⟩⟩
+    · have := dec ⟨i.val, by simp; omega⟩
+      have e₁ : data₁[i.val] = data[i.val] := by
+        simp only [data₁, Vector.getElem_mk, List.getElem_toArray, List.getElem_take]
+        rfl
+      simp only [listVec, Vector.getElem_mk, List.getElem_toArray] at this ⊢
+      rw [e₁, this, List.getElem_append_left]
+    · have := dec ⟨xs.length + i.val, by simp⟩
+      have e₂ : data₂[i.val] = data[xs.length + i.val] := by
+        simp only [data₂, Vector.getElem_mk, List.getElem_toArray, List.getElem_drop]
+        rfl
+      simp only [listVec, Vector.getElem_mk, List.getElem_toArray] at this ⊢
+      rw [e₂, this, List.getElem_append_right (by omega)]
+      simp
+  · rintro ⟨a, b, hab, rfl, ⟨data₁, dec₁, ha⟩, ⟨data₂, dec₂, hb⟩⟩
+    let data : Vector (Vector Byte repr.size) (xs ++ ys).length :=
+      ⟨(data₁.toList ++ data₂.toList).toArray, by simp⟩
+    have h₀ : data.toList = data₁.toList ++ data₂.toList := by simp [data, Vector.toList]
+    refine ⟨data, fun i => ?_, ?_⟩
+    · by_cases hi : i.val < xs.length
+      · have := dec₁ ⟨i.val, hi⟩
+        have e : data[i.val] = data₁[i.val] := by
+          simp only [data, Vector.getElem_mk, List.getElem_toArray]
+          rw [List.getElem_append_left (by simpa using hi)]
+          simp
+        simp only [listVec, Vector.getElem_mk, List.getElem_toArray] at this ⊢
+        rw [e, this, List.getElem_append_left]
+      · have hi' : i.val - xs.length < ys.length := by have := i.isLt; simp at this; omega
+        have := dec₂ ⟨i.val - xs.length, hi'⟩
+        have e : data[i.val] = data₂[i.val - xs.length] := by
+          simp only [data, Vector.getElem_mk, List.getElem_toArray]
+          rw [List.getElem_append_right (by simpa using hi)]
+          simp
+        simp only [listVec, Vector.getElem_mk, List.getElem_toArray] at this ⊢
+        rw [e, this, List.getElem_append_right (by omega)]
+    · have hsplit : (data.flatMap (fun b => b.map (Cell.shared d))).toList =
+          (data₁.flatMap (fun b => b.map (Cell.shared d))).toList ++
+            (data₂.flatMap (fun b => b.map (Cell.shared d))).toList := by
+        rw [hcells, hcells, hcells, h₀, List.flatMap_append]
+      rw [hsplit]
+      exact (Bytes.block_append repr p q bptr _ _ hprov
+        (by rw [hoff, hcells, flatMap_shared_length]; simp)
+        (by rw [hcells, flatMap_shared_length]; exact Repr.aligned_stride repr _) _).mpr
+        ⟨a, b, hab, rfl, ha, hb⟩
+
+/-! ### Sharing a prefix of a readable range -/
+
+theorem Bytes.shareRange.local_readable {T : Type} (repr : Repr T) (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat) (hcount : 0 < count) (hsize : 0 < repr.size) :
+    Bytes.LocalOp (readableRange repr p bptr values depth) (State.shareRange repr p count)
+      (fun result h => result = values.toList ∧
+        readableRange repr p bptr values (depth + 1) h) := by
+  intro h F s hp hd hm hi
+  have hr := Bytes.read_of_readableRange hcount hsize hp ((Fragment.matches_union _ _ _).mp hm).1
+  obtain ⟨data, decoded, hb⟩ := hp
+  obtain ⟨⟨_, s₁, hc⟩, hpost⟩ :=
+    Bytes.shareRange_cells.spec repr p bptr data depth hcount hsize h F s hb hd hm hi
+  refine ⟨⟨values.toList, s₁, hr, hc⟩, ?_⟩
+  rintro result s' ⟨hv, hc'⟩
+  obtain ⟨h', hd', hm', hi', hq⟩ := hpost () s' hc'
+  exact ⟨h', hd', hm', hi', Option.some.inj (hv.symm.trans hr), data, decoded, hq⟩
+
+theorem Bytes.endShareRange.local_readable {T : Type} (repr : Repr T) (p : RawPtr T)
+    (bptr : BasePtr) (values : Vector T count) (depth : Nat) (positive : 0 < depth)
+    (hcount : 0 < count) (hsize : 0 < repr.size) :
+    Bytes.LocalOp (readableRange repr p bptr values (depth + 1))
+      (State.endShareRange repr p values.toList)
+      (fun _ => readableRange repr p bptr values depth) := by
+  intro h F s hp hd hm hi
+  have hr := Bytes.read_of_readableRange hcount hsize hp ((Fragment.matches_union _ _ _).mp hm).1
+  obtain ⟨data, decoded, hp⟩ := hp
+  obtain ⟨⟨_, s₁, hc⟩, hpost⟩ :=
+    Bytes.endShareRange_cells.spec repr p bptr data depth positive hcount hsize h F s hp hd hm hi
+  refine ⟨⟨(), s₁, by simpa using hr, by simpa using hc⟩, ?_⟩
+  rintro _ s' ⟨_, he⟩
+  obtain ⟨h', hd', hm', hi', hq⟩ := hpost () s' (by simpa using he)
+  exact ⟨h', hd', hm', hi', data, decoded, hq⟩
+
+/-- A readable range of `xs`, shared `d₁` times, followed by a readable range of `ys`, shared
+`d₂` times, in the same block. -/
+def RawPtr.readable2 {T : Type} [Pointee T] (p : RawPtr T) (d₁ d₂ : Nat) (xs ys : List T) :
+    IProp :=
+  iexists fun bptr : BasePtr => upClose (fun h =>
+    p.address.val + xs.length * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize ∧
+    (readableRange (Pointee.repr (T := T)) p bptr (listVec xs) d₁ ∗ᵇ
+      readableRange (Pointee.repr (T := T)) (p.elem xs.length) bptr (listVec ys) d₂) h)
+
+theorem RawPtr.readable_split {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (xs ys : List T)
+    (hfit : p.address.val + xs.length * (Pointee.repr (T := T)).size <
+      2 ^ UScalarTy.numBits .Usize) :
+    p.readable d (xs ++ ys) ⊢ p.readable2 d d xs ys := by
+  rintro h ⟨bptr, a, ha, hsub⟩
+  exact ⟨bptr, a, ⟨hfit, (readableRange_append _ p (p.elem xs.length) bptr xs ys d
+    (RawPtr.elem_provenance p _) (RawPtr.elem_address p _ hfit) a).mp ha⟩, hsub⟩
+
+theorem RawPtr.readable2_merge {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (xs ys : List T) :
+    p.readable2 d d xs ys ⊢ p.readable d (xs ++ ys) := by
+  rintro h ⟨bptr, a, ⟨hfit, ha⟩, hsub⟩
+  exact ⟨bptr, a, (readableRange_append _ p (p.elem xs.length) bptr xs ys d
+    (RawPtr.elem_provenance p _) (RawPtr.elem_address p _ hfit) a).mpr ha, hsub⟩
+
+theorem RawPtr.shareRange.spec_readable2 {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (d₁ d₂ : Nat) (xs ys : List T) (hne : 0 < xs.length) :
+    ⦃ p.readable2 d₁ d₂ xs ys ⦄ RawPtr.shareRange (Pointee.repr (T := T)) p xs.length
+      ⦃ result => ⌜result = xs⌝ ∗ p.readable2 (d₁ + 1) d₂ xs ys ⦄ := by
+  refine ispec_conseq (ispec_checked_local
+      (A := fun bptr h =>
+        p.address.val + xs.length * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize ∧
+        (readableRange (Pointee.repr (T := T)) p bptr (listVec xs) d₁ ∗ᵇ
+          readableRange (Pointee.repr (T := T)) (p.elem xs.length) bptr (listVec ys) d₂) h)
+      (B := fun bptr result h => result = xs ∧
+        p.address.val + xs.length * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize ∧
+        (readableRange (Pointee.repr (T := T)) p bptr (listVec xs) (d₁ + 1) ∗ᵇ
+          readableRange (Pointee.repr (T := T)) (p.elem xs.length) bptr (listVec ys) d₂) h)
+      (fun bptr => ?_) (fun bptr => ?_)) (entails_refl _) (fun _ => ?_)
+  · apply Bytes.LocalOp.pure_pre
+    intro hfit
+    refine Bytes.LocalOp.conseq (fun _ h => h) ?_
+      (Bytes.LocalOp.frame (Bytes.shareRange.local_readable _ p bptr (listVec xs) d₁ hne
+        Pointee.Sized.pos))
+    rintro x _ ⟨a, b, hab, rfl, ⟨hx, ha⟩, hb⟩
+    exact ⟨by simpa using hx, hfit, a, b, hab, rfl, ha, hb⟩
+  · refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.sep (fun _ ha => NoOwned.readableRange ha)
+      (fun _ hb => NoOwned.readableRange hb) h.2.2) ?_
+    rintro a F s _ _ _ _ x s' hx a' _ hm' _ ⟨_, _, a₁, b₁, _, rfl, ⟨data, _, hblock⟩, _⟩ base hEx _
+    have hlen :
+        0 < (data.flatMap (fun bytes => bytes.map (Cell.shared (d₁ + 1)))).toList.length := by
+      simp; exact ⟨hne, Pointee.Sized.pos⟩
+    have run := hx.2
+    unfold Heap.shareRange Heap.modifyRange at run
+    exact modify_step_nonExclusive run ((Fragment.matches_union _ _ _).mp hm').1
+      (Or.inl (Bytes.block_cell hblock hlen)) (by rw [flatMap_shared_getElem_depth]; simp) base hEx
+  · rintro h ⟨bptr, a, ⟨hx, hA⟩, hsub⟩
+    exact (sep_pure_l _ _ h).mpr ⟨hx, bptr, a, hA, hsub⟩
+
+theorem RawPtr.endShareRange.spec_readable2 {T : Type} [Pointee T] [Pointee.Sized T]
+    (p : RawPtr T) (d₁ d₂ : Nat) (xs ys : List T) (positive : 0 < d₁) (hne : 0 < xs.length) :
+    ⦃ p.readable2 (d₁ + 1) d₂ xs ys ⦄ RawPtr.endShareRange (Pointee.repr (T := T)) p xs
+      ⦃ p.readable2 d₁ d₂ xs ys ⦄ := by
+  have h := ispec_checked_local
+      (A := fun bptr h =>
+        p.address.val + xs.length * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize ∧
+        (readableRange (Pointee.repr (T := T)) p bptr (listVec xs) (d₁ + 1) ∗ᵇ
+          readableRange (Pointee.repr (T := T)) (p.elem xs.length) bptr (listVec ys) d₂) h)
+      (B := fun bptr (_ : Unit) h =>
+        p.address.val + xs.length * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize ∧
+        (readableRange (Pointee.repr (T := T)) p bptr (listVec xs) d₁ ∗ᵇ
+          readableRange (Pointee.repr (T := T)) (p.elem xs.length) bptr (listVec ys) d₂) h)
+      (modify := State.endShareRange (Pointee.repr (T := T)) p xs)
+      (fun bptr => ?_) (fun bptr => ?_)
+  · exact h
+  · apply Bytes.LocalOp.pure_pre
+    intro hfit
+    have hl := Bytes.LocalOp.frame (R := readableRange (Pointee.repr (T := T)) (p.elem xs.length)
+      bptr (listVec ys) d₂) (Bytes.endShareRange.local_readable _ p bptr (listVec xs) d₁ positive
+        hne Pointee.Sized.pos)
+    simp only [listVec_toList] at hl
+    exact Bytes.LocalOp.conseq (fun _ h => h) (fun _ _ h => ⟨hfit, h⟩) hl
+  · refine Bytes.AuthPres.of_step (fun _ _ h => NoOwned.sep (fun _ ha => NoOwned.readableRange ha)
+      (fun _ hb => NoOwned.readableRange hb) h.2) ?_
+    rintro a F s _ _ _ _ x s' hx a' _ hm' _ ⟨_, a₁, b₁, _, rfl, ⟨data, _, hblock⟩, _⟩ base hEx _
+    have hlen : 0 < (data.flatMap (fun bytes => bytes.map (Cell.shared d₁))).toList.length := by
+      simp; exact ⟨hne, Pointee.Sized.pos⟩
+    have run := hx.2
+    unfold Heap.endShareRange Heap.modifyRange at run
+    exact modify_step_nonExclusive run ((Fragment.matches_union _ _ _).mp hm').1
+      (Or.inl (Bytes.block_cell hblock hlen)) (by rw [flatMap_shared_getElem_depth]; simp; omega)
+      base hEx
+
+/-- `slice::from_raw_parts` on a prefix of a readable range. -/
+theorem core.slice.raw.from_raw_parts.spec_readable2 {T : Type} [Pointee T] [Pointee.Sized T]
+    (p : ConstRawPtr T) (len : Usize) (d₁ d₂ : Nat) (xs ys : List T)
+    (hLen : len.val = xs.length) (hne : 0 < xs.length) :
+    ⦃ p.readable2 d₁ d₂ xs ys ⦄ core.slice.raw.from_raw_parts p len
+      ⦃ (s, back) => ⌜s.val.val = xs⌝ ∗
+        ⌜back = RawPtr.endShareRange (Pointee.repr (T := T)) p xs⌝ ∗
+        p.readable2 (d₁ + 1) d₂ xs ys ⦄ := by
+  unfold core.slice.raw.from_raw_parts
+  rw [hLen]
+  apply ispec_bind (RawPtr.shareRange.spec_readable2 p d₁ d₂ xs ys hne)
+    (entails_of_eq (sep_emp_r_eq _).symm)
+  intro vs
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro rfl
+  have hMax : vs.length ≤ Usize.max := by rw [← hLen]; scalar_tac
+  simp only [hMax, dite_true]
+  apply ispec_ok
+  simp only [uncurry_apply_pair, Slice.from_val]
+  iframe
+
+
+section HeapLevel
+
+universe u
+
+open Aeneas.Data.Coinductive
+
+unseal Result
+
+/-! ### Heap-level facts about checked and allocating effects -/
+
+theorem _root_.Aeneas.Data.Coinductive.DWP.fail_iff {α : Type} {e : Error} {Q : effectWP.Post α}
+    {s : Heap} :
+    DWP effectWP (Result.fail e : Result α) Q s ↔ e = .oom := by
+  simp only [Result.fail, Result.vis]
+  exact ⟨fun h => h.vis_view, fun h => DWP.vis h⟩
+
+/-- The results of a checked effect come with a successor of its relation. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.checkedModify_rel {α : Type} {R : Heap → α → Heap → Prop}
+    {Q : effectWP.Post α} {s : Heap} (h : DWP effectWP (Result.checkedModify R) Q s) :
+    DWP effectWP (Result.checkedModify R) (fun x s' => Q x s' ∧ R s x s') s := by
+  unfold Result.checkedModify Result.vis at *
+  obtain ⟨hen, hall⟩ := h.vis_view
+  refine DWP.vis ⟨hen, fun x s' hx => ?_⟩
+  have hk := hall x s' hx
+  cases x with
+  | none => exact DWP.fail_iff.mpr (DWP.fail_iff.mp hk)
+  | some v =>
+    simp only [Result.ofOption, Result.ok] at hk ⊢
+    exact DWP.ret_iff.mpr ⟨DWP.ret_iff.mp hk, hx⟩
+
+/-- The results of an allocating effect come with a successor of its relation. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.allocatingModify_rel {α : Type}
+    {R : Heap → α → Heap → Prop} {Q : effectWP.Post α} {s : Heap}
+    (h : DWP effectWP (Result.allocatingModify R) Q s) :
+    DWP effectWP (Result.allocatingModify R) (fun x s' => Q x s' ∧ R s x s') s := by
+  unfold Result.allocatingModify Result.vis at *
+  obtain ⟨hen, hall⟩ := h.vis_view
+  refine DWP.vis ⟨hen, fun x s' hx => ?_⟩
+  have hk := hall x s' hx
+  cases x with
+  | none => exact DWP.fail_iff.mpr (DWP.fail_iff.mp hk)
+  | some v =>
+    simp only [Result.ofOption, Result.ok] at hk ⊢
+    exact DWP.ret_iff.mpr ⟨DWP.ret_iff.mp hk, hx⟩
+
+/-- A checked effect which is enabled, and whose successors all satisfy `Q`. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.checkedModify_intro {α : Type}
+    {R : Heap → α → Heap → Prop} {Q : effectWP.Post α} {s : Heap} (hen : ∃ x s', R s x s')
+    (hpost : ∀ x s', R s x s' → Q x s') :
+    DWP effectWP (Result.checkedModify R) Q s := by
+  unfold Result.checkedModify Result.vis
+  obtain ⟨x₀, s₀, h₀⟩ := hen
+  refine DWP.vis ⟨⟨some x₀, s₀, h₀⟩, fun x s' hx => ?_⟩
+  cases x with
+  | none => exact (hx.1 ⟨x₀, s₀, h₀⟩).elim
+  | some v =>
+    simp only [Result.ofOption, Result.ok]
+    exact DWP.ret_iff.mpr (hpost v s' hx)
+
+/-- An allocation returns a result of its relation. -/
+theorem ispec_allocatingModify_rel {α : Type} {P : IPre} {R : Heap → α → Heap → Prop}
+    {Q : IPost α} (h : ispec P (Result.allocatingModify R) Q) :
+    ispec P (Result.allocatingModify R) (fun x => ⌜∃ s s', R s x s'⌝ ∗ Q x) := by
+  rw [ispec_iff] at h ⊢
+  intro F s hR
+  refine (DWP.allocatingModify_rel (h F s hR)).mono ?_
+  rintro x s' ⟨hQ, hx⟩
+  exact Realizes.mono (sep_mono (pure_sep_intro _ ⟨s, s', hx⟩) (entails_refl F)) hQ
+
+/-! ### Exposures in realized assertions -/
+
+theorem WP.Realizes.pure_sep {P : Prop} {H F : IProp} {s : Heap} :
+    Realizes ((⌜P⌝ ∗ H) ∗ F) s ↔ P ∧ Realizes (H ∗ F) s := by
+  rw [sep_assoc_eq]
+  constructor
+  · rintro ⟨hi, h, hh, hm, ha⟩
+    obtain ⟨hP, hh⟩ := (sep_pure_l _ _ h).mp hh
+    exact ⟨hP, hi, h, hh, hm, ha⟩
+  · rintro ⟨hP, hi, h, hh, hm, ha⟩
+    exact ⟨hi, h, (sep_pure_l _ _ h).mpr ⟨hP, hh⟩, hm, ha⟩
+
+/-- The block of an exposure. -/
+theorem WP.Realizes.exposure_block {T : Type} [Pointee T] {p : RawPtr T} {n : Nat} {R : IProp}
+    {s : Heap} (h : Realizes (p.exposure n ∗ R) s) :
+    ∃ blk, s.allocations p.provenance = some blk ∧
+      blk.repr.length = n * (Pointee.repr (T := T)).size ∧ s.live blk = true ∧
+      blk.bptr = p.address ∧ blk.owned = false := by
+  obtain ⟨_, h, ⟨h₁, h₂, _, rfl, ⟨a, ⟨_, rfl⟩, hsub⟩, _⟩, hm, _⟩ := h
+  obtain ⟨rest, _, rfl⟩ := PartialCommMonoid.subheap_iff.mp hsub
+  exact hm _ (Or.inl (Or.inl rfl))
+
+/-- An exposure lies in the address space. -/
+theorem WP.Realizes.exposure_fit {T : Type} [Pointee T] {p : RawPtr T} {n : Nat} {R : IProp}
+    {s : Heap} (h : Realizes (p.exposure n ∗ R) s) :
+    p.address.val + n * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize := by
+  obtain ⟨blk, hl, hlen, -, hb, -⟩ := Realizes.exposure_block h
+  have hv := h.1.validBlock hl
+  simp only [Heap.validBlock, Bool.and_eq_true, Heap.bounded, decide_eq_true_eq] at hv
+  rw [← hb, ← hlen]
+  exact hv.1.1.2
+
+theorem ispec_exposure_fit {α : Type u} {T : Type} [Pointee T] {p : RawPtr T} {n : Nat}
+    {P R : IPre} {m : Result α} {Q : IPost α} (hP : P ⊢ p.exposure n ∗ R)
+    (h : p.address.val + n * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize →
+      ispec P m Q) :
+    ispec P m Q := by
+  rw [ispec_iff]
+  intro F s hR
+  have hfit := Realizes.exposure_fit
+    (Realizes.mono (entails_trans (sep_mono hP (entails_refl F))
+      (entails_of_eq (sep_assoc_eq _ _ _))) hR)
+  exact ispec_iff.mp (h hfit) F s hR
+
+/-! ### Exposures at their placement -/
+
+/-- `as_mut_ptr` exposes the slice at the address of its placement. -/
+theorem Slice.as_mut_ptr.spec_at {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.Calibrated T]
+    (address : BasePtr) (s : MutBorrow (Slice T)) (hne : 0 < s.val.length) :
+    ⦃ emp ⦄ Slice.as_mut_ptr address s
+      ⦃ (p, back) => ⌜p.address = address⌝ ∗
+        ⌜back = Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
+        p ↦* s.val.val ∗ p.exposure s.val.length ⦄ := by
+  unfold Slice.as_mut_ptr
+  apply ispec_bind (ispec_allocatingModify_rel
+    (R := State.exposeAt (Pointee.repr (T := T)) s.val.val address)
+    (RawPtr.allocExposure.spec s.val.val address hne)) (entails_of_eq (sep_emp_r_eq emp).symm)
+  intro p
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro ⟨_, _, hx⟩
+  have := State.exposeAt_address hx
+  apply ispec_ok
+  simp only [uncurry_apply_pair]
+  iframe
+
+/-- `as_ptr` exposes the slice at the address of its placement. -/
+theorem Slice.as_ptr.spec_at {T : Type} [Pointee T] [Pointee.Sized T] (address : BasePtr)
+    (s : SharedBorrow (Slice T)) (hne : 0 < s.val.length) :
+    ⦃ emp ⦄ Slice.as_ptr address s
+      ⦃ (p, back) => ⌜p.address = address⌝ ∗
+        ⌜back = Slice.end_as_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
+        p.readable 1 s.val.val ∗ p.exposure s.val.length ⦄ := by
+  unfold Slice.as_ptr
+  apply ispec_bind (ispec_allocatingModify_rel
+    (R := State.sharedExposeAt (Pointee.repr (T := T)) s.val.val address)
+    (RawPtr.allocSharedExposure.spec s.val.val address hne))
+    (entails_of_eq (sep_emp_r_eq emp).symm)
+  intro p
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro ⟨_, _, hx⟩
+  have := State.sharedExposeAt_address hx
+  apply ispec_ok
+  simp only [uncurry_apply_pair]
+  iframe
+
+/-! ### Pointer arithmetic from an element of a range -/
+
+theorem Bytes.add.local_elem {T : Type} [Pointee T] (p : RawPtr T) (base : BasePtr)
+    (values : Vector T count) (depth : Nat) (j : Nat) (i : Usize) (hcount : 0 < count)
+    (hsize : 0 < (Pointee.repr (T := T)).size) (hle : j + i.val ≤ count) (P : Fragment → Prop)
+    (view : ∀ h, P h → readableRange (Pointee.repr (T := T)) p base values depth h) :
+    Bytes.LocalOp P (State.offset (Pointee.repr (T := T)) (p.elem j) i.val)
+      (fun result h => result = p.elem (j + i.val) ∧ P h) := by
+  intro h F s hP hd hm hi
+  have keep := hP
+  have hp := view h hP
+  have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
+  have bound := readableRange_bound _ p base values depth hcount hsize h s hp localMatch hi
+  have hmul := Nat.mul_le_mul_right (Pointee.repr (T := T)).size hle
+  rw [Nat.add_mul] at hmul
+  have hqaddr : (p.elem j).address.val = p.address.val + j * (Pointee.repr (T := T)).size :=
+    RawPtr.elem_address p j (by omega)
+  have hfit : (p.elem j).address.val + i.val * (Pointee.repr (T := T)).size <
+      2 ^ UScalarTy.numBits .Usize := by omega
+  obtain ⟨data, _, hlo, _, cells⟩ := hp
+  rw [cells] at localMatch
+  obtain ⟨blk, hb, hl, hlive, hbase, _⟩ :=
+    Bytes.bytes_of_matches (repr := (Pointee.repr (T := T)).region count) (p := p.cast Unit)
+      (data := data.flatMap (fun bytes => bytes.map (Cell.shared depth)))
+      (Nat.mul_pos hcount hsize) localMatch
+  change p.offsetFrom base + count * (Pointee.repr (T := T)).size ≤ blk.repr.length at hb
+  change s.allocations (p.elem j).provenance = some blk at hl
+  simp only [RawPtr.offsetFrom] at hb
+  have hqlo : base.val ≤ (p.elem j).address.val := by omega
+  have hstart : (p.elem j).address.val ≤ base.val + blk.repr.length := by omega
+  have hlo' : (base.val : Int) ≤ ((p.elem j).address.val : Int) +
+      i.val * (Pointee.repr (T := T)).size := by omega
+  have hhi' : ((p.elem j).address.val : Int) + i.val * (Pointee.repr (T := T)).size ≤
+      base.val + blk.repr.length := by omega
+  have hfit' : ((p.elem j).address.val : Int) + i.val * (Pointee.repr (T := T)).size <
+      (2 ^ UScalarTy.numBits .Usize : Nat) := by exact_mod_cast hfit
+  let result : RawPtr T := ⟨(p.elem j).provenance,
+    ⟨BitVec.ofNat _ ((p.elem j).address.val + i.val * (Pointee.repr (T := T)).size)⟩⟩
+  have hrun : Heap.offset (Pointee.repr (T := T)) (p.elem j) i.val s = some result := by
+    have hf : ((p.elem j).address.val : Int) + i.val * (Pointee.repr (T := T)).size <
+        (2 : Int) ^ System.Platform.numBits := by
+      simpa only [Nat.cast_pow, Nat.cast_ofNat, UScalarTy.Usize_numBits_eq] using hfit'
+    have target_nat : (((p.elem j).address.val : Int) +
+        i.val * (Pointee.repr (T := T)).size).toNat =
+        (p.elem j).address.val + i.val * (Pointee.repr (T := T)).size := by
+      exact_mod_cast Int.toNat_natCast _
+    simp [Heap.offset, hl, hlive, hbase, hqlo, hstart, hlo', hhi', hf, target_nat, result]
+  refine ⟨⟨result, s, hrun, rfl⟩, ?_⟩
+  rintro answer s' ⟨he, rfl⟩
+  have he := Option.some.inj (he.symm.trans hrun)
+  subst answer
+  refine ⟨h, hd, hm, hi, RawPtr.eq_elem rfl ?_, keep⟩
+  change (BitVec.ofNat _ _).toNat = _
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfit, hqaddr, Nat.add_mul, Nat.add_assoc]
+
+/-- Pointer arithmetic from the `j`-th element of a range, within the range or one past it. -/
+theorem RawPtr.add.spec_elem {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (values : List T) (j : Nat) (count : Usize) (hne : 0 < values.length)
+    (hle : j + count.val ≤ values.length) :
+    ⦃ p ↦* values ⦄ RawPtr.add (p.elem j) count
+      ⦃ result => ⌜result = p.elem (j + count.val)⌝ ∗ p ↦* values ⦄ :=
+  ispec_conseq (ispec_checked_local
+      (fun bptr => Bytes.add.local_elem p bptr (listVec values) 0 j count hne Pointee.Sized.pos hle
+        _ (fun _ hp => pointsToRange_readable hp))
+      (fun _ => Bytes.AuthPres.of_eq (fun _ _ h => NoOwned.pointsToRange h.2)
+        (fun _ _ _ h => h.2)))
+    (entails_refl _) (fun _ => iexists_upClose_pure_and)
+
+/-! ### Retained views and pointer distance -/
+
+/-- The view `id` is retained, possibly retired, with its base pointer, its length and a live
+allocation. -/
+def Heap.Retained (s : Heap) (id : Nat) (bptr : BasePtr) (len : Nat) : Prop :=
+  ∃ blk, s.allocations id = some blk ∧ blk.bptr = bptr ∧ blk.repr.length = len ∧
+    s.allocationAlive blk = true
+
+theorem Heap.Retained.of_extends {s s' : Heap} {id : Nat} {bptr : BasePtr} {len : Nat}
+    (hext : ∀ j, s.allocations j ≠ none → s'.allocations j = s.allocations j)
+    (h : Heap.Retained s id bptr len) : Heap.Retained s' id bptr len := by
+  obtain ⟨blk, hl, hb, hlen, halive⟩ := h
+  refine ⟨blk, by rw [hext id (by simp [hl]), hl], hb, hlen, ?_⟩
+  simp only [Heap.allocationAlive] at halive ⊢
+  cases hr : s.allocations blk.root with
+  | none => simp [hr] at halive
+  | some r => rw [hext _ (by simp [hr]), hr]; simpa [hr] using halive
+
+theorem Heap.Retained.retire {s : Heap} {id id' : Nat} {bptr : BasePtr} {len : Nat}
+    (h : Heap.Retained s id bptr len) : Heap.Retained (s.retire id') id bptr len := by
+  obtain ⟨blk, hl, hb, hlen, halive⟩ := h
+  by_cases hid : id = id'
+  · subst hid
+    refine ⟨{ blk with active := false }, by simp [Heap.retire, update, hl], hb, hlen, ?_⟩
+    simp only [Heap.allocationAlive] at halive ⊢
+    by_cases hr : blk.root = id
+    · simp [Heap.retire, update, hr] at halive ⊢; simpa [hl] using halive
+    · simpa [Heap.retire, update, hr] using halive
+  · refine ⟨blk, by simp [Heap.retire, update, hid, hl], hb, hlen, ?_⟩
+    simp only [Heap.allocationAlive] at halive ⊢
+    by_cases hr : blk.root = id'
+    · subst hr
+      cases hr' : s.allocations blk.root with
+      | none => simp [hr'] at halive
+      | some r => simp [Heap.retire, update, hr'] at halive ⊢; exact halive
+    · simpa [Heap.retire, update, hr] using halive
+
+theorem Heap.createRepr_allocations {s s' : Heap} {block : Block} {id : Nat}
+    (h : s.createRepr block = some (id, s')) :
+    ∀ j, s.allocations j ≠ none → s'.allocations j = s.allocations j := by
+  intro j hj
+  unfold Heap.createRepr at h
+  split at h
+  · rename_i hnext
+    simp only [Heap.commit] at h
+    split at h
+    · simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨-, rfl⟩ := h
+      have : j ≠ s.next := by rintro rfl; exact hj hnext
+      simp [update, this]
+    · simp at h
+  · simp at h
+
+theorem State.sharedExposeAt_allocations {T : Type} {repr : Repr T} {values : List T}
+    {address : BasePtr} {s s' : Heap} {p : RawPtr T}
+    (h : State.sharedExposeAt repr values address s p s') :
+    ∀ j, s.allocations j ≠ none → s'.allocations j = s.allocations j := by
+  obtain ⟨data, root, -, hnew⟩ := h
+  unfold Heap.newSharedExposure at hnew
+  split_ifs at hnew
+  obtain ⟨⟨_, _⟩, hrun, he⟩ := Option.map_eq_some_iff.mp hnew
+  cases he
+  exact Heap.createRepr_allocations hrun
+
+/-- Overlapping views of live allocations have the same root (from fournet/wip-memory-model). -/
+theorem Heap.Inv.same_root_of_overlap {s : Heap} (hi : s.Inv)
+    {i j : Nat} {a b : Block} (ha : s.allocations i = some a)
+    (hb : s.allocations j = some b)
+    (aliveA : s.allocationAlive a = true) (aliveB : s.allocationAlive b = true)
+    (overlap : a.bptr.val < b.bptr.val + b.repr.length ∧
+      b.bptr.val < a.bptr.val + a.repr.length) :
+    a.root = b.root := by
+  have va := hi.validBlock ha
+  have vb := hi.validBlock hb
+  cases hra : s.allocations a.root
+  · simp [Heap.allocationAlive, hra] at aliveA
+  · rename_i ra
+    cases hrb : s.allocations b.root
+    · simp [Heap.allocationAlive, hrb] at aliveB
+    · rename_i rb
+      have ar : ra.alive = true := by simpa [Heap.allocationAlive, hra] using aliveA
+      have br : rb.alive = true := by simpa [Heap.allocationAlive, hrb] using aliveB
+      simp only [Heap.validBlock, hra, hrb, Bool.and_eq_true, beq_iff_eq,
+        decide_eq_true_eq] at va vb
+      by_contra different
+      have row := List.all_eq_true.mp hi.2 a.root (List.mem_range.mpr (hi.base_lt hra))
+      simp only [hra, Bool.and_eq_true] at row
+      have pair := List.all_eq_true.mp row.2 b.root (List.mem_range.mpr (hi.base_lt hrb))
+      simp [different, hrb, ar, br, Heap.overlaps] at pair
+      grind
+
+/-- The distance between a pointer into a retained view and the start of a live view at the same
+address, in the same allocation (after `offset_from_reexposed.spec` of
+fournet/wip-memory-model). -/
+theorem offset_from_reexposed {finish origin : RawPtr U8} {count : Nat} {s : Heap}
+    {a b : Block} {Q : effectWP.Post Isize} (hi : s.Inv)
+    (ha : s.allocations finish.provenance = some a)
+    (hb : s.allocations origin.provenance = some b)
+    (la : s.allocationAlive a = true) (lb : s.allocationAlive b = true)
+    (originBase : origin.address = b.bptr) (sameBase : a.bptr = b.bptr)
+    (nonemptyA : 0 < a.repr.length) (nonemptyB : 0 < b.repr.length)
+    (cursor : finish.address.val = a.bptr.val + count)
+    (within : count ≤ a.repr.length) (fits : (count : Int) ≤ IScalar.cMax .Isize)
+    (hQ : ∀ r : Isize, r.val = count → Q r s) :
+    DWP effectWP (MutRawPtr.offset_from finish origin) Q s := by
+  have overlap : a.bptr.val < b.bptr.val + b.repr.length ∧
+      b.bptr.val < a.bptr.val + a.repr.length := by
+    rw [sameBase]; omega
+  have root := hi.same_root_of_overlap ha hb la lb overlap
+  have hsize : (Pointee.repr (T := U8)).size = 1 := rfl
+  have distance : (finish.address.val : Int) - origin.address.val = count := by
+    rw [cursor, originBase, sameBase]; push_cast; ring
+  have lower : IScalar.cMin .Isize ≤ (count : Int) :=
+    le_trans (by decide : IScalar.cMin .Isize ≤ 0) (Int.natCast_nonneg count)
+  have countFit : IScalar.cMin .Isize ≤ ((finish.address.val : Int) - origin.address.val) /
+      ((Pointee.repr (T := U8)).size : Int) ∧
+      ((finish.address.val : Int) - origin.address.val) / ((Pointee.repr (T := U8)).size : Int) ≤
+        IScalar.cMax .Isize := by
+    rw [distance, hsize]; simp only [Nat.cast_one, Int.ediv_one]; exact ⟨lower, fits⟩
+  let result := IScalar.ofInt (((finish.address.val : Int) - origin.address.val) /
+    ((Pointee.repr (T := U8)).size : Int)) countFit
+  have run : Heap.offsetFrom (Pointee.repr (T := U8)) finish origin s = some result := by
+    have h1 : a.bptr.val ≤ finish.address.val := by omega
+    have h2 : finish.address.val ≤ a.bptr.val + a.repr.length := by omega
+    have h3 : b.bptr.val ≤ origin.address.val := by rw [originBase]
+    have h4 : origin.address.val ≤ b.bptr.val + b.repr.length := by rw [originBase]; omega
+    have hdist : (finish.address.val : Int) - origin.address.val = count := distance
+    simp only [Heap.offsetFrom, Heap.distance, ha, hb, la, lb, root, hsize, h1, h2, h3, h4,
+      hdist, Option.bind_eq_bind, Option.bind_some, beq_self_eq_true, Bool.true_and,
+      Nat.cast_one, Int.emod_one, Int.ediv_one, decide_true, zero_lt_one]
+    simp [lower, fits, result, hdist, hsize]
+  unfold MutRawPtr.offset_from RawPtr.offset_from
+  refine DWP.checkedModify_intro ⟨result, s, run, rfl⟩ ?_
+  rintro r s' ⟨hr, rfl⟩
+  have := Option.some.inj (hr.symm.trans run)
+  subst this
+  exact hQ _ (by simp [result, distance, hsize])
+
+
+/-- Running a step whose separation-logic specification is known, in a heap which realizes its
+precondition with the frame `F`. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.bind_ispec {α : Type} {β : Type u} {P : IPre}
+    {m : Result α} {Q : IPost α} {k : α → Result β}
+    {F : IProp} {s : Heap} {Q₂ : effectWP.Post β}
+    (hspec : ispec P m Q) (hR : Realizes (P ∗ F) s)
+    (hk : ∀ x s', Realizes (Q x ∗ F) s' → DWP effectWP (k x) Q₂ s') :
+    DWP effectWP (Aeneas.Std.bind m k) Q₂ s :=
+  DWP.bind (ispec_iff.mp hspec F s hR) hk
+
+/-- `DWP.bind_ispec` for a checked effect, whose results also come with a successor of its
+relation. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.bind_ispec_checked {α : Type} {β : Type u} {P : IPre}
+    {R : Heap → α → Heap → Prop} {Q : IPost α}
+    {k : α → Result β} {F : IProp} {s : Heap} {Q₂ : effectWP.Post β}
+    (hspec : ispec P (Result.checkedModify R) Q) (hR : Realizes (P ∗ F) s)
+    (hk : ∀ x s', Realizes (Q x ∗ F) s' → R s x s' → DWP effectWP (k x) Q₂ s') :
+    DWP effectWP (Aeneas.Std.bind (Result.checkedModify R) k) Q₂ s :=
+  DWP.bind (DWP.checkedModify_rel (ispec_iff.mp hspec F s hR)) fun x s' h => hk x s' h.1 h.2
+
+/-- `DWP.bind_ispec` for an allocating effect, whose results also come with a successor of its
+relation. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.bind_ispec_allocating {α : Type} {β : Type u}
+    {P : IPre} {R : Heap → α → Heap → Prop}
+    {Q : IPost α} {k : α → Result β} {F : IProp} {s : Heap} {Q₂ : effectWP.Post β}
+    (hspec : ispec P (Result.allocatingModify R) Q) (hR : Realizes (P ∗ F) s)
+    (hk : ∀ x s', Realizes (Q x ∗ F) s' → R s x s' → DWP effectWP (k x) Q₂ s') :
+    DWP effectWP (Aeneas.Std.bind (Result.allocatingModify R) k) Q₂ s :=
+  DWP.bind (DWP.allocatingModify_rel (ispec_iff.mp hspec F s hR)) fun x s' h => hk x s' h.1 h.2
+
+
+theorem WP.Realizes.pure_frame {P : Prop} {F : IProp} {s : Heap} (h : Realizes (⌜P⌝ ∗ F) s) :
+    P ∧ Realizes F s := by
+  rw [← sep_emp_r_eq ⌜P⌝, Realizes.pure_sep, sep_emp_l_eq] at h
+  exact h
+
+end HeapLevel
+
+/-- Writes the first value of a range. -/
+theorem MutRawPtr.write.spec_head {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.NoPointers T]
+    (p : MutRawPtr T) (values : List T) (value : T) (h : 0 < values.length) :
+    ⦃ p ↦* values ⦄ MutRawPtr.write p value ⦃ p ↦* values.set 0 value ⦄ := by
+  simpa using MutRawPtr.write.spec_range p values 0 value h
 
 end Aeneas.Std
