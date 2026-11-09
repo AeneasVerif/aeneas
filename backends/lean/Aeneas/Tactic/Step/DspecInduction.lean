@@ -225,6 +225,8 @@ elab "dspec_induction" func:ident : tactic => do
       ← repeat' (fun g => g.apply curry_admissible) [g_admissible] | onError
     let [g_admissible]
       ← repeat' (fun g => do
+          -- a registered judgment is a leaf: do not peel the `∀`s of its definition
+          unless (← getAdmissibleThms (← g.getType)).isEmpty do failure
           let [g] ← (g.apply admissible_pi) | onError
           pure [(← g.intro1P).snd]
       ) [g_admissible] | onError
