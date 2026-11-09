@@ -11,6 +11,7 @@ public import Aeneas.Std.RawPtrSpecs
 public import Aeneas.Std.Core.PtrMovement
 public import Aeneas.Std.Core.RawPtrOps
 public import Aeneas.Std.Core.MaybeUninit
+public import Aeneas.Std.Core.PointeeArray
 public import Aeneas.Std.SliceDef
 public import Aeneas.Std.SliceIter
 public import Aeneas.Std.Std
