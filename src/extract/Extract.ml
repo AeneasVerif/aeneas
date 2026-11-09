@@ -880,7 +880,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       List.iter
         (fun ve ->
           F.pp_print_space fmt ();
-          extract_texpr span ctx fmt ~inside:true ~inside_do ve)
+          extract_texpr_arg span ctx fmt ~inside:true ~inside_do ve)
         args;
       (* Close parentheses *)
       if inside then F.pp_print_string fmt ")"
@@ -1172,11 +1172,30 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
                   [%save_error] span
                     "Call to a function which needs a placement (it exposes                      safe places as raw memory) from a function which doesn't                      have one";
                   F.pp_print_string fmt " /- ERROR: missing placement -/"));
-      (* Print the arguments *)
+      (* Print the arguments.
+
+         In Lean, the comparisons ([<], [<=], etc.) are propositions: when they
+         are given as arguments (for instance, [ok (x <= y)]), the expected type
+         may not be known when elaborating the argument (for instance, when the
+         call is a branch of an [if] whose type is inferred), so we force them to
+         [Bool] with an ascription. *)
+      let is_comparison (e : texpr) : bool =
+        match PureUtils.opt_destruct_function_call e with
+        | Some (Binop (Eq _ | Lt _ | Le _ | Ge _ | Gt _ | Ne _), _, [ _; _ ])
+          ->
+            true
+        | _ -> false
+      in
       List.iter
         (fun ve ->
           F.pp_print_space fmt ();
-          extract_texpr span ctx fmt ~inside:true ~inside_do ve)
+          if backend () = Lean && is_comparison ve then begin
+            F.pp_print_string fmt "(";
+            extract_texpr span ctx fmt ~inside:false ~inside_do ve;
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ": Bool)"
+          end
+          else extract_texpr span ctx fmt ~inside:true ~inside_do ve)
         args;
       (* Close the box for the function call *)
       (*F.pp_close_box fmt ();*)
@@ -1190,6 +1209,30 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
         ^ ",\nArguments: "
         ^ String.concat " " (List.map show_texpr args))
         fmt
+
+(** Extract an argument of a function call or of a constructor.
+
+    In Lean, the comparisons ([<], [<=], etc.) and the boolean negations ([¬])
+    are propositions: when they are given as arguments (for instance,
+    [ok (x <= y)]), the expected type may not be known when elaborating the
+    argument (for instance, when the call is a branch of an [if] whose type is
+    inferred), so we force them to [Bool] with an ascription. *)
+and extract_texpr_arg (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) ~(inside : bool) ~(inside_do : bool) (e : texpr) : unit
+    =
+  let is_comparison =
+    match PureUtils.opt_destruct_function_call e with
+    | Some (Binop (Eq _ | Lt _ | Le _ | Ge _ | Gt _ | Ne _), _, [ _; _ ])
+    | Some (Unop (Not None), _, [ _ ]) -> true
+    | _ -> false
+  in
+  if backend () = Lean && is_comparison then begin
+    F.pp_print_string fmt "(";
+    extract_texpr span ctx fmt ~inside:false ~inside_do e;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt ": Bool)"
+  end
+  else extract_texpr span ctx fmt ~inside ~inside_do e
 
 (** Subcase of the app case: ADT constructor *)
 and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
@@ -1205,7 +1248,7 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
   let _ =
     extract_adt_g_value span
       (fun ctx inside e ->
-        extract_texpr span ctx fmt ~inside ~inside_do e;
+        extract_texpr_arg span ctx fmt ~inside ~inside_do e;
         ctx)
       fmt ctx is_single_pat ~inside adt_cons.variant_id args e_ty
   in
