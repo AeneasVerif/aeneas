@@ -12,6 +12,8 @@ public import Aeneas.SepLogic.SliceExposure
 public import Aeneas.SepLogic.SharedExposure
 public import Aeneas.SepLogic.Allocation
 import all Aeneas.Std.Core.Ptr
+import all Aeneas.Std.Alloc.Boxed
+import all Aeneas.Std.Slice
 import all Aeneas.Std.Heap
 import all Aeneas.Std.Heap.Model
 import all Aeneas.Std.Heap.Repr
@@ -240,20 +242,21 @@ theorem RawPtr.endShareRange.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : 
 
 theorem Bytes.add.local {T : Type} (repr : Repr T) (p : RawPtr T) (base : BasePtr)
     (values : Vector T count) (depth : Nat) (i : Usize) (hcount : 0 < count)
-    (hsize : 0 < repr.size) (hle : i.val ≤ count) :
-    Bytes.LocalOp (Bytes.pointsToRange repr p base values depth) (State.offset repr p i.val)
+    (hsize : 0 < repr.size) (hle : i.val ≤ count) (P : Fragment → Prop)
+    (view : ∀ h, P h → readableRange repr p base values depth h) :
+    Bytes.LocalOp P (State.offset repr p i.val)
       (fun result h => result.provenance = p.provenance ∧
-        result.address.val = p.address.val + i.val * repr.size ∧
-        Bytes.pointsToRange repr p base values depth h) := by
-  intro h F s hp hd hm hi
-  have keep := hp
+        result.address.val = p.address.val + i.val * repr.size ∧ P h) := by
+  intro h F s hP hd hm hi
+  have keep := hP
+  have hp := view h hP
   have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
   have bound := readableRange_bound repr p base values depth hcount hsize h s
-    (pointsToRange_readable hp) localMatch hi
+    hp localMatch hi
   have hfit : p.address.val + i.val * repr.size < 2 ^ UScalarTy.numBits .Usize := by
     have := Nat.mul_le_mul_right repr.size hle
     omega
-  obtain ⟨data, _, hlo, _, cells⟩ := pointsToRange_readable hp
+  obtain ⟨data, _, hlo, _, cells⟩ := hp
   rw [cells] at localMatch
   obtain ⟨blk, hb, hl, hlive, hbase, _⟩ :=
     Bytes.bytes_of_matches (repr := repr.region count) (p := p.cast Unit)
@@ -290,18 +293,10 @@ theorem Bytes.add.local {T : Type} (repr : Repr T) (p : RawPtr T) (base : BasePt
   subst answer
   exact ⟨h, hd, hm, hi, rfl, hval, keep⟩
 
-/-- Pointer arithmetic within a range, including the pointer one past its end. -/
-@[step]
-theorem RawPtr.add.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
-    (values : List T) (count : Usize) (hne : 0 < values.length)
-    (hCount : count.val ≤ values.length) :
-    ⦃ p ↦* values ⦄ RawPtr.add p count
-      ⦃ result => ⌜result = p.elem count.val⌝ ∗ p ↦* values ⦄ := by
-  refine ispec_conseq (ispec_checked_local fun bptr =>
-      Bytes.add.local _ p bptr (listVec values) 0 count hne Pointee.Sized.pos hCount)
-    (entails_refl _) (fun result => ?_)
-  rintro h ⟨bptr, a, ⟨hprov, haddr, hA⟩, hSub⟩
-  refine (sep_pure_l _ _ h).mpr ⟨?_, bptr, a, hA, hSub⟩
+theorem RawPtr.eq_elem {T : Type} [Pointee T] {p result : RawPtr T} {i : Nat}
+    (hprov : result.provenance = p.provenance)
+    (haddr : result.address.val = p.address.val + i * (Pointee.repr (T := T)).size) :
+    result = p.elem i := by
   cases result with
   | mk prov addr =>
     simp only at hprov haddr
@@ -312,9 +307,23 @@ theorem RawPtr.add.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
       congr 1
       apply BitVec.eq_of_toNat_eq
       rw [BitVec.toNat_ofNat]
-      have h1 : bv.toNat = p.address.val + count.val * (Pointee.repr (T := T)).size := haddr
+      have h1 : bv.toNat = p.address.val + i * (Pointee.repr (T := T)).size := haddr
       rw [← h1]
       exact (Nat.mod_eq_of_lt bv.isLt).symm
+
+/-- Pointer arithmetic within a range, including the pointer one past its end. -/
+@[step]
+theorem RawPtr.add.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (values : List T) (count : Usize) (hne : 0 < values.length)
+    (hCount : count.val ≤ values.length) :
+    ⦃ p ↦* values ⦄ RawPtr.add p count
+      ⦃ result => ⌜result = p.elem count.val⌝ ∗ p ↦* values ⦄ := by
+  refine ispec_conseq (ispec_checked_local fun bptr =>
+      Bytes.add.local _ p bptr (listVec values) 0 count hne Pointee.Sized.pos hCount _
+        (fun _ hp => pointsToRange_readable hp))
+    (entails_refl _) (fun result => ?_)
+  rintro h ⟨bptr, a, ⟨hprov, haddr, hA⟩, hSub⟩
+  exact (sep_pure_l _ _ h).mpr ⟨RawPtr.eq_elem hprov haddr, bptr, a, hA, hSub⟩
 
 /-! ## Exposures and allocations
 
@@ -525,5 +534,373 @@ theorem RawPtr.endSharedExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] (
   refine ⟨⟨(), s₁, by simpa using hr, he⟩, ?_⟩
   rintro _ s' ⟨_, he'⟩
   exact post () s' he'
+
+/-- Pointer arithmetic within a range whose cells decode to `values`. -/
+@[step]
+theorem RawPtr.add.spec_readable {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (depth : Nat) (values : List T) (count : Usize) (hne : 0 < values.length)
+    (hCount : count.val ≤ values.length) :
+    ⦃ p.readable depth values ⦄ RawPtr.add p count
+      ⦃ result => ⌜result = p.elem count.val⌝ ∗ p.readable depth values ⦄ := by
+  refine ispec_conseq (ispec_checked_local fun bptr =>
+      Bytes.add.local _ p bptr (listVec values) depth count hne Pointee.Sized.pos hCount _
+        (fun _ hp => hp))
+    (entails_refl _) (fun result => ?_)
+  rintro h ⟨bptr, a, ⟨hprov, haddr, hA⟩, hSub⟩
+  exact (sep_pure_l _ _ h).mpr ⟨RawPtr.eq_elem hprov haddr, bptr, a, hA, hSub⟩
+
+/-! ## Ending exposures, and accesses within ranges -/
+
+theorem sep_upClose {A B : Fragment → Prop} : upClose A ∗ upClose B ⊢ upClose (Bytes.sep A B) := by
+  rintro _ ⟨h₁, h₂, hd, rfl, ⟨a, ha, hsa⟩, ⟨b, hb, hsb⟩⟩
+  obtain ⟨r₁, hr₁, rfl⟩ := PartialCommMonoid.subheap_iff.mp hsa
+  obtain ⟨r₂, hr₂, rfl⟩ := PartialCommMonoid.subheap_iff.mp hsb
+  have hd' := Fragment.disjoint_union_left.mp hd
+  have hd₁ := Fragment.disjoint_union_right.mp hd'.1
+  have hd₂ := Fragment.disjoint_union_right.mp hd'.2
+  refine ⟨a ∪ b, ⟨a, b, hd₁.1, rfl, ha, hb⟩, PartialCommMonoid.subheap_iff.mpr
+    ⟨r₁ ∪ r₂, ?_, ?_⟩⟩
+  · exact Fragment.disjoint_union_left.mpr
+      ⟨Fragment.disjoint_union_right.mpr ⟨hr₁, hd₁.2⟩,
+       Fragment.disjoint_union_right.mpr ⟨hd₂.1.symm, hr₂⟩⟩
+  · funext r; apply propext
+    show ((a r ∨ r₁ r) ∨ (b r ∨ r₂ r)) ↔ ((a r ∨ b r) ∨ (r₁ r ∨ r₂ r))
+    tauto
+
+/-- Retires the exposure of `as_mut_ptr` and `from_mut`. -/
+@[step]
+theorem RawPtr.endExposure.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (values : List T) (hne : 0 < values.length) :
+    ⦃ p.exposure values.length ∗ p ↦* values ⦄
+      RawPtr.endExposure (Pointee.repr (T := T)) p values.length ⦃ emp ⦄ := by
+  have hEq : p.exposure values.length ∗ p ↦* values ⊢
+      iexists fun bptr => upClose (Bytes.alloc (Pointee.repr (T := T)) p p.address
+        values.length false ∗ᵇ readableRange (Pointee.repr (T := T)) p bptr
+          (listVec values) 0) := by
+    rintro h ⟨h₁, h₂, hd, rfl, hE, bptr, a, ha, hsa⟩
+    obtain ⟨c, hc, hsc⟩ := sep_upClose (A := Bytes.alloc (Pointee.repr (T := T)) p p.address
+      values.length false) (B := readableRange (Pointee.repr (T := T)) p bptr (listVec values) 0)
+      _ ⟨h₁, h₂, hd, rfl, hE, a, pointsToRange_readable ha, hsa⟩
+    exact ⟨bptr, c, hc, hsc⟩
+  refine ispec_conseq (ispec_checked_local (modify := State.removeExposure
+    (Pointee.repr (T := T)) p values.length) (B := fun _ _ => Bytes.empty) fun bptr => ?_) hEq
+    (fun _ _ _ => trivial)
+  exact Bytes.endExposure.local _ p bptr (listVec values) 0 hne Pointee.Sized.pos
+
+theorem Bytes.pointsToRange_singleton {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {value : T} {depth : Nat} {h : Fragment} :
+    Bytes.pointsToRange repr p bptr (listVec [value]) depth h ↔
+      Bytes.pointsTo repr p bptr value depth h := by
+  constructor
+  · rintro ⟨data, encoded, hb⟩
+    refine ⟨data[0], encoded ⟨0, by simp⟩, ?_⟩
+    have : (data.flatMap (fun bytes => bytes.map (Cell.shared depth))).toList =
+        (data[0].map (Cell.shared depth)).toList := by
+      obtain ⟨⟨arr⟩, harr⟩ := data
+      match arr, harr with
+      | [x], _ => simp [Vector.flatMap, Vector.toList]
+    rwa [← this]
+  · rintro ⟨bytes, encoded, hb⟩
+    refine ⟨#v[bytes], fun i => ?_, ?_⟩
+    · obtain ⟨i, hi⟩ := i
+      have : i = 0 := by simp at hi; omega
+      subst this
+      simpa using encoded
+    · have : (#v[bytes].flatMap (fun bytes => bytes.map (Cell.shared depth))).toList =
+          (bytes.map (Cell.shared depth)).toList := by
+        simp [Vector.flatMap, Vector.toList]
+      rwa [this]
+
+@[simp] theorem RawPtr.range_singleton {T : Type} [Pointee T] (p : RawPtr T) (value : T) :
+    (p ↦* [value]) = (p ↦ value) := by
+  apply IProp.ext
+  intro h
+  constructor
+  · rintro ⟨bptr, a, ha, hsa⟩
+    exact ⟨bptr, a, Bytes.pointsToRange_singleton.mp ha, hsa⟩
+  · rintro ⟨bptr, a, ha, hsa⟩
+    exact ⟨bptr, a, Bytes.pointsToRange_singleton.mpr ha, hsa⟩
+
+theorem RawPtr.elem_provenance {T : Type} [Pointee T] (p : RawPtr T) (i : Nat) :
+    (p.elem i).provenance = p.provenance := rfl
+
+theorem RawPtr.elem_address {T : Type} [Pointee T] (p : RawPtr T) (i : Nat)
+    (hfit : p.address.val + i * (Pointee.repr (T := T)).size < 2 ^ UScalarTy.numBits .Usize) :
+    (p.elem i).address.val = p.address.val + i * (Pointee.repr (T := T)).size := by
+  change (BitVec.ofNat _ _).toNat = _
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfit]
+
+theorem Bytes.readElem.local {T : Type} [Pointee T] (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (depth : Nat) (i : Fin count)
+    (hsize : 0 < (Pointee.repr (T := T)).size) (P : Fragment → Prop)
+    (view : ∀ h, P h → readableRange (Pointee.repr (T := T)) p bptr values depth h) :
+    Bytes.LocalOp P (State.read (Pointee.repr (T := T)) (p.elem i.val))
+      (fun result h => result = values[i.val] ∧ P h) := by
+  intro h F s hP hd hm hi
+  have hp := view h hP
+  have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
+  have bound := readableRange_bound _ p bptr values depth
+    (Nat.lt_of_le_of_lt (Nat.zero_le _) i.isLt) hsize h s hp localMatch hi
+  have hfit : p.address.val + i.val * (Pointee.repr (T := T)).size <
+      2 ^ UScalarTy.numBits .Usize :=
+    Nat.lt_of_le_of_lt (Nat.add_le_add_left
+      (Nat.mul_le_mul_right (Pointee.repr (T := T)).size (Nat.le_of_lt i.isLt)) _) bound
+  have hr := read_range_element (p := p) (q := p.elem i.val) i hsize rfl
+    (p.elem_address i.val hfit) hp localMatch
+  refine ⟨⟨values[i.val], s, hr, rfl⟩, ?_⟩
+  rintro x s' ⟨hx, rfl⟩
+  exact ⟨h, hd, hm, hi, Option.some.inj (hx.symm.trans hr), hP⟩
+
+/-- Reads the `i`-th value of a range whose cells decode to `values`. -/
+@[step]
+theorem RawPtr.read.spec_readable {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (depth : Nat) (values : List T) (i : Nat) (hi : i < values.length) :
+    ⦃ p.readable depth values ⦄ RawPtr.read (p.elem i)
+      ⦃ result => ⌜result = values[i]⌝ ∗ p.readable depth values ⦄ := by
+  refine ispec_conseq (ispec_checked_local fun bptr =>
+      Bytes.readElem.local p bptr (listVec values) depth ⟨i, hi⟩ Pointee.Sized.pos _
+        (fun _ h => h))
+    (entails_refl _) (fun _ => ?_)
+  have : (listVec values)[i] = values[i] := by simp [listVec]
+  simp only [this]
+  exact iexists_upClose_pure_and
+
+/-- Reads the `i`-th value of a range. -/
+@[step]
+theorem RawPtr.read.spec_range {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (values : List T) (i : Nat) (hi : i < values.length) :
+    ⦃ p ↦* values ⦄ RawPtr.read (p.elem i)
+      ⦃ result => ⌜result = values[i]⌝ ∗ p ↦* values ⦄ := by
+  refine ispec_conseq (ispec_checked_local fun bptr =>
+      Bytes.readElem.local p bptr (listVec values) 0 ⟨i, hi⟩ Pointee.Sized.pos _
+        (fun _ hp => pointsToRange_readable hp))
+    (entails_refl _) (fun _ => ?_)
+  have : (listVec values)[i] = values[i] := by simp [listVec]
+  simp only [this]
+  exact iexists_upClose_pure_and
+
+/-! ## Writes within ranges, allocation, `from_mut` -/
+
+theorem Bytes.pointsToRange_congr {T : Type} {repr : Repr T} {p : RawPtr T} {bptr : BasePtr}
+    {depth : Nat} {n m : Nat} (hnm : n = m) (v : Vector T n) (w : Vector T m)
+    (hvw : v.toList = w.toList) :
+    Bytes.pointsToRange repr p bptr v depth = Bytes.pointsToRange repr p bptr w depth := by
+  subst hnm
+  have : v = w := Vector.toList_inj.mp hvw
+  rw [this]
+
+theorem Bytes.writeElem.local {T : Type} [Pointee T] (p : RawPtr T) (bptr : BasePtr)
+    (values : Vector T count) (i : Fin count) (value : T)
+    (noPointers : ∀ q, ¬ (Pointee.repr (T := T)).Carries value q)
+    (hsize : 0 < (Pointee.repr (T := T)).size) :
+    Bytes.LocalOp (Bytes.pointsToRange (Pointee.repr (T := T)) p bptr values 0)
+      (State.write (Pointee.repr (T := T)) (p.elem i.val) value)
+      (fun _ => Bytes.pointsToRange (Pointee.repr (T := T)) p bptr (values.set i.val value i.isLt) 0) := by
+  intro h F s hp hd hm hi
+  have localMatch := ((Fragment.matches_union _ _ _).mp hm).1
+  have bound := readableRange_bound _ p bptr values 0 (Nat.lt_of_le_of_lt (Nat.zero_le _) i.isLt)
+    hsize h s (pointsToRange_readable hp) localMatch hi
+  have hfit : p.address.val + i.val * (Pointee.repr (T := T)).size <
+      2 ^ UScalarTy.numBits .Usize :=
+    Nat.lt_of_le_of_lt (Nat.add_le_add_left
+      (Nat.mul_le_mul_right (Pointee.repr (T := T)).size (Nat.le_of_lt i.isLt)) _) bound
+  obtain ⟨rest, hsep, rebuild⟩ := pointsToRange_focus _ p (p.elem i.val) bptr values 0 i hsize rfl
+    (p.elem_address i.val hfit) h hp
+  obtain ⟨hE, hPost⟩ := Bytes.LocalOp.frame (R := rest)
+    (Bytes.write_pointsTo.spec _ (p.elem i.val) bptr values[i.val] value noPointers hsize)
+    h F s hsep hd hm hi
+  refine ⟨hE, fun x s' hx => ?_⟩
+  obtain ⟨h', hd', hm', hi', hq⟩ := hPost x s' hx
+  exact ⟨h', hd', hm', hi', rebuild value h' hq⟩
+
+/-- Writes the `i`-th value of a range. -/
+@[step]
+theorem MutRawPtr.write.spec_range {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.NoPointers T]
+    (p : MutRawPtr T) (values : List T) (i : Nat) (value : T) (hi : i < values.length) :
+    ⦃ p ↦* values ⦄ MutRawPtr.write (p.elem i) value ⦃ p ↦* values.set i value ⦄ := by
+  refine ispec_conseq (ispec_checked_local fun bptr =>
+      Bytes.writeElem.local p bptr (listVec values) ⟨i, hi⟩ value
+        (Pointee.NoPointers.no_pointers value) Pointee.Sized.pos)
+    (entails_refl _) (fun _ => ?_)
+  rintro h ⟨bptr, a, ha, hsa⟩
+  refine ⟨bptr, a, ?_, hsa⟩
+  rw [Bytes.pointsToRange_congr (by simp) _ (listVec (values.set i value)) (by simp [listVec])] at ha
+  exact ha
+
+theorem Bytes.newOwned.post {T : Type} (repr : Repr T) (value : T)
+    (s₀ : Heap) (F : Fragment) (hi : s₀.Inv) (hm : Fragment.Matches s₀ F) :
+    ∀ p s₁, State.newBlock repr [value] true s₀ p s₁ →
+      ∃ h, h.Disjoint F ∧ Fragment.Matches s₁ (h ∪ F) ∧ s₁.Inv ∧
+        (Bytes.alloc repr p p.address 1 true ∗ᵇ Bytes.pointsTo repr p p.address value) h := by
+  rintro p s₁ ⟨data, bptr, root, encoded, created⟩
+  match data, encoded with
+  | [bytes], ⟨encoded, _⟩ =>
+    obtain ⟨_, h, hd, hm, hi, a, b, hab, hh, ha, hb⟩ :=
+      newBlock_single.resources repr bytes true bptr root hi hm created
+    exact ⟨h, hd, hm, hi, a, b, hab, hh, ha, bytes, encoded, hb⟩
+
+/-- `Box::into_raw`: the value is moved to a new block of the global allocator. -/
+@[step]
+theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] (b : Box T) :
+    ⦃ emp ⦄ alloc.boxed.Box.into_raw b ⦃ p => p ↦ b.val ∗ p.freeable 1 ⦄ := by
+  unfold alloc.boxed.Box.into_raw RawPtr.newBlock
+  have h := ispec_allocating_emp (A := fun p => Bytes.alloc (Pointee.repr (T := T)) p p.address
+      1 true ∗ᵇ Bytes.pointsTo (Pointee.repr (T := T)) p p.address b.val)
+    (modify := State.newBlock (Pointee.repr (T := T)) [b.val] true)
+    (fun s F hi hm => Bytes.newOwned.post (Pointee.repr (T := T)) b.val s F hi hm)
+  refine ispec_conseq h (entails_refl _) (fun p => entails_trans upClose_sep ?_)
+  refine entails_trans (entails_of_eq (sep_comm_eq _ _)) ?_
+  exact sep_mono (fun h hU => ⟨p.address, hU⟩) (entails_refl _)
+
+/-- `ptr::from_mut`: exposes the place of a mutable borrow. -/
+@[step]
+theorem core.ptr.from_mut.spec {T : Type} [Pointee T] [Pointee.Calibrated T] (r : MutBorrow T) :
+    ⦃ emp ⦄ core.ptr.from_mut r
+      ⦃ (p, back) => ⌜back = core.ptr.end_from_mut p⌝ ∗ p ↦ r.val ∗ p.exposure 1 ⦄ := by
+  unfold core.ptr.from_mut
+  apply ispec_bind (RawPtr.allocExposure.spec [r.val]) (entails_of_eq (sep_emp_r_eq emp).symm)
+  intro p
+  apply ispec_ok
+  simp only [RawPtr.range_singleton, List.length_singleton, uncurry_apply_pair]
+  iframe
+
+/-- The backward computation of `ptr::from_mut`: reads the value, and retires the exposure. -/
+@[step]
+theorem core.ptr.end_from_mut.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : MutRawPtr T)
+    (value : T) :
+    ⦃ p ↦ value ∗ p.exposure 1 ⦄ core.ptr.end_from_mut p ⦃ result => ⌜result = value⌝ ⦄ := by
+  unfold core.ptr.end_from_mut
+  apply ispec_bind (RawPtr.read.spec p value) (entails_refl _)
+  intro result
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro rfl
+  have hEnd := RawPtr.endExposure.spec p [result] (by simp)
+  simp only [RawPtr.range_singleton, List.length_singleton] at hEnd
+  apply ispec_bind hEnd (by iframe)
+  intro _
+  apply ispec_ok
+  iframe
+
+/-! ## Raw pointers to slices -/
+
+/-- `as_mut_ptr`: exposes the cells of a mutable slice. -/
+@[step]
+theorem Slice.as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Calibrated T]
+    (s : MutBorrow (Slice T)) :
+    ⦃ emp ⦄ Slice.as_mut_ptr s
+      ⦃ (p, back) => ⌜back = Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
+        p ↦* s.val.val ∗ p.exposure s.val.length ⦄ := by
+  unfold Slice.as_mut_ptr
+  apply ispec_bind (RawPtr.allocExposure.spec s.val.val) (entails_of_eq (sep_emp_r_eq emp).symm)
+  intro p
+  apply ispec_ok
+  simp only [uncurry_apply_pair]
+  iframe
+
+/-- The backward computation of `as_mut_ptr`: the cells become the new slice, and the exposure is
+retired. -/
+@[step]
+theorem Slice.end_as_mut_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (s : Slice T)
+    (p : MutRawPtr T) (values : List T) (hLen : values.length = s.length)
+    (hne : 0 < values.length) :
+    ⦃ p ↦* values ∗ p.exposure s.length ⦄ Slice.end_as_mut_ptr (Pointee.repr (T := T)) s p
+      ⦃ s' => ⌜s'.val = values⌝ ⦄ := by
+  have hMax : values.length ≤ Usize.max := by rw [hLen]; exact s.property
+  unfold Slice.end_as_mut_ptr
+  rw [← hLen]
+  apply ispec_bind (RawPtr.readRange.spec p values hne) (entails_refl _)
+  intro vs
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro rfl
+  apply ispec_bind (RawPtr.endExposure.spec p vs hne) (by iframe)
+  intro _
+  simp only [hMax, dite_true]
+  apply ispec_ok
+  simp only [Slice.from_val]
+  iframe
+
+/-- `as_ptr`: exposes the cells of a shared slice, read-only. -/
+@[step]
+theorem Slice.as_ptr.spec {T : Type} [Pointee T] (s : SharedBorrow (Slice T)) :
+    ⦃ emp ⦄ Slice.as_ptr s
+      ⦃ (p, back) => ⌜back = Slice.end_as_ptr (Pointee.repr (T := T)) s.val p⌝ ∗
+        p.readable 1 s.val.val ∗ p.exposure s.val.length ⦄ := by
+  unfold Slice.as_ptr
+  apply ispec_bind (RawPtr.allocSharedExposure.spec s.val.val)
+    (entails_of_eq (sep_emp_r_eq emp).symm)
+  intro p
+  apply ispec_ok
+  simp only [uncurry_apply_pair]
+  iframe
+
+/-- The backward computation of `as_ptr`: the cells must still decode to the slice, and the
+exposure is retired. -/
+@[step]
+theorem Slice.end_as_ptr.spec {T : Type} [Pointee T] [Pointee.Sized T] (s : Slice T)
+    (p : ConstRawPtr T) (hne : 0 < s.length) :
+    ⦃ p.readable 1 s.val ∗ p.exposure s.length ⦄ Slice.end_as_ptr (Pointee.repr (T := T)) s p
+      ⦃ emp ⦄ := by
+  unfold Slice.end_as_ptr
+  apply ispec_conseq (RawPtr.endSharedExposure.spec p s.val hne) (by iframe) (fun _ => entails_refl _)
+
+/-- Borrows the cells of a range as a slice. -/
+@[step]
+theorem RawPtr.borrowSlice.spec {T : Type} [Pointee T] [Pointee.Sized T] (q : RawPtr T)
+    (len : Usize) (values : List T) (hLen : len.val = values.length) (hne : 0 < values.length) :
+    ⦃ q ↦* values ⦄ RawPtr.borrowSlice (Pointee.repr (T := T)) q len
+      ⦃ s => ⌜s.val = values⌝ ∗ q ↦† len.val ⦄ := by
+  unfold RawPtr.borrowSlice
+  rw [hLen]
+  apply ispec_bind (RawPtr.borrowRange.spec q values hne) (entails_of_eq (sep_emp_r_eq _).symm)
+  intro vs
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro rfl
+  have hMax : vs.length ≤ Usize.max := by rw [← hLen]; scalar_tac
+  simp only [hMax, dite_true]
+  apply ispec_ok
+  simp only [Slice.from_val]
+  iframe
+
+/-- `slice::from_raw_parts`: the cells of the range are shared by the slice (they become readable,
+but not writable) until the borrow ends. -/
+@[step]
+theorem core.slice.raw.from_raw_parts.spec {T : Type} [Pointee T] [Pointee.Sized T]
+    (p : ConstRawPtr T) (len : Usize) (depth : Nat) (values : List T)
+    (hLen : len.val = values.length) (hne : 0 < values.length) :
+    ⦃ p.range depth values ⦄ core.slice.raw.from_raw_parts p len
+      ⦃ (s, back) => ⌜s.val.val = values⌝ ∗
+        ⌜back = RawPtr.endShareRange (Pointee.repr (T := T)) p values⌝ ∗
+        p.range (depth + 1) values ⦄ := by
+  unfold core.slice.raw.from_raw_parts
+  rw [hLen]
+  apply ispec_bind (RawPtr.shareRange.spec p depth values hne)
+    (entails_of_eq (sep_emp_r_eq _).symm)
+  intro vs
+  rw [sep_assoc_eq, ispec_ipure]
+  rintro rfl
+  have hMax : vs.length ≤ Usize.max := by rw [← hLen]; scalar_tac
+  simp only [hMax, dite_true]
+  apply ispec_ok
+  simp only [uncurry_apply_pair, Slice.from_val]
+  iframe
+
+/-- `slice::from_raw_parts_mut`: the cells of the range are borrowed by the slice. -/
+@[step]
+theorem core.slice.raw.from_raw_parts_mut.spec {T : Type} [Pointee T] [Pointee.Sized T]
+    (p : MutRawPtr T) (len : Usize) (values : List T) (hLen : len.val = values.length)
+    (hne : 0 < values.length) :
+    ⦃ p ↦* values ⦄ core.slice.raw.from_raw_parts_mut p len
+      ⦃ (s, back) => ⌜s.val.val = values⌝ ∗
+        ⌜back = core.slice.raw.from_raw_parts_mut.back (Pointee.repr (T := T)) p len⌝ ∗
+        p ↦† len.val ⦄ := by
+  unfold core.slice.raw.from_raw_parts_mut
+  apply ispec_bind (RawPtr.borrowSlice.spec p len values hLen hne)
+    (entails_of_eq (sep_emp_r_eq _).symm)
+  intro s
+  rw [sep_assoc_eq, ispec_ipure]
+  intro hs
+  apply ispec_ok
+  simp only [uncurry_apply_pair, hs]
+  iframe
 
 end Aeneas.Std
