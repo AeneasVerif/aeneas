@@ -82,6 +82,17 @@ pub fn copy_from_local(v: u32) -> [u8; 4] {
     out
 }
 
+/// Zmij's exponent path: the length of the copy is computed after the raw borrow (the exposure must
+/// stay alive until the copy).
+pub unsafe fn copy_from_local_len(v: u32, long: bool, buffer: *mut u8) {
+    let data = v.to_le();
+    ptr::copy_nonoverlapping(
+        ptr::addr_of!(data).cast::<u8>(),
+        buffer,
+        if long { 4 } else { 3 },
+    );
+}
+
 static PAIRS: [u8; 4] = *b"1234";
 
 /// Zmij's `digits2`: a shared reborrow of a value behind a raw pointer.
@@ -138,6 +149,9 @@ mod tests {
         assert_eq!(b.format(1), b"01");
         assert_eq!(shift_and_pad(b'x'), [1, b'8', b'9', b'0', b'0', 5]);
         assert_eq!(copy_from_local(0x04030201), [1, 2, 3, 4]);
+        let mut out = [0u8; 4];
+        unsafe { copy_from_local_len(0x04030201, false, out.as_mut_ptr()) };
+        assert_eq!(out, [1, 2, 3, 0]);
         assert_eq!(read_pair(2), b'3');
         assert_eq!(read_table(), b'1' + b'2');
         assert_eq!(num_bits_u32(), 32);

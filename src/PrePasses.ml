@@ -2367,6 +2367,144 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
     }
   else f
 
+(** Sink the raw borrows of places ([x = &raw const p]) and the casts of their
+    results ([y = <*T>::cast(move x)]) down to just before their first use, past
+    the statements which mention neither the pointer nor the place.
+
+    The raw borrows become exposures (see [decompose_raw_ptr_derefs]) whose
+    backward function retires the raw memory when the borrow ends. A raw
+    pointer has no lifetime: the interpreter may end the borrow at the joins
+    which follow the raw borrow, before the pointer is used. For instance, in
+    zmij's
+    {[
+      ptr::copy_nonoverlapping(ptr::addr_of!(data).cast(), buffer,
+        if c { 5 } else { 4 })
+    ]}
+    the arguments are evaluated in order, and the exposure of [data] would end
+    at the join after the [if], before the copy reads it. Sinking the raw borrow
+    after the [if] preserves the semantics (the statements it crosses don't
+    mention it) and makes the exposure live until the copy. *)
+let sink_raw_borrows (crate : crate) (f : fun_decl) : fun_decl =
+  let cast_pats =
+    List.map NameMatcher.parse_pattern
+      [
+        "core::ptr::mut_ptr::{*mut @T}::cast";
+        "core::ptr::const_ptr::{*const @T}::cast";
+      ]
+  in
+  let is_cast (fid : FunDeclId.id) : bool =
+    match FunDeclId.Map.find_opt fid crate.fun_decls with
+    | Some d ->
+        List.exists
+          (fun pat -> ExtractName.match_name crate pat d.item_meta.name)
+          cast_pats
+    | None -> false
+  in
+  let rec root (p : place) : LocalId.id option =
+    match p.kind with
+    | PlaceLocal l -> Some l
+    | PlaceGlobal _ -> None
+    | PlaceProjection (q, _) -> root q
+  in
+  (* The local defined by a movable statement, and the locals it uses *)
+  let movable (st : statement) : (LocalId.id * LocalId.id list) option =
+    match st.kind with
+    | Assign ({ kind = PlaceLocal x; _ }, RawPtr (p, _, _)) ->
+        Some (x, Option.to_list (root p))
+    | Call
+        ( {
+            func = FnOpRegular { kind = Fun fid; _ };
+            args = [ (Move { kind = PlaceLocal y; _ } | Copy { kind = PlaceLocal y; _ }) ];
+            _;
+          },
+          { kind = PlaceLocal x; _ },
+          _ )
+      when is_cast fid ->
+        Some (x, [ y ])
+    | _ -> None
+  in
+  let mentions (locals : LocalId.id list) (st : statement) : bool =
+    let found = ref false in
+    let visitor =
+      object
+        inherit [_] iter_statement as super
+
+        method! visit_place env p =
+          (match p.kind with
+          | PlaceLocal l when List.mem l locals -> found := true
+          | _ -> ());
+          super#visit_place env p
+
+        method! visit_statement env st =
+          (match st.kind with
+          | (StorageLive l | StorageDead l) when List.mem l locals ->
+              found := true
+          | _ -> ());
+          super#visit_statement env st
+      end
+    in
+    visitor#visit_statement () st;
+    !found
+  in
+  (* Move the statement at index [i] down to just before the first statement
+     which mentions its locals, if it crosses at least one statement *)
+  let rec sink (sts : statement list) : statement list =
+    let arr = Array.of_list sts in
+    let n = Array.length arr in
+    let rec try_from i =
+      if i >= n then None
+      else
+        match movable arr.(i) with
+        | None -> try_from (i + 1)
+        | Some (x, uses) -> (
+            let locals = x :: uses in
+            (* The [storage_dead] of the used locals move with the statement *)
+            let is_carried (st : statement) =
+              match st.kind with
+              | StorageDead l -> List.mem l uses
+              | _ -> false
+            in
+            let rec first j =
+              if j >= n then None
+              else if is_carried arr.(j) then first (j + 1)
+              else if mentions locals arr.(j) then Some j
+              else first (j + 1)
+            in
+            match first (i + 1) with
+            | Some j
+              when List.exists
+                     (fun st -> not (is_carried st))
+                     (Array.to_list (Array.sub arr (i + 1) (j - i - 1))) ->
+                Some (i, j, is_carried)
+            | _ -> try_from (i + 1))
+    in
+    match try_from 0 with
+    | None -> sts
+    | Some (i, j, is_carried) ->
+        let st = arr.(i) in
+        let before = Array.to_list (Array.sub arr 0 i) in
+        let crossed = Array.to_list (Array.sub arr (i + 1) (j - i - 1)) in
+        let carried, crossed = List.partition is_carried crossed in
+        let after = Array.to_list (Array.sub arr j (n - j)) in
+        sink (before @ crossed @ [ st ] @ carried @ after)
+  in
+  let visitor =
+    object
+      inherit [_] map_statement as super
+
+      method! visit_block env b =
+        let b = super#visit_block env b in
+        { b with statements = sink b.statements }
+    end
+  in
+  match f.body with
+  | StructuredBody body ->
+      {
+        f with
+        body = StructuredBody { body with body = visitor#visit_block () body.body };
+      }
+  | _ -> f
+
 (** [&*(&raw const p)] is [&p]: a raw pointer to a global, or to the place
     behind a shared reference, which is only reborrowed as a shared reference
     (ex.: [let d = ptr::addr_of!(STATIC_DATA); let d = &*d;]) doesn't need to
@@ -2903,7 +3041,13 @@ let apply_passes (crate : crate) : crate =
   let crate = update_array_default crate in
   let crate = anon_consts_to_calls crate in
   let crate =
-    { crate with fun_decls = FunDeclId.Map.map simplify_raw_reborrows crate.fun_decls }
+    {
+      crate with
+      fun_decls =
+        FunDeclId.Map.map
+          (fun f -> simplify_raw_reborrows (sink_raw_borrows crate f))
+          crate.fun_decls;
+    }
   in
   let crate = decompose_raw_ptr_derefs crate in
   (* Passes that apply to individual function bodies *)
