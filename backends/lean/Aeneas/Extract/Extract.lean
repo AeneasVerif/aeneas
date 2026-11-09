@@ -113,6 +113,9 @@ structure FunInfo where
       `core::slice::raw::from_raw_parts_mut` writes the slice back to the memory it was created from.
       By default, the backward functions of a model are pure. -/
   statefulLifetimes : List Nat := []
+  /-- Does the model expose a safe place as raw memory? It then takes the address of the exposure as
+      a first, ghost, argument (see `Aeneas.Std.Placement`). -/
+  placement : Bool := false
 deriving Repr, Inhabited
 
 instance : ToMessageData FunInfo where
@@ -123,7 +126,8 @@ instance : ToMessageData FunInfo where
   canFail : {x.canFail},
   lift : {x.lift},
   hasDefault : {x.hasDefault},
-  statefulLifetimes : {x.statefulLifetimes} }"
+  statefulLifetimes : {x.statefulLifetimes},
+  placement : {x.placement} }"
 
 structure TraitConst where
   rust : String
@@ -634,6 +638,13 @@ The options are:
   @[rust_fun "core::slice::raw::from_raw_parts_mut" (statefulLifetimes := [0])]
   def from_raw_parts_mut (p : MutRawPtr T) (len : Usize) : Result (Slice T × (Slice T → Result Unit))
   ```
+- `placement`: `false` by default. If `true`, the model exposes a safe place as raw memory, and takes
+  the address of the exposure as its first argument: the extracted code passes it an address of the
+  placement it received (see `Aeneas.Std.Placement`). For instance:
+  ```
+  @[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0]) (placement := true)]
+  def from_mut [Pointee T] (address : BasePtr) (r : MutBorrow T) : Result (MutRawPtr T × Result T)
+  ```
 -/
 syntax (name := rustFun) "rust_fun" str Parser.Tactic.optConfig : attr
 
@@ -818,7 +829,8 @@ def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let statefulLifetimes :=
     if info.statefulLifetimes.isEmpty then m!""
     else m!" ~stateful_lifetimes:{listToString info.statefulLifetimes}"
-  m!"{extract}{keepParams}{keepTraitClauses}{canFail}{lift}{hasDefault}{statefulLifetimes}"
+  let placement := if info.placement then m!" ~placement:true" else m!""
+  m!"{extract}{keepParams}{keepTraitClauses}{canFail}{lift}{hasDefault}{statefulLifetimes}{placement}"
 
 def TraitDecl.toExtract (info : TraitDecl) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"

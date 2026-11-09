@@ -1536,11 +1536,62 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            (fun (d : Pure.trait_impl) -> (d.def_id, d))
            trans_trait_impls)
     in
+    (* The transparent functions which expose safe places as raw memory,
+       directly (by calling a model with [placement]) or through the functions
+       they call: they receive a placement (see [Placement] in the Lean
+       library) *)
+    let funs_with_placement =
+      let exposes (id : FunDeclId.id) : bool =
+        match FunDeclId.Map.find_opt id trans_funs with
+        | Some trans -> (
+            match trans.f.builtin_info with
+            | Some { placement = true; _ } -> true
+            | _ -> false)
+        | None -> false
+      in
+      let deps =
+        FunDeclId.Map.fold
+          (fun id (trans : pure_fun_translation) acc ->
+            let decls = (trans.f :: trans.loops) @ trans.bodies in
+            let callees =
+              List.fold_left
+                (fun acc (decl : Pure.fun_decl) ->
+                  match decl.body with
+                  | None -> acc
+                  | Some body ->
+                      ReorderDecls.FunIdSet.fold
+                        (fun (fid : ReorderDecls.fun_id) acc ->
+                          FunDeclId.TreeSet.add fid.def_id acc)
+                        (ReorderDecls.compute_body_fun_deps body.body)
+                        acc)
+                FunDeclId.TreeSet.empty decls
+            in
+            if Option.is_some trans.f.body then (id, callees) :: acc else acc)
+          trans_funs []
+      in
+      let rec fixpoint (set : FunDeclId.TreeSet.t) : FunDeclId.TreeSet.t =
+        let set' =
+          List.fold_left
+            (fun set (id, callees) ->
+              if
+                FunDeclId.TreeSet.exists
+                  (fun callee -> exposes callee || FunDeclId.TreeSet.mem callee set)
+                  callees
+              then FunDeclId.TreeSet.add id set
+              else set)
+            set deps
+        in
+        if FunDeclId.TreeSet.equal set set' then set else fixpoint set'
+      in
+      fixpoint FunDeclId.TreeSet.empty
+    in
     {
       ExtractBase.crate;
       trans_ctx;
       names_maps;
       indent_incr = 2;
+      funs_with_placement;
+      placement = None;
       use_dep_ite =
         Config.backend () = Lean && !Config.extract_decreases_clauses;
       trait_decl_id = None (* None by default *);

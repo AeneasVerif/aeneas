@@ -23,8 +23,10 @@ namespace raw_pointers_control_flow
 /-- [raw_pointers_control_flow::write_if]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 10:0-20:1 -/
 def write_if
-  (data : MutBorrow (Slice Std.U8)) (b : Bool) : Result (Slice Std.U8) := do
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
+  (placement : Placement) (data : MutBorrow (Slice Std.U8)) (b : Bool) :
+  Result (Slice Std.U8)
+  := do
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) data
   let data1 ←
     if b
     then do
@@ -41,7 +43,8 @@ def write_if
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 27:4-32:5 -/
 @[rust_loop_body]
 def write_loop_loop.body
-  (n : Std.Usize) (p : MutRawPtr Std.U8) (i : Std.Usize) :
+  (placement : Placement) (n : Std.Usize) (p : MutRawPtr Std.U8)
+  (i : Std.Usize) :
   Result (ControlFlow Std.Usize Unit)
   := do
   if i < n
@@ -56,32 +59,37 @@ def write_loop_loop.body
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 27:4-32:5 -/
 @[rust_loop]
 def write_loop_loop
-  (n : Std.Usize) (p : MutRawPtr Std.U8) (i : Std.Usize) : Result Unit := do
+  (placement : Placement) (n : Std.Usize) (p : MutRawPtr Std.U8)
+  (i : Std.Usize) :
+  Result Unit
+  := do
   loop
-    (fun i1 => write_loop_loop.body n p i1)
+    (fun i1 => write_loop_loop.body (placement.sub 0) n p i1)
     i
 
 /-- [raw_pointers_control_flow::write_loop]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 24:0-33:1 -/
 def write_loop
-  (data : MutBorrow (Slice Std.U8)) (n : Std.Usize) :
+  (placement : Placement) (data : MutBorrow (Slice Std.U8)) (n : Std.Usize) :
   Result (Slice Std.U8)
   := do
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) data
   let data1 ← as_mut_ptr_back
-  write_loop_loop n p 0#usize
+  write_loop_loop (placement.sub 1) n p 0#usize
   ok data1
 
 /-- [raw_pointers_control_flow::view_in_loop]: loop body 0:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 37:4-43:5 -/
 @[rust_loop_body]
 def view_in_loop_loop.body
-  (n : Std.Usize) (data : Slice Std.U8) (i : Std.Usize) :
+  (placement : Placement) (n : Std.Usize) (data : Slice Std.U8) (i : Std.Usize)
+  :
   Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Slice Std.U8))
   := do
   if i < n
   then
-    let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (MutBorrow.mk data)
+    let (p, as_mut_ptr_back) ←
+      Slice.as_mut_ptr (placement.addr 0) (MutBorrow.mk data)
     let p1 ← RawPtr.add p i
     MutRawPtr.write p1 0#u8
     let i1 ← i + 1#usize
@@ -93,21 +101,22 @@ def view_in_loop_loop.body
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 37:4-43:5 -/
 @[rust_loop]
 def view_in_loop_loop
-  (data : Slice Std.U8) (n : Std.Usize) (i : Std.Usize) :
+  (placement : Placement) (data : Slice Std.U8) (n : Std.Usize) (i : Std.Usize)
+  :
   Result (Slice Std.U8)
   := do
   loop
-    (fun (data1, i1) => view_in_loop_loop.body n data1 i1)
+    (fun (data1, i1) => view_in_loop_loop.body (placement.sub 0) n data1 i1)
     (data, i)
 
 /-- [raw_pointers_control_flow::view_in_loop]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 35:0-44:1 -/
 @[reducible]
 def view_in_loop
-  (data : MutBorrow (Slice Std.U8)) (n : Std.Usize) :
+  (placement : Placement) (data : MutBorrow (Slice Std.U8)) (n : Std.Usize) :
   Result (Slice Std.U8)
   := do
-  view_in_loop_loop data.val n 0#usize
+  view_in_loop_loop (placement.sub 0) data.val n 0#usize
 
 /-- [raw_pointers_control_flow::slice_in_branch]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 46:0-53:1 -/
@@ -122,10 +131,10 @@ def slice_in_branch (p : MutRawPtr Std.U8) (b : Bool) : Result Unit := do
 
 /-- [raw_pointers_control_flow::local_view]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 58:0-64:1 -/
-def local_view : Result Std.U32 := do
+def local_view (placement : Placement) : Result Std.U32 := do
   let a := Array.repeat 2#usize 0#u32
   let (s, _) ← lift (Array.as_mut_slice (MutBorrow.mk a))
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) s
   let (s1, from_raw_parts_mut_back) ←
     core.slice.raw.from_raw_parts_mut p 2#usize
   let s2 ← Slice.update s1.val 0#usize 5#u32

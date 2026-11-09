@@ -253,6 +253,7 @@ let builtin_trait_decls_info () =
                 extract_name = basename;
                 can_fail = true;
                 stateful_lifetimes = [];
+                placement = false;
                 lift = true;
                 has_default;
               }
@@ -271,6 +272,7 @@ let builtin_trait_decls_info () =
                    extract_name;
                    can_fail = true;
                    stateful_lifetimes = [];
+                   placement = false;
                    lift = true;
                    has_default = false;
                  }
@@ -534,6 +536,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
         extract_name = basename;
         can_fail;
         stateful_lifetimes;
+        placement = false;
         lift;
         has_default = false;
       }

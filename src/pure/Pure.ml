@@ -253,6 +253,13 @@ type builtin_fun_info = {
           slice back to the memory it was created from). Such a backward
           function is returned as a monadic computation even if it has no
           inputs, so that its effects happen when the lifetime ends. *)
+  placement : bool;
+      (** Does the function expose a safe place as raw memory (for instance,
+          [core::ptr::from_mut])? Such a function receives the address of the
+          exposure as a first, ghost, argument: the extracted functions which
+          access the heap receive a placement (a tree of addresses, see
+          [Placement] in the Lean library) and give its [k]-th address to their
+          [k]-th exposure. *)
   lift : bool;
       (** If the function can not fail, should we still lift it to the [Result]
           monad? This can make reasonings easier, as we can then use [progress]

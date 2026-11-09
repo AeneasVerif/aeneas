@@ -73,10 +73,10 @@ Casting the pointer to mutable cannot authorize writes; the temporary block is r
 def Slice.end_as_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
   p.endSharedExposure repr s.val
 
-@[rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0])]
-def Slice.as_ptr {T : Type} [Pointee T] (s : SharedBorrow (Slice T)) :
+@[rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0]) (placement := true)]
+def Slice.as_ptr {T : Type} [Pointee T] (address : BasePtr) (s : SharedBorrow (Slice T)) :
     Result (ConstRawPtr T × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocSharedExposure (Pointee.repr (T := T)) s.val.val) fun p =>
+  Aeneas.Std.bind (RawPtr.allocSharedExposure (Pointee.repr (T := T)) s.val.val address) fun p =>
     .ok (p, Slice.end_as_ptr (Pointee.repr (T := T)) s.val p)
 
 /-- Ends the mutable exposure of `as_mut_ptr`: the cells become the new slice and their
@@ -86,10 +86,10 @@ def Slice.end_as_mut_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : MutRawPtr
   p.endExposure repr s.length
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
-@[rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0])]
-def Slice.as_mut_ptr {T : Type} [Pointee T] (s : MutBorrow (Slice T)) :
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0]) (placement := true)]
+def Slice.as_mut_ptr {T : Type} [Pointee T] (address : BasePtr) (s : MutBorrow (Slice T)) :
     Result (MutRawPtr T × Result (Slice T)) :=
-  Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) s.val.val) fun p =>
+  Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) s.val.val address) fun p =>
     .ok (p, Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p)
 
 /-- Back function of `from_raw_parts_mut`: ends the borrow of the cells with the final slice. -/

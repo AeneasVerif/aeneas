@@ -23,9 +23,11 @@ namespace raw_pointers
 /-- [raw_pointers::read_via_ptr]:
     Source: 'tests/src/raw_pointers.rs', lines 5:0-10:1 -/
 def read_via_ptr
-  (data : SharedBorrow (Array Std.U16 8#usize)) : Result Std.U16 := do
+  (placement : Placement) (data : SharedBorrow (Array Std.U16 8#usize)) :
+  Result Std.U16
+  := do
   let s ← lift (Array.as_slice data)
-  let (ptr, as_ptr_back) ← Slice.as_ptr s
+  let (ptr, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
   let p ← RawPtr.add ptr 1#usize
   let i ← RawPtr.read p
   as_ptr_back
@@ -34,11 +36,11 @@ def read_via_ptr
 /-- [raw_pointers::write_via_ptr]:
     Source: 'tests/src/raw_pointers.rs', lines 12:0-17:1 -/
 def write_via_ptr
-  (data : MutBorrow (Array Std.U16 8#usize)) :
+  (placement : Placement) (data : MutBorrow (Array Std.U16 8#usize)) :
   Result (Array Std.U16 8#usize)
   := do
   let (s, as_mut_slice_back) ← lift (Array.as_mut_slice data)
-  let (ptr, as_mut_ptr_back) ← Slice.as_mut_ptr s
+  let (ptr, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) s
   let p ← RawPtr.add ptr 2#usize
   MutRawPtr.write p 42#u16
   let s1 ← as_mut_ptr_back
@@ -47,10 +49,10 @@ def write_via_ptr
 /-- [raw_pointers::write_then_read]:
     Source: 'tests/src/raw_pointers.rs', lines 20:0-26:1 -/
 def write_then_read
-  (data : MutBorrow (Slice Std.U32)) :
+  (placement : Placement) (data : MutBorrow (Slice Std.U32)) :
   Result (Std.U32 × (Slice Std.U32))
   := do
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) data
   MutRawPtr.write p 1#u32
   let data1 ← as_mut_ptr_back
   let i ← Slice.index_usize (SharedBorrow.mk data1) 0#usize
@@ -58,10 +60,10 @@ def write_then_read
 
 /-- [raw_pointers::local_array]:
     Source: 'tests/src/raw_pointers.rs', lines 28:0-35:1 -/
-def local_array : Result Std.U8 := do
+def local_array (placement : Placement) : Result Std.U8 := do
   let a := Array.repeat 4#usize 0#u8
   let (s, as_mut_slice_back) ← lift (Array.as_mut_slice (MutBorrow.mk a))
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) s
   let p1 ← RawPtr.add p 3#usize
   MutRawPtr.write p1 7#u8
   let s1 ← as_mut_ptr_back
@@ -72,10 +74,10 @@ def local_array : Result Std.U8 := do
 /-- [raw_pointers::first_ptr]:
     Source: 'tests/src/raw_pointers.rs', lines 39:0-41:1 -/
 def first_ptr
-  (data : MutBorrow (Slice Std.U8)) :
+  (placement : Placement) (data : MutBorrow (Slice Std.U8)) :
   Result ((MutRawPtr Std.U8) × (Slice Std.U8))
   := do
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) data
   let data1 ← as_mut_ptr_back
   ok (p, data1)
 
@@ -87,8 +89,10 @@ def write_through (p : MutRawPtr Std.U8) (v : Std.U8) : Result Unit := do
 /-- [raw_pointers::swap_through_ptrs]:
     Source: 'tests/src/raw_pointers.rs', lines 47:0-55:1 -/
 def swap_through_ptrs
-  (x : MutBorrow (Slice Std.U64)) : Result (Slice Std.U64) := do
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr x
+  (placement : Placement) (x : MutBorrow (Slice Std.U64)) :
+  Result (Slice Std.U64)
+  := do
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) x
   let a ← RawPtr.read p
   let b ← RawPtr.add p 1#usize
   let b1 ← RawPtr.read b
@@ -126,15 +130,20 @@ def boxed : Result Std.U32 := do
 /-- [raw_pointers::call_write_through]:
     Source: 'tests/src/raw_pointers.rs', lines 75:0-78:1 -/
 def call_write_through
-  (data : MutBorrow (Slice Std.U8)) : Result (Slice Std.U8) := do
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
+  (placement : Placement) (data : MutBorrow (Slice Std.U8)) :
+  Result (Slice Std.U8)
+  := do
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) data
   write_through p 9#u8
   as_mut_ptr_back
 
 /-- [raw_pointers::from_mut_write]:
     Source: 'tests/src/raw_pointers.rs', lines 81:0-87:1 -/
-def from_mut_write (x : MutBorrow Std.U32) : Result (Std.U32 × Std.U32) := do
-  let (p, from_mut_back) ← core.ptr.from_mut x
+def from_mut_write
+  (placement : Placement) (x : MutBorrow Std.U32) :
+  Result (Std.U32 × Std.U32)
+  := do
+  let (p, from_mut_back) ← core.ptr.from_mut (placement.addr 0) x
   MutRawPtr.write p 5#u32
   let x1 ← from_mut_back
   ok (x1, x1)

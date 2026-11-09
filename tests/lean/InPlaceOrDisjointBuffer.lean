@@ -51,12 +51,13 @@ instance {T : Type _} [Pointee (ConstRawPtr T)] [Pointee (MutRawPtr T)]
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 15:4-27:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_in_place
-  {T : Type _} [Pointee T] (buffer : MutBorrow (Slice T)) :
+  {T : Type _} [Pointee T] (placement : Placement)
+  (buffer : MutBorrow (Slice T)) :
   Result ((InPlaceOrDisjointBuffer T) × (InPlaceOrDisjointBuffer T → Result
     (Slice T)))
   := do
   let len := Slice.len (SharedBorrow.mk buffer.val)
-  let (ptr, as_mut_ptr_back) ← Slice.as_mut_ptr buffer
+  let (ptr, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) buffer
   let p := RawPtr.cast_const ptr
   let back := fun ipodb => as_mut_ptr_back
   ok ({ src := p, dst := ptr, len, _phantom := core.marker.PhantomData.mk },
@@ -66,7 +67,7 @@ def InPlaceOrDisjointBuffer.new_in_place
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 32:4-41:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_disjoint
-  {T : Type _} [Pointee T] (src : MutBorrow (Slice T))
+  {T : Type _} [Pointee T] (placement : Placement) (src : MutBorrow (Slice T))
   (dst : MutBorrow (Slice T)) :
   Result ((InPlaceOrDisjointBuffer T) × (InPlaceOrDisjointBuffer T → Result
     ((Slice T) × (Slice T))))
@@ -75,9 +76,9 @@ def InPlaceOrDisjointBuffer.new_disjoint
   let right_val := Slice.len (SharedBorrow.mk dst.val)
   massert (left_val = right_val)
   let len := Slice.len (SharedBorrow.mk src.val)
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr src
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) src
   let p1 := RawPtr.cast_const p
-  let (p2, as_mut_ptr_back1) ← Slice.as_mut_ptr dst
+  let (p2, as_mut_ptr_back1) ← Slice.as_mut_ptr (placement.addr 1) dst
   let back :=
     fun ipodb =>
       do
@@ -128,8 +129,11 @@ def InPlaceOrDisjointBuffer.impl.dst
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 56:0-61:1
     Visibility: public -/
 def zero_first_in_place
-  (buf : MutBorrow (Slice Std.U8)) : Result (Std.Usize × (Slice Std.U8)) := do
-  let (b, new_in_place_back) ← InPlaceOrDisjointBuffer.new_in_place buf
+  (placement : Placement) (buf : MutBorrow (Slice Std.U8)) :
+  Result (Std.Usize × (Slice Std.U8))
+  := do
+  let (b, new_in_place_back) ←
+    InPlaceOrDisjointBuffer.new_in_place (placement.sub 0) buf
   let (d, dst_back, _) ←
     InPlaceOrDisjointBuffer.impl.dst (MutBorrow.mk
       { b with _phantom := core.marker.PhantomData.mk })
@@ -146,10 +150,12 @@ def zero_first_in_place
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 63:0-67:1
     Visibility: public -/
 def copy_first
-  (src : MutBorrow (Slice Std.U8)) (dst : MutBorrow (Slice Std.U8)) :
+  (placement : Placement) (src : MutBorrow (Slice Std.U8))
+  (dst : MutBorrow (Slice Std.U8)) :
   Result ((Slice Std.U8) × (Slice Std.U8))
   := do
-  let (b, new_disjoint_back) ← InPlaceOrDisjointBuffer.new_disjoint src dst
+  let (b, new_disjoint_back) ←
+    InPlaceOrDisjointBuffer.new_disjoint (placement.sub 0) src dst
   let (s, src_back) ←
     InPlaceOrDisjointBuffer.impl.src (SharedBorrow.mk
       { b with _phantom := core.marker.PhantomData.mk })
@@ -166,8 +172,11 @@ def copy_first
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 69:0-73:1
     Visibility: public -/
 def increment_first_in_place
-  (buf : MutBorrow (Slice Std.U8)) : Result (Slice Std.U8) := do
-  let (b, new_in_place_back) ← InPlaceOrDisjointBuffer.new_in_place buf
+  (placement : Placement) (buf : MutBorrow (Slice Std.U8)) :
+  Result (Slice Std.U8)
+  := do
+  let (b, new_in_place_back) ←
+    InPlaceOrDisjointBuffer.new_in_place (placement.sub 0) buf
   let (s, src_back) ←
     InPlaceOrDisjointBuffer.impl.src (SharedBorrow.mk
       { b with _phantom := core.marker.PhantomData.mk })

@@ -183,16 +183,56 @@ def RawPtr.readRange (repr : Repr T) (q : RawPtr T) (count : Nat) : Result (List
 def RawPtr.newBlock (repr : Repr T) (values : List T) (own : Bool) : Result (RawPtr T) :=
   Result.allocatingModify (State.newBlock repr values own)
 
-/-- Exposes a safe mutable place, represented functionally without an address, as raw memory.
-Used by `from_mut` and `as_mut_ptr`. The fresh block holds `values` with full access
-and the matching backward computation removes it with `endExposure`. -/
-def RawPtr.allocExposure (repr : Repr T) (values : List T) : Result (MutRawPtr T) :=
-  RawPtr.newBlock repr values false
+/-! ### Placements
 
-/-- Exposes a shared safe borrow with read-only cells (`shared 1`), as used by `as_ptr`.
-Casting the returned pointer to mutable does not change those permissions. -/
-def RawPtr.allocSharedExposure (repr : Repr T) (values : List T) : Result (ConstRawPtr T) :=
-  Result.allocatingModify (State.newSharedExposure repr values)
+A safe place has no address in the functional translation: the address at which it is exposed as
+raw memory (by `from_mut`, `as_ptr` or `as_mut_ptr`) is a ghost argument, chosen by the caller, as
+in the hand-written models of fournet/wip-memory-model. Exposing the same place twice at the same
+address lets the second exposure choose the root of the first one, so that pointers obtained from
+both exposures can be compared or subtracted.
+
+The extracted functions which access the heap receive a placement: a tree of addresses. The
+`k`-th exposure in the body of a function is at `placement.addr k`, and its `k`-th call to a function
+which accesses the heap receives `placement.sub k` (so that the iterations of a loop, which is a
+recursive function, have their own addresses). The specifications choose the placement: an
+exposure at a placement where it doesn't fit runs out of memory. -/
+
+/-- A tree of addresses: the address at path `[k₀, ..., kₙ]` is the one of the `kₙ`-th exposure of the
+function called by the `kₙ₋₁`-th call of ... the `k₀`-th call. -/
+abbrev Placement := List Nat → BasePtr
+
+/-- The address of the `k`-th exposure of a function body. -/
+@[expose] def Placement.addr (placement : Placement) (k : Nat) : BasePtr := placement [k]
+
+/-- The placement given to the `k`-th call of a function body. -/
+@[expose] def Placement.sub (placement : Placement) (k : Nat) : Placement :=
+  fun path => placement (k :: path)
+
+/-- Exposure of a safe place at `address`: the encoding of the values and the root are still chosen
+by the model (demonically). -/
+def State.exposeAt (repr : Repr T) (values : List T) (address : BasePtr) (s₀ : State)
+    (p : RawPtr T) (s₁ : State) : Prop :=
+  ∃ data root, State.exposesList repr s₀ address.val values data ∧
+    Heap.newBlock repr data false address root s₀ = some (p, s₁)
+
+/-- Shared exposure of a safe place at `address`. -/
+def State.sharedExposeAt (repr : Repr T) (values : List T) (address : BasePtr) (s₀ : State)
+    (p : RawPtr T) (s₁ : State) : Prop :=
+  ∃ data root, State.exposesList repr s₀ address.val values data ∧
+    Heap.newSharedExposure repr data address root s₀ = some (p, s₁)
+
+/-- Exposes a safe mutable place, represented functionally without an address, as raw memory, at
+`address`. Used by `from_mut` and `as_mut_ptr`. The fresh block holds `values` with full access
+and the matching backward computation removes it with `endExposure`. -/
+def RawPtr.allocExposure (repr : Repr T) (values : List T) (address : BasePtr) :
+    Result (MutRawPtr T) :=
+  Result.allocatingModify (State.exposeAt repr values address)
+
+/-- Exposes a shared safe borrow with read-only cells (`shared 1`) at `address`, as used by
+`as_ptr`. Casting the returned pointer to mutable does not change those permissions. -/
+def RawPtr.allocSharedExposure (repr : Repr T) (values : List T) (address : BasePtr) :
+    Result (ConstRawPtr T) :=
+  Result.allocatingModify (State.sharedExposeAt repr values address)
 
 def RawPtr.endExposure (repr : Repr T) (q : RawPtr T) (count : Nat) : Result Unit :=
   Result.checkedModify (State.removeExposure repr q count)
@@ -202,8 +242,9 @@ def RawPtr.endSharedExposure (repr : Repr T) (q : RawPtr T) (original : List T) 
 
 /-- Exposes a shared borrow and returns its matching backward computation.
 The backward computation checks the original value and retires the exposure. -/
-def core.ptr.from_ref (repr : Repr T) (r : T) : Result (ConstRawPtr T × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocSharedExposure repr [r]) fun p =>
+def core.ptr.from_ref (repr : Repr T) (address : BasePtr) (r : T) :
+    Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.allocSharedExposure repr [r] address) fun p =>
     .ok (p, p.endSharedExposure repr [r])
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
@@ -213,10 +254,11 @@ def core.ptr.end_from_mut [Pointee T] (p : MutRawPtr T) : Result T := do
   p.endExposure (Pointee.repr (T := T)) 1
   .ok value
 
-/-- Exposes `r` as raw memory; the back computation runs when the borrow ends. -/
-@[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0])]
-def core.ptr.from_mut [Pointee T] (r : MutBorrow T) : Result (MutRawPtr T × Result T) :=
-  Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) [r.val]) fun p =>
+/-- Exposes `r` as raw memory at `address`; the back computation runs when the borrow ends. -/
+@[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0]) (placement := true)]
+def core.ptr.from_mut [Pointee T] (address : BasePtr) (r : MutBorrow T) :
+    Result (MutRawPtr T × Result T) :=
+  Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) [r.val] address) fun p =>
     .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std

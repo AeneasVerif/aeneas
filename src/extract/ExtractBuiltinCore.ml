@@ -81,7 +81,8 @@ let mk_struct_constructor (type_name : string) : string =
 
 let mk_fun ?(keep_params : bool list option = None)
     ?(keep_trait_clauses : bool list option = None) ?(can_fail = true)
-    ?(stateful_lifetimes = []) ?(lift = true) ?(has_default = false)
+    ?(stateful_lifetimes = []) ?(placement = false) ?(lift = true)
+    ?(has_default = false)
     (rust_name : string) (extract_name : string) :
     pattern * Pure.builtin_fun_info =
   [%ldebug "About to parse pattern: " ^ rust_name];
@@ -97,6 +98,7 @@ let mk_fun ?(keep_params : bool list option = None)
       extract_name;
       can_fail;
       stateful_lifetimes;
+      placement;
       lift;
       has_default;
     }
@@ -170,6 +172,7 @@ let mk_trait_decl ?(parent_clauses : string list = [])
              extract_name = lname;
              can_fail = true;
              stateful_lifetimes = [];
+             placement = false;
              lift = true;
              has_default = Collections.StringSet.mem lname default_methods;
            }
