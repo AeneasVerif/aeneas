@@ -5,6 +5,7 @@ public import Aeneas.Data.Coinductive.Effect
 public import Aeneas.Data.Coinductive.ITreeWP
 public import Aeneas.SepLogic.IProp
 public import Aeneas.SepLogic.Lemmas
+public import Aeneas.SepLogic.Allocation
 public section
 
 namespace Aeneas.Std.WP
@@ -45,14 +46,26 @@ instance : EffectWP.Monotonic effectWP where
     | guardedModify => exact ⟨hEvent.1, fun x s' hx => hC _ _ (hEvent.2 x s' hx)⟩
     | fail => exact hEvent
 
+/-- All the cells of the block `base` are exclusive (depth `0`). -/
+def AllExclusive (s : Heap) (base : Nat) : Prop :=
+  ∀ blk, s.allocations base = some blk → ∀ (i : Nat) (hi : i < blk.repr.length),
+    blk.repr[i].depth = some 0
+
+/-- The owned blocks whose cleanup is in `h`, and whose cells are all exclusive, can be returned:
+there is no other active view of their root (see `Bytes.RootReturn`). Owning the cleanup and the
+exclusive cells of a block thus gives the authority to free it. -/
+def AuthOK (s : Heap) (h : Fragment) : Prop :=
+  ∀ base size bptr, h (.cleanup base size bptr true) → AllExclusive s base →
+    Bytes.RootReturn s base
+
 /-- The heap `s` realizes the assertion `H`: it satisfies the invariant of the heap, and some
-fragment which satisfies `H` holds in it. -/
+fragment which satisfies `H` holds in it, with the authority of its owned exclusive blocks. -/
 def Realizes (H : IProp) (s : Heap) : Prop :=
-  s.Inv ∧ ∃ h, H h ∧ Fragment.Matches s h
+  s.Inv ∧ ∃ h, H h ∧ Fragment.Matches s h ∧ AuthOK s h
 
 theorem Realizes.mono {H H' : IProp} (hEntails : H ⊢ H') {s : Heap} :
     Realizes H s → Realizes H' s :=
-  fun ⟨hInv, h, hH, hMatches⟩ => ⟨hInv, h, hEntails h hH, hMatches⟩
+  fun ⟨hInv, h, hH, hMatches, hAuth⟩ => ⟨hInv, h, hEntails h hH, hMatches, hAuth⟩
 
 abbrev rawIwp (total:Bool) (m : Result α) (Q : IPost α) (s : Heap) : Prop :=
   if total then DWP effectWP m (fun value s' => Realizes (Q value) s') s
