@@ -18,17 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace builtin_auto
-
-/-- [core::ptr::null]:
-    Source: '/rustc/library/core/src/ptr/mod.rs', lines 877:0-877:55
-    Name pattern: [core::ptr::null]
-    Visibility: public -/
-@[rust_fun "core::ptr::null"]
-axiom core.ptr.null (T : Type _) : Result (ConstRawPtr T)
 
 /-- [builtin_auto::Inner]
     Source: 'tests/src/builtin-auto.rs', lines 7:0-9:1 -/
