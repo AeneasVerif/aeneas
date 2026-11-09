@@ -150,8 +150,8 @@ def shift_and_pad
   let p3 ← RawPtr.add p 3#usize
   core.ptr.write_bytes p3 48#u8 2#usize
   let p4 ← RawPtr.add p 1#usize
-  let p5 ← RawPtr.ptr_cast Std.U16 p4
   let i ← lift (core.num.U16.to_le 14648#u16)
+  let p5 ← RawPtr.ptr_cast Std.U16 p4
   MutRawPtr.write_unaligned p5 i
   let s1 ← as_mut_ptr_back
   ok (as_mut_slice_back s1)
@@ -163,25 +163,43 @@ def copy_from_local
   (placement : Placement) (v : Std.U32) : Result (Array Std.U8 4#usize) := do
   let data ← lift (core.num.U32.to_le v)
   let out := Array.repeat 4#usize 0#u8
-  let (p, from_ref_model_back) ←
-    core.ptr.from_ref_model (placement.addr 0) (SharedBorrow.mk data)
-  let p1 ← RawPtr.ptr_cast Std.U8 p
   let (s, as_mut_slice_back) ← lift (Array.as_mut_slice (MutBorrow.mk out))
-  let (p2, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 1) s
-  core.ptr.copy_nonoverlapping p1 p2 4#usize
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) s
+  let (p1, from_ref_model_back) ←
+    core.ptr.from_ref_model (placement.addr 1) (SharedBorrow.mk data)
+  let p2 ← RawPtr.ptr_cast Std.U8 p1
+  core.ptr.copy_nonoverlapping p2 p 4#usize
   let s1 ← as_mut_ptr_back
   let out1 := as_mut_slice_back s1
   from_ref_model_back
   ok out1
 
+/-- [raw_ryu_zmij_idioms::copy_from_local_len]:
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 87:0-94:1
+    Visibility: public -/
+def copy_from_local_len
+  (placement : Placement) (v : Std.U32) (long : Bool)
+  (buffer : MutRawPtr Std.U8) :
+  Result Unit
+  := do
+  let data ← lift (core.num.U32.to_le v)
+  let i ← if long
+            then ok 4#usize
+            else ok 3#usize
+  let (p, from_ref_model_back) ←
+    core.ptr.from_ref_model (placement.addr 0) (SharedBorrow.mk data)
+  let p1 ← RawPtr.ptr_cast Std.U8 p
+  core.ptr.copy_nonoverlapping p1 buffer i
+  from_ref_model_back
+
 /-- [raw_ryu_zmij_idioms::PAIRS]
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 85:0-85:33 -/
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 96:0-96:33 -/
 @[global_simps, irreducible]
 def PAIRS : Array Std.U8 4#usize :=
   Array.make 4#usize [ 49#u8, 50#u8, 51#u8, 52#u8 ]
 
 /-- [raw_ryu_zmij_idioms::pair]:
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 88:0-90:1
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 99:0-101:1
     Visibility: public -/
 def pair
   (placement : Placement) (i : Std.Usize) : Result (SharedBorrow Std.U8) := do
@@ -193,7 +211,7 @@ def pair
   ok i1
 
 /-- [raw_ryu_zmij_idioms::read_pair]:
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 92:0-95:1
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 103:0-106:1
     Visibility: public -/
 def read_pair (placement : Placement) (i : Std.Usize) : Result Std.U8 := do
   massert (i < 4#usize : Bool)
@@ -201,7 +219,7 @@ def read_pair (placement : Placement) (i : Std.Usize) : Result Std.U8 := do
   ok i1.val
 
 /-- [raw_ryu_zmij_idioms::Table]
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 97:0-100:1
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 108:0-111:1
     Visibility: public -/
 structure Table where
   first : Std.U8
@@ -212,7 +230,7 @@ instance : Pointee Table := ⟨Repr.iso (Repr.prod (Pointee.repr (T := Std.U8))
   (fun _ => rfl)⟩
 
 /-- [raw_ryu_zmij_idioms::compute_table]:
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 102:0-109:1 -/
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 113:0-120:1 -/
 def compute_table (placement : Placement) : Result Table := do
   let s ← lift (Array.as_slice (SharedBorrow.mk PAIRS))
   let (p, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
@@ -226,27 +244,27 @@ def compute_table (placement : Placement) : Result Table := do
   ok { first := i, second := i1 }
 
 /-- [raw_ryu_zmij_idioms::TABLE]
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 112:0-112:38 -/
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 123:0-123:38 -/
 @[global_simps, irreducible]
 def TABLE (placement : Placement) : Result Table :=
   compute_table (placement.sub 0)
 
 /-- [raw_ryu_zmij_idioms::read_table]:
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 115:0-119:1
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 126:0-130:1
     Visibility: public -/
 def read_table (placement : Placement) : Result Std.U8 := do
   let d ← TABLE (placement.sub 0)
   d.first + d.second
 
 /-- [raw_ryu_zmij_idioms::num_bits]:
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 122:0-124:1
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 133:0-135:1
     Visibility: public -/
 def num_bits (T : Type _) [Pointee T] : Result Std.Usize := do
   let i ← core.mem.size_of T
   i * 8#usize
 
 /-- [raw_ryu_zmij_idioms::num_bits_u32]:
-    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 126:0-128:1
+    Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 137:0-139:1
     Visibility: public -/
 def num_bits_u32 : Result Std.Usize := do
   num_bits Std.U32
