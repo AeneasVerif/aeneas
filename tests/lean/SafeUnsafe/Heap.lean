@@ -139,6 +139,21 @@ theorem _root_.Aeneas.Data.Coinductive.DWP.heap_newBlock {β : Type} {Q : effect
   · simp only [Heap.newBlock, align_u32, Heap.createRepr, hFresh]
     simp [hAlign, Heap.commit, add, block, hCheck] at *
 
+/-- Allocation or exposure of values of any representation, with their encodings `data`, at `b`. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.heap_newBlock_data {T β : Type} {Q : effectWP.Post β}
+    {s : Heap} {repr : Std.Repr T} {vs : List T} {own : Bool}
+    {k : ULift (Option (RawPtr T)) → Result β}
+    (hSpec : DWP effectWP (Result.vis (.guardedModify (Option (RawPtr T))
+      (State.checked (State.newBlock repr vs own))) k) Q s)
+    (data : List (Vector Std.Byte repr.size)) (b : Usize)
+    (hData : if own then repr.encodeList vs data else State.exposesList repr s b.val vs data)
+    (hAlign : repr.align.val ∣ b.val) (hFresh : s.allocations s.next = none)
+    (hCheck : (add s ⟨b, s.next, repr.create data 0, own, true, true⟩).check = true) :
+    DWP effectWP (k ⟨some ⟨s.next, b⟩⟩) Q (add s ⟨b, s.next, repr.create data 0, own, true, true⟩) := by
+  refine hSpec.heap_choose _ _ ⟨data, b, none, hData, ?_⟩
+  simp only [Heap.newBlock, Heap.createRepr, hFresh]
+  simp [hAlign, Heap.commit, add, hCheck] at *
+
 /-- Shared exposure (`as_ptr`), at the placement `b`. -/
 theorem _root_.Aeneas.Data.Coinductive.DWP.heap_newSharedExposure {β : Type} {Q : effectWP.Post β} {s : Heap} {vs : List U32}
     {k : ULift (Option (RawPtr U32)) → Result β}
