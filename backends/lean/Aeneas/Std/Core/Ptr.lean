@@ -3,8 +3,6 @@ module
 public import Aeneas.Std.Core.Core
 public import Aeneas.Std.Heap
 public import Aeneas.Std.Core.Pointee
-public import Aeneas.Std.WP
-public import Aeneas.SepLogic.Local
 public import Aeneas.Std.Scalar.Core
 public section
 
@@ -262,42 +260,5 @@ def core.ptr.from_mut [Pointee T] (address : BasePtr) (r : MutBorrow T) :
     Result (MutRawPtr T × Result T) :=
   Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) [r.val] address) fun p =>
     .ok (p, core.ptr.end_from_mut p)
-
-/-! ## Specifications of the raw-pointer functions
-
-`p ↦ value`: `p` owns the cells of an admissible encoding of `value` (see `Bytes.pointsTo`), in
-some block. -/
-
-section Specs
-
-open Aeneas.SepLogic Aeneas.Std.WP
-
-instance instPointsToRawPtr {T : Type} [Pointee T] : PointsTo (RawPtr T) T :=
-  ⟨fun p value => iexists fun bptr : BasePtr =>
-    upClose (Bytes.pointsTo (Pointee.repr (T := T)) p bptr value)⟩
-
-@[step]
-theorem RawPtr.read.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T) (value : T) :
-    ⦃ p ↦ value ⦄ RawPtr.read p ⦃ result => ⌜result = value⌝ ∗ p ↦ value ⦄ := by
-  apply ispec_exists.mpr
-  intro bptr
-  refine ispec_conseq (ispec_checkedModify (Bytes.LocalOp.upClose
-    (Bytes.read.local _ p bptr value 0 Pointee.Sized.pos))) (entails_refl _) ?_
-  rintro x h ⟨a, ⟨rfl, hp⟩, hSub⟩
-  exact (sep_pure_l _ _ h).mpr ⟨rfl, bptr, a, hp, hSub⟩
-
-@[step]
-theorem MutRawPtr.write.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.NoPointers T]
-    (p : MutRawPtr T) (oldValue newValue : T) :
-    ⦃ p ↦ oldValue ⦄ MutRawPtr.write p newValue ⦃ p ↦ newValue ⦄ := by
-  apply ispec_exists.mpr
-  intro bptr
-  refine ispec_conseq (ispec_checkedModify (Bytes.LocalOp.upClose
-    (Bytes.write_pointsTo.local _ p bptr oldValue newValue
-      (Pointee.NoPointers.no_pointers newValue) Pointee.Sized.pos))) (entails_refl _) ?_
-  intro _ h hU
-  exact ⟨bptr, hU⟩
-
-end Specs
 
 end Aeneas.Std
