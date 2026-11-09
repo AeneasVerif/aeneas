@@ -7,3 +7,4 @@ public import Aeneas.Std
 -- Re-export `Aeneas.Std` as `meta` since `#guard` often needs it.
 public meta import Aeneas.Std
 public import Aeneas.Tactic
+public import Aeneas.SepLogic
