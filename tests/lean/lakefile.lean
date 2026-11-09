@@ -49,6 +49,7 @@ package «tests» {}
 @[default_target] lean_lib GenericUnitOutput
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib HigherRankedTraitBounds
+@[default_target] lean_lib ImplConstSelf
 @[default_target] lean_lib InPlaceOrDisjointBuffer
 @[default_target] lean_lib InPlaceOrDisjointBufferSpecs
 @[default_target] lean_lib Into
