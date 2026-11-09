@@ -6,8 +6,7 @@ public import Aeneas.Std.Heap
 /-! Local heap operations: the operations which, from every heap which matches a fragment of the
 precondition together with a frame fragment, are enabled and keep the frame. These are the facts
 about the operations of the byte heap from which the specifications of the raw-pointer functions are
-proved (see `LocalOp.ispec_checkedModify`). The proofs about reads and writes are those of
-fournet/wip-memory-model (`Heap/Specs.lean`). -/
+proved (see `LocalOp.ispec_checkedModify`). -/
 
 @[expose] public section
 
@@ -15,153 +14,170 @@ namespace Aeneas.Std.Bytes
 
 open Aeneas.SepLogic
 
-universe u
+universe w
 
-/-- The heap operation `op` is local in the heap `s`, from the fragments of `A` to those of `B`. -/
-def LocalAt {α : Type u} (A : Fragment → Prop) (op : Heap → α → Heap → Prop)
-    (B : α → Fragment → Prop) (s : Heap) : Prop :=
-  ∀ a frame, A a → a.Disjoint frame → Fragment.Matches s (a ∪ frame) → s.Inv →
-    (∃ x s', op s x s') ∧
-    ∀ x s', op s x s' →
-      ∃ a', a'.Disjoint frame ∧ Fragment.Matches s' (a' ∪ frame) ∧ s'.Inv ∧ B x a'
+def empty : (Fragment → Prop) := fun h => h = ∅
 
-/-- The heap operation `op` is local, from the fragments of `A` to those of `B`. -/
-def LocalOp {α : Type u} (A : Fragment → Prop) (op : Heap → α → Heap → Prop)
-    (B : α → Fragment → Prop) : Prop :=
-  ∀ s, LocalAt A op B s
+def sep (P Q : (Fragment → Prop)) : (Fragment → Prop) :=
+  fun h => ∃ a b, a.Disjoint b ∧ h = a ∪ b ∧ P a ∧ Q b
 
-theorem read.local (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
-    (value : ty) (depth : Nat) (hsize : 0 < repr.size) :
-    LocalOp (pointsTo repr p bptr value depth) (State.read repr p)
-      (fun x h => x = value ∧ pointsTo repr p bptr value depth h) := by
-  intro s h F hp hd hm hi
-  have hr := read_of_pointsTo hsize hp ((Fragment.matches_union _ _ _).mp hm).1
-  refine ⟨⟨value, s, hr, rfl⟩, ?_⟩
-  rintro x s' ⟨hx, rfl⟩
-  exact ⟨h, hd, hm, hi, Option.some.inj (hx.symm.trans hr), hp⟩
+/-- The separating conjunction of predicates on fragments (they hold of disjoint parts). -/
+infixr:35 " ∗ᵇ " => sep
 
-/-- A compatible exact update preserves every indexed frame, including overlapping
-borrowed/shared views. -/
-theorem modify.local (repr : Repr ty) (p : RawPtr ty) (s : Heap) (blk : Block)
-    (old new : Vector Cell repr.size)
-    (change : ∀ {r}, Vector Cell r → Nat → Option (Vector Cell r))
-    (hb : (p.offsetFrom blk.bptr) + repr.size ≤ blk.repr.length)
-    (hl : s.allocations p.provenance = some blk) (hlive : s.live blk = true)
-    (ha : repr.align.val ∣ p.address.val)
-    (hc : change blk.bytes (p.offsetFrom blk.bptr) =
-      some (repr.update blk.bytes (p.offsetFrom blk.bptr) hb new))
-    (valid : (s.storeRepr p.provenance
-      (repr.update blk.bytes (p.offsetFrom blk.bptr) hb new).toList).check = true) :
-    LocalAt (block repr p blk.bptr old.toList)
-      (fun s (_ : Unit) s' => Heap.modify repr p change s = some s')
-      (fun _ => block repr p blk.bptr new.toList) s := by
-  intro h F hp hd hm hinv
-  obtain ⟨hlo, _, rfl⟩ := hp
-  have hrun := Heap.modify.spec repr p change s blk _ hl hlive hlo ha hc valid
-  refine ⟨⟨(), _, hrun⟩, ?_⟩
-  rintro _ s' he
-  have he := Option.some.inj (hrun.symm.trans he)
-  subst s'
-  have preserved := Heap.modify_Inv repr p s _ change hinv hrun
-  exact ⟨_, disjoint_cellsHeap_congr (by simp) hd,
-    (Fragment.matches_union _ _ _).mpr
-      ⟨matches_update hl hlive hb _, matches_update_frame hl hb hd
-        ((Fragment.matches_union _ _ _).mp hm).2⟩,
-    preserved, hlo, ha, rfl⟩
+theorem sep_comm (P Q : (Fragment → Prop)) (h : Fragment) : sep P Q h ↔ sep Q P h := by
+  constructor
+  · rintro ⟨a, b, hd, he, hp, hq⟩
+    exact ⟨b, a, hd.symm, he.trans (Fragment.union_comm _ _), hq, hp⟩
+  · rintro ⟨a, b, hd, he, hp, hq⟩
+    exact ⟨b, a, hd.symm, he.trans (Fragment.union_comm _ _), hq, hp⟩
 
-/-- A particular admissible encoding can be written when its exact update is compatible. -/
-theorem write_encoding.local (repr : Repr ty) (p : RawPtr ty) (s : Heap) (blk : Block)
-    (old : Vector Byte repr.size) (value : ty) (data : Vector Byte repr.size)
-    (encoded : repr.encode value data)
-    (hsize : 0 < repr.size) (hb : (p.offsetFrom blk.bptr) + repr.size ≤ blk.repr.length)
-    (hl : s.allocations p.provenance = some blk) (hlive : s.live blk = true)
-    (ha : repr.align.val ∣ p.address.val)
-    (selected : repr.select blk.bytes (p.offsetFrom blk.bptr) hb = old.map (Cell.shared 0))
-    (valid : (s.storeRepr p.provenance (repr.update blk.bytes (p.offsetFrom blk.bptr) hb
-      (data.map (Cell.shared 0))).toList).check = true) :
-    LocalAt (block repr p blk.bptr (old.map (Cell.shared 0)).toList)
-      (fun s (_ : Unit) s' => Heap.write repr p value data encoded s = some s')
-      (fun _ => pointsTo repr p blk.bptr value) s := by
-  have hc : Repr.write repr blk.bytes (p.offsetFrom blk.bptr) value data encoded =
-      some (repr.update blk.bytes (p.offsetFrom blk.bptr) hb (data.map (Cell.shared 0))) := by
-    simp [Repr.write, hsize, hb, selected, Repr.writeBytes_shared]
-  have ht := modify.local repr p s blk (old.map (Cell.shared 0)) (data.map (Cell.shared 0))
-    (fun bytes i => repr.write bytes i value data encoded)
-    hb hl hlive ha hc valid
-  intro h F hp hd hm hi
-  obtain ⟨enabled, post⟩ := ht h F hp hd hm hi
-  refine ⟨enabled, fun x s' hrun => ?_⟩
-  obtain ⟨h', hd', hm', hi', hp'⟩ := post x s' hrun
-  exact ⟨h', hd', hm', hi', data, encoded, hp'⟩
+theorem sep_assoc (P Q R : (Fragment → Prop)) (h : Fragment) :
+    sep (sep P Q) R h ↔ sep P (sep Q R) h := by
+  constructor
+  · rintro ⟨ab, c, hd, rfl, ⟨a, b, hab, rfl, hp, hq⟩, hr⟩
+    obtain ⟨hac, hbc⟩ := Fragment.disjoint_union_left.mp hd
+    exact ⟨a, b ∪ c, Fragment.disjoint_union_right.mpr ⟨hab, hac⟩,
+      Fragment.union_assoc _ _ _, hp, b, c, hbc, rfl, hq, hr⟩
+  · rintro ⟨a, bc, hd, rfl, hp, ⟨b, c, hbc, rfl, hq, hr⟩⟩
+    obtain ⟨hab, hac⟩ := Fragment.disjoint_union_right.mp hd
+    exact ⟨a ∪ b, c, Fragment.disjoint_union_left.mpr ⟨hac, hbc⟩,
+      (Fragment.union_assoc _ _ _).symm, ⟨a, b, hab, rfl, hp, hq⟩, hr⟩
 
-/-- Every permitted `State.write` encoding receives an exact points-to post. -/
-theorem writeAt.local (repr : Repr ty) (p : RawPtr ty) (s : Heap) (blk : Block)
-    (old : Vector Byte repr.size) (value : ty)
-    (hsize : 0 < repr.size) (hb : (p.offsetFrom blk.bptr) + repr.size ≤ blk.repr.length)
-    (hl : s.allocations p.provenance = some blk) (hlive : s.live blk = true)
-    (ha : repr.align.val ∣ p.address.val)
-    (selected : repr.select blk.bytes (p.offsetFrom blk.bptr) hb = old.map (Cell.shared 0))
-    (witness : ∃ data, repr.encode value data ∧
-      (s.storeRepr p.provenance (repr.update blk.bytes (p.offsetFrom blk.bptr) hb
-        (data.map (Cell.shared 0))).toList).check = true) :
-    LocalAt (block repr p blk.bptr (old.map (Cell.shared 0)).toList)
-      (State.write repr p value) (fun _ => pointsTo repr p blk.bptr value) s := by
-  intro h F hp hd hm hinv
-  have hlo := hp.1
-  obtain ⟨data, encoded, valid⟩ := witness
-  have ht := write_encoding.local repr p s blk old value data encoded
-    hsize hb hl hlive ha selected valid
-  obtain ⟨⟨x, s', hx⟩, _⟩ := ht h F hp hd hm hinv
-  refine ⟨⟨x, s', data, encoded, hx⟩, ?_⟩
-  rintro _ s' ⟨bytes, he, hrun⟩
-  have hc : Repr.write repr blk.bytes (p.offsetFrom blk.bptr) value bytes he =
-      some (repr.update blk.bytes (p.offsetFrom blk.bptr) hb (bytes.map (Cell.shared 0))) := by
-    simp [Repr.write, hsize, hb, selected, Repr.writeBytes_shared]
-  have hcommit :
-      Heap.commit (s.storeRepr p.provenance
-        (repr.update blk.bytes (p.offsetFrom blk.bptr) hb (bytes.map (Cell.shared 0))).toList) =
-        some s' := by
-    simpa [Heap.write, Heap.modify, hl, hlive, hlo, ha, hc] using hrun
-  obtain ⟨hs, check⟩ := Heap.commit_success _ _ hcommit
-  have hv : (s.storeRepr p.provenance
-      (repr.update blk.bytes (p.offsetFrom blk.bptr) hb (bytes.map (Cell.shared 0))).toList).check =
-      true := hs ▸ check
-  have ht' := write_encoding.local repr p s blk old value bytes he
-    hsize hb hl hlive ha selected hv
-  exact (ht' h F hp hd hm hinv).2 () s' hrun
+theorem sep_mono {P P' Q Q' : (Fragment → Prop)}
+    (hp : ∀ h, P h → P' h) (hq : ∀ h, Q h → Q' h) {h : Fragment} :
+    sep P Q h → sep P' Q' h := by
+  rintro ⟨a, b, hd, he, ha, hb⟩
+  exact ⟨a, b, hd, he, hp _ ha, hq _ hb⟩
 
-/-- Exclusive cells authorize every admissible write of a value whose pointer payloads (if any)
-have provenance in the heap. -/
-theorem write.local (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
-    (old : Vector Byte repr.size) (value : ty)
-    (payloads : ∀ s : Heap, s.Inv → ∀ q, repr.Carries value q →
-      (s.allocations q.provenance).isSome = true)
-    (hsize : 0 < repr.size) :
-    LocalOp (block repr p bptr (old.map (Cell.shared 0)).toList)
-      (State.write repr p value) (fun _ => pointsTo repr p bptr value) := by
-  intro s a F hp hd hm hinv
-  obtain ⟨hlo, ha, rfl⟩ := hp
-  obtain ⟨blk, hb, hl, hlive, hbase, selected⟩ :=
-    bytes_of_matches hsize ((Fragment.matches_union _ _ _).mp hm).1
-  subst bptr
-  obtain ⟨data, encoded⟩ := repr.encode_complete value
-  have valid := Heap.update_Inv hinv hl hb
-    (old.map (Cell.shared 0)) (data.map (Cell.shared 0)) selected
-    (fun i hi => by
-      simpa only [Vector.getElem_map] using valid_encoding encoded (payloads s hinv) i hi)
-    (fun i hi => by
-      simp only [Vector.getElem_map]
-      exact Cell.PermWeakens.writer _ _)
-  exact writeAt.local repr p s blk old value hsize hb hl hlive ha selected
-    ⟨data, encoded, valid.2⟩ _ F ⟨hlo, ha, rfl⟩ hd hm hinv
+theorem sep_and_left (A : Prop) (P Q : (Fragment → Prop)) (h : Fragment) :
+    sep (fun a => A ∧ P a) Q h ↔ A ∧ sep P Q h := by
+  constructor
+  · rintro ⟨a, b, hd, he, ⟨ha, hp⟩, hq⟩
+    exact ⟨ha, a, b, hd, he, hp, hq⟩
+  · rintro ⟨ha, a, b, hd, he, hp, hq⟩
+    exact ⟨a, b, hd, he, ⟨ha, hp⟩, hq⟩
 
-/-- Ordinary pointer-free writes need only their exclusive footprint. -/
-theorem write_pointsTo.local (repr : Repr ty) (p : RawPtr ty) (bptr : BasePtr)
-    (old value : ty) (noPointers : ∀ q, ¬ repr.Carries value q) (hsize : 0 < repr.size) :
-    LocalOp (pointsTo repr p bptr old) (State.write repr p value)
-      (fun _ => pointsTo repr p bptr value) := by
-  rintro s h F ⟨bytes, _, hp⟩ hd hm hinv
-  exact write.local repr p bptr bytes value (fun _ _ q hq => (noPointers q hq).elim) hsize
-    s h F hp hd hm hinv
+theorem sep_empty_left (P : (Fragment → Prop)) (h : Fragment) :
+    sep empty P h ↔ P h := by
+  constructor
+  · rintro ⟨a, b, _, he, rfl, hp⟩
+    have he' : h = b := by simpa using he
+    simpa [he'] using hp
+  · intro hp
+    exact ⟨∅, h, Fragment.disjoint_empty_left h, by simp, rfl, hp⟩
+
+theorem sep_empty_right (P : (Fragment → Prop)) (h : Fragment) :
+    sep P empty h ↔ P h :=
+  (sep_comm P empty h).trans (sep_empty_left P h)
+
+abbrev Cmd (α : Type w) := Heap → α → Heap → Prop
+
+def Cmd.pure (x : α) : Cmd α := fun s y s' => y = x ∧ s' = s
+def Cmd.bind (c : Cmd α) (k : α → Cmd β) : Cmd β :=
+  fun s y s'' => ∃ x s', c s x s' ∧ k x s' y s''
+
+/-- Successor existence plus demonic safety, for every matching disjoint frame.
+Dropped resources remain in the physical heap but are no longer owned. -/
+def LocalOp (P : (Fragment → Prop)) (c : Cmd α)
+    (Q : α → (Fragment → Prop)) : Prop :=
+  ∀ h F s, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
+    (∃ x s', c s x s') ∧
+    ∀ x s', c s x s' →
+      ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h'
+
+/-- Input-state contract for operations whose enabledness depends on compatible
+placement, symbolic pointer metadata, or return authority. It still quantifies
+over every matching indexed frame and every permitted successor. -/
+def LocalAt (P : (Fragment → Prop)) (c : Cmd α) (Q : α → (Fragment → Prop)) (s : Heap) : Prop :=
+  ∀ h F, P h → h.Disjoint F → Fragment.Matches s (h ∪ F) → s.Inv →
+    (∃ x s', c s x s') ∧
+    ∀ x s', c s x s' →
+      ∃ h', h'.Disjoint F ∧ Fragment.Matches s' (h' ∪ F) ∧ s'.Inv ∧ Q x h'
+
+theorem LocalOp.at {P : (Fragment → Prop)} {c : Cmd α} {Q : α → (Fragment → Prop)}
+    (ht : LocalOp P c Q) (s : Heap) : LocalAt P c Q s :=
+  fun h F hp hd hm hi => ht h F s hp hd hm hi
+
+theorem LocalAt.frame {P R : (Fragment → Prop)} {c : Cmd α} {Q : α → (Fragment → Prop)} {s : Heap}
+    (ht : LocalAt P c Q s) :
+    LocalAt (sep P R) c (fun x => sep (Q x) R) s := by
+  intro h F ⟨a, b, hab, he, hp, hr⟩ hf hm hi
+  subst h
+  obtain ⟨haF, hbF⟩ := Fragment.disjoint_union_left.mp hf
+  rw [Fragment.union_assoc] at hm
+  obtain ⟨hsafe, hpost⟩ :=
+    ht a (b ∪ F) hp (Fragment.disjoint_union_right.mpr ⟨hab, haF⟩) hm hi
+  refine ⟨hsafe, fun x s' hrun => ?_⟩
+  obtain ⟨a', hd, hm', hi', hq⟩ := hpost x s' hrun
+  obtain ⟨ha'b, ha'F⟩ := Fragment.disjoint_union_right.mp hd
+  exact ⟨a' ∪ b, Fragment.disjoint_union_left.mpr ⟨ha'F, hbF⟩,
+    by simpa [Fragment.union_assoc] using hm', hi', a', b, ha'b, rfl, hq, hr⟩
+
+theorem LocalOp.frame {P R : (Fragment → Prop)} {c : Cmd α}
+    {Q : α → (Fragment → Prop)} (ht : LocalOp P c Q) :
+    LocalOp (sep P R) c (fun x => sep (Q x) R) := by
+  intro h F s ⟨a, b, hab, he, hp, hr⟩ hf hm hi
+  subst h
+  obtain ⟨haF, hbF⟩ := Fragment.disjoint_union_left.mp hf
+  rw [Fragment.union_assoc] at hm
+  obtain ⟨hsafe, hpost⟩ :=
+    ht a (b ∪ F) s hp (Fragment.disjoint_union_right.mpr ⟨hab, haF⟩) hm hi
+  refine ⟨hsafe, fun x s' hrun => ?_⟩
+  obtain ⟨a', hd, hm', hi', hq⟩ := hpost x s' hrun
+  obtain ⟨ha'b, ha'F⟩ := Fragment.disjoint_union_right.mp hd
+  exact ⟨a' ∪ b, Fragment.disjoint_union_left.mpr ⟨ha'F, hbF⟩,
+    by simpa [Fragment.union_assoc] using hm', hi', a', b, ha'b, rfl, hq, hr⟩
+
+theorem LocalOp.drop {P R : (Fragment → Prop)} {c : Cmd α}
+    {Q : α → (Fragment → Prop)} (ht : LocalOp P c (fun x => sep (Q x) R)) :
+    LocalOp P c Q := by
+  intro h F s hp hd hm hi
+  obtain ⟨hsafe, hpost⟩ := ht h F s hp hd hm hi
+  refine ⟨hsafe, fun x s' hrun => ?_⟩
+  obtain ⟨_, hd', hm', hi', a, b, _, rfl, hq, _⟩ := hpost x s' hrun
+  obtain ⟨haF, _⟩ := Fragment.disjoint_union_left.mp hd'
+  obtain ⟨hab, hF⟩ := (Fragment.matches_union _ _ _).mp hm'
+  exact ⟨a, haF, (Fragment.matches_union _ _ _).mpr
+    ⟨(Fragment.matches_union _ _ _).mp hab |>.1, hF⟩, hi', hq⟩
+
+theorem LocalOp.conseq {P P' : (Fragment → Prop)} {c : Cmd α}
+    {Q Q' : α → (Fragment → Prop)} (hp : ∀ h, P h → P' h)
+    (hq : ∀ x h, Q' x h → Q x h) (ht : LocalOp P' c Q') : LocalOp P c Q := by
+  intro h F s hP hd hm hi
+  obtain ⟨hsafe, hpost⟩ := ht h F s (hp h hP) hd hm hi
+  refine ⟨hsafe, fun x s' hrun => ?_⟩
+  obtain ⟨h', hd', hm', hi', hQ⟩ := hpost x s' hrun
+  exact ⟨h', hd', hm', hi', hq x h' hQ⟩
+
+theorem LocalOp.pure_pre {A : Prop} {P : (Fragment → Prop)}
+    {c : Cmd α} {Q : α → (Fragment → Prop)} (ht : A → LocalOp P c Q) :
+    LocalOp (fun h => A ∧ P h) c Q := by
+  intro h F s ⟨ha, hp⟩ hd hm hi
+  exact ht ha h F s hp hd hm hi
+
+theorem LocalOp.pure (P : (Fragment → Prop)) (x : α) :
+    LocalOp P (Cmd.pure x) (fun y h => y = x ∧ P h) := by
+  intro h F s hp hd hm hi
+  refine ⟨⟨x, s, rfl, rfl⟩, ?_⟩
+  rintro _ _ ⟨rfl, rfl⟩
+  exact ⟨h, hd, hm, hi, rfl, hp⟩
+
+theorem LocalOp.bind {P : (Fragment → Prop)} {c : Cmd α}
+    {k : α → Cmd β} {Q : α → (Fragment → Prop)} {R : β → (Fragment → Prop)}
+    (hc : LocalOp P c Q) (hk : ∀ x, LocalOp (Q x) (k x) R) :
+    LocalOp P (c.bind k) R := by
+  intro h F s hp hd hm hi
+  obtain ⟨⟨x, s', hrun⟩, hpost⟩ := hc h F s hp hd hm hi
+  have hnext : ∀ x s', c s x s' →
+      (∃ y s'', k x s' y s'') ∧
+      ∀ y s'', k x s' y s'' →
+        ∃ h'', h''.Disjoint F ∧ Fragment.Matches s'' (h'' ∪ F) ∧ s''.Inv ∧ R y h'' := by
+    intro x s' hx
+    obtain ⟨h', hd', hm', hi', hq⟩ := hpost x s' hx
+    exact hk x h' F s' hq hd' hm' hi'
+  obtain ⟨⟨y, s'', hy⟩, _⟩ := hnext x s' hrun
+  refine ⟨⟨y, s'', x, s', hrun, hy⟩, ?_⟩
+  rintro y s'' ⟨x, s', hx, hy⟩
+  exact (hnext x s' hx).2 y s'' hy
 
 end Aeneas.Std.Bytes

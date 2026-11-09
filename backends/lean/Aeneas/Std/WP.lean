@@ -219,7 +219,7 @@ theorem Bytes.LocalOp.upClose {α : Type} {A : Fragment → Prop} {op : Heap →
   have hdA : a.Disjoint (rest ∪ frame) := Fragment.disjoint_union_right.mpr ⟨hRest, hdParts.1⟩
   have hmA : Fragment.Matches s (a ∪ (rest ∪ frame)) := by
     rwa [← Fragment.union_assoc]
-  obtain ⟨hEnabled, hPost⟩ := hLocal s a (rest ∪ frame) hA hdA hmA hInv
+  obtain ⟨hEnabled, hPost⟩ := hLocal a (rest ∪ frame) s hA hdA hmA hInv
   refine ⟨hEnabled, fun x s' hx => ?_⟩
   obtain ⟨a', hdNew, hmNew, hInv', hB⟩ := hPost x s' hx
   have hdNewParts := Fragment.disjoint_union_right.mp hdNew
