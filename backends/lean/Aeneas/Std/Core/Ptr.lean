@@ -2,6 +2,7 @@
 module
 public import Aeneas.Std.Core.Core
 public import Aeneas.Std.Heap
+public import Aeneas.Std.Core.Pointee
 public import Aeneas.Std.Scalar.Core
 public section
 
@@ -103,14 +104,14 @@ misaligned pointers are representable; typed accesses check alignment, bounds, p
 and decoding. Casting changes neither bytes nor permissions and assumes no decoder relation.
 This helper is used by manually adapted examples, not yet inserted by the compiler. -/
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
-def RawPtr.add (repr : Repr T) (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
-  Result.checkedModify (State.offset repr q count.val)
+def RawPtr.add [Pointee T] (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
+  Result.checkedModify (State.offset (Pointee.repr (T := T)) q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::offset"]
-def RawPtr.offset (repr : Repr T) (q : RawPtr T) (count : Isize) : Result (RawPtr T) :=
-  Result.checkedModify (State.offset repr q count.val)
+def RawPtr.offset [Pointee T] (q : RawPtr T) (count : Isize) : Result (RawPtr T) :=
+  Result.checkedModify (State.offset (Pointee.repr (T := T)) q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset"] RawPtr.offset
 
@@ -121,8 +122,8 @@ def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
 namespace RawPtr
 
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
-def read (repr : Repr T) (q : RawPtr T) : Result T :=
-  Result.checkedModify (State.read repr q)
+def read [Pointee T] (q : RawPtr T) : Result T :=
+  Result.checkedModify (State.read (Pointee.repr (T := T)) q)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
 attribute [rust_fun "core::ptr::read"] read
@@ -130,8 +131,8 @@ attribute [rust_fun "core::ptr::read"] read
 end RawPtr
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
-def MutRawPtr.write (repr : Repr T) (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.checkedModify (State.write repr q value)
+def MutRawPtr.write [Pointee T] (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.checkedModify (State.write (Pointee.repr (T := T)) q value)
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
@@ -207,14 +208,15 @@ def core.ptr.from_ref (repr : Repr T) (r : T) : Result (ConstRawPtr T × Result 
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the exposure, so that the pointer can't be used anymore. -/
-def core.ptr.end_from_mut (repr : Repr T) (p : MutRawPtr T) : Result T := do
-  let value ← p.read repr
-  p.endExposure repr 1
+def core.ptr.end_from_mut [Pointee T] (p : MutRawPtr T) : Result T := do
+  let value ← p.read
+  p.endExposure (Pointee.repr (T := T)) 1
   .ok value
 
 /-- Exposes `r` as raw memory; the back computation runs when the borrow ends. -/
 @[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0])]
-def core.ptr.from_mut (repr : Repr T) (r : T) : Result (MutRawPtr T × Result T) :=
-  Aeneas.Std.bind (RawPtr.allocExposure repr [r]) fun p => .ok (p, core.ptr.end_from_mut repr p)
+def core.ptr.from_mut [Pointee T] (r : MutBorrow T) : Result (MutRawPtr T × Result T) :=
+  Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) [r.val]) fun p =>
+    .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std
