@@ -25,3 +25,11 @@ pub fn endian(x: u64, y: u16) -> u64 {
 pub fn in_range(x: i32) -> bool {
     (-5..=15).contains(&x)
 }
+
+pub fn from_bool<T: From<bool>>(b: bool) -> T {
+    T::from(b)
+}
+
+pub fn from_bool_u32(b: bool) -> u32 {
+    from_bool::<u32>(b)
+}
