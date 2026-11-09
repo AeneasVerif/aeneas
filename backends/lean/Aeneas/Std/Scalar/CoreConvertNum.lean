@@ -576,6 +576,14 @@ end core.convert
 
 open ScalarElab
 
+/-! ## `From<bool>` instance records -/
+
+-- Remark: the command `scalar` turns the name `From'SBool` into `FromU8Bool`, `FromU16Bool`, etc.
+scalar @[expose, reducible] def core.convert.From'SBool : core.convert.From «%S» Bool := {
+  «from» := fun x => ok (core.convert.num.From'SBool.from x)
+}
+
+
 /-!
 # To Little-Endian
 -/
