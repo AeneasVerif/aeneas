@@ -174,7 +174,7 @@ theorem DecimalBuffer.format.sl_spec (placement : Placement)
   -- The second exposure, at the same address
   have hs2 : (Array.as_slice ⟨as_mut_slice_back (Slice.from new hmax)⟩).val.val = new := by
     simp [as_mut_slice_back_post, Array.as_slice, Array.from_slice, Slice.from_val, hnewlen]
-  unfold Slice.as_ptr
+  simp only [Slice.as_ptr_eq]
   simp only [Std.bind_assoc, bind_ok, Std.uncurry_apply_pair]
   rw [hs2]
   refine DWP.bind_ispec_allocating (RawPtr.allocSharedExposure.spec new (placement.addr 1)
