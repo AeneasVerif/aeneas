@@ -408,4 +408,61 @@ instance : Pointee Unit := ⟨Repr.unit Unit () (fun _ => rfl)⟩
 instance {A B : Type} [Pointee A] [Pointee B] : Pointee (A × B) :=
   ⟨(Repr.unspecified (A × B) (Repr.prod (Pointee.repr (T := A)) (Pointee.repr (T := B)))).1⟩
 
+/-! ### Properties of the representations -/
+
+/-- The representation of `T` is not zero-sized (the reads and writes of zero-sized values don't
+access the heap). -/
+class Pointee.Sized (T : Type) [Pointee T] : Prop where
+  pos : 0 < (Pointee.repr (T := T)).size
+
+/-- The encodings of the values of `T` contain no pointer bytes: writing them needs no provenance
+evidence. -/
+class Pointee.NoPointers (T : Type) [Pointee T] : Prop where
+  no_pointers : ∀ (value : T) q, ¬ (Pointee.repr (T := T)).Carries value q
+
+theorem Repr.ofBytes_noPointers (T : Type) (size : Nat) (align : Alignment)
+    (aligned : align.val ∣ size) (encode : T → List U8) (decode : List U8 → Option T)
+    (length_encode : ∀ value, (encode value).length = size)
+    (decode_encode : ∀ value, decode (encode value) = some value) (value : T) (q : RawPtr Unit) :
+    ¬ (Repr.ofBytes T size align aligned encode decode length_encode decode_encode).Carries
+      value q := by
+  rintro ⟨bytes, hEnc, i, lane, hi⟩
+  have hList : bytes.toList = (encode value).map Byte.data := hEnc
+  have hGet : bytes[i.val] = ((encode value).map Byte.data)[i.val]'(by
+      simp [length_encode]; exact i.isLt) := by
+    simp only [← hList, Vector.getElem_toList]
+  rw [hGet] at hi
+  simp at hi
+
+theorem _root_.Aeneas.Std.UScalarTy.numBits_div_eight_pos (ty : UScalarTy) :
+    0 < ty.numBits / 8 := by
+  cases ty <;> simp only [UScalarTy.numBits] <;> rcases System.Platform.numBits_eq with h | h <;>
+    simp [h]
+
+theorem _root_.Aeneas.Std.IScalarTy.numBits_div_eight_pos (ty : IScalarTy) :
+    0 < ty.numBits / 8 := by
+  cases ty <;> simp only [IScalarTy.numBits] <;> rcases System.Platform.numBits_eq with h | h <;>
+    simp [h]
+
+instance (ty : UScalarTy) : Pointee.Sized (UScalar ty) := ⟨ty.numBits_div_eight_pos⟩
+instance (ty : IScalarTy) : Pointee.Sized (IScalar ty) := ⟨ty.numBits_div_eight_pos⟩
+instance : Pointee.Sized Bool := ⟨Nat.one_pos⟩
+instance {T : Type} : Pointee.Sized (RawPtr T) := ⟨Nat.succ_pos 7⟩
+
+instance (ty : UScalarTy) : Pointee.NoPointers (UScalar ty) :=
+  ⟨fun value q => by
+    show ¬ (Repr.uscalar ty).Carries value q
+    unfold Repr.uscalar
+    exact Repr.ofBytes_noPointers _ _ _ _ _ _ _ _ value q⟩
+instance (ty : IScalarTy) : Pointee.NoPointers (IScalar ty) :=
+  ⟨fun value q => by
+    show ¬ (Repr.iscalar ty).Carries value q
+    unfold Repr.iscalar
+    exact Repr.ofBytes_noPointers _ _ _ _ _ _ _ _ value q⟩
+instance : Pointee.NoPointers Bool :=
+  ⟨fun value q => by
+    show ¬ Repr.bool.Carries value q
+    unfold Repr.bool
+    exact Repr.ofBytes_noPointers _ _ _ _ _ _ _ _ value q⟩
+
 end Aeneas.Std
