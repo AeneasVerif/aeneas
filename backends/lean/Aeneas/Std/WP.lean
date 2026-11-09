@@ -1,5 +1,6 @@
 module
 public import Aeneas.Std.WPDef
+public import Aeneas.SepLogic.Local
 public import Mathlib.Data.Nat.Notation
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.Delab
@@ -205,6 +206,73 @@ theorem ispec_guardedModify {α : Type} {modify : Heap → α → Heap → Prop}
   obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hx
   exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
 
+/-- A local heap operation on fragments is local on the upward closures. -/
+theorem Bytes.LocalOp.upClose {α : Type} {A : Fragment → Prop} {op : Heap → α → Heap → Prop}
+    {B : α → Fragment → Prop} (hLocal : Bytes.LocalOp A op B) :
+    ∀ s h frame, upClose A h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      (∃ x s', op s x s') ∧
+      ∀ x s', op s x s' →
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ upClose (B x) h' := by
+  rintro s _ frame ⟨a, hA, hSub⟩ hd hm hInv
+  obtain ⟨rest, hRest, rfl⟩ := PartialCommMonoid.subheap_iff.mp hSub
+  have hdParts := Fragment.disjoint_union_left.mp hd
+  have hdA : a.Disjoint (rest ∪ frame) := Fragment.disjoint_union_right.mpr ⟨hRest, hdParts.1⟩
+  have hmA : Fragment.Matches s (a ∪ (rest ∪ frame)) := by
+    rwa [← Fragment.union_assoc]
+  obtain ⟨hEnabled, hPost⟩ := hLocal s a (rest ∪ frame) hA hdA hmA hInv
+  refine ⟨hEnabled, fun x s' hx => ?_⟩
+  obtain ⟨a', hdNew, hmNew, hInv', hB⟩ := hPost x s' hx
+  have hdNewParts := Fragment.disjoint_union_right.mp hdNew
+  refine ⟨a' ∪ rest, Fragment.disjoint_union_left.mpr ⟨hdNewParts.2, hdParts.2⟩, ?_, hInv',
+    a', hB, PartialCommMonoid.Subheap.union_left hdNewParts.1⟩
+  rwa [Fragment.union_assoc]
+
+/-- A heap operation, totalized: it fails with undefined behavior if it is not enabled. It is
+correct if it is local (in which case it is enabled). -/
+theorem ispec_checkedModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre} {Q : IPost α}
+    (hLocal : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      (∃ x s', modify s x s') ∧
+      ∀ x s', modify s x s' →
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ Q x h') :
+    ispec P (Result.checkedModify modify) Q := by
+  rw [ispec_iff]
+  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+  obtain ⟨⟨x₀, s₀, hx₀⟩, hPost⟩ := hLocal s owned framed hP hDisjoint hMatches hInv
+  unfold Result.checkedModify
+  refine DWP.vis (θ := effectWP)
+    (effect := RustEffect.Input.guardedModify _ (State.checked modify))
+    ⟨⟨some x₀, s₀, hx₀⟩, fun answer s' hAnswer => ?_⟩
+  cases answer with
+  | none => exact (hAnswer.1 ⟨x₀, s₀, hx₀⟩).elim
+  | some x =>
+    obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hAnswer
+    exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
+
+/-- An allocation: it aborts with out-of-memory if it is not enabled. -/
+theorem ispec_allocatingModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre}
+    {Q : IPost α}
+    (hLocal : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      ∀ x s', modify s x s' →
+        ∃ h', h'.Disjoint frame ∧ Fragment.Matches s' (h' ∪ frame) ∧ s'.Inv ∧ Q x h') :
+    ispec P (Result.allocatingModify modify) Q := by
+  classical
+  rw [ispec_iff]
+  rintro F s ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, hF⟩, hMatches⟩
+  have hPost := hLocal s owned framed hP hDisjoint hMatches hInv
+  unfold Result.allocatingModify
+  refine DWP.vis (θ := effectWP)
+    (effect := RustEffect.Input.guardedModify _ (State.checked modify))
+    ⟨?_, fun answer s' hAnswer => ?_⟩
+  · by_cases h : ∃ x s', modify s x s'
+    · obtain ⟨x, s', hx⟩ := h
+      exact ⟨some x, s', hx⟩
+    · exact ⟨none, s, h, rfl⟩
+  · cases answer with
+    | none => exact DWP.vis (θ := effectWP) (effect := RustEffect.Input.fail .oom) rfl
+    | some x =>
+      obtain ⟨h', hDisjoint', hMatches', hInv', hQ⟩ := hPost x s' hAnswer
+      exact DWP.ret_iff.mpr ⟨hInv', h' ∪ framed, ⟨h', framed, hDisjoint', rfl, hQ, hF⟩, hMatches'⟩
+
 /-- Out-of-memory aborts are accepted. -/
 @[simp]
 theorem ispec_oom : ispec P (Result.oom : Result α) Q := by
@@ -252,6 +320,12 @@ theorem ispec_mono {α : Type u} {P Pm F : IPre} {Q : IPost α} {m : Result α} 
   have hSpec := hFramed F' s (Realizes.mono (sep_mono hPre (entails_refl F')) hP)
   exact hSpec.mono fun value _ => Realizes.mono (sep_mono
     (entails_trans (sep_mono (entails_refl _) hPost) (postWand_cancel Qm Q value)) (entails_refl F'))
+
+/-- The rule of consequence. -/
+theorem ispec_conseq {P P' : IPre} {m : Result α} {Q Q' : IPost α}
+    (hTriple : ispec P' m Q') (hPre : P ⊢ P') (hPost : ∀ x, Q' x ⊢ Q x) : ispec P m Q :=
+  ispec_mono hTriple (entails_trans hPre (entails_of_eq (sep_emp_r_eq _).symm))
+    (postWand_intro fun x => entails_trans (entails_of_eq (sep_emp_r_eq _)) (hPost x))
 
 /-- The conjunction of two postconditions which are realized by the same heap with the same frame
 fragment. -/
