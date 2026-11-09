@@ -34,6 +34,12 @@ def core.num.I128.unsigned_abs (x : I128) : U128 := ⟨ BitVec.ofNat _ x.val.nat
 @[rust_fun "core::num::{u16}::to_le" -canFail]
 def core.num.U16.to_le (x : U16) : U16 := x
 
+@[rust_fun "core::num::{u32}::to_le" -canFail]
+def core.num.U32.to_le (x : U32) : U32 := x
+
+@[rust_fun "core::num::{u32}::to_be" -canFail]
+def core.num.U32.to_be (x : U32) : U32 := ⟨ BitVec.setWidth _ (BitVec.fromLEBytes x.bv.toBEBytes) ⟩
+
 @[rust_fun "core::num::{u64}::to_le" -canFail]
 def core.num.U64.to_le (x : U64) : U64 := x
 
