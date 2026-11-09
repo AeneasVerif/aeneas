@@ -224,42 +224,42 @@ def assert_not_b0_and_not_b1_call : Result Unit := do
     Source: 'tests/src/assert-cfg.rs', lines 119:0-122:1
     Visibility: public -/
 def assert_lt (x : Std.U32) : Result Unit := do
-  massert (x < 10#u32)
+  massert (x < 10#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_le]:
     Source: 'tests/src/assert-cfg.rs', lines 124:0-127:1
     Visibility: public -/
 def assert_le (x : Std.U32) : Result Unit := do
-  massert (x <= 3494#u32)
+  massert (x <= 3494#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_gt]:
     Source: 'tests/src/assert-cfg.rs', lines 129:0-132:1
     Visibility: public -/
 def assert_gt (x : Std.U32) : Result Unit := do
-  massert (x > 0#u32)
+  massert (x > 0#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_ge]:
     Source: 'tests/src/assert-cfg.rs', lines 134:0-137:1
     Visibility: public -/
 def assert_ge (x : Std.U32) : Result Unit := do
-  massert (x >= 1#u32)
+  massert (x >= 1#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_eq]:
     Source: 'tests/src/assert-cfg.rs', lines 139:0-142:1
     Visibility: public -/
 def assert_eq (x : Std.U32) : Result Unit := do
-  massert (x = 42#u32)
+  massert (x = 42#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_ne]:
     Source: 'tests/src/assert-cfg.rs', lines 144:0-147:1
     Visibility: public -/
 def assert_ne (x : Std.U32) : Result Unit := do
-  massert (x != 0#u32)
+  massert (x != 0#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_arith]:
@@ -267,7 +267,7 @@ def assert_ne (x : Std.U32) : Result Unit := do
     Visibility: public -/
 def assert_arith (x : Std.U32) (y : Std.U32) : Result Unit := do
   let i ← x + y
-  massert (i < 100#u32)
+  massert (i < 100#u32 : Bool)
   f
 
 /-- [assert_cfg::assert_in_loop]: loop body 0:
@@ -284,7 +284,7 @@ def assert_in_loop_loop.body
   | none => ok (done ())
   | some i =>
     let x ← Array.index_usize (SharedBorrow.mk a) i
-    massert (x.val < 100#u32)
+    massert (x.val < 100#u32 : Bool)
     ok (cont iter1)
 
 /-- [assert_cfg::assert_in_loop]: loop 0:
@@ -320,7 +320,7 @@ def assert_or_in_loop_loop.body
   | none => ok (done a)
   | some i =>
     let c ← Array.index_usize (SharedBorrow.mk a) i
-    massert (c.val < 100#u32)
+    massert (c.val < 100#u32 : Bool)
     let c1 ← lift (core.num.U32.wrapping_sub c.val 200#u32)
     let i1 ← lift (IScalar.hcast .U32 (-200)#i32)
     massert ((c1 >= i1) || (c1 < 100#u32))
@@ -335,7 +335,7 @@ def assert_or_in_loop_loop.body
     let i5 ← c2 >>> 16#i32
     let i6 ← lift (100#u32 &&& i5)
     let c3 ← lift (core.num.U32.wrapping_add c2 i6)
-    massert (c3 < 100#u32)
+    massert (c3 < 100#u32 : Bool)
     let a1 ← Array.update a i c3
     ok (cont (a1, iter1))
 

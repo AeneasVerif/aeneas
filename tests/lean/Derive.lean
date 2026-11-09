@@ -183,7 +183,7 @@ def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
   := do
   let __self_discr := read_discriminant self.val
   let __arg1_discr := read_discriminant other.val
-  ok (__self_discr = __arg1_discr)
+  ok (__self_discr = __arg1_discr : Bool)
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:22-8:31 -/
@@ -955,7 +955,7 @@ def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
         if self.val.d = other.val.d
         then
           if self.val.e = other.val.e
-          then ok (self.val.f = other.val.f)
+          then ok (self.val.f = other.val.f : Bool)
           else ok false
         else ok false
       else ok false

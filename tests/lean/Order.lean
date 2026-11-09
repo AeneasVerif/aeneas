@@ -62,7 +62,7 @@ def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialEqWrap.eq
   (self : SharedBorrow Wrap) (other : SharedBorrow Wrap) : Result Bool := do
-  ok (self.val._0 = other.val._0)
+  ok (self.val._0 = other.val._0 : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 23:9-23:18 -/
@@ -336,7 +336,7 @@ def Rank.Insts.CoreCmpPartialEqRank.eq
   (self : SharedBorrow Rank) (other : SharedBorrow Rank) : Result Bool := do
   let __self_discr := read_discriminant self.val
   let __arg1_discr := read_discriminant other.val
-  ok (__self_discr = __arg1_discr)
+  ok (__self_discr = __arg1_discr : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Rank> for order::Rank}]
     Source: 'tests/src/order.rs', lines 87:9-87:18 -/
@@ -610,7 +610,7 @@ structure Keyed where
     Visibility: public -/
 def Keyed.Insts.CoreCmpPartialEqKeyed.eq
   (self : SharedBorrow Keyed) (other : SharedBorrow Keyed) : Result Bool := do
-  ok (self.val.key = other.val.key)
+  ok (self.val.key = other.val.key : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Keyed> for order::Keyed}]
     Source: 'tests/src/order.rs', lines 193:0-197:1 -/
@@ -680,7 +680,7 @@ def test_keyed_max_tie : Result Unit := do
   let k ←
     core.cmp.Ord.max.trait_default Keyed.Insts.CoreCmpOrd
       { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
-  massert (k.tag = 1#u8)
+  massert (k.tag = 1#u8 : Bool)
 
 /- Unit test for [order::test_keyed_max_tie] -/
 #guard (test_keyed_max_tie).reducesTo ()
@@ -692,7 +692,7 @@ def test_keyed_min_tie : Result Unit := do
   let k ←
     core.cmp.Ord.min.trait_default Keyed.Insts.CoreCmpOrd
       { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
-  massert (k.tag = 0#u8)
+  massert (k.tag = 0#u8 : Bool)
 
 /- Unit test for [order::test_keyed_min_tie] -/
 #guard (test_keyed_min_tie).reducesTo ()
@@ -705,12 +705,12 @@ def test_keyed_clamp_tie : Result Unit := do
     core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
       { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
       { key := 3#u8, tag := 3#u8 }
-  massert (r.tag = 0#u8)
+  massert (r.tag = 0#u8 : Bool)
   let r1 ←
     core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
       { key := 3#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
       { key := 3#u8, tag := 3#u8 }
-  massert (r1.tag = 0#u8)
+  massert (r1.tag = 0#u8 : Bool)
 
 /- Unit test for [order::test_keyed_clamp_tie] -/
 #guard (test_keyed_clamp_tie).reducesTo ()

@@ -545,7 +545,7 @@ let rec end_dead_fun_call_abs (config : config) (span : Meta.span)
   let try_end (abs : abs) : (eval_ctx * (SA.expr -> SA.expr)) option =
     match abs.kind with
     | FunCall _
-      when abs.can_end
+      when abs_is_endable ctx abs
            && AbsId.Set.is_empty abs.parents
            && not (consumes_inputs abs) ->
         let ctx', cc = end_abs config span abs.abs_id 0 ctx in

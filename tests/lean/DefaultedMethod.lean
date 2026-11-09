@@ -88,6 +88,6 @@ def main : Result Unit := do
     Trait.provided_method.default YesOverride.Insts.Defaulted_methodTrait
       (SharedBorrow.mk YesOverride.mk)
   let n ← lift (core.cmp.impls.OrdI32.min 10#i32 1#i32)
-  massert (n = 1#i32)
+  massert (n = 1#i32 : Bool)
 
 end defaulted_method

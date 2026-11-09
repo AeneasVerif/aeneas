@@ -572,7 +572,7 @@ def sum2
   := do
   let i := Slice.len s
   let i1 := Slice.len s2
-  massert (i = i1)
+  massert (i = i1 : Bool)
   sum2_loop s.val s2.val 0#u32 0#usize
 
 /-- [arrays::f0]:

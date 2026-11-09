@@ -28,6 +28,7 @@ package «tests» {}
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib ConstShadow
+@[default_target] lean_lib CoreOps
 @[default_target] lean_lib Curve25519
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
@@ -39,11 +40,13 @@ package «tests» {}
 @[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib FloatBits
 @[default_target] lean_lib FnPtrGeneric
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib GenericUnitOutput
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib HigherRankedTraitBounds
+@[default_target] lean_lib ImplConstSelf
 @[default_target] lean_lib InPlaceOrDisjointBuffer
 @[default_target] lean_lib InPlaceOrDisjointBufferSpecs
 @[default_target] lean_lib Into
@@ -56,6 +59,7 @@ package «tests» {}
 @[default_target] lean_lib Issue1207ClosureSignatureRegions
 @[default_target] lean_lib Issue1250AnonymousConst
 @[default_target] lean_lib Issue1260EliminateSharedLoans
+@[default_target] lean_lib Issue1279ComparisonPropType
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue1436LoopGenerics
 @[default_target] lean_lib Issue1436LoopGenericsRec
@@ -107,6 +111,7 @@ package «tests» {}
 @[default_target] lean_lib RawPointers
 @[default_target] lean_lib RawPointersControlFlow
 @[default_target] lean_lib RawPointersSpecs
+@[default_target] lean_lib RawRyuZmijIdioms
 @[default_target] lean_lib RawZmijMwe
 @[default_target] lean_lib RawZmijMweProofs
 @[default_target] lean_lib RenameAttribute
@@ -116,8 +121,12 @@ package «tests» {}
 @[default_target] lean_lib SepLogic
 @[default_target] lean_lib SafeUnsafe
 @[default_target] lean_lib Scalars
+@[default_target] lean_lib SliceGetUnchecked
+@[default_target] lean_lib SliceGetUncheckedTests
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
+@[default_target] lean_lib StaticRetStateful
+@[default_target] lean_lib StdModelsZmij
 @[default_target] lean_lib StepBy
 @[default_target] lean_lib StepOverflowing
 @[default_target] lean_lib StringChars
