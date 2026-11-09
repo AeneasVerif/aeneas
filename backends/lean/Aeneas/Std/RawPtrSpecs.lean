@@ -1180,6 +1180,17 @@ theorem RawPtr.read.spec_readable {T : Type} [Pointee T] [Pointee.Sized T] (p : 
   simp only [this]
   exact iexists_upClose_pure_and
 
+@[simp] theorem RawPtr.elem_zero {T : Type} [Pointee T] (p : RawPtr T) : p.elem 0 = p := by
+  obtain ⟨prov, ⟨bv⟩⟩ := p
+  simp [RawPtr.elem, UScalar.val]
+
+/-- Reading the first value of a readable range. -/
+theorem RawPtr.read.spec_readable_head {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (depth : Nat) (values : List T) (hne : 0 < values.length) :
+    ⦃ p.readable depth values ⦄ RawPtr.read p
+      ⦃ result => ⌜result = values[0]⌝ ∗ p.readable depth values ⦄ := by
+  simpa using RawPtr.read.spec_readable p depth values 0 hne
+
 /-- Reads the `i`-th value of a range. -/
 @[step]
 theorem RawPtr.read.spec_range {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)

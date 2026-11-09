@@ -11,6 +11,26 @@ namespace Aeneas.Std
 
 open Result
 
+/-- The model of `Box<T>` is the value it owns, so the representation of a `Box<T>` in memory is the
+representation of a `T`: the model does not see that a `Box` is a pointer which owns its allocation
+(which `ptr::read` on a `Box` duplicates, see `tests/lean/SafeUnsafe`). -/
+@[expose] instance alloc.boxed.Box.instPointee {T : Type} [Pointee T] : Pointee (Box T) :=
+  ⟨Repr.iso Pointee.repr Box.val Box.mk (fun _ => rfl)⟩
+
+instance alloc.boxed.Box.instPointeeSized {T : Type} [Pointee T] [Pointee.Sized T] :
+    Pointee.Sized (Box T) :=
+  ⟨Pointee.Sized.pos (T := T)⟩
+
+instance alloc.boxed.Box.instPointeeCalibrated {T : Type} [Pointee T] [Pointee.Calibrated T] :
+    Pointee.Calibrated (Box T) := ⟨fun value bytes hDecode hPointers => by
+  have hDecode' : (Pointee.repr (T := T)).decode bytes = some value.val := by
+    change ((Pointee.repr (T := T)).decode bytes).map Box.mk = some value at hDecode
+    cases h : (Pointee.repr (T := T)).decode bytes <;> simp_all
+    subst hDecode; rfl
+  exact Pointee.Calibrated.calibrated value.val bytes hDecode' fun i q lane hb => by
+    obtain ⟨bytes', hEnc, j, lane', hb'⟩ := hPointers i q lane hb
+    exact ⟨bytes', hEnc, j, lane', hb'⟩⟩
+
 @[expose, rust_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref" -canFail (keepParams := [true, false])]
 def alloc.boxed.Box.deref {T : Type _} (x : SharedBorrow (Box T)) : SharedBorrow T :=
   SharedBorrow.mk x.val.val
