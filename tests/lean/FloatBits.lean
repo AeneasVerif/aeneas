@@ -39,4 +39,17 @@ def ascii
   (bytes : SharedBorrow (Slice Std.U8)) : Result (SharedBorrow Str) := do
   core.str.converts.from_utf8_unchecked bytes
 
+/-- [float_bits::read32]:
+    Source: 'tests/src/float_bits.rs', lines 17:0-19:1
+    Visibility: public -/
+def read32 (p : ConstRawPtr F32) : Result F32 := do
+  RawPtr.read p
+
+/-- [float_bits::read64]:
+    Source: 'tests/src/float_bits.rs', lines 21:0-23:1
+    Visibility: public -/
+def read64 (p : ConstRawPtr F64) : Result Std.U64 := do
+  let p1 ← RawPtr.read p
+  ok (core.f64.F64.to_bits p1)
+
 end float_bits
