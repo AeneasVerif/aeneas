@@ -81,8 +81,8 @@ no compatible placement; safe-boundary feasibility is an additional assumption,
 not a Rust precondition. The functional Box representation does not preserve
 address identity across repeated conversions. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
-def alloc.boxed.Box.into_raw (repr : Repr T) (b : Box T) : Result (MutRawPtr T) :=
-  RawPtr.newBlock repr [b.val] true
+def alloc.boxed.Box.into_raw [Pointee T] (b : Box T) : Result (MutRawPtr T) :=
+  RawPtr.newBlock (Pointee.repr (T := T)) [b.val] true
 
 /-- Moves the value out of explicit memory with `State.returnOwned`, without physical death.
 In Rust, `from_raw` doesn't call the global allocator either: it only converts the pointer, and
@@ -90,9 +90,9 @@ the memory is freed when the box is dropped. But the model of `Box<T>` is the wr
 stay explicitly active. Immutable metadata retains the old pointer's address, but converting
 the same Box back to raw still forgets its safe-place identity in this prototype. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
-def alloc.boxed.Box.from_raw (repr : Repr T) (p : MutRawPtr T) : Result (Box T) := do
-  let value ← RawPtr.read repr p
-  Result.checkedModify (State.returnOwned repr p 1)
+def alloc.boxed.Box.from_raw [Pointee T] (p : MutRawPtr T) : Result (Box T) := do
+  let value ← RawPtr.read p
+  Result.checkedModify (State.returnOwned (Pointee.repr (T := T)) p 1)
   pure ⟨value⟩
 
 end Aeneas.Std

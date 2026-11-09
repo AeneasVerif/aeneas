@@ -22,7 +22,8 @@ namespace raw_pointers_control_flow
 
 /-- [raw_pointers_control_flow::write_if]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 10:0-20:1 -/
-def write_if (data : Slice Std.U8) (b : Bool) : Result (Slice Std.U8) := do
+def write_if
+  (data : MutBorrow (Slice Std.U8)) (b : Bool) : Result (Slice Std.U8) := do
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
   let data1 ←
     if b
@@ -32,8 +33,8 @@ def write_if (data : Slice Std.U8) (b : Bool) : Result (Slice Std.U8) := do
     else do
          MutRawPtr.write p 2#u8
          as_mut_ptr_back
-  let i ← Slice.index_usize data1 0#usize
-  let i1 ← i + 1#u8
+  let i ← Slice.index_usize (SharedBorrow.mk data1) 0#usize
+  let i1 ← i.val + 1#u8
   Slice.update data1 0#usize i1
 
 /-- [raw_pointers_control_flow::write_loop]: loop body 0:
@@ -63,7 +64,9 @@ def write_loop_loop
 /-- [raw_pointers_control_flow::write_loop]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 24:0-33:1 -/
 def write_loop
-  (data : Slice Std.U8) (n : Std.Usize) : Result (Slice Std.U8) := do
+  (data : MutBorrow (Slice Std.U8)) (n : Std.Usize) :
+  Result (Slice Std.U8)
+  := do
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
   let data1 ← as_mut_ptr_back
   write_loop_loop n p 0#usize
@@ -78,7 +81,7 @@ def view_in_loop_loop.body
   := do
   if i < n
   then
-    let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
+    let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (MutBorrow.mk data)
     let p1 ← RawPtr.add p i
     MutRawPtr.write p1 0#u8
     let i1 ← i + 1#usize
@@ -101,8 +104,10 @@ def view_in_loop_loop
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 35:0-44:1 -/
 @[reducible]
 def view_in_loop
-  (data : Slice Std.U8) (n : Std.Usize) : Result (Slice Std.U8) := do
-  view_in_loop_loop data n 0#usize
+  (data : MutBorrow (Slice Std.U8)) (n : Std.Usize) :
+  Result (Slice Std.U8)
+  := do
+  view_in_loop_loop data.val n 0#usize
 
 /-- [raw_pointers_control_flow::slice_in_branch]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 46:0-53:1 -/
@@ -110,20 +115,20 @@ def slice_in_branch (p : MutRawPtr Std.U8) (b : Bool) : Result Unit := do
   let (s, from_raw_parts_mut_back) ←
     core.slice.raw.from_raw_parts_mut p 2#usize
   if b
-  then let s1 ← Slice.update s 0#usize 1#u8
+  then let s1 ← Slice.update s.val 0#usize 1#u8
        from_raw_parts_mut_back s1
-  else let s1 ← Slice.update s 1#usize 1#u8
+  else let s1 ← Slice.update s.val 1#usize 1#u8
        from_raw_parts_mut_back s1
 
 /-- [raw_pointers_control_flow::local_view]:
     Source: 'tests/src/raw_pointers_control_flow.rs', lines 58:0-64:1 -/
 def local_view : Result Std.U32 := do
   let a := Array.repeat 2#usize 0#u32
-  let (s, _) ← lift (Array.to_slice_mut a)
+  let (s, _) ← lift (Array.as_mut_slice (MutBorrow.mk a))
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
   let (s1, from_raw_parts_mut_back) ←
     core.slice.raw.from_raw_parts_mut p 2#usize
-  let s2 ← Slice.update s1 0#usize 5#u32
+  let s2 ← Slice.update s1.val 0#usize 5#u32
   let _ ← as_mut_ptr_back
   from_raw_parts_mut_back s2
   ok 0#u32

@@ -54,7 +54,7 @@ def write_exponent
     Visibility: public -/
 def write_two_digits
   (k : Std.Usize) (result : MutRawPtr Std.U8) : Result Unit := do
-  let s ← lift (Array.to_slice DIGIT_TABLE)
+  let s ← lift (Array.as_slice (SharedBorrow.mk DIGIT_TABLE))
   let (p, as_ptr_back) ← Slice.as_ptr s
   let i ← k * 2#usize
   let d ← RawPtr.add p i
@@ -83,15 +83,16 @@ def Buffer.new : Result Buffer := do
     Source: 'tests/src/ryu-raw-pointers.rs', lines 38:4-43:5
     Visibility: public -/
 def Buffer.format_exponent
-  (self : Buffer) (k : Std.Isize) :
-  Result ((Slice Std.U8) × (Result Buffer))
+  (self : MutBorrow Buffer) (k : Std.Isize) :
+  Result ((SharedBorrow (Slice Std.U8)) × (Result Buffer))
   := do
-  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.bytes)
+  let (s, as_mut_slice_back) ←
+    lift (Array.as_mut_slice (MutBorrow.mk self.val.bytes))
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
   let n ← write_exponent k p
   let s1 ← as_mut_ptr_back
-  let a := to_slice_mut_back s1
-  let s2 ← lift (Array.to_slice a)
+  let a := as_mut_slice_back s1
+  let s2 ← lift (Array.as_slice (SharedBorrow.mk a))
   let (p1, as_ptr_back) ← Slice.as_ptr s2
   let (s3, from_raw_parts_back) ← core.slice.raw.from_raw_parts p1 n
   let r := do
@@ -105,9 +106,9 @@ def Buffer.format_exponent
     Visibility: public -/
 def first_char_of_exponent (k : Std.Isize) : Result Std.U8 := do
   let buf ← Buffer.new
-  let (s, format_exponent_back) ← Buffer.format_exponent buf k
+  let (s, format_exponent_back) ← Buffer.format_exponent (MutBorrow.mk buf) k
   let i ← Slice.index_usize s 0#usize
   let _ ← format_exponent_back
-  ok i
+  ok i.val
 
 end ryu_raw_pointers

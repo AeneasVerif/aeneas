@@ -22,8 +22,9 @@ namespace raw_pointers
 
 /-- [raw_pointers::read_via_ptr]:
     Source: 'tests/src/raw_pointers.rs', lines 5:0-10:1 -/
-def read_via_ptr (data : Array Std.U16 8#usize) : Result Std.U16 := do
-  let s ← lift (Array.to_slice data)
+def read_via_ptr
+  (data : SharedBorrow (Array Std.U16 8#usize)) : Result Std.U16 := do
+  let s ← lift (Array.as_slice data)
   let (ptr, as_ptr_back) ← Slice.as_ptr s
   let p ← RawPtr.add ptr 1#usize
   let i ← RawPtr.read p
@@ -33,40 +34,47 @@ def read_via_ptr (data : Array Std.U16 8#usize) : Result Std.U16 := do
 /-- [raw_pointers::write_via_ptr]:
     Source: 'tests/src/raw_pointers.rs', lines 12:0-17:1 -/
 def write_via_ptr
-  (data : Array Std.U16 8#usize) : Result (Array Std.U16 8#usize) := do
-  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut data)
+  (data : MutBorrow (Array Std.U16 8#usize)) :
+  Result (Array Std.U16 8#usize)
+  := do
+  let (s, as_mut_slice_back) ← lift (Array.as_mut_slice data)
   let (ptr, as_mut_ptr_back) ← Slice.as_mut_ptr s
   let p ← RawPtr.add ptr 2#usize
   MutRawPtr.write p 42#u16
   let s1 ← as_mut_ptr_back
-  ok (to_slice_mut_back s1)
+  ok (as_mut_slice_back s1)
 
 /-- [raw_pointers::write_then_read]:
     Source: 'tests/src/raw_pointers.rs', lines 20:0-26:1 -/
 def write_then_read
-  (data : Slice Std.U32) : Result (Std.U32 × (Slice Std.U32)) := do
+  (data : MutBorrow (Slice Std.U32)) :
+  Result (Std.U32 × (Slice Std.U32))
+  := do
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
   MutRawPtr.write p 1#u32
   let data1 ← as_mut_ptr_back
-  let i ← Slice.index_usize data1 0#usize
-  ok (i, data1)
+  let i ← Slice.index_usize (SharedBorrow.mk data1) 0#usize
+  ok (i.val, data1)
 
 /-- [raw_pointers::local_array]:
     Source: 'tests/src/raw_pointers.rs', lines 28:0-35:1 -/
 def local_array : Result Std.U8 := do
   let a := Array.repeat 4#usize 0#u8
-  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut a)
+  let (s, as_mut_slice_back) ← lift (Array.as_mut_slice (MutBorrow.mk a))
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
   let p1 ← RawPtr.add p 3#usize
   MutRawPtr.write p1 7#u8
   let s1 ← as_mut_ptr_back
-  let a1 := to_slice_mut_back s1
-  Array.index_usize a1 3#usize
+  let a1 := as_mut_slice_back s1
+  let i ← Array.index_usize (SharedBorrow.mk a1) 3#usize
+  ok i.val
 
 /-- [raw_pointers::first_ptr]:
     Source: 'tests/src/raw_pointers.rs', lines 39:0-41:1 -/
 def first_ptr
-  (data : Slice Std.U8) : Result ((MutRawPtr Std.U8) × (Slice Std.U8)) := do
+  (data : MutBorrow (Slice Std.U8)) :
+  Result ((MutRawPtr Std.U8) × (Slice Std.U8))
+  := do
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
   let data1 ← as_mut_ptr_back
   ok (p, data1)
@@ -78,7 +86,8 @@ def write_through (p : MutRawPtr Std.U8) (v : Std.U8) : Result Unit := do
 
 /-- [raw_pointers::swap_through_ptrs]:
     Source: 'tests/src/raw_pointers.rs', lines 47:0-55:1 -/
-def swap_through_ptrs (x : Slice Std.U64) : Result (Slice Std.U64) := do
+def swap_through_ptrs
+  (x : MutBorrow (Slice Std.U64)) : Result (Slice Std.U64) := do
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr x
   let a ← RawPtr.read p
   let b ← RawPtr.add p 1#usize
@@ -92,7 +101,7 @@ def swap_through_ptrs (x : Slice Std.U64) : Result (Slice Std.U64) := do
     Source: 'tests/src/raw_pointers.rs', lines 57:0-60:1 -/
 def set_via_slice (p : MutRawPtr Std.U8) (len : Std.Usize) : Result Unit := do
   let (s, from_raw_parts_mut_back) ← core.slice.raw.from_raw_parts_mut p len
-  let s1 ← Slice.update s 0#usize 1#u8
+  let s1 ← Slice.update s.val 0#usize 1#u8
   from_raw_parts_mut_back s1
 
 /-- [raw_pointers::sum_via_slice]:
@@ -102,27 +111,29 @@ def sum_via_slice
   let (s, from_raw_parts_back) ← core.slice.raw.from_raw_parts p len
   let i ← Slice.index_usize s 0#usize
   let i1 ← Slice.index_usize s 1#usize
-  let i2 ← lift (core.num.U8.wrapping_add i i1)
+  let i2 ← lift (core.num.U8.wrapping_add i.val i1.val)
   from_raw_parts_back
   ok i2
 
 /-- [raw_pointers::boxed]:
     Source: 'tests/src/raw_pointers.rs', lines 67:0-73:1 -/
 def boxed : Result Std.U32 := do
-  let p ← alloc.boxed.Box.into_raw 3#u32
+  let p ← alloc.boxed.Box.into_raw (Box.mk 3#u32)
   MutRawPtr.write p 4#u32
-  alloc.boxed.Box.from_raw p
+  let i ← alloc.boxed.Box.from_raw p
+  ok i.val
 
 /-- [raw_pointers::call_write_through]:
     Source: 'tests/src/raw_pointers.rs', lines 75:0-78:1 -/
-def call_write_through (data : Slice Std.U8) : Result (Slice Std.U8) := do
+def call_write_through
+  (data : MutBorrow (Slice Std.U8)) : Result (Slice Std.U8) := do
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr data
   write_through p 9#u8
   as_mut_ptr_back
 
 /-- [raw_pointers::from_mut_write]:
     Source: 'tests/src/raw_pointers.rs', lines 81:0-87:1 -/
-def from_mut_write (x : Std.U32) : Result (Std.U32 × Std.U32) := do
+def from_mut_write (x : MutBorrow Std.U32) : Result (Std.U32 × Std.U32) := do
   let (p, from_mut_back) ← core.ptr.from_mut x
   MutRawPtr.write p 5#u32
   let x1 ← from_mut_back
@@ -131,20 +142,23 @@ def from_mut_write (x : Std.U32) : Result (Std.U32 × Std.U32) := do
 /-- Trait declaration: [raw_pointers::Counter]
     Source: 'tests/src/raw_pointers.rs', lines 89:0-91:1 -/
 structure Counter (Self : Type _) where
-  next : Self → Result Std.U32
+  next : SharedBorrow Self → Result Std.U32
 
 /-- [raw_pointers::PtrCounter]
     Source: 'tests/src/raw_pointers.rs', lines 93:0-95:1 -/
 structure PtrCounter where
   p : MutRawPtr Std.U32
 
+instance : Pointee PtrCounter := ⟨Repr.iso (Pointee.repr (T := MutRawPtr
+  Std.U32)) (fun x => x.1) (fun p => ⟨p⟩) (fun _ => rfl)⟩
+
 /-- [raw_pointers::{impl raw_pointers::Counter for raw_pointers::PtrCounter}::next]:
     Source: 'tests/src/raw_pointers.rs', lines 98:4-104:5 -/
 def PtrCounter.Insts.Raw_pointersCounter.next
-  (self : PtrCounter) : Result Std.U32 := do
-  let v ← RawPtr.read self.p
+  (self : SharedBorrow PtrCounter) : Result Std.U32 := do
+  let v ← RawPtr.read self.val.p
   let i ← lift (core.num.U32.wrapping_add v 1#u32)
-  MutRawPtr.write self.p i
+  MutRawPtr.write self.val.p i
   ok v
 
 /-- Trait implementation: [raw_pointers::{impl raw_pointers::Counter for raw_pointers::PtrCounter}]
@@ -157,7 +171,9 @@ def PtrCounter.Insts.Raw_pointersCounter : Counter PtrCounter := {
 /-- [raw_pointers::next_twice]:
     Source: 'tests/src/raw_pointers.rs', lines 108:0-112:1 -/
 def next_twice
-  {T : Type _} (CounterInst : Counter T) (c : T) : Result Std.U32 := do
+  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : SharedBorrow T) :
+  Result Std.U32
+  := do
   let a ← CounterInst.next c
   let b ← CounterInst.next c
   ok (core.num.U32.wrapping_add a b)
@@ -165,13 +181,17 @@ def next_twice
 /-- [raw_pointers::next_once]:
     Source: 'tests/src/raw_pointers.rs', lines 114:0-116:1 -/
 def next_once
-  {T : Type _} (CounterInst : Counter T) (c : T) : Result Std.U32 := do
+  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : SharedBorrow T) :
+  Result Std.U32
+  := do
   CounterInst.next c
 
 /-- [raw_pointers::next_twice_via_generic]:
     Source: 'tests/src/raw_pointers.rs', lines 119:0-123:1 -/
 def next_twice_via_generic
-  {T : Type _} (CounterInst : Counter T) (c : T) : Result Std.U32 := do
+  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : SharedBorrow T) :
+  Result Std.U32
+  := do
   let a ← next_once CounterInst c
   let b ← next_once CounterInst c
   ok (core.num.U32.wrapping_add a b)

@@ -1325,7 +1325,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t)
     ?(use_forall = false) ?(use_fun = false) ?(use_forall_use_sep = true)
     ?(use_arrows = false) ?(as_implicits : bool = false)
-    ?(space : bool ref option = None) (origin : generic_origin)
+    ?(space : bool ref option = None) ?(pointee_binders = false)
+    (origin : generic_origin)
     (generics : generic_params) (explicit : explicit_info option)
     (type_params : string list) (cg_params : string list)
     (trait_clauses : string list) : unit =
@@ -1387,6 +1388,14 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               (* ) *)
               right_bracket expl)
             type_params;
+          (* Lean: the functions which access the heap receive the [Pointee]
+             instances of their type parameters (see [Pointee.lean]) *)
+          if pointee_binders then
+            List.iter
+              (fun (_, s) ->
+                insert_req_space ();
+                F.pp_print_string fmt ("[Pointee " ^ s ^ "]"))
+              type_params;
           if use_arrows then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->"));
@@ -2169,6 +2178,161 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
     Note that all the names used for extraction should already have been
     registered. *)
+(** Does the type mention type variables? *)
+let rec ty_mentions_type_vars (ty : ty) : bool =
+  match ty with
+  | TVar _ -> true
+  | TAdt (_, args) -> List.exists ty_mentions_type_vars args.types
+  | TArrow (ty0, ty1) -> ty_mentions_type_vars ty0 || ty_mentions_type_vars ty1
+  | TTraitType _ -> true
+  | TLiteral _ | TNever | TDynTrait _ | TError -> false
+
+(** Lean: do the values of this type have a byte representation, given by a
+    [Pointee] instance, so that they can be stored in the heap (see
+    [Pointee.lean])? The library gives the instances of the integers, booleans,
+    raw pointers and tuples, and we generate the instances of the structures
+    (see {!extract_type_decl_pointee_instance}). If [vars], we consider that
+    the type variables have byte representations. *)
+let rec ty_is_pointee ?(vars = false) (ctx : extraction_ctx) (ty : ty) : bool =
+  match ty with
+  | TVar _ -> vars
+  | TLiteral (TInt _ | TUInt _ | TBool) -> true
+  | TAdt (TBuiltin (TRawPtr _), _) -> true
+  | TAdt (TTuple, args) -> List.for_all (ty_is_pointee ~vars ctx) args.types
+  | TAdt (TAdtId id, args) -> (
+      match TypeDeclId.Map.find_opt id ctx.trans_types with
+      | Some decl when type_decl_has_pointee_instance ctx decl ->
+          List.for_all (ty_is_pointee ~vars ctx)
+            (PureUtils.type_decl_get_instantiated_fields_types decl None args)
+      | _ -> false)
+  | _ -> false
+
+(** Lean: do we generate a [Pointee] instance for this type declaration? We do
+    so, in the crates with functions which access the heap, for the (non recursive) structures
+    whose fields have byte representations, provided that the type parameters
+    have. The fields which mention type parameters become hypotheses of the
+    instance. *)
+and type_decl_has_pointee_instance (ctx : extraction_ctx) (decl : type_decl) :
+    bool =
+  backend () = Lean
+  && FunDeclId.Map.exists
+       (fun _ (trans : pure_fun_translation) ->
+         Option.is_some trans.f.body
+         && FunsAnalysis.is_stateful ctx.trans_ctx.fun_ctx.fun_infos
+              trans.f.def_id)
+       ctx.trans_funs
+  && decl.builtin_info = None
+  && (not
+        (TypesUtils.type_decl_from_decl_id_is_tuple_struct
+           ctx.trans_ctx.type_ctx.type_infos decl.def_id))
+  &&
+  match decl.kind with
+  | Struct fields ->
+      List.for_all
+        (fun (f : field) -> ty_is_pointee ~vars:true ctx f.field_ty)
+        fields
+  | Enum _ | Opaque -> false
+
+(** Lean: the [Pointee] instance of a structure (see [Pointee.lean]): the fields
+    are stored one after the other, as nested pairs. For instance:
+    {[
+      instance {T : Type _} [Pointee (MutRawPtr T)] : Pointee (S T) :=
+        ⟨Repr.iso (Repr.prod (Pointee.repr (T := MutRawPtr T))
+          (Pointee.repr (T := Std.U32))) (fun x => (x.1, x.2))
+          (fun p => ⟨p.1, p.2⟩) (fun _ => rfl)⟩
+    ]} *)
+let extract_type_decl_pointee_instance (ctx : extraction_ctx)
+    (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
+  let span = decl.item_meta.span in
+  match decl.kind with
+  | Struct fields
+    when type_decl_has_pointee_instance ctx decl
+         && not (decl_is_from_rec_group kind) ->
+      let ctx, type_params, cg_params, trait_clauses =
+        ctx_add_generic_params span decl.item_meta.name Item decl.llbc_generics
+          decl.generics ctx
+      in
+      let extract_ty = extract_ty span ctx fmt TypeDeclId.TreeSet.empty in
+      let field_tys = List.map (fun (f : field) -> f.field_ty) fields in
+      F.pp_print_break fmt 0 0;
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      F.pp_print_string fmt "instance";
+      extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty Item
+        ~as_implicits:true decl.generics None type_params cg_params
+        trait_clauses;
+      (* The hypotheses: the instances of the fields which mention type
+         parameters *)
+      let hyps =
+        List.fold_left
+          (fun acc ty ->
+            if ty_mentions_type_vars ty && not (List.mem ty acc) then
+              acc @ [ ty ]
+            else acc)
+          [] field_tys
+      in
+      List.iter
+        (fun ty ->
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "[Pointee";
+          F.pp_print_space fmt ();
+          extract_ty ~inside:true ty;
+          F.pp_print_string fmt "]")
+        hyps;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ": Pointee";
+      F.pp_print_space fmt ();
+      extract_ty ~inside:true
+        (TAdt (TAdtId decl.def_id, generic_args_of_params decl.generics));
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":=";
+      F.pp_print_space fmt ();
+      let n = List.length field_tys in
+      if n = 0 then F.pp_print_string fmt "⟨Repr.unit _ ⟨⟩ (fun _ => rfl)⟩"
+      else begin
+        let print_repr ty =
+          F.pp_print_string fmt "(Pointee.repr (T :=";
+          F.pp_print_space fmt ();
+          extract_ty ~inside:false ty;
+          F.pp_print_string fmt "))"
+        in
+        let rec print_reprs tys =
+          match tys with
+          | [] -> [%internal_error] span
+          | [ ty ] -> print_repr ty
+          | ty :: tys ->
+              F.pp_print_string fmt "(Repr.prod";
+              F.pp_print_space fmt ();
+              print_repr ty;
+              F.pp_print_space fmt ();
+              print_reprs tys;
+              F.pp_print_string fmt ")"
+        in
+        F.pp_print_string fmt "⟨Repr.iso";
+        F.pp_print_space fmt ();
+        print_reprs field_tys;
+        (* The projection: [fun x => (x.1, ..., x.n)] *)
+        let projs = List.init n (fun i -> "x." ^ string_of_int (i + 1)) in
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt
+          ("(fun x => "
+          ^ (if n = 1 then List.hd projs
+             else "(" ^ String.concat ", " projs ^ ")")
+          ^ ")");
+        (* The inverse: [fun p => ⟨p.1, p.2.1, ..., p.2...2⟩] *)
+        let comp i =
+          let snds = String.concat "" (List.init i (fun _ -> ".2")) in
+          if i = n - 1 then "p" ^ snds else "p" ^ snds ^ ".1"
+        in
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt
+          ("(fun p => ⟨" ^ String.concat ", " (List.init n comp) ^ "⟩)");
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "(fun _ => rfl)⟩"
+      end;
+      F.pp_close_box fmt ();
+      F.pp_print_break fmt 0 0
+  | _ -> ()
+
 let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match backend () with
@@ -2182,6 +2346,7 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         if backend () = Coq then
           extract_type_decl_coq_arguments ctx fmt kind decl;
         extract_type_decl_record_field_projectors ctx fmt kind decl;
-        if backend () = Lean then
+        if backend () = Lean then (
           extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
-            decl)
+            decl;
+          extract_type_decl_pointee_instance ctx fmt kind decl))

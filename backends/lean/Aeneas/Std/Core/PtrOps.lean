@@ -14,8 +14,9 @@ def Repr.unaligned (repr : Repr T) : Repr T :=
   { repr with align := ⟨1, 0, rfl⟩, aligned := Nat.one_dvd _ }
 
 def RawPtr.replace (repr : Repr T) (p : RawPtr T) (value : T) : Result T := do
-  let old ← p.read repr
-  MutRawPtr.write repr p value
+  let _ : Pointee T := ⟨repr⟩
+  let old ← p.read
+  MutRawPtr.write p value
   pure old
 
 /-- Only disjoint or identical footprints are modeled. Rust's partially
@@ -24,9 +25,9 @@ def RawPtr.swap (repr : Repr T) (p q : RawPtr T) : Result Unit :=
   Result.checkedModify fun s (_ : Unit) s' => Heap.swapBytes repr p q s = some s'
 
 def RawPtr.read_unaligned (repr : Repr T) (p : RawPtr T) : Result T :=
-  p.read repr.unaligned
+  @RawPtr.read _ ⟨repr.unaligned⟩ p
 
 def RawPtr.write_unaligned (repr : Repr T) (p : RawPtr T) (value : T) : Result Unit :=
-  MutRawPtr.write repr.unaligned p value
+  @MutRawPtr.write _ ⟨repr.unaligned⟩ p value
 
 end Aeneas.Std

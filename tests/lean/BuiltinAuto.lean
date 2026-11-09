@@ -35,6 +35,9 @@ axiom core.ptr.null (T : Type _) : Result (ConstRawPtr T)
 structure Inner where
   ptr : ConstRawPtr Std.U8
 
+instance : Pointee Inner := ⟨Repr.iso (Pointee.repr (T := ConstRawPtr
+  Std.U8)) (fun x => x.1) (fun p => ⟨p⟩) (fun _ => rfl)⟩
+
 /-- [builtin_auto::make]:
     Source: 'tests/src/builtin-auto.rs', lines 11:0-15:1
     Visibility: public -/
