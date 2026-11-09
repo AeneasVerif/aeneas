@@ -110,6 +110,7 @@ package «tests» {}
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib RyuRawPointers
 @[default_target] lean_lib SepLogic
+@[default_target] lean_lib SafeUnsafe
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
