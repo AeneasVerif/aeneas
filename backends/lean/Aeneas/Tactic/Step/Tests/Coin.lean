@@ -85,13 +85,6 @@ instance : MonadLift Result ITreeC where
   | .ok a => .ret a
   | _ => .div -- TODO
 
-/- The coin tree has no accepted-abort case, so this lifting needs no OOM. -/
-theorem spec_coinSpec {α} {x : Result α} {p : Post α}
-    (noOOM : x ≠ Result.oom) (s : spec x p) : coinSpec p x := by
-  rcases spec_ok_or_oom s with ⟨value, rfl, hp⟩ | oom
-  · exact coinSpec.ret p value hp
-  · exact (noOOM oom).elim
-
 @[simp]
 theorem qimp_coinSpec_unit {α} (P : Unit → Prop) (k : Unit → ITreeC α) (Q : α → Prop) :
   qimp_coinSpec P k Q ↔ (P () → coinSpec Q (k ())) := by
@@ -156,6 +149,8 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
   mk_spec_bind_skip_args := 4
   prepare_intro_outputs := ``prepareIntroOutputs
   to_mvcgen := .none
+  /- No lifting from `spec`: the `MonadLift Result ITreeC` instance above sends every effect,
+     `guardedModify` included, to `.div`, so `spec x p → coinSpec p x` does not hold. -/
   liftings := #[]
 }
 

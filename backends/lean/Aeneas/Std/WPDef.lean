@@ -1,0 +1,285 @@
+module
+public import Aeneas.Std.Primitives
+public import Aeneas.Data.Coinductive.ITree
+public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Data.Coinductive.ITreeWP
+public import Aeneas.SepLogic.IProp
+public import Aeneas.SepLogic.Lemmas
+public section
+
+namespace Aeneas.Std.WP
+
+open Std Result
+open Aeneas.Data.Coinductive
+open Aeneas.SepLogic
+
+@[expose, implicit_reducible] def Post α := (α -> Prop)
+@[expose, implicit_reducible] def Pre := Prop
+
+@[expose, implicit_reducible] def Wp α := Post α → Pre
+
+@[expose] def wp_return (x:α) : Wp α := fun p => p x
+
+section ResultImplementation
+
+unseal Result
+
+@[expose] section
+
+/-- The WP of the effects of Rust programs (`RustEffect`) on the byte heap (from
+fournet/wip-memory-model): a heap operation must be enabled, and all its successors must satisfy
+the continuation. Out-of-memory aborts are accepted; the other failures (panics, undefined
+behavior) are rejected. -/
+@[reducible]
+def effectWP : EffectWP RustEffect where
+  State := Heap
+  wp effect C s :=
+    match effect with
+    | .guardedModify _ modify =>
+        (∃ x s', modify s x s') ∧ ∀ x s', modify s x s' → C ⟨x⟩ s'
+    | .fail e => e = .oom
+
+instance : EffectWP.Monotonic effectWP where
+  wp_monotonic {effect} _ _ hC _ hEvent := by
+    cases effect with
+    | guardedModify => exact ⟨hEvent.1, fun x s' hx => hC _ _ (hEvent.2 x s' hx)⟩
+    | fail => exact hEvent
+
+/-- The heap `s` realizes the assertion `H`: it satisfies the invariant of the heap, and some
+fragment which satisfies `H` holds in it. -/
+def Realizes (H : IProp) (s : Heap) : Prop :=
+  s.Inv ∧ ∃ h, H h ∧ Fragment.Matches s h
+
+theorem Realizes.mono {H H' : IProp} (hEntails : H ⊢ H') {s : Heap} :
+    Realizes H s → Realizes H' s :=
+  fun ⟨hInv, h, hH, hMatches⟩ => ⟨hInv, h, hEntails h hH, hMatches⟩
+
+abbrev rawIwp (total:Bool) (m : Result α) (Q : IPost α) (s : Heap) : Prop :=
+  if total then DWP effectWP m (fun value s' => Realizes (Q value) s') s
+  else DWLP effectWP m (fun value s' => Realizes (Q value) s') s
+
+/-- The weakest precondition of `m` for `Q`: the fragments `owned` from which, for every frame
+`F`, running `m` in a heap which realizes `owns owned ∗ F` gives a heap which realizes `Q ∗ F`. -/
+def iwp (total:Bool) (m : Result α) (Q : IPost α) : IProp where
+  holds owned :=
+    ∀ F s, Realizes (owns owned ∗ F) s → rawIwp total m (Q ∗+ F) s
+  up_closed hWp hSub F s hPre :=
+    hWp F s (Realizes.mono (sep_mono
+      (fun _ hOwns => hSub.trans hOwns)
+      (entails_refl F)) hPre)
+
+/-- Total-correctness separation-logic specification -/
+def ispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
+  P ⊢ iwp true m Q
+
+/-- Partial-correctness separation-logic specification -/
+def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
+  P ⊢ iwp false m Q
+
+/-- Total-correctness pure specification -/
+def spec (m : Result α) (p : Post α) : Prop :=
+  ispec emp m (fun value => ⌜p value⌝)
+
+/-- Partial-correctness pure specification -/
+def dspec (m : Result α) (p : Post α) : Prop :=
+  dispec emp m (fun value => ⌜p value⌝)
+
+end
+
+end ResultImplementation
+
+/-- Variant of `uncurry` used to decompose tuples in post-conditions.
+
+Similar to `uncurry` but delaborated differently:
+`uncurry'` is delaborated as `x y => ...` (separate binders), while
+`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
+We use this in the Hoare triple notation `⦃ ⦄`.
+
+Example: `f 0 ⦃ x y z => ... ⦄` desugars to
+`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
+-/
+
+@[expose]
+def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
+  fun (x, y) => p x y
+
+end Aeneas.Std.WP
+
+/-
+We want the notations to live in the namespace `Aeneas`, not `Aeneas.Std.WP`
+TODO: use https://github.com/leanprover/lean4/pull/11355
+-/
+namespace Aeneas
+
+open Std WP Result
+
+/-!
+# Hoare triple notation and elaboration
+-/
+
+scoped syntax:lead (name := slSpecSyntax)
+  "⦃ " term " ⦄" ppLine term:lead ppLine
+  "⦃ " term+ " => " term " ⦄" : term
+scoped syntax:lead (name := slSpecSyntaxPred)
+  "⦃ " term " ⦄" ppLine term:lead ppLine "⦃ " term " ⦄" : term
+
+open Lean PrettyPrinter
+
+/-- Build a `Std.uncurry` chain wrapping a curried lambda over `xs`.
+
+Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
+-/
+private meta partial def buildUncurryLam (xs : List Term) (body : Term) : MacroM Term := do
+  let uncurryIdent := mkIdent ``Aeneas.Std.uncurry
+  match xs with
+  | [] => pure body
+  | [x] => `(fun $x => $body)
+  | [a, b] => `($uncurryIdent (fun $a $b => $body))
+  | a :: rest =>
+    let inner ← buildUncurryLam rest body
+    `($uncurryIdent (fun $a => $inner))
+
+/-- Helper to elaborate `binder => body` when binder is a tuple - this supports nested tuples. -/
+private meta partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) :
+    MacroM Term := do
+  match binder with
+  | `( ($a, $bs,*) ) =>
+    let xs : List Term := a :: bs.getElems.toList
+    let mut leafIdents : List Term := []
+    let mut wrappedBody := body
+    for (x, idx) in xs.zipIdx.reverse do
+      match x with
+      | `( ($_, $_,*) ) =>
+        -- Fresh identifier from depth + index
+        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
+        let inner ← mkBinderFun (depth + 1) x wrappedBody
+        wrappedBody ← `($inner $freshIdent)
+        leafIdents := freshIdent :: leafIdents
+      | _ =>
+        leafIdents := x :: leafIdents
+    buildUncurryLam leafIdents wrappedBody
+  | _ => `(fun $binder => $body)
+
+private meta partial def mkPostSyntax (body : Term) (depth : Nat) (binders : List Term) :
+    MacroM Term := do
+  match binders with
+  | [] => pure body
+  | [x] => mkBinderFun depth x body
+  | x :: rest =>
+    let rest ← mkPostSyntax body (depth + 1) rest
+    let inner ← mkBinderFun depth x rest
+    `($(mkIdent ``Aeneas.Std.WP.uncurry') $inner)
+
+/-- If `stx` is a bare identifier or a juxtaposition (application) of bare
+identifiers — i.e. a binder group like `a b c` — return the identifiers in
+order.  Otherwise return `none`, so anonymous constructors `⟨a, b⟩`, tuple
+patterns, and other structured terms are left untouched. -/
+private meta partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
+  if stx.isIdent then some #[⟨stx⟩]
+  else if stx.getKind == ``Lean.Parser.Term.app || stx.getKind == Lean.nullKind then
+    stx.getArgs.foldlM (init := (#[] : Array Term)) fun acc s =>
+      (binderGroupIdents? s).map (acc ++ ·)
+  else none
+
+/-- Expand a binder that shares one type ascription across several names —
+`(a b c : T)` — into the list of single binders `[(a : T), (b : T), (c : T)]`,
+so each name becomes its own product component (exactly as if written
+separately).  Tuple/pattern binders `(a, b)`, `(⟨a, b⟩ : T)`, single binders
+`(a : T)`, and bare identifiers are returned unchanged. -/
+private meta def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
+  match binder with
+  | `(($e : $t)) =>
+    match binderGroupIdents? e.raw with
+    | some ids =>
+      if ids.size ≤ 1 then pure [binder]
+      else ids.toList.mapM fun id => `(($id : $t))
+    | none => pure [binder]
+  | _ => pure [binder]
+
+/-- Flatten grouped binders across the whole binder list. -/
+private meta def expandBinders (xs : List Term) : MacroM (List Term) := do
+  let mut out : Array Term := #[]
+  for x in xs do
+    out := out ++ (← expandGroupedBinder x).toArray
+  pure out.toList
+
+/-- Build the postcondition term for `⦃ xs => p ⦄`, expanding grouped binders
+into one component per name first. -/
+private meta def mkPost (p : Term) (xs : List Term) : MacroM Term := do
+  mkPostSyntax p 0 (← expandBinders xs)
+
+macro_rules
+  | `(⦃$P⦄ $m ⦃ $result => $Q⦄) => do
+      let post ← mkPost (← `(iprop($Q))) [result]
+      `(ispec iprop($P) $m $post)
+
+macro_rules
+  | `(⦃$P⦄ $m ⦃ $result $results:term* => $Q⦄) => do
+      let post ← mkPost (← `(iprop($Q))) (result :: results.toList)
+      `(ispec iprop($P) $m $post)
+
+macro_rules
+  | `(⦃$P⦄ $m ⦃ $Q⦄) =>
+      `(ispec iprop($P) $m (fun _ => iprop($Q)))
+
+scoped syntax:lead (name := slDspecSyntax)
+  "⦃ " term " ⦄" ppLine term:lead ppLine
+  "⦃ " term+ " => " term " ⦄div" : term
+scoped syntax:lead (name := slDspecSyntaxPred)
+  "⦃ " term " ⦄" ppLine term:lead ppLine "⦃ " term " ⦄div" : term
+
+macro_rules
+  | `(⦃$P⦄ $m ⦃ $result => $Q⦄div) => do
+      let post ← mkPost (← `(iprop($Q))) [result]
+      `(dispec iprop($P) $m $post)
+
+macro_rules
+  | `(⦃$P⦄ $m ⦃ $result $results:term* => $Q⦄div) => do
+      let post ← mkPost (← `(iprop($Q))) (result :: results.toList)
+      `(dispec iprop($P) $m $post)
+
+macro_rules
+  | `(⦃$P⦄ $m ⦃ $Q⦄div) =>
+      `(dispec iprop($P) $m (fun _ => iprop($Q)))
+
+/- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
+This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/
+scoped syntax:54 (name := pureSpecBinders)
+  term:55 " ⦃ " term+ " => " term " ⦄" : term
+scoped syntax:54 (name := pureSpecPred)
+  term:55 " ⦃ " term " ⦄" : term
+
+-- for dspec
+scoped syntax:54 (name := pureDspecBinders)
+  term:55 " ⦃ " term+ " => " term " ⦄div" : term
+scoped syntax:54 (name := pureDspecPred)
+  term:55 " ⦃ " term " ⦄div" : term
+
+scoped macro_rules (kind := pureSpecBinders)
+  | `($m ⦃ $x => $p ⦄) => do
+    let post ← mkPost p [x]
+    `(Aeneas.Std.WP.spec $m $post)
+
+scoped macro_rules (kind := pureSpecBinders)
+  | `($m ⦃ $x $xs:term* => $p ⦄) => do
+    let post ← mkPost p (x :: xs.toList)
+    `(Aeneas.Std.WP.spec $m $post)
+
+scoped macro_rules (kind := pureDspecBinders)
+  | `($m ⦃ $x => $p ⦄div) => do
+    let post ← mkPost p [x]
+    `(Aeneas.Std.WP.dspec $m $post)
+
+scoped macro_rules (kind := pureDspecBinders)
+  | `($m ⦃ $x $xs:term* => $p ⦄div) => do
+    let post ← mkPost p (x :: xs.toList)
+    `(Aeneas.Std.WP.dspec $m $post)
+
+/-- Macro expansion for predicate with no arrow -/
+scoped macro_rules (kind := pureSpecPred)
+  | `($m ⦃ $p ⦄) => `(Aeneas.Std.WP.spec $m $p)
+
+scoped macro_rules (kind := pureDspecPred)
+  | `($m ⦃ $p ⦄div) => `(Aeneas.Std.WP.dspec $m $p)
+
+end Aeneas

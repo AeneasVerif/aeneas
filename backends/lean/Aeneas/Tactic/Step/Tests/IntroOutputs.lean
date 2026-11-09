@@ -823,3 +823,32 @@ example (r : core.result.Result Never Nat) (e : Nat) (hr : r = .Err e) :
         | .Ok _ => False
         | .Err error => error = e ∧ state = () ⦄ := by
   step*
+
+/- A destructuring `let` in a postcondition is a `match`: it must be reduced before the
+conjunction it hides is split, also when the spec is used in a separation-logic proof. -/
+section
+open Aeneas.SepLogic
+
+example (H : IProp) (P : Nat → Prop) (run : Result ((Nat × Nat × Nat) × Nat))
+    (hrun : WP.spec run fun out =>
+      let (t, x, y) := out.1
+      t = 0 ∧ (∀ j < out.2, P j) ∧ x = y) :
+    ⦃ H ⦄ (do let ((t, x, y), w) ← run; ok (t + x + y + w)) ⦃ _ => H ⦄ := by
+  let* ⟨t, x, y, w, ht, hP, hxy⟩ ← hrun
+  guard_hyp ht : t = 0
+  guard_hyp hP : ∀ j < w, P j
+  guard_hyp hxy : x = y
+  step
+
+example (H : IProp) (P : Nat → Prop) (run : Result ((Nat × Nat × Nat) × Nat))
+    (hrun : WP.spec run fun out =>
+      let (t, x, y) := out.1
+      t = 0 ∧ (∀ j < out.2, P j) ∧ x = y) :
+    ⦃ H ⦄ (do let (r, w) ← run; ok (r.1 + w)) ⦃ _ => H ⦄ := by
+  let* ⟨r, w, ht, hP, hxy⟩ ← hrun
+  guard_hyp ht : r.1 = 0
+  guard_hyp hP : ∀ j < w, P j
+  guard_hyp hxy : r.2.1 = r.2.2
+  step
+
+end
