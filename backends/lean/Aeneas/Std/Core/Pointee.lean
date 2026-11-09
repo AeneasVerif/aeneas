@@ -3,7 +3,7 @@ module
 public import Aeneas.Std.Heap
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Data.BitVec
-public section
+@[expose] public section
 
 namespace Aeneas.Std
 
@@ -425,5 +425,143 @@ instance : Pointee.NoPointers Bool :=
     show ¬ Repr.bool.Carries value q
     unfold Repr.bool
     exact Repr.ofBytes_noPointers _ _ _ _ _ _ _ _ value q⟩
+
+/-! ### Calibrated representations
+
+A representation is calibrated if the bytes from which a value is decoded (and whose pointer
+bytes, if any, are carried by the value) are an admissible encoding of the value: exposing a safe
+place, whose bytes are only known to decode to its value, then gives an admissible encoding. -/
+
+theorem _root_.BitVec.toLEBytes_fromLEBytes (xs : List _root_.Byte) :
+    (BitVec.fromLEBytes xs).toLEBytes = xs := by
+  apply List.ext_getElem
+  · rw [BitVec.toLEBytes_length]; omega
+  · intro i h1 h2
+    apply BitVec.eq_of_getElem_eq
+    intro j hj
+    have := BitVec.toLEBytes_getElem_testBit (BitVec.fromLEBytes xs) i j h1 ⟨hj, by omega⟩
+    rw [BitVec.getElem_eq_testBit_toNat, ← _root_.Byte.testBit, this, BitVec.fromLEBytes_getElem]
+    have hd : (8 * i + j) / 8 = i := by omega
+    have hm : (8 * i + j) % 8 = j := by omega
+    simp only [hd, hm, _root_.Byte.testBit, BitVec.getElem_eq_testBit_toNat]
+
+theorem _root_.BitVec.toLEBytes_cast {m n : Nat} (h : m = n) (x : BitVec m) :
+    (x.cast h).toLEBytes = x.toLEBytes := by
+  subst h; rfl
+
+class Pointee.Calibrated (T : Type) [Pointee T] : Prop where
+  calibrated : ∀ (value : T) (bytes : Vector Byte (Pointee.repr (T := T)).size),
+    (Pointee.repr (T := T)).decode bytes = some value →
+    (∀ i : Fin (Pointee.repr (T := T)).size, ∀ q lane, bytes[i.val] = .pointer q lane →
+      (Pointee.repr (T := T)).Carries value q) →
+    (Pointee.repr (T := T)).encode value bytes
+
+theorem Repr.mapM_numeric_eq {bytes : List Byte} {xs : List U8}
+    (h : bytes.mapM Byte.numeric = some xs) (noPointer : ∀ b ∈ bytes, ∀ q lane, b ≠ .pointer q lane) :
+    bytes = xs.map Byte.data := by
+  induction bytes generalizing xs with
+  | nil => simp at h; simp [← h]
+  | cons b bytes ih =>
+    simp only [List.mapM_cons] at h
+    cases hb : b.numeric with
+    | none => simp [hb] at h
+    | some x =>
+      cases hr : bytes.mapM Byte.numeric with
+      | none => simp [hb, hr] at h
+      | some ys =>
+        simp [hb, hr] at h
+        subst h
+        have hbx : b = .data x := by
+          cases b with
+          | uninit => simp [Byte.numeric] at hb
+          | data v => simp [Byte.numeric] at hb; rw [hb]
+          | pointer q lane => exact absurd rfl (noPointer _ (List.mem_cons_self) q lane)
+        rw [hbx, ih hr (fun b hb => noPointer b (List.mem_cons_of_mem _ hb))]
+        rfl
+
+theorem Repr.ofBytes_calibrated (T : Type) (size : Nat) (align : Alignment)
+    (aligned : align.val ∣ size) (encode : T → List U8) (decode : List U8 → Option T)
+    (length_encode : ∀ value, (encode value).length = size)
+    (decode_encode : ∀ value, decode (encode value) = some value)
+    (encode_decode : ∀ xs value, decode xs = some value → encode value = xs)
+    (value : T) (bytes : Vector Byte size)
+    (hdec : (Repr.ofBytes T size align aligned encode decode length_encode decode_encode).decode
+      bytes = some value)
+    (hptr : ∀ i : Fin size, ∀ q lane, bytes[i.val] = .pointer q lane →
+      (Repr.ofBytes T size align aligned encode decode length_encode decode_encode).Carries
+        value q) :
+    (Repr.ofBytes T size align aligned encode decode length_encode decode_encode).encode
+      value bytes := by
+  change bytes.toList.mapM Byte.numeric >>= decode = some value at hdec
+  show bytes.toList = (encode value).map Byte.data
+  cases hm : bytes.toList.mapM Byte.numeric with
+  | none => simp [hm] at hdec
+  | some xs =>
+    simp only [hm, Option.bind_eq_bind, Option.bind_some] at hdec
+    have noPointer : ∀ b ∈ bytes.toList, ∀ q lane, b ≠ .pointer q lane := by
+      intro b hb q lane he
+      obtain ⟨i, hi, hget⟩ := List.getElem_of_mem hb
+      have hi' : i < size := by simpa using hi
+      apply Repr.ofBytes_noPointers T size align aligned encode decode length_encode
+        decode_encode value q
+      apply hptr ⟨i, hi'⟩ q lane
+      simpa [← hget] using he
+    rw [Repr.mapM_numeric_eq hm noPointer, encode_decode xs value hdec]
+
+theorem Repr.uscalar_encode_decode (ty : UScalarTy) (xs : List U8) (value : UScalar ty)
+    (h : (Repr.decodeLE ty.numBits xs).map UScalar.mk = some value) :
+    value.bv.toLEBytes.map (UScalar.mk (ty := .U8)) = xs := by
+  unfold Repr.decodeLE at h
+  split at h
+  · simp only [Option.map_some, Option.some.injEq] at h
+    subst h
+    rw [BitVec.toLEBytes_cast, BitVec.toLEBytes_fromLEBytes, List.map_map]
+    exact List.map_id _
+  · simp at h
+
+theorem Repr.iscalar_encode_decode (ty : IScalarTy) (xs : List U8) (value : IScalar ty)
+    (h : (Repr.decodeLE ty.numBits xs).map IScalar.mk = some value) :
+    value.bv.toLEBytes.map (UScalar.mk (ty := .U8)) = xs := by
+  unfold Repr.decodeLE at h
+  split at h
+  · simp only [Option.map_some, Option.some.injEq] at h
+    subst h
+    rw [BitVec.toLEBytes_cast, BitVec.toLEBytes_fromLEBytes, List.map_map]
+    exact List.map_id _
+  · simp at h
+
+instance (ty : UScalarTy) : Pointee.Calibrated (UScalar ty) :=
+  ⟨fun value bytes hdec hptr => by
+    revert hdec hptr
+    show (Repr.uscalar ty).decode bytes = some value → _ → (Repr.uscalar ty).encode value bytes
+    unfold Repr.uscalar
+    exact fun hdec hptr => Repr.ofBytes_calibrated _ _ _ _ _ _ _ _
+      (fun xs v h => Repr.uscalar_encode_decode ty xs v h) value bytes hdec hptr⟩
+
+instance (ty : IScalarTy) : Pointee.Calibrated (IScalar ty) :=
+  ⟨fun value bytes hdec hptr => by
+    revert hdec hptr
+    show (Repr.iscalar ty).decode bytes = some value → _ → (Repr.iscalar ty).encode value bytes
+    unfold Repr.iscalar
+    exact fun hdec hptr => Repr.ofBytes_calibrated _ _ _ _ _ _ _ _
+      (fun xs v h => Repr.iscalar_encode_decode ty xs v h) value bytes hdec hptr⟩
+
+instance : Pointee.Calibrated Bool :=
+  ⟨fun value bytes hdec hptr => by
+    revert hdec hptr
+    show Repr.bool.decode bytes = some value → _ → Repr.bool.encode value bytes
+    unfold Repr.bool
+    refine fun hdec hptr => Repr.ofBytes_calibrated _ _ _ _ _ _ _ _ ?_ value bytes hdec hptr
+    intro xs v h
+    match xs, h with
+    | [x], h =>
+      by_cases h0 : x = (⟨0#8⟩ : U8)
+      · simp only [h0, if_true, Option.some.injEq] at h
+        subst h; simp [h0]
+      · by_cases h1 : x = (⟨1#8⟩ : U8)
+        · have h10 : ¬ ((⟨1#8⟩ : U8) = (⟨0#8⟩ : U8)) := by decide
+          simp only [h1, h10, if_false, if_true, Option.some.injEq] at h
+          subst h; simp [h1]
+        · simp [h0, h1] at h⟩
 
 end Aeneas.Std

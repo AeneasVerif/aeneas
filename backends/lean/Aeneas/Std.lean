@@ -7,6 +7,7 @@ public import Aeneas.Std.Primitives
 public import Aeneas.Std.PrimitivesLemmas
 public import Aeneas.Std.Scalar
 public import Aeneas.Std.Slice
+public import Aeneas.Std.RawPtrSpecs
 public import Aeneas.Std.SliceDef
 public import Aeneas.Std.SliceIter
 public import Aeneas.Std.Std
