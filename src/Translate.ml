@@ -1590,24 +1590,83 @@ let extract_translated_crate (filename : string) (dest_dir : string)
                       !acc)
                 FunDeclId.TreeSet.empty decls
             in
-            if Option.is_some trans.f.body then (id, callees) :: acc else acc)
+            (* The trait methods called through a trait instance *)
+            let trait_calls = ref [] in
+            let visitor =
+              object
+                inherit [_] Pure.iter_expr
+
+                method! visit_qualif _ q =
+                  match q.id with
+                  | FunOrOp (Fun (FromLlbc (TraitMethod (tref, mid), _))) ->
+                      trait_calls :=
+                        (tref.trait_decl_ref.trait_decl_id, mid) :: !trait_calls
+                  | _ -> ()
+              end
+            in
+            List.iter
+              (fun (decl : Pure.fun_decl) ->
+                match decl.body with
+                | None -> ()
+                | Some body -> visitor#visit_texpr () body.body)
+              decls;
+            if Option.is_some trans.f.body then
+              (id, callees, !trait_calls) :: acc
+            else acc)
           trans_funs []
       in
-      let rec fixpoint (set : FunDeclId.TreeSet.t) : FunDeclId.TreeSet.t =
+      (* The implementations of the trait methods *)
+      let impl_methods =
+        TraitImplId.Map.fold
+          (fun _ (impl : Pure.trait_impl) acc ->
+            List.map
+              (fun (mid, _, (fref : Pure.fun_decl_ref Pure.binder)) ->
+                ( (impl.impl_trait.trait_decl_id, mid),
+                  fref.binder_value.fun_id ))
+              impl.methods
+            @ acc)
+          trans_trait_impls []
+      in
+      (* A trait method needs a placement if one of its implementations needs
+         one: then all its implementations receive one, and so do the
+         functions which call it through a trait instance *)
+      let rec fixpoint (set : FunDeclId.TreeSet.t) methods =
         let set' =
           List.fold_left
-            (fun set (id, callees) ->
+            (fun set (id, callees, trait_calls) ->
               if
                 FunDeclId.TreeSet.exists
                   (fun callee -> exposes callee || FunDeclId.TreeSet.mem callee set)
                   callees
+                || List.exists (fun m -> List.mem m methods) trait_calls
               then FunDeclId.TreeSet.add id set
               else set)
             set deps
         in
-        if FunDeclId.TreeSet.equal set set' then set else fixpoint set'
+        let set' =
+          List.fold_left
+            (fun set (m, fid) ->
+              if List.mem m methods then FunDeclId.TreeSet.add fid set else set)
+            set' impl_methods
+        in
+        let methods' =
+          List.fold_left
+            (fun methods (m, fid) ->
+              if FunDeclId.TreeSet.mem fid set' && not (List.mem m methods) then
+                m :: methods
+              else methods)
+            methods impl_methods
+        in
+        if
+          FunDeclId.TreeSet.equal set set'
+          && List.length methods = List.length methods'
+        then (set, methods)
+        else fixpoint set' methods'
       in
-      fixpoint FunDeclId.TreeSet.empty
+      fixpoint FunDeclId.TreeSet.empty []
+    in
+    let funs_with_placement, trait_methods_with_placement =
+      funs_with_placement
     in
     (* The type parameters of the transparent functions which need a [Pointee]
        instance (Lean only, see [Pointee.lean]): the ones which appear in the
@@ -1721,6 +1780,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       names_maps;
       indent_incr = 2;
       funs_with_placement;
+      trait_methods_with_placement;
       funs_pointee_params;
       placement = None;
       use_dep_ite =

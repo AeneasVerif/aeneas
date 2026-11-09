@@ -622,6 +622,9 @@ type extraction_ctx = {
       *)
   trait_impls_filter_trait_clauses_map : bool list TraitImplId.TreeMap.t;
   funs_with_placement : FunDeclId.TreeSet.t;
+  trait_methods_with_placement : (TraitDeclId.id * TraitMethodId.id) list;
+      (** Lean: the trait methods which receive a placement, because one of
+          their implementations needs one *)
   funs_pointee_params : TypeVarId.Set.t FunDeclId.TreeMap.t;
       (** Lean: the type parameters of the transparent functions which need a
           [Pointee] instance (see [Pointee.lean]) *)

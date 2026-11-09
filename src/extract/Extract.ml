@@ -1148,6 +1148,16 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
                     if fun_has_placement ctx trans.f then Some "sub" else None)
             | None -> None
           in
+          placement_arg)
+      | FromLlbc (TraitMethod (tref, mid), _) ->
+          if
+            List.mem
+              (tref.trait_decl_ref.trait_decl_id, mid)
+              ctx.trait_methods_with_placement
+          then Some "sub"
+          else None
+      | _ -> None)
+      |> (fun placement_arg ->
           match placement_arg with
           | None -> ()
           | Some kind -> (
@@ -1161,8 +1171,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               | None ->
                   [%save_error] span
                     "Call to a function which needs a placement (it exposes                      safe places as raw memory) from a function which doesn't                      have one";
-                  F.pp_print_string fmt " /- ERROR: missing placement -/"))
-      | _ -> ());
+                  F.pp_print_string fmt " /- ERROR: missing placement -/"));
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -3177,6 +3186,12 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
 
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
+    (* The placement (Lean only, see [Placement]) *)
+    if List.mem (decl.def_id, method_id) ctx.trait_methods_with_placement then (
+      F.pp_print_string fmt "Placement";
+      F.pp_print_space fmt ();
+      extract_arrow fmt ();
+      F.pp_print_space fmt ());
     let ({ inputs; output; _ } : fun_sig) = signature in
     extract_fun_input_parameters_types span ctx fmt inputs;
     extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false output
