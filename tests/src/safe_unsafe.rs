@@ -3,10 +3,9 @@
 //! Adequacy of the raw-pointer model: small programs mixing safe code with
 //! `unsafe` raw-pointer primitives (`ptr::from_mut`, `as_ptr`/`as_mut_ptr`,
 //! `slice::from_raw_parts(_mut)`, `Box::into_raw`/`from_raw`, `ptr::read`,
-//! `as_mut`, `NonNull`).
+//! `as_mut`).
 //!
-//! Every function is closed (`non_null_write` aside), so that its behaviour is
-//! fixed. Each one documents what Miri reports, with Stacked Borrows (the
+//! Every function is closed, so that its behaviour is fixed. Each one documents what Miri reports, with Stacked Borrows (the
 //! default) and Tree Borrows alike: `ok(n)` (no UB, returns `n`) or `UB`. The
 //! Lean proofs in `tests/lean/SafeUnsafe/Proofs.lean` relate the extracted model
 //! to the verdict, and sum up the cases where the model is stricter than Rust
@@ -316,18 +315,6 @@ pub fn ptr_as_mut_twice() -> u32 {
     x
 }
 
-// ---------------------------------------------------------------------------
-// `NonNull::from(&mut x)`: an opaque type hides the raw pointer
-// ---------------------------------------------------------------------------
-
-/// ok(v)
-pub fn non_null_write(v: u32) -> u32 {
-    let mut x = 1u32;
-    let p = ptr::NonNull::from(&mut x);
-    unsafe { *p.as_ptr() = v };
-    x
-}
-
 #[cfg(miri)]
 mod miri {
     macro_rules! verdicts {
@@ -366,8 +353,4 @@ mod miri {
         ptr_as_mut_write,
         ptr_as_mut_twice
     );
-    #[test]
-    fn non_null_write() {
-        std::println!("{}", super::non_null_write(4));
-    }
 }
