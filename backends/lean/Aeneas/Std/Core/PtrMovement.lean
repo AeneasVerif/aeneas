@@ -2,8 +2,8 @@ module
 
 public import Aeneas.Std.Core.Ptr
 
-/-! Byte movement and root-aware allocation distance. These opt-in models have
-no builtin registration. The core distinguishes numerical addresses from view IDs. -/
+/-! Byte movement and root-aware allocation distance. Only `offset_from` is registered as the model
+of a Rust function. The core distinguishes numerical addresses from view IDs. -/
 
 @[expose] public section
 
@@ -50,5 +50,14 @@ def RawPtr.byte_add (p : RawPtr T) (count : Usize) : Result (RawPtr T) :=
 
 def RawPtr.offset_from (repr : Repr T) (p origin : RawPtr T) : Result Isize :=
   Result.checkedModify (fun s result s' => Heap.offsetFrom repr p origin s = some result ∧ s' = s)
+
+/-- `<*mut T>::offset_from` and `<*const T>::offset_from`: the distance, in elements, between two
+pointers into live views of a common root (for instance, two exposures of the same safe place at the
+same address, see `Placement`). -/
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::offset_from"]
+def MutRawPtr.offset_from [Pointee T] (p : MutRawPtr T) (origin : ConstRawPtr T) : Result Isize :=
+  RawPtr.offset_from (Pointee.repr (T := T)) p origin
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset_from"] MutRawPtr.offset_from
 
 end Aeneas.Std

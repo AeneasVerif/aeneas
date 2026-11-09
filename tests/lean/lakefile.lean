@@ -105,6 +105,7 @@ package «tests» {}
 @[default_target] lean_lib Range
 @[default_target] lean_lib RawPointers
 @[default_target] lean_lib RawPointersControlFlow
+@[default_target] lean_lib RawZmijMwe
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib RyuRawPointers
