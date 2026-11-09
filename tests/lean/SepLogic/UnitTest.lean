@@ -471,8 +471,9 @@ example (q : MutRawPtr U32) (x : U32) : (q ↦* [x]) = (q ↦ x) :=
 
 /-- `as_mut_ptr` returns a `Result` in `Type 1` (its back computation), hence the explicit
 universe-heterogeneous `Std.bind` (the extracted code gets it from the Aeneas `do` elaborator). -/
-def slicePtrWrite (s : Aeneas.Std.Slice U32) : Result (U32 × Aeneas.Std.Slice U32) :=
-  Aeneas.Std.bind (Aeneas.Std.Slice.as_mut_ptr ⟨s⟩) fun (p, back) => do
+def slicePtrWrite (placement : Aeneas.Std.Placement) (s : Aeneas.Std.Slice U32) :
+    Result (U32 × Aeneas.Std.Slice U32) :=
+  Aeneas.Std.bind (Aeneas.Std.Slice.as_mut_ptr (placement.addr 0) ⟨s⟩) fun (p, back) => do
     let q ← p.add 1#usize
     write q 42#u32
     let value ← read q
@@ -480,8 +481,9 @@ def slicePtrWrite (s : Aeneas.Std.Slice U32) : Result (U32 × Aeneas.Std.Slice U
     pure (value, s)
 
 /-- The write through the pointer is seen in the slice given back when the borrow ends. -/
-theorem slicePtrWrite.spec (s : Aeneas.Std.Slice U32) (h : 1 < s.length) :
-    ⦃ emp ⦄ slicePtrWrite s ⦃ (value, s') => ⌜value = 42#u32 ∧ s'.val = s.val.set 1 42#u32⌝⦄ := by
+theorem slicePtrWrite.spec (placement : Aeneas.Std.Placement) (s : Aeneas.Std.Slice U32)
+    (h : 1 < s.length) :
+    ⦃ emp ⦄ slicePtrWrite placement s ⦃ (value, s') => ⌜value = 42#u32 ∧ s'.val = s.val.set 1 42#u32⌝⦄ := by
   unfold slicePtrWrite
   step as ⟨r, hr⟩
   obtain ⟨p, back⟩ := r

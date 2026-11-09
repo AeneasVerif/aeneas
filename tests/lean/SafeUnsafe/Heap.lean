@@ -124,7 +124,7 @@ theorem align_u32 : (Pointee.repr (T := U32)).align.val = 4 := rfl
 
 theorem size_u32 : (Pointee.repr (T := U32)).size = 4 := rfl
 
-/-- Allocation (`into_raw`, `from_mut`, `as_mut_ptr`), at the placement `b`. -/
+/-- Allocation of an owned block (`into_raw`), at `b`. -/
 theorem _root_.Aeneas.Data.Coinductive.DWP.heap_newBlock {β : Type} {Q : effectWP.Post β} {s : Heap} {vs : List U32} {own : Bool}
     {k : ULift (Option (RawPtr U32)) → Result β}
     (hSpec : DWP effectWP (Result.vis (.guardedModify (Option (RawPtr U32))
@@ -154,17 +154,54 @@ theorem _root_.Aeneas.Data.Coinductive.DWP.heap_newBlock_data {T β : Type} {Q :
   simp only [Heap.newBlock, Heap.createRepr, hFresh]
   simp [hAlign, Heap.commit, add, hCheck] at *
 
-/-- Shared exposure (`as_ptr`), at the placement `b`. -/
-theorem _root_.Aeneas.Data.Coinductive.DWP.heap_newSharedExposure {β : Type} {Q : effectWP.Post β} {s : Heap} {vs : List U32}
-    {k : ULift (Option (RawPtr U32)) → Result β}
+/-- Exposure of values of any representation, with their encodings `data`, at the address `b` given
+by the placement. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.heap_exposeAt_data {T β : Type} {Q : effectWP.Post β}
+    {s : Heap} {repr : Std.Repr T} {vs : List T} {b : Usize}
+    {k : ULift (Option (RawPtr T)) → Result β}
+    (hSpec : DWP effectWP (Result.vis (.guardedModify (Option (RawPtr T))
+      (State.checked (State.exposeAt repr vs b))) k) Q s)
+    (data : List (Vector Std.Byte repr.size))
+    (hData : State.exposesList repr s b.val vs data)
+    (hAlign : repr.align.val ∣ b.val) (hFresh : s.allocations s.next = none)
+    (hCheck : (add s ⟨b, s.next, repr.create data 0, false, true, true⟩).check = true) :
+    DWP effectWP (k ⟨some ⟨s.next, b⟩⟩) Q
+      (add s ⟨b, s.next, repr.create data 0, false, true, true⟩) := by
+  refine hSpec.heap_choose _ _ ⟨data, none, hData, ?_⟩
+  simp only [Heap.newBlock, Heap.createRepr, hFresh]
+  simp [hAlign, Heap.commit, add, hCheck] at *
+
+/-- Exposure of a safe place (`from_mut`, `as_mut_ptr`) at the address `b` given by the placement. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.heap_exposeAt {β : Type} {Q : effectWP.Post β} {s : Heap}
+    {vs : List U32} {b : Usize} {k : ULift (Option (RawPtr U32)) → Result β}
     (hSpec : DWP effectWP (Result.vis (.guardedModify (Option (RawPtr U32))
-      (State.checked (State.newSharedExposure Pointee.repr vs))) k) Q s)
-    (b : Usize) (hAlign : 4 ∣ b.val) (hFresh : s.allocations s.next = none)
+      (State.checked (State.exposeAt Pointee.repr vs b))) k) Q s)
+    (hAlign : 4 ∣ b.val) (hFresh : s.allocations s.next = none)
+    (hCheck : (add s (block b s.next vs false 0)).check = true) :
+    DWP effectWP (k ⟨some ⟨s.next, b⟩⟩) Q (add s (block b s.next vs false 0)) := by
+  refine hSpec.heap_choose _ _ ⟨vs.map enc, none, exposesList_enc s b.val vs, ?_⟩
+  simp only [Heap.newBlock, align_u32, Heap.createRepr, hFresh]
+  simp [hAlign, Heap.commit, add, block, hCheck] at *
+
+/-- Shared exposure of a safe place (`as_ptr`) at the address `b` given by the placement. -/
+theorem _root_.Aeneas.Data.Coinductive.DWP.heap_sharedExposeAt {β : Type} {Q : effectWP.Post β}
+    {s : Heap} {vs : List U32} {b : Usize} {k : ULift (Option (RawPtr U32)) → Result β}
+    (hSpec : DWP effectWP (Result.vis (.guardedModify (Option (RawPtr U32))
+      (State.checked (State.sharedExposeAt Pointee.repr vs b))) k) Q s)
+    (hAlign : 4 ∣ b.val) (hFresh : s.allocations s.next = none)
     (hCheck : (add s (block b s.next vs false 1)).check = true) :
     DWP effectWP (k ⟨some ⟨s.next, b⟩⟩) Q (add s (block b s.next vs false 1)) := by
-  refine hSpec.heap_choose _ _ ⟨vs.map enc, b, none, exposesList_enc s b.val vs, ?_⟩
+  refine hSpec.heap_choose _ _ ⟨vs.map enc, none, exposesList_enc s b.val vs, ?_⟩
   simp only [Heap.newSharedExposure, align_u32, Heap.createRepr, hFresh]
   simp [hAlign, Heap.commit, add, block, hCheck] at *
+
+/-- The placement of the refutations: the exposure at path `path` is at `8 * (path.sum + 1)`, so
+that the first two exposures of a function are at `8` and `16`. -/
+def distinct : Placement := fun path => UScalar.mk (BitVec.ofNat _ (8 * (path.sum + 1)))
+
+theorem distinct_val (path : List Nat) (h : 8 * (path.sum + 1) < 2^32) :
+    (distinct path).val = 8 * (path.sum + 1) :=
+  usize_mk_val _ h
 
 end safe_unsafe.Heap
 
@@ -231,6 +268,7 @@ macro "heap_norm" : tactic => `(tactic|
     Array.as_mut_slice, Array.as_slice, Array.val_to_slice, Array.repeat_val, Array.make_val,
     Slice.from_val, Slice.length, List.replicate_succ, List.replicate_zero, UScalar.ofNatCore_val_eq,
     Array.index_mut_usize, Array.index_usize, Array.getElem?_Usize_eq,
+    Placement.addr, Placement.sub,
     Result.allocatingModify, Result.checkedModify, Result.ofOption, lift, bind_ok, bind_vis,
     bind_tc_ok, bind_tc_vis, bind_tc_eq, pure_tc_eq, Std.uncurry_apply_pair] at hSpec)
 

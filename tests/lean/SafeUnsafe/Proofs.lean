@@ -18,6 +18,11 @@ an encoding and a placement nondeterministically. A refutation `¬ ⦃ emp ⦄ f
 exhibits one run, with explicit placements for the allocations (see `SafeUnsafe.Heap`), which reaches
 an undefined operation (a checked operation with no successor).
 
+The functions which expose safe places as raw memory (`from_mut`, `as_ptr`, `as_mut_ptr`) take a
+placement: the addresses of their exposures (see `Aeneas.Std.Placement`). Their specifications hold
+for every placement; their refutations are for the placement `SafeUnsafe.Heap.distinct`, which puts
+the exposures of a function at distinct addresses (`8`, `16`, ...).
+
 | Function                               | Rust (Miri) | Model      |
 |----------------------------------------|-------------|------------|
 | `from_mut_write_then_read`             | ok(5)       | ok(5)      |
@@ -78,21 +83,22 @@ unseal Result
 
 /-! ## `ptr::from_mut` -/
 
-theorem from_mut_write_then_read.spec :
-    ⦃ emp ⦄ from_mut_write_then_read ⦃ r => ⌜r = 5#u32⌝ ⦄ := by
+theorem from_mut_write_then_read.spec (placement : Placement) :
+    ⦃ emp ⦄ from_mut_write_then_read placement ⦃ r => ⌜r = 5#u32⌝ ⦄ := by
   unfold from_mut_write_then_read
   step*
   subst_vars
   step*
 
 theorem from_mut_write_after_owner_write.ub :
-    ¬ ⦃ emp ⦄ from_mut_write_after_owner_write ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ from_mut_write_after_owner_write distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_mut_write_after_owner_write at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := read_eq hx
@@ -103,13 +109,14 @@ theorem from_mut_write_after_owner_write.ub :
   simp [Heap.write, Heap.modify, Heap.retire, add, update, Heap.live, Heap.empty] at hw
 
 theorem from_mut_read_after_owner_read.incomplete :
-    ¬ ⦃ emp ⦄ from_mut_read_after_owner_read ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ from_mut_read_after_owner_read distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_mut_read_after_owner_read at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨bytes, rfl⟩ := write_eq hx
@@ -121,20 +128,22 @@ theorem from_mut_read_after_owner_read.incomplete :
   obtain ⟨hr, -⟩ := hx
   simp [Heap.read, Heap.retire, Heap.storeRepr, add, update, Heap.live, Heap.empty] at hr
 
-theorem from_mut_twice.ub : ¬ ⦃ emp ⦄ from_mut_twice ⦃ _ => ⌜True⌝ ⦄ := by
+theorem from_mut_twice.ub : ¬ ⦃ emp ⦄ from_mut_twice distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_mut_twice at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := read_eq hx
   heap_checked
   obtain rfl := removeExposure_eq hx
-  obtain ⟨c, hc⟩ : ∃ c : Usize, c.val = 16 := ⟨16#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock c (by omega) (by simp [add, update, Heap.retire, Heap.empty])
+  set c : Usize := distinct [1]
+  have hc : c.val = 16 := distinct_val [1] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) (by simp [add, update, Heap.retire, Heap.empty])
     (by heap_check [hb, hc, Heap.retire])
   heap_norm
   heap_checked
@@ -144,13 +153,14 @@ theorem from_mut_twice.ub : ¬ ⦃ emp ⦄ from_mut_twice ⦃ _ => ⌜True⌝ �
   simp [Heap.write, Heap.modify, Heap.retire, Heap.storeRepr, add, update, Heap.live,
     Heap.empty] at hw
 
-theorem from_mut_dangling.ub : ¬ ⦃ emp ⦄ from_mut_dangling ⦃ _ => ⌜True⌝ ⦄ := by
+theorem from_mut_dangling.ub : ¬ ⦃ emp ⦄ from_mut_dangling distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_mut_dangling ptr_to_local at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0, 0]
+  have hb : b.val = 8 := distinct_val [0, 0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := read_eq hx
@@ -160,13 +170,14 @@ theorem from_mut_dangling.ub : ¬ ⦃ emp ⦄ from_mut_dangling ⦃ _ => ⌜True
   obtain ⟨hr, -⟩ := hx
   simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
 
-theorem from_mut_escape.incomplete : ¬ ⦃ emp ⦄ from_mut_escape ⦃ _ => ⌜True⌝ ⦄ := by
+theorem from_mut_escape.incomplete : ¬ ⦃ emp ⦄ from_mut_escape distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_mut_escape escape at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0, 0]
+  have hb : b.val = 8 := distinct_val [0, 0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := read_eq hx
@@ -176,8 +187,8 @@ theorem from_mut_escape.incomplete : ¬ ⦃ emp ⦄ from_mut_escape ⦃ _ => ⌜
   obtain ⟨_, hw⟩ := hx
   simp [Heap.write, Heap.modify, Heap.retire, add, update, Heap.live, Heap.empty] at hw
 
-theorem from_mut_write_in_callee.spec :
-    ⦃ emp ⦄ from_mut_write_in_callee ⦃ r => ⌜r = 8#u32⌝ ⦄ := by
+theorem from_mut_write_in_callee.spec (placement : Placement) :
+    ⦃ emp ⦄ from_mut_write_in_callee placement ⦃ r => ⌜r = 8#u32⌝ ⦄ := by
   unfold from_mut_write_in_callee write_through
   step*
   subst_vars
@@ -185,7 +196,7 @@ theorem from_mut_write_in_callee.spec :
 
 /-! ## `as_ptr`/`as_mut_ptr` -/
 
-theorem as_mut_ptr_write.spec : ⦃ emp ⦄ as_mut_ptr_write ⦃ r => ⌜r = 7#u32⌝ ⦄ := by
+theorem as_mut_ptr_write.spec (placement : Placement) : ⦃ emp ⦄ as_mut_ptr_write placement ⦃ r => ⌜r = 7#u32⌝ ⦄ := by
   unfold as_mut_ptr_write
   step* 2
   have hs : s.val.val = [0#u32, 0#u32, 0#u32, 0#u32] := by simp [s_post, Array.repeat]
@@ -196,8 +207,8 @@ theorem as_mut_ptr_write.spec : ⦃ emp ⦄ as_mut_ptr_write ⦃ r => ⌜r = 7#u
   step*
   simp_all [Array.from_slice]
 
-theorem as_mut_ptr_one_past_end.spec :
-    ⦃ emp ⦄ as_mut_ptr_one_past_end ⦃ r => ⌜r = 0#u32⌝ ⦄ := by
+theorem as_mut_ptr_one_past_end.spec (placement : Placement) :
+    ⦃ emp ⦄ as_mut_ptr_one_past_end placement ⦃ r => ⌜r = 0#u32⌝ ⦄ := by
   unfold as_mut_ptr_one_past_end
   step* 2
   have hs : s.val.val = [0#u32, 0#u32, 0#u32, 0#u32] := by simp [s_post, Array.repeat]
@@ -208,7 +219,7 @@ theorem as_mut_ptr_one_past_end.spec :
   simp_all [Array.from_slice]
 
 theorem as_mut_ptr_write_one_past_end.ub :
-    ¬ ⦃ emp ⦄ as_mut_ptr_write_one_past_end ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ as_mut_ptr_write_one_past_end distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold as_mut_ptr_write_one_past_end at hSpec
@@ -216,8 +227,9 @@ theorem as_mut_ptr_write_one_past_end.ub :
   have hv : ((Array.repeat 4#usize 0#u32).to_slice : List U32) = [0#u32, 0#u32, 0#u32, 0#u32] := by
     simp [Array.val_to_slice, Array.repeat_val]
   rw [hv] at hSpec
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hq, rfl⟩ := hx
@@ -234,7 +246,7 @@ theorem as_mut_ptr_write_one_past_end.ub :
   · simp at hw
 
 theorem as_mut_ptr_add_out_of_bounds.ub :
-    ¬ ⦃ emp ⦄ as_mut_ptr_add_out_of_bounds ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ as_mut_ptr_add_out_of_bounds distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold as_mut_ptr_add_out_of_bounds at hSpec
@@ -242,8 +254,9 @@ theorem as_mut_ptr_add_out_of_bounds.ub :
   have hv : ((Array.repeat 4#usize 0#u32).to_slice : List U32) = [0#u32, 0#u32, 0#u32, 0#u32] := by
     simp [Array.val_to_slice, Array.repeat_val]
   rw [hv] at hSpec
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_stuck
   obtain ⟨hq, -⟩ := hx
@@ -253,7 +266,7 @@ theorem as_mut_ptr_add_out_of_bounds.ub :
   simp [size_u32] at h
 
 theorem as_ptr_read_after_owner_write.ub :
-    ¬ ⦃ emp ⦄ as_ptr_read_after_owner_write ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ as_ptr_read_after_owner_write distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold as_ptr_read_after_owner_write at hSpec
@@ -261,8 +274,9 @@ theorem as_ptr_read_after_owner_write.ub :
   have hv : ∀ h, ((Array.make 2#usize [1#u32, 2#u32] h).to_slice : List U32) = [1#u32, 2#u32] := by
     simp [Array.val_to_slice, Array.make_val]
   rw [hv] at hSpec
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newSharedExposure b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_sharedExposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := endSharedExposure_eq hx
@@ -271,7 +285,7 @@ theorem as_ptr_read_after_owner_write.ub :
   obtain ⟨hr, -⟩ := hx
   simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
 
-theorem as_ptr_read_while_shared.spec : ⦃ emp ⦄ as_ptr_read_while_shared ⦃ r => ⌜r = 3#u32⌝ ⦄ := by
+theorem as_ptr_read_while_shared.spec (placement : Placement) : ⦃ emp ⦄ as_ptr_read_while_shared placement ⦃ r => ⌜r = 3#u32⌝ ⦄ := by
   unfold as_ptr_read_while_shared
   step* 2
   · subst s_post; simp [Array.as_slice, Array.make, Slice.length]
@@ -286,7 +300,7 @@ theorem as_ptr_read_while_shared.spec : ⦃ emp ⦄ as_ptr_read_while_shared ⦃
   step with Slice.end_as_ptr.spec s.val p (by simp [Slice.length, hs])
   step*
 
-theorem as_mut_ptr_twice.ub : ¬ ⦃ emp ⦄ as_mut_ptr_twice ⦃ _ => ⌜True⌝ ⦄ := by
+theorem as_mut_ptr_twice.ub : ¬ ⦃ emp ⦄ as_mut_ptr_twice distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold as_mut_ptr_twice at hSpec
@@ -294,8 +308,9 @@ theorem as_mut_ptr_twice.ub : ¬ ⦃ emp ⦄ as_mut_ptr_twice ⦃ _ => ⌜True�
   have hv : ((Array.repeat 2#usize 0#u32).to_slice : List U32) = [0#u32, 0#u32] := by
     simp [Array.val_to_slice, Array.repeat_val]
   rw [hv] at hSpec
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hr, rfl⟩ := hx
@@ -306,8 +321,9 @@ theorem as_mut_ptr_twice.ub : ¬ ⦃ emp ⦄ as_mut_ptr_twice ⦃ _ => ⌜True�
   obtain rfl := removeExposure_eq hx
   simp only [List.length_cons, List.length_nil] at hSpec
   simp only [show 0 + 1 + 1 ≤ Usize.max from by scalar_tac, _root_.dite_true, bind_ok] at hSpec
-  obtain ⟨c, hc⟩ : ∃ c : Usize, c.val = 16 := ⟨16#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock c (by omega) (by simp [add, update, Heap.retire, Heap.empty])
+  set c : Usize := distinct [1]
+  have hc : c.val = 16 := distinct_val [1] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) (by simp [add, update, Heap.retire, Heap.empty])
     (by heap_check [hb, hc, Heap.retire])
   heap_norm
   heap_checked
@@ -355,20 +371,21 @@ theorem box_use_after_free.ub : ¬ ⦃ emp ⦄ box_use_after_free ⦃ _ => ⌜Tr
   obtain ⟨hr, -⟩ := hx
   simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
 
-theorem box_free_local.ub : ¬ ⦃ emp ⦄ box_free_local ⦃ _ => ⌜True⌝ ⦄ := by
+theorem box_free_local.ub : ¬ ⦃ emp ⦄ box_free_local distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold box_free_local at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := read_eq hx
   heap_stuck
   simp [State.returnOwned, Heap.returnOwned, add, block, update, Heap.empty] at hx
 
-theorem box_free_array_element.ub : ¬ ⦃ emp ⦄ box_free_array_element ⦃ _ => ⌜True⌝ ⦄ := by
+theorem box_free_array_element.ub : ¬ ⦃ emp ⦄ box_free_array_element distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold box_free_array_element at hSpec
@@ -376,8 +393,9 @@ theorem box_free_array_element.ub : ¬ ⦃ emp ⦄ box_free_array_element ⦃ _ 
   have hv : ∀ h, ((Array.make 2#usize [1#u32, 2#u32] h).to_slice : List U32) = [1#u32, 2#u32] := by
     simp [Array.val_to_slice, Array.make_val]
   rw [hv] at hSpec
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain rfl := read_eq hx
@@ -446,13 +464,14 @@ theorem from_raw_parts_too_long.ub : ¬ ⦃ emp ⦄ from_raw_parts_too_long ⦃ 
 
 /-- The cells are shared by the slice: writing through the pointer fails. -/
 theorem from_raw_parts_write_while_shared.ub :
-    ¬ ⦃ emp ⦄ from_raw_parts_write_while_shared ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ from_raw_parts_write_while_shared distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_raw_parts_write_while_shared at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hr, hx⟩ := hx
@@ -485,13 +504,14 @@ from the previous model, where the read failed), but the borrow of `x` ends (`fr
 before the one of the slice (`from_raw_parts_back`), whose lifetime is not related to it: retiring
 the exposure of `x` requires its cells back, while they are still shared by the slice. -/
 theorem from_raw_parts_read_while_shared.incomplete :
-    ¬ ⦃ emp ⦄ from_raw_parts_read_while_shared ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ from_raw_parts_read_while_shared distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_raw_parts_read_while_shared at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hr, hx⟩ := hx
@@ -532,7 +552,7 @@ theorem from_raw_parts_read_while_shared.incomplete :
 (`from_raw_parts_mut_back`), whose lifetime is not related to it: ending the exposure reads cells
 which are still borrowed by the slice. -/
 theorem from_raw_parts_mut_over_array.incomplete :
-    ¬ ⦃ emp ⦄ from_raw_parts_mut_over_array ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ from_raw_parts_mut_over_array distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold from_raw_parts_mut_over_array at hSpec
@@ -540,8 +560,9 @@ theorem from_raw_parts_mut_over_array.incomplete :
   have hv : ((Array.repeat 2#usize 0#u32).to_slice : List U32) = [0#u32, 0#u32] := by
     simp [Array.val_to_slice, Array.repeat_val]
   rw [hv] at hSpec
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hr, -, hx⟩ := hx
@@ -577,7 +598,7 @@ theorem from_raw_parts_mut_over_array.incomplete :
 
 /-! ## `ptr::read` -/
 
-theorem ptr_read_copy.spec : ⦃ emp ⦄ ptr_read_copy ⦃ r => ⌜r = 2#u32⌝ ⦄ := by
+theorem ptr_read_copy.spec (placement : Placement) : ⦃ emp ⦄ ptr_read_copy placement ⦃ r => ⌜r = 2#u32⌝ ⦄ := by
   unfold ptr_read_copy
   step*
   subst_vars
@@ -585,20 +606,21 @@ theorem ptr_read_copy.spec : ⦃ emp ⦄ ptr_read_copy ⦃ r => ⌜r = 2#u32⌝ 
 
 /-- The two owners free the allocation: the second `from_raw` reads a retired block. -/
 theorem ptr_read_owner_double_free.ub :
-    ¬ ⦃ emp ⦄ ptr_read_owner_double_free ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ ptr_read_owner_double_free distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold ptr_read_owner_double_free at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
+  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 4 := ⟨4#usize, by simp⟩
   have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
   heap_norm
-  obtain ⟨c, hc⟩ : ∃ c : Usize, c.val = 16 := ⟨16#usize, by simp⟩
+  set c : Usize := distinct [0]
+  have hc : c.val = 8 := distinct_val [0] (by decide)
   have hEnc : (Pointee.repr (T := Owner)).encode { ptr := ⟨Heap.empty.next, b⟩ }
       (Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)) := rfl
-  have hSpec := hSpec.heap_newBlock_data [Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)] c
-    (by simp only [Bool.false_eq_true, ↓reduceIte, State.exposesList]
-        exact ⟨exposes_of_encode hEnc _ _, trivial⟩)
+  have hSpec := hSpec.heap_exposeAt_data
+    [Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)]
+    ⟨exposes_of_encode hEnc _ _, trivial⟩
     (by show 8 ∣ c.val; omega) (by simp [add, update, Heap.empty]) (by
       have := pow_numBits_gt
       simp [Heap.check, Heap.validBlock, Heap.bounded, Heap.empty, update, UScalarTy.numBits,
@@ -611,7 +633,7 @@ theorem ptr_read_owner_double_free.ub :
       all_goals first
         | omega
         | (simp [hs8, hs4]; omega)
-        | (show 16 + 1 * 8 < _; omega)
+        | (show 8 + 1 * 8 < _; omega)
         | (intro _ _ h₁ _ _ h₂
            have := (List.mem_zipIdx h₁).2.1
            have := (List.mem_zipIdx h₂).2.1
@@ -668,14 +690,15 @@ and gives the `&mut` back (`as_mut_back`) at the end of the function. Reading `x
 borrowed cells. -/
 theorem ptr_as_mut_write.incomplete
     (hModel : ∀ p, core.ptr.mut_ptr.RawPtrMutT.as_mut p = asMutBorrow p) :
-    ¬ ⦃ emp ⦄ ptr_as_mut_write ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ ptr_as_mut_write distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold ptr_as_mut_write at hSpec
   simp only [hModel, asMutBorrow, RawPtr.borrow] at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hr, -, hx⟩ := hx
@@ -703,14 +726,15 @@ theorem ptr_as_mut_write.incomplete
 /-- The second `as_mut` borrows cells which are already borrowed by the first one. -/
 theorem ptr_as_mut_twice.ub
     (hModel : ∀ p, core.ptr.mut_ptr.RawPtrMutT.as_mut p = asMutBorrow p) :
-    ¬ ⦃ emp ⦄ ptr_as_mut_twice ⦃ _ => ⌜True⌝ ⦄ := by
+    ¬ ⦃ emp ⦄ ptr_as_mut_twice distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := dwp_empty hTriple
   unfold ptr_as_mut_twice at hSpec
   simp only [hModel, asMutBorrow, RawPtr.borrow] at hSpec
   heap_norm
-  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
-  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
   heap_norm
   heap_checked
   obtain ⟨hr, -, hx⟩ := hx
@@ -739,7 +763,8 @@ theorem ptr_as_mut_twice.ub
 
 /-- The backward function of `Handle::new` ends the borrow of `x` with the backward function of
 `from_mut`, which reads the value written through the hidden pointer. -/
-theorem handle_write.spec : ⦃ emp ⦄ handle_write ⦃ r => ⌜r = 4#u32⌝ ⦄ := by
+theorem handle_write.spec (placement : Placement) :
+    ⦃ emp ⦄ handle_write placement ⦃ r => ⌜r = 4#u32⌝ ⦄ := by
   unfold handle_write Handle.new Handle.as_ptr
   step as ⟨r, hBack⟩
   obtain ⟨p, back⟩ := r
