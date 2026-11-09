@@ -180,7 +180,7 @@ def PtrCounter.Insts.Raw_pointersCounter : Counter PtrCounter := {
 /-- [raw_pointers::next_twice]:
     Source: 'tests/src/raw_pointers.rs', lines 108:0-112:1 -/
 def next_twice
-  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : SharedBorrow T) :
+  {T : Type _} (CounterInst : Counter T) (c : SharedBorrow T) :
   Result Std.U32
   := do
   let a ← CounterInst.next c
@@ -190,7 +190,7 @@ def next_twice
 /-- [raw_pointers::next_once]:
     Source: 'tests/src/raw_pointers.rs', lines 114:0-116:1 -/
 def next_once
-  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : SharedBorrow T) :
+  {T : Type _} (CounterInst : Counter T) (c : SharedBorrow T) :
   Result Std.U32
   := do
   CounterInst.next c
@@ -198,7 +198,7 @@ def next_once
 /-- [raw_pointers::next_twice_via_generic]:
     Source: 'tests/src/raw_pointers.rs', lines 119:0-123:1 -/
 def next_twice_via_generic
-  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : SharedBorrow T) :
+  {T : Type _} (CounterInst : Counter T) (c : SharedBorrow T) :
   Result Std.U32
   := do
   let a ← next_once CounterInst c
