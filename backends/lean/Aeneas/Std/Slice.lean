@@ -73,9 +73,11 @@ Casting the pointer to mutable cannot authorize writes; the temporary block is r
 def Slice.end_as_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
   p.endSharedExposure repr s.val
 
-def Slice.as_ptr {T : Type} (repr : Repr T) (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocSharedExposure repr s.val) fun p =>
-    .ok (p, Slice.end_as_ptr repr s p)
+@[rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0])]
+def Slice.as_ptr {T : Type} [Pointee T] (s : SharedBorrow (Slice T)) :
+    Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.allocSharedExposure (Pointee.repr (T := T)) s.val.val) fun p =>
+    .ok (p, Slice.end_as_ptr (Pointee.repr (T := T)) s.val p)
 
 /-- Ends the mutable exposure of `as_mut_ptr`: the cells become the new slice and their
 temporary block is removed. -/
@@ -84,26 +86,31 @@ def Slice.end_as_mut_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : MutRawPtr
   p.endExposure repr s.length
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
-def Slice.as_mut_ptr {T : Type} (repr : Repr T) (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
-  Aeneas.Std.bind (RawPtr.allocExposure repr s.val) fun p => .ok (p, Slice.end_as_mut_ptr repr s p)
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0])]
+def Slice.as_mut_ptr {T : Type} [Pointee T] (s : MutBorrow (Slice T)) :
+    Result (MutRawPtr T × Result (Slice T)) :=
+  Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) s.val.val) fun p =>
+    .ok (p, Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p)
 
 /-- Back function of `from_raw_parts_mut`: ends the borrow of the cells with the final slice. -/
 def core.slice.raw.from_raw_parts_mut.back {T : Type} (repr : Repr T) (p : MutRawPtr T) (len : Usize)
     (s : Slice T) : Result Unit :=
   if s.length = len.val then p.endBorrowRange repr s.val else .fail .undef
 
-def core.slice.raw.from_raw_parts {T : Type} (repr : Repr T) (p : ConstRawPtr T) (len : Usize) :
-    Result (Slice T × Result Unit) :=
-  Aeneas.Std.bind (p.shareRange repr len.val) fun values =>
+@[rust_fun "core::slice::raw::from_raw_parts" (statefulLifetimes := [0])]
+def core.slice.raw.from_raw_parts {T : Type} [Pointee T] (p : ConstRawPtr T) (len : Usize) :
+    Result (SharedBorrow (Slice T) × Result Unit) :=
+  Aeneas.Std.bind (p.shareRange (Pointee.repr (T := T)) len.val) fun values =>
   if h : values.length ≤ Usize.max then
     let s := Slice.from values h
-    .ok (s, p.endShareRange repr s.val)
+    .ok (⟨s⟩, p.endShareRange (Pointee.repr (T := T)) s.val)
   else .fail .undef
 
-def core.slice.raw.from_raw_parts_mut {T : Type} (repr : Repr T) (p : MutRawPtr T) (len : Usize) :
-    Result (Slice T × (Slice T → Result Unit)) :=
-  Aeneas.Std.bind (p.borrowSlice repr len) fun s =>
-    .ok (s, core.slice.raw.from_raw_parts_mut.back repr p len)
+@[rust_fun "core::slice::raw::from_raw_parts_mut" (statefulLifetimes := [0])]
+def core.slice.raw.from_raw_parts_mut {T : Type} [Pointee T] (p : MutRawPtr T) (len : Usize) :
+    Result (MutBorrow (Slice T) × (Slice T → Result Unit)) :=
+  Aeneas.Std.bind (p.borrowSlice (Pointee.repr (T := T)) len) fun s =>
+    .ok (⟨s⟩, core.slice.raw.from_raw_parts_mut.back (Pointee.repr (T := T)) p len)
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h

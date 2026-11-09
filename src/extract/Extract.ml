@@ -56,7 +56,8 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       in
       let f = def.f in
       let fun_id = (Pure.FunId f.def_id, f.loop_id) in
-      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
+      ctx_add_builtin_fun f.item_meta.span (FunId (FromLlbc fun_id))
+        info.extract_name ctx
   | None ->
       (* Not builtin *)
       (* Register the decrease clauses, if necessary *)
@@ -1043,7 +1044,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           | Pure Discriminant ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
-          | Pure ToResult ->
+          | Pure (ToResult | RawPtrRead | RawPtrWrite) ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure (ResultUnwrapMut | ResultUnwrapMutBorrow) ->
@@ -1745,6 +1746,13 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
           (List.map snd supd.updates)
     | _ -> [%admit_raise] span "Unreachable" fmt
 
+(** The transparent functions which access the heap receive the [Pointee]
+    instances of their type parameters (Lean only, see [Pointee.lean]) *)
+let fun_has_pointee_binders (ctx : extraction_ctx) (def : fun_decl) : bool =
+  backend () = Lean
+  && Option.is_some def.body
+  && FunsAnalysis.is_stateful ctx.trans_ctx.fun_ctx.fun_infos def.def_id
+
 (** A small utility to print the parameters of a function signature.
 
     We return two contexts:
@@ -1778,9 +1786,10 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
   let explicit = def.signature.explicit_info in
+  let pointee_binders = fun_has_pointee_binders ctx def in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
-     ~space Item def.signature.generics (Some explicit) type_params cg_params
+     ~space ~pointee_binders Item def.signature.generics (Some explicit) type_params cg_params
      trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
