@@ -608,6 +608,14 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       (fun ty ->
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".leading_zeros")
       ~can_fail:false ()
+  (* Trailing zeros *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::trailing_zeros")
+      (fun ty ->
+        "core.num."
+        ^ StringUtils.capitalize_first_letter ty
+        ^ ".trailing_zeros")
+      ~can_fail:false ()
   (* to_le_bytes *)
   @ mk_scalar_fun
       (fun ty -> "core::num::{" ^ ty ^ "}::to_le_bytes")

@@ -227,3 +227,23 @@ pub fn test_question_mark_err() {
     let r = use_question_mark(10, 0);
     assert!(!r.is_ok());
 }
+
+// ============================================================================
+// trailing_zeros
+// ============================================================================
+
+fn u32_use_trailing_zeros(x: u32) -> u32 {
+    x.trailing_zeros()
+}
+
+fn i64_use_trailing_zeros(x: i64) -> u32 {
+    x.trailing_zeros()
+}
+
+#[verify::test]
+pub fn test_trailing_zeros() {
+    assert!(u32_use_trailing_zeros(12) == 2);
+    assert!(u32_use_trailing_zeros(0) == 32);
+    assert!(i64_use_trailing_zeros(-8) == 3);
+    assert!(0u64.trailing_zeros() == 64);
+}
