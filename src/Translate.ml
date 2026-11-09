@@ -1559,31 +1559,220 @@ let extract_translated_crate (filename : string) (dest_dir : string)
                   match decl.body with
                   | None -> acc
                   | Some body ->
-                      ReorderDecls.FunIdSet.fold
-                        (fun (fid : ReorderDecls.fun_id) acc ->
-                          FunDeclId.TreeSet.add fid.def_id acc)
-                        (ReorderDecls.compute_body_fun_deps body.body)
-                        acc)
+                      let acc =
+                        ReorderDecls.FunIdSet.fold
+                          (fun (fid : ReorderDecls.fun_id) acc ->
+                            FunDeclId.TreeSet.add fid.def_id acc)
+                          (ReorderDecls.compute_body_fun_deps body.body)
+                          acc
+                      in
+                      (* The globals are evaluated where they are used: a
+                         global whose initializer exposes safe places receives
+                         a placement from its users *)
+                      let acc = ref acc in
+                      let visitor =
+                        object
+                          inherit [_] Pure.iter_expr
+
+                          method! visit_qualif _ q =
+                            match q.id with
+                            | Global gid -> (
+                                match
+                                  GlobalDeclId.Map.find_opt gid trans_globals
+                                with
+                                | Some g ->
+                                    acc := FunDeclId.TreeSet.add g.body_id !acc
+                                | None -> ())
+                            | _ -> ()
+                        end
+                      in
+                      visitor#visit_texpr () body.body;
+                      !acc)
                 FunDeclId.TreeSet.empty decls
             in
-            if Option.is_some trans.f.body then (id, callees) :: acc else acc)
+            (* The trait methods called through a trait instance *)
+            let trait_calls = ref [] in
+            let visitor =
+              object
+                inherit [_] Pure.iter_expr
+
+                method! visit_qualif _ q =
+                  match q.id with
+                  | FunOrOp (Fun (FromLlbc (TraitMethod (tref, mid), _))) ->
+                      trait_calls :=
+                        (tref.trait_decl_ref.trait_decl_id, mid) :: !trait_calls
+                  | _ -> ()
+              end
+            in
+            List.iter
+              (fun (decl : Pure.fun_decl) ->
+                match decl.body with
+                | None -> ()
+                | Some body -> visitor#visit_texpr () body.body)
+              decls;
+            if Option.is_some trans.f.body then
+              (id, callees, !trait_calls) :: acc
+            else acc)
           trans_funs []
       in
-      let rec fixpoint (set : FunDeclId.TreeSet.t) : FunDeclId.TreeSet.t =
+      (* The implementations of the trait methods *)
+      let impl_methods =
+        TraitImplId.Map.fold
+          (fun _ (impl : Pure.trait_impl) acc ->
+            List.map
+              (fun (mid, _, (fref : Pure.fun_decl_ref Pure.binder)) ->
+                ( (impl.impl_trait.trait_decl_id, mid),
+                  fref.binder_value.fun_id ))
+              impl.methods
+            @ acc)
+          trans_trait_impls []
+      in
+      (* A trait method needs a placement if one of its implementations needs
+         one: then all its implementations receive one, and so do the
+         functions which call it through a trait instance *)
+      let rec fixpoint (set : FunDeclId.TreeSet.t) methods =
         let set' =
           List.fold_left
-            (fun set (id, callees) ->
+            (fun set (id, callees, trait_calls) ->
               if
                 FunDeclId.TreeSet.exists
                   (fun callee -> exposes callee || FunDeclId.TreeSet.mem callee set)
                   callees
+                || List.exists (fun m -> List.mem m methods) trait_calls
               then FunDeclId.TreeSet.add id set
               else set)
             set deps
         in
-        if FunDeclId.TreeSet.equal set set' then set else fixpoint set'
+        let set' =
+          List.fold_left
+            (fun set (m, fid) ->
+              if List.mem m methods then FunDeclId.TreeSet.add fid set else set)
+            set' impl_methods
+        in
+        let methods' =
+          List.fold_left
+            (fun methods (m, fid) ->
+              if FunDeclId.TreeSet.mem fid set' && not (List.mem m methods) then
+                m :: methods
+              else methods)
+            methods impl_methods
+        in
+        if
+          FunDeclId.TreeSet.equal set set'
+          && List.length methods = List.length methods'
+        then (set, methods)
+        else fixpoint set' methods'
       in
-      fixpoint FunDeclId.TreeSet.empty
+      fixpoint FunDeclId.TreeSet.empty []
+    in
+    let funs_with_placement, trait_methods_with_placement =
+      funs_with_placement
+    in
+    (* The type parameters of the transparent functions which need a [Pointee]
+       instance (Lean only, see [Pointee.lean]): the ones which appear in the
+       type arguments of the stateful models they call, or in the type
+       arguments which instantiate the [Pointee] parameters of the transparent
+       functions they call. A type parameter which is only used as a value
+       type (ex.: a float type) doesn't need one. *)
+    let funs_pointee_params =
+      let ty_vars (ty : Pure.ty) : TypeVarId.Set.t =
+        let vars = ref TypeVarId.Set.empty in
+        let visitor =
+          object
+            inherit [_] Pure.iter_expr
+
+            method! visit_TVar _ v =
+              match v with
+              | Free id | Bound (_, id) -> vars := TypeVarId.Set.add id !vars
+          end
+        in
+        visitor#visit_ty () ty;
+        !vars
+      in
+      (* For every transparent function: the calls in its bodies (callee and
+         type arguments) *)
+      let calls =
+        FunDeclId.Map.fold
+          (fun id (trans : pure_fun_translation) acc ->
+            if Option.is_none trans.f.body then acc
+            else
+              let decls = (trans.f :: trans.loops) @ trans.bodies in
+              let calls = ref [] in
+              let visitor =
+                object
+                  inherit [_] Pure.iter_expr
+
+                  method! visit_qualif _ q =
+                    match q.id with
+                    | FunOrOp (Fun (FromLlbc (FunId fid, _))) ->
+                        calls := (fid, q.generics.types) :: !calls
+                    | _ -> ()
+                end
+              in
+              List.iter
+                (fun (decl : Pure.fun_decl) ->
+                  match decl.body with
+                  | None -> ()
+                  | Some body -> visitor#visit_texpr () body.body)
+                decls;
+              (id, !calls) :: acc)
+          trans_funs []
+      in
+      let is_transparent (id : FunDeclId.id) : bool =
+        match FunDeclId.Map.find_opt id trans_funs with
+        | Some trans -> Option.is_some trans.f.body
+        | None -> false
+      in
+      (* The models which need the [Pointee] instances of their type arguments
+         although they don't access the heap *)
+      let pointee_models =
+        List.map NameMatcher.parse_pattern
+          [ "core::mem::size_of"; "core::mem::align_of" ]
+      in
+      let stateful (id : FunDeclId.id) : bool =
+        FunsAnalysis.is_stateful trans_ctx.fun_ctx.fun_infos id
+        ||
+        match FunDeclId.Map.find_opt id trans_funs with
+        | Some trans ->
+            List.exists
+              (fun pat ->
+                ExtractName.match_name crate pat trans.f.item_meta.name)
+              pointee_models
+        | None -> false
+      in
+      let lookup m id =
+        Option.value ~default:TypeVarId.Set.empty (FunDeclId.TreeMap.find_opt id m)
+      in
+      let step (m : TypeVarId.Set.t FunDeclId.TreeMap.t) =
+        List.fold_left
+          (fun m' (id, calls) ->
+            let needed =
+              List.fold_left
+                (fun acc (callee, (tys : Pure.ty list)) ->
+                  if is_transparent callee then
+                    let callee_needed = lookup m callee in
+                    List.fold_left
+                      (fun acc (i, ty) ->
+                        if TypeVarId.Set.mem (TypeVarId.of_int i) callee_needed
+                        then TypeVarId.Set.union acc (ty_vars ty)
+                        else acc)
+                      acc
+                      (List.mapi (fun i ty -> (i, ty)) tys)
+                  else if stateful callee then
+                    List.fold_left
+                      (fun acc ty -> TypeVarId.Set.union acc (ty_vars ty))
+                      acc tys
+                  else acc)
+                TypeVarId.Set.empty calls
+            in
+            FunDeclId.TreeMap.add id needed m')
+          FunDeclId.TreeMap.empty calls
+      in
+      let rec fixpoint m =
+        let m' = step m in
+        if FunDeclId.TreeMap.equal TypeVarId.Set.equal m m' then m else fixpoint m'
+      in
+      fixpoint FunDeclId.TreeMap.empty
     in
     {
       ExtractBase.crate;
@@ -1591,6 +1780,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       names_maps;
       indent_incr = 2;
       funs_with_placement;
+      trait_methods_with_placement;
+      funs_pointee_params;
       placement = None;
       use_dep_ite =
         Config.backend () = Lean && !Config.extract_decreases_clauses;

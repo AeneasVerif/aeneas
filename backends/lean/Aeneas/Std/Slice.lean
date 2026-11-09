@@ -73,8 +73,8 @@ Casting the pointer to mutable cannot authorize writes; the temporary block is r
 def Slice.end_as_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
   p.endSharedExposure repr s.val
 
-@[rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0]) (placement := true)]
-def Slice.as_ptr {T : Type} [Pointee T] (address : BasePtr) (s : SharedBorrow (Slice T)) :
+/-- `as_ptr` for the slices of values with a `Pointee` instance. -/
+@[expose] def Slice.as_ptr_pointee {T : Type} [Pointee T] (address : BasePtr) (s : SharedBorrow (Slice T)) :
     Result (ConstRawPtr T × Result Unit) :=
   Aeneas.Std.bind (RawPtr.allocSharedExposure (Pointee.repr (T := T)) s.val.val address) fun p =>
     .ok (p, Slice.end_as_ptr (Pointee.repr (T := T)) s.val p)
@@ -86,11 +86,42 @@ def Slice.end_as_mut_ptr {T : Type} (repr : Repr T) (s : Slice T) (p : MutRawPtr
   p.endExposure repr s.length
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
-@[rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0]) (placement := true)]
-def Slice.as_mut_ptr {T : Type} [Pointee T] (address : BasePtr) (s : MutBorrow (Slice T)) :
+/-- `as_mut_ptr` for the slices of values with a `Pointee` instance. -/
+@[expose] def Slice.as_mut_ptr_pointee {T : Type} [Pointee T] (address : BasePtr) (s : MutBorrow (Slice T)) :
     Result (MutRawPtr T × Result (Slice T)) :=
   Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) s.val.val address) fun p =>
     .ok (p, Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p)
+
+/-- The element types of the slices which can be exposed as raw memory by `as_ptr` and
+`as_mut_ptr`: the types with a `Pointee` instance, and `MaybeUninit T` (see `MaybeUninit.lean`),
+which has none since its uninitialized values have no representation. -/
+class Exposable (T : Type) where
+  as_ptr : BasePtr → SharedBorrow (Slice T) → Result (ConstRawPtr T × Result Unit)
+  as_mut_ptr : BasePtr → MutBorrow (Slice T) → Result (MutRawPtr T × Result (Slice T))
+
+@[expose] instance Exposable.ofPointee {T : Type} [Pointee T] : Exposable T where
+  as_ptr := Slice.as_ptr_pointee
+  as_mut_ptr := Slice.as_mut_ptr_pointee
+
+@[expose, rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0]) (placement := true)]
+def Slice.as_ptr {T : Type} [Exposable T] (address : BasePtr) (s : SharedBorrow (Slice T)) :
+    Result (ConstRawPtr T × Result Unit) :=
+  Exposable.as_ptr address s
+
+@[expose, rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0]) (placement := true)]
+def Slice.as_mut_ptr {T : Type} [Exposable T] (address : BasePtr) (s : MutBorrow (Slice T)) :
+    Result (MutRawPtr T × Result (Slice T)) :=
+  Exposable.as_mut_ptr address s
+
+theorem Slice.as_ptr_eq {T : Type} [Pointee T] (address : BasePtr) (s : SharedBorrow (Slice T)) :
+    Slice.as_ptr address s =
+      Aeneas.Std.bind (RawPtr.allocSharedExposure (Pointee.repr (T := T)) s.val.val address) fun p =>
+        .ok (p, Slice.end_as_ptr (Pointee.repr (T := T)) s.val p) := rfl
+
+theorem Slice.as_mut_ptr_eq {T : Type} [Pointee T] (address : BasePtr) (s : MutBorrow (Slice T)) :
+    Slice.as_mut_ptr address s =
+      Aeneas.Std.bind (RawPtr.allocExposure (Pointee.repr (T := T)) s.val.val address) fun p =>
+        .ok (p, Slice.end_as_mut_ptr (Pointee.repr (T := T)) s.val p) := rfl
 
 /-- Back function of `from_raw_parts_mut`: ends the borrow of the cells with the final slice. -/
 def core.slice.raw.from_raw_parts_mut.back {T : Type} (repr : Repr T) (p : MutRawPtr T) (len : Usize)

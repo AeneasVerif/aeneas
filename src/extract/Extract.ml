@@ -249,7 +249,19 @@ let extract_adt_g_value (span : Meta.span)
 (* Extract globals in the same way as variables *)
 let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     ~(inside : bool) (id : A.GlobalDeclId.id) (generics : generic_args) : unit =
-  let use_brackets = inside && generics <> empty_generic_args in
+  (* The globals whose initializer exposes safe places receive a placement
+     (Lean only, see [Placement]) *)
+  let has_placement =
+    backend () = Lean
+    &&
+    match GlobalDeclId.Map.find_opt id ctx.trans_globals with
+    | Some (d : global_decl) ->
+        FunDeclId.TreeSet.mem d.body_id ctx.funs_with_placement
+    | None -> false
+  in
+  let use_brackets =
+    inside && (generics <> empty_generic_args || has_placement)
+  in
   F.pp_open_hvbox fmt ctx.indent_incr;
   if use_brackets then F.pp_print_string fmt "(";
   (* Extract the global name *)
@@ -266,6 +278,18 @@ let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       (GlobalDeclId.Map.find_opt id ctx.trans_globals)
   in
   extract_generic_args span ctx fmt TypeDeclId.TreeSet.empty ~explicit generics;
+  (if has_placement then
+     match ctx.placement with
+     | Some (name, counter) ->
+         F.pp_print_space fmt ();
+         F.pp_print_string fmt
+           ("(" ^ name ^ ".sub " ^ string_of_int !counter ^ ")");
+         incr counter
+     | None ->
+         [%save_error] span
+           "Use of a global which needs a placement (its initializer exposes \
+            safe places as raw memory) from a function which doesn't have one";
+         F.pp_print_string fmt " /- ERROR: missing placement -/");
   if use_brackets then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -710,11 +734,17 @@ let extract_texpr_errors (fmt : F.formatter) =
 (** - [inside_do]: [true] if we are inside a do block. In Lean, controls whether
       we can print let-bindings or if we need to insert a [do] first. *)
 (** The transparent functions which access the heap receive the [Pointee]
-    instances of their type parameters (Lean only, see [Pointee.lean]) *)
-let fun_has_pointee_binders (ctx : extraction_ctx) (def : fun_decl) : bool =
-  backend () = Lean
-  && Option.is_some def.body
-  && FunsAnalysis.is_stateful ctx.trans_ctx.fun_ctx.fun_infos def.def_id
+    instances of the type parameters which need one (Lean only, see
+    [Pointee.lean] and [funs_pointee_params]) *)
+let fun_pointee_binders (ctx : extraction_ctx) (def : fun_decl) :
+    TypeVarId.id -> bool =
+  if backend () = Lean && Option.is_some def.body then
+    let needed =
+      Option.value ~default:TypeVarId.Set.empty
+        (FunDeclId.TreeMap.find_opt def.def_id ctx.funs_pointee_params)
+    in
+    fun id -> TypeVarId.Set.mem id needed
+  else fun _ -> false
 
 (** The transparent functions which access the heap receive a placement: the
     addresses of the safe places they expose as raw memory (Lean only, see
@@ -1118,6 +1148,16 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
                     if fun_has_placement ctx trans.f then Some "sub" else None)
             | None -> None
           in
+          placement_arg)
+      | FromLlbc (TraitMethod (tref, mid), _) ->
+          if
+            List.mem
+              (tref.trait_decl_ref.trait_decl_id, mid)
+              ctx.trait_methods_with_placement
+          then Some "sub"
+          else None
+      | _ -> None)
+      |> (fun placement_arg ->
           match placement_arg with
           | None -> ()
           | Some kind -> (
@@ -1131,8 +1171,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               | None ->
                   [%save_error] span
                     "Call to a function which needs a placement (it exposes                      safe places as raw memory) from a function which doesn't                      have one";
-                  F.pp_print_string fmt " /- ERROR: missing placement -/"))
-      | _ -> ());
+                  F.pp_print_string fmt " /- ERROR: missing placement -/"));
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -1828,7 +1867,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
   let explicit = def.signature.explicit_info in
-  let pointee_binders = fun_has_pointee_binders ctx def in
+  let pointee_binders = fun_pointee_binders ctx def in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
      ~space ~pointee_binders Item def.signature.generics (Some explicit) type_params cg_params
@@ -2532,7 +2571,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
     ~(irreducible : bool) ~(with_do : bool) (name : string)
     (generics : generic_params) (explicit : explicit_info)
     (type_params : string list) (cg_params : string list)
-    (trait_clauses : string list) (ty : ty)
+    (trait_clauses : string list) ?(placement : string option = None) (ty : ty)
     (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
 
@@ -2586,6 +2625,11 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty
     ~space:(Some space) Item generics (Some explicit) type_params cg_params
     trait_clauses;
+  (match placement with
+  | Some name ->
+      insert_req_space fmt space;
+      F.pp_print_string fmt ("(" ^ name ^ " : Placement)")
+  | None -> ());
   if not !space then F.pp_print_space fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
@@ -2744,10 +2788,20 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
         | Let (true, _, _, _) -> true
         | _ -> false
       in
+      (* The placement (Lean only, see [Placement]) *)
+      let ctx, placement =
+        if
+          backend () = Lean
+          && FunDeclId.TreeSet.mem global.body_id ctx.funs_with_placement
+        then
+          let ctx, name = ctx_add_var span "placement" placement_var_id ctx in
+          ({ ctx with placement = Some (name, ref 0) }, Some name)
+        else ({ ctx with placement = None }, None)
+      in
       extract_global_decl_body_gen span ctx fmt global SingleNonRec
         ~irreducible:(backend () = Lean)
         ~with_do decl_name global.generics global.explicit_info type_params
-        cg_params trait_clauses output_ty
+        cg_params trait_clauses ~placement output_ty
         (Some
            (fun fmt ->
              extract_texpr span ctx fmt ~inside:false ~inside_do:with_do
@@ -3132,6 +3186,12 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
 
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
+    (* The placement (Lean only, see [Placement]) *)
+    if List.mem (decl.def_id, method_id) ctx.trait_methods_with_placement then (
+      F.pp_print_string fmt "Placement";
+      F.pp_print_space fmt ();
+      extract_arrow fmt ();
+      F.pp_print_space fmt ());
     let ({ inputs; output; _ } : fun_sig) = signature in
     extract_fun_input_parameters_types span ctx fmt inputs;
     extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false output
