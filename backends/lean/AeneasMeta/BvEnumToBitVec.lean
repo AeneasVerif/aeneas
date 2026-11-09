@@ -73,8 +73,8 @@ meta def realizeBvEnumToBitVec (declName : Name) : CoreM Unit := do
   enableRealizationsForConst declName
   /- The realisers are private to `Lean.Meta.Tactic.BVDecide.Normalize.Enums`: we
      trigger them through their registered reserved-name actions instead. -/
-  for suffix in [enumToBitVecSuffix, "enumToBitVec_le", "eq_iff_enumToBitVec_eq"] do
-    executeReservedNameAction (.str declName suffix)
+  for suffix in ["enumToBitVec", "enumToBitVec_le", "eq_iff_enumToBitVec_eq"] do
+    executeReservedNameAction (mkPrivateName (← getEnv) (.str declName suffix))
 
 /-- `#define_bv_decide_toBitVec T` eagerly realises `bv_decide`'s enum
 conversion constants for the enum inductive `T` in the current module.
