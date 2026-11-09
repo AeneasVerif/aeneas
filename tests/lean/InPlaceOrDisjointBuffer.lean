@@ -74,7 +74,7 @@ def InPlaceOrDisjointBuffer.new_disjoint
   := do
   let left_val := Slice.len (SharedBorrow.mk src.val)
   let right_val := Slice.len (SharedBorrow.mk dst.val)
-  massert (left_val = right_val)
+  massert (left_val = right_val : Bool)
   let len := Slice.len (SharedBorrow.mk src.val)
   let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) src
   let p1 := RawPtr.cast_const p

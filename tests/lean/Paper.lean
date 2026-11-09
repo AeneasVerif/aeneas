@@ -31,7 +31,7 @@ def ref_incr (x : MutBorrow Std.I32) : Result Std.I32 := do
     Visibility: public -/
 def test_incr : Result Unit := do
   let x ← ref_incr (MutBorrow.mk 0#i32)
-  massert (x = 1#i32)
+  massert (x = 1#i32 : Bool)
 
 /- Unit test for [paper::test_incr] -/
 #guard (test_incr).reducesTo ()
@@ -56,10 +56,10 @@ def test_choose : Result Unit := do
   let (z, choose_back) ←
     choose true (MutBorrow.mk 0#i32) (MutBorrow.mk 0#i32)
   let z1 ← z.val + 1#i32
-  massert (z1 = 1#i32)
+  massert (z1 = 1#i32 : Bool)
   let (x, y) := choose_back z1
-  massert (x = 1#i32)
-  massert (y = 0#i32)
+  massert (x = 1#i32 : Bool)
+  massert (y = 0#i32 : Bool)
 
 /- Unit test for [paper::test_choose] -/
 #guard (test_choose).reducesTo ()
@@ -114,7 +114,7 @@ def test_nth : Result Unit := do
   let x1 ← x.val + 1#i32
   let l := list_nth_mut_back x1
   let i ← sum (SharedBorrow.mk l)
-  massert (i = 7#i32)
+  massert (i = 7#i32 : Bool)
 
 /- Unit test for [paper::test_nth] -/
 #guard (test_nth).reducesTo ()

@@ -42,7 +42,7 @@ def SharedWrapper.unwrap
 def use_shared_wrapper : Result Unit := do
   let w ← SharedWrapper.create (SharedBorrow.mk 0#i32)
   let p ← SharedWrapper.unwrap w
-  massert (0#i32 = p.val)
+  massert (0#i32 = p.val : Bool)
 
 /-- [adt_borrows::SharedWrapper1]
     Source: 'tests/src/adt-borrows.rs', lines 26:0-28:1 -/
@@ -66,7 +66,7 @@ def SharedWrapper1.unwrap
 def use_shared_wrapper1 : Result Unit := do
   let w ← SharedWrapper1.create (SharedBorrow.mk 0#i32)
   let p ← SharedWrapper1.unwrap w
-  massert (0#i32 = p.val)
+  massert (0#i32 = p.val : Bool)
 
 /-- [adt_borrows::SharedWrapper2]
     Source: 'tests/src/adt-borrows.rs', lines 47:0-50:1 -/
@@ -96,8 +96,8 @@ def use_shared_wrapper2 : Result Unit := do
   let w ←
     SharedWrapper2.create (SharedBorrow.mk 0#i32) (SharedBorrow.mk 1#i32)
   let (i, i1) ← SharedWrapper2.unwrap w
-  massert (0#i32 = i.val)
-  massert (1#i32 = i1.val)
+  massert (0#i32 = i.val : Bool)
+  massert (1#i32 = i1.val : Bool)
 
 /-- [adt_borrows::MutWrapper]
     Source: 'tests/src/adt-borrows.rs', lines 71:0-71:36 -/
@@ -137,7 +137,7 @@ def use_mut_wrapper : Result Unit := do
   let (p, unwrap_back) ← MutWrapper.unwrap w
   let p1 ← p.val + 1#i32
   let x := create_back (unwrap_back p1)
-  massert (x = 1#i32)
+  massert (x = 1#i32 : Bool)
 
 /-- [adt_borrows::use_mut_wrapper_id]:
     Source: 'tests/src/adt-borrows.rs', lines 95:0-97:1 -/
@@ -185,7 +185,7 @@ def use_mut_wrapper1 : Result Unit := do
   let (p, unwrap_back) ← MutWrapper1.unwrap w
   let p1 ← p.val + 1#i32
   let x := create_back (unwrap_back p1)
-  massert (x = 1#i32)
+  massert (x = 1#i32 : Bool)
 
 /-- [adt_borrows::use_mut_wrapper1_id]:
     Source: 'tests/src/adt-borrows.rs', lines 125:0-127:1 -/
@@ -242,9 +242,9 @@ def use_mut_wrapper2 : Result Unit := do
   let px ← i.val + 1#i32
   let py ← i1.val + 1#i32
   let x := create_back { w with x := (unwrap_back px).x }
-  massert (x = 1#i32)
+  massert (x = 1#i32 : Bool)
   let y := create_back1 { w with y := (unwrap_back1 py).y }
-  massert (y = 11#i32)
+  massert (y = 11#i32 : Bool)
 
 /-- [adt_borrows::use_mut_wrapper2_id]:
     Source: 'tests/src/adt-borrows.rs', lines 159:0-161:1 -/

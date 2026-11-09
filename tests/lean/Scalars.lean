@@ -332,7 +332,7 @@ def test_question_mark_ok : Result Unit := do
   let b ← core.result.Result.is_ok (SharedBorrow.mk r)
   massert b
   let i ← core.result.Result.unwrap core.fmt.DebugUnit r
-  massert (i = 6#u32)
+  massert (i = 6#u32 : Bool)
 
 /- Unit test for [scalars::test_question_mark_ok] -/
 #guard (test_question_mark_ok).reducesTo ()

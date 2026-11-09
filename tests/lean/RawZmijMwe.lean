@@ -31,7 +31,7 @@ def PAIRS : Array Std.U16 2#usize :=
     Visibility: public -/
 def read_digits2
   (placement : Placement) (pair : Std.Usize) : Result Std.U16 := do
-  massert (pair < 2#usize)
+  massert (pair < 2#usize : Bool)
   let s ← lift (Array.as_slice (SharedBorrow.mk PAIRS))
   let (p, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
   let p1 ← RawPtr.add p pair
