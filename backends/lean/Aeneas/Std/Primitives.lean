@@ -562,12 +562,12 @@ We nonetheless preserve the types, by using the wrappers below.
 /-- The type of boxes: `Box<T>` -/
 structure Box (α : Type u) where
   val : α
-deriving Inhabited, BEq, DecidableEq, Repr, Hashable
+deriving Inhabited, BEq, DecidableEq, _root_.Repr, Hashable
 
 /-- The type of shared borrows: `&T` -/
 structure SharedBorrow (α : Type u) where
   val : α
-deriving Inhabited, BEq, DecidableEq, Repr, Hashable
+deriving Inhabited, BEq, DecidableEq, _root_.Repr, Hashable
 
 /-- The type of mutable borrows: `&mut T`.
 
@@ -576,7 +576,7 @@ deriving Inhabited, BEq, DecidableEq, Repr, Hashable
     the borrowed value (of type `T`), not a value of type `MutBorrow T`. -/
 structure MutBorrow (α : Type u) where
   val : α
-deriving Inhabited, BEq, DecidableEq, Repr, Hashable
+deriving Inhabited, BEq, DecidableEq, _root_.Repr, Hashable
 
 attribute [ext, pp_using_anonymous_constructor] Box SharedBorrow MutBorrow
 
