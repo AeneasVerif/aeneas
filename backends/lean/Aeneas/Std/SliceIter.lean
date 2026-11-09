@@ -76,6 +76,31 @@ def core.slice.iter.IteratorSliceIter.next
     ok (some x, it)
   else ok (none, it)
 
+/-- A slice iterator returns the element at its current index and advances by one
+    while elements remain. -/
+@[step]
+theorem core.slice.iter.IteratorSliceIter.next.spec
+    {T : Type _} (it : core.slice.iter.Iter T) :
+    core.slice.iter.IteratorSliceIter.next it
+      ⦃ r => if h : it.i < it.slice.val.length
+        then r = (some (it.slice.val[it.i]'h), { it with i := it.i + 1 })
+        else r = (none, it) ⦄ := by
+  by_cases h : it.i < it.slice.val.length
+  · simp [core.slice.iter.IteratorSliceIter.next, h, WP.spec_ok]
+    exact Slice.getElem_Nat_eq it.slice it.i h
+  · simp [core.slice.iter.IteratorSliceIter.next, h, WP.spec_ok]
+
+/-- Behavioural model of the optimised slice-iterator `fold`. It visits the
+    remaining elements in the same order as repeated `next` calls. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::fold"]
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+    {T Acc F : Type _}
+    (FnMutInst : core.ops.function.FnMut F (Acc × T) Acc)
+    (it : core.slice.iter.Iter T) (init : Acc) (f : F) : Result Acc :=
+  core.iter.traits.iterator.Iterator.fold.default.loop
+    core.slice.iter.IteratorSliceIter.next FnMutInst it init f
+
 /-- `DoubleEndedIterator::next_back` on `slice::Iter`.
 
 The standard library generates this impl with the `iterator!` macro
@@ -114,11 +139,38 @@ theorem core.slice.iter.IteratorSliceIter.next_back.spec
   rw [List.getElem?_eq_getElem (by scalar_tac), Slice.getElem_Nat_eq]
   scalar_tac
 
+/-- `Iterator::count` on `slice::Iter`.
+
+The standard library specialises this in the `iterator!` macro
+(`library/core/src/slice/iter/macros.rs`) rather than draining the iterator:
+```rust
+fn count(self) -> usize {
+    len!(self)
+}
+```
+where `len!` is the number of elements between `ptr` and `end`. As for `next_back`, the model's
+remaining elements are `slice[i..slice.length]`, so that is `slice.length - i`. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::count"]
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.count
+  {T : Type _} (it : core.slice.iter.Iter T) : Result Std.Usize :=
+  ok (Std.Usize.ofNatCore (it.slice.val.length - it.i) (by scalar_tac))
+
+@[step]
+theorem core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.count.spec
+    {T : Type _} (it : core.slice.iter.Iter T) :
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.count it
+    ⦃ n => n.val = it.slice.val.length - it.i ⦄ := by
+  unfold core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.count
+  simp [WP.spec_ok]
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
 impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type _) :
   core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
   next := core.slice.iter.IteratorSliceIter.next
+  fold := core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+  count := core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.count
   step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
     (core.iter.traits.iterator.IteratorSliceIter T)
   enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
@@ -126,6 +178,81 @@ impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type _) :
   take := core.iter.traits.iterator.Iterator.take.trait_default
     (core.iter.traits.iterator.IteratorSliceIter T)
 }
+
+/-- The default `count` agrees with the specialised slice count. This proof uses the
+    `next` and fold-step specifications, with the remaining slice length as measure. -/
+theorem core.slice.iter.IteratorSliceIter.count_default_spec
+    {T : Type _} (it : core.slice.iter.Iter T) :
+    core.iter.traits.iterator.Iterator.count.default
+      (core.iter.traits.iterator.IteratorSliceIter T) it
+    ⦃ n => n.val = it.slice.val.length - it.i ⦄ := by
+  change core.iter.traits.iterator.Iterator.fold.trait_default
+    (core.iter.traits.iterator.IteratorSliceIter T)
+    (core.iter.traits.iterator.Iterator.count.stepFnMut T) it 0#usize ()
+    ⦃ n => n.val = it.slice.val.length - it.i ⦄
+  apply core.iter.traits.iterator.Iterator.fold.trait_default.spec_decr_nat
+    (core.iter.traits.iterator.IteratorSliceIter T)
+    (core.iter.traits.iterator.Iterator.count.stepFnMut T)
+    it 0#usize ()
+    (fun s => s.1.slice.val.length - s.1.i)
+    (fun s => s.2.1.val + (s.1.slice.val.length - s.1.i) =
+      it.slice.val.length - it.i)
+    (fun n => n.val = it.slice.val.length - it.i)
+  · intro s hs
+    rcases s with ⟨it1, acc, ⟨⟩⟩
+    change acc.val + (it1.slice.val.length - it1.i) =
+      it.slice.val.length - it.i at hs
+    let postNext : Option T × core.slice.iter.Iter T → Prop := fun r =>
+      if it1.i < it1.slice.val.length
+      then ∃ x, r = (some x, { it1 with i := it1.i + 1 })
+      else r = (none, it1)
+    have hn : (core.iter.traits.iterator.IteratorSliceIter T).next it1
+        ⦃ postNext ⦄ := by
+      apply WP.spec_mono (core.slice.iter.IteratorSliceIter.next.spec it1)
+      intro r hr
+      by_cases hi : it1.i < it1.slice.val.length
+      · simp [postNext, hi] at hr ⊢
+        exact ⟨_, hr⟩
+      · simpa [postNext, hi] using hr
+    have hc : ∀ x it2, postNext (some x, it2) →
+        (core.iter.traits.iterator.Iterator.count.stepFnMut T).call_mut () (acc, x)
+          ⦃ r => r.1.val = acc.val + 1 ∧ r.2 = () ⦄ := by
+      intro x it2 hp
+      by_cases hi : it1.i < it1.slice.val.length
+      · have hmax : acc.val + 1 ≤ Usize.max := by
+          have hb := Slice.property it.slice
+          omega
+        exact core.iter.traits.iterator.Iterator.count.stepFnMut.spec acc x hmax
+      · simp [postNext, hi] at hp
+    have hb := core.iter.traits.iterator.Iterator.fold.default.body.spec
+      (core.iter.traits.iterator.IteratorSliceIter T).next
+      (core.iter.traits.iterator.Iterator.count.stepFnMut T)
+      it1 acc () postNext
+      (fun _ r => r.1.val = acc.val + 1 ∧ r.2 = ()) hn hc
+    apply WP.spec_mono hb
+    intro r hr
+    rcases hr with ⟨o, it2, ho, hr⟩
+    by_cases hi : it1.i < it1.slice.val.length
+    · simp [postNext, hi] at ho
+      rcases ho with ⟨⟨x, hx⟩, hit2⟩
+      subst o
+      subst it2
+      simp at hr
+      rcases hr with ⟨acc1, hacc, f1, heq⟩
+      subst r
+      cases f1
+      change (acc1.val + (it1.slice.val.length - (it1.i + 1)) =
+        it.slice.val.length - it.i) ∧
+        (it1.slice.val.length - (it1.i + 1) < it1.slice.val.length - it1.i)
+      constructor <;> omega
+    · simp [postNext, hi] at ho
+      rcases ho with ⟨ho, hit2⟩
+      subst o
+      subst it2
+      simp at hr
+      cases hr
+      omega
+  · simp
 
 -- ============================================================================
 -- IntoIterator for shared array references: &[T; N] → Iter<T>
