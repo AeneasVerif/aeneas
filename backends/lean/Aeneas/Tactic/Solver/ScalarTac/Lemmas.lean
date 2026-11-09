@@ -373,16 +373,16 @@ attribute [scalar_tac_simps, simp_scalar_safe] ReduceZMod.reduceZMod
 attribute [scalar_tac_simps] Set.Mem
 
 @[scalar_tac_simps] theorem Set.mem_insert_nat s x y :
-  @insert ℕ (Set ℕ) Set.instInsert x s y ↔ y = x ∨ s y := by rfl
+  y ∈ @insert ℕ (Set ℕ) Set.instInsert x s ↔ y = x ∨ y ∈ s := by rfl
 
 @[scalar_tac_simps] theorem Set.mem_singleton_nat x y :
-  @singleton ℕ (Set ℕ) Set.instSingletonSet x y ↔ y = x := by rfl
+  y ∈ @singleton ℕ (Set ℕ) Set.instSingletonSet x ↔ y = x := by rfl
 
 @[scalar_tac_simps] theorem Set.mem_insert_int s x y :
-  @insert ℤ (Set ℤ) Set.instInsert x s y ↔ y = x ∨ s y := by rfl
+  y ∈ @insert ℤ (Set ℤ) Set.instInsert x s ↔ y = x ∨ y ∈ s := by rfl
 
 @[scalar_tac_simps] theorem Set.mem_singleton_int x y :
-  @singleton ℤ (Set ℤ) Set.instSingletonSet x y ↔ y = x := by rfl
+  y ∈ @singleton ℤ (Set ℤ) Set.instSingletonSet x ↔ y = x := by rfl
 
 /-!
 # Subtypes
