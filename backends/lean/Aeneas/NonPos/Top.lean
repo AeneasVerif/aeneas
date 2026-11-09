@@ -9,8 +9,8 @@ public import Aeneas.NonPos.Proofs
 This file is the whole trusted surface of the library.  It contains, and only contains:
 
 1. the *statements* that pin down the imported constants (`Dom`, `Cont`, `Shape`, `Fix`, ...);
-2. the `nonpos_structure` command, a thin wrapper around `Fix`, and the lemma it proves about each
-   structure (with the tactic of 4, so that it does not have to derive it at each use);
+2. the `nonpos_structure` command, a thin wrapper around `Fix`, and the lemmas it proves about each
+   structure (with the tactic of 4, so that it does not have to derive them at each use);
 3. the statements of the continuity theorems, one per form of term;
 4. the `nonpos_cont` tactic, a thin wrapper around those theorems;
 5. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
@@ -207,7 +207,7 @@ structure:
 * `Bla.mk to_num add (h : Shape.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk`;
-* the lemma `Bla.mk_cont`, described in section 8.
+* the lemma `Bla.mk_cont` and (when it holds) the instance `Bla.botTotal`, described in section 8.
 
 The command never inspects the field types: `Shape (G.F k)` is found by instance search, which can
 only succeed through the instances of section 2, and the types of `mk` and the projections are the
@@ -382,6 +382,20 @@ theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Shape.cond (f d))
     (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) : Cont (fun d => Fix.fold F (f d) (h d)) :=
   Proofs.Cont.fold F h hf
 
+/-! `Cont.fst` and `Cont.snd` for the field tuple of a structure, at the `Dom` that the shape of the
+tuple gives it (`Shape.dom`, as in `Cont.unfold`), so that a projection out of a dictionary is
+proved without comparing that `Dom` with the one instance search builds for the whole tuple. -/
+section ShapeForms
+variable {G : Fam.{pu, v} I → Type w₁} {H : Fam.{pu, v} I → Type w₂} [Shape G] [Shape H]
+  {X : Fam.{pu, v} I} [∀ k, Dom (X k)]
+theorem Cont.shape_fst {f : D → G X ×' H X} (hf : Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) f) :
+    Cont (inst_1 := Shape.dom G X) (fun d => (f d).1) :=
+  @Proofs.Cont.fst D _ _ _ (Shape.dom G X) (Shape.dom H X) f hf
+theorem Cont.shape_snd {f : D → G X ×' H X} (hf : Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) f) :
+    Cont (inst_1 := Shape.dom H X) (fun d => (f d).2) :=
+  @Proofs.Cont.snd D _ _ _ (Shape.dom G X) (Shape.dom H X) f hf
+end ShapeForms
+
 /-- Fixed points: `partial_fixpoint` elaborates to `Lean.Order.fix`, for functions and for
 self-referential dictionaries alike. -/
 theorem Cont.fix {α : Type w₁} [Dom α] [Lean.Order.CCPO α] [FixCompat α] {f : D → α → α}
@@ -500,14 +514,63 @@ meta def nonposProjCondProof? (fn' : Expr) : MetaM (Option Expr) := do
 syntax "nonpos_cont" (num)? : tactic
 syntax "nonpos_cont_peel" : tactic
 
+/-- `#[G, H, iG, iH]` if the `Shape` instance `inst` unfolds to `Shape.prod G H` (with `iG`, `iH`). -/
+meta partial def shapeProdArgs? (inst : Expr) : MetaM (Option (Array Expr)) := do
+  let inst ← whnfCore inst
+  if inst.isAppOfArity ``Shape.prod 5 then return some (inst.getAppArgs.extract 1 5)
+  match ← unfoldDefinition? inst with
+  | some e => shapeProdArgs? e
+  | none => return none
+
+open Tactic in
+/-- A field of a varying dictionary, `fun d => (Fix.unfold F (g d)).2. … .1`: proved inside out, from
+`Cont.unfold` (at the `Dom` of the shape of the tuple) by `Cont.shape_snd` and `Cont.shape_fst`, with
+the parts read from the `Shape` instances, so that only the field's own `Dom` is
+compared with the goal's (comparing the `Dom` of the whole tuple with the one instance search
+builds would go through all the fields).  Leaves the goal `Cont g`.  `false` (and no change) if the
+goal is not of this form. -/
+meta def nonposShapeProj (goal : MVarId) (D iD f : Expr) : TacticM Bool := do
+  let .lam n dTy body bi := f | return false
+  let mut e := body
+  let mut path : Array Bool := #[]  -- the projections, outermost first (`true` for `.1`)
+  while e.isAppOfArity ``PProd.fst 3 || e.isAppOfArity ``PProd.snd 3 do
+    path := path.push (e.isAppOfArity ``PProd.fst 3)
+    e := e.appArg!
+  if path.isEmpty || !e.isAppOfArity ``Fix.unfold 5 then return false
+  let args := e.getAppArgs  -- `I F inst k (g d)`
+  let (F, inst, k, gd) := (args[1]!, args[2]!, args[3]!, args[4]!)
+  if F.hasLooseBVars || inst.hasLooseBVars || k.hasLooseBVars then return false
+  let s ← saveState
+  try
+    let gFun := Expr.lam n dTy gd bi
+    let hg ← mkFreshExprSyntheticOpaqueMVar (← mkAppOptM ``Cont #[D, none, iD, none, gFun])
+    let mut pf ← mkAppOptM ``Cont.unfold #[D, iD, none, F, inst, k, gFun, hg]
+    -- `pf : Cont (inst_1 := Shape.dom (F k) X) …`: the family `X` and its `Dom`s
+    let some iU := (← inferType pf).getAppArgs[3]? | throwError "unexpected"
+    let (X, iX) := (iU.getAppArgs[3]!, iU.getAppArgs[4]!)
+    let mut iP := mkApp inst k  -- the `Shape` instance of the current tuple
+    for isFst in path.reverse do
+      let some gh ← shapeProdArgs? iP | throwError "not a pair"
+      pf ← mkAppOptM (if isFst then ``Cont.shape_fst else ``Cont.shape_snd)
+        #[D, iD, none, gh[0]!, gh[1]!, gh[2]!, gh[3]!, X, iX, none, pf]
+      iP := if isFst then gh[2]! else gh[3]!
+    unless ← isDefEq (← goal.getType) (← inferType pf) do throwError "type mismatch"
+    goal.assign pf
+    replaceMainGoal [hg.mvarId!]
+    return true
+  catch _ =>
+    s.restore
+    return false
+
 open Tactic in
 /-- One step on a goal `Cont (fun d => body)`. -/
 meta partial def nonposContStep (tree : DiscrTree Name) : TacticM Unit := withMainContext do
   let g ← getMainGoal
   let ty ← instantiateMVars (← g.getType)
-  let_expr Cont _ _ _ _ f := ty | throwError "nonpos_cont: not a `Cont` goal:{indentExpr ty}"
+  let_expr Cont D _ iD _ f := ty | throwError "nonpos_cont: not a `Cont` goal:{indentExpr ty}"
   let f ← instantiateMVars f
   let f ← if f.isLambda then pure f else etaExpand f
+  if ← nonposShapeProj g D iD f then return
   let tac ← lambdaTelescope f fun ds body => do
     let d := ds[0]!
     let body := body.consumeMData.headBeta
@@ -634,24 +697,39 @@ elab "nonpos_continuity " id:ident : command => do
       logWarning m!"nonpos_continuity: could not prove {lemmaName} ({e.toMessageData}); \
         nonpos_cont will unfold {f} instead"
 
-/-! ## 8. The lemma of each structure
+/-! ## 8. The lemmas of each structure
 
-For performance, `nonpos_structure` also proves, once for each structure `Bla`, that `mk` is
-continuous in its fields: `Bla.mk_cont` gives, from `Cont f₁`, ..., `Cont fₙ`,
-`Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
-`@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
-left with one goal per field, instead of going through the whole tuple of fields each time.
+For performance, `nonpos_structure` also proves, once for each structure `Bla`, two facts that would
+otherwise be derived from its whole tuple of fields at each use:
+* `Bla.mk_cont`: `mk` is continuous in its fields.  From `Cont f₁`, ..., `Cont fₙ` it gives
+  `Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
+  `@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
+  left with one goal per field.
+* `Bla.botTotal`: `Fix.BotTotal` of the structure, as an instance, when instance search finds it at
+  every value of the parameters (it does not when the structure has a plain field of unpointed
+  type).  The `CCPO` instance of the structure, which `partial_fixpoint` and `Cont.monotone` look
+  for, then does not re-derive it field by field at each search.
 -/
 
-/-- `Bla.mk_cont` for each structure of a group made by `elabGroup`. -/
+/-- `Bla.mk_cont` and `Bla.botTotal` for each structure of a group made by `elabGroup`. -/
 meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
   let g := ss[0]!.name
   let fId := mkIdentFrom g (g.getId ++ `F)
   for s in ss do
-    if s.fields.isEmpty then continue
     let impl ← implicitBinders s.params
     let args := s.params.map (·.1)
     let k ← `($(mkIdent (g.getId ++ `I ++ s.name.getId)) $args*)  -- `G.I.Bla x₁ ... xₙ`
+    -- `Bla.botTotal`: only if instance search finds `Fix.BotTotal` for every value of the parameters
+    let botTy ← if s.params.isEmpty then `(Fix.BotTotal $fId $k)
+      else `(∀ $(← explicitBinders s.params)*, Fix.BotTotal $fId $k)
+    let holds ← liftTermElabM do
+      try forallTelescope (← instantiateMVars (← Term.elabType botTy)) fun _ b => return (← synthInstance? b).isSome
+      catch _ => return false
+    if holds then
+      let botId := mkIdentFrom s.name (s.name.getId ++ `botTotal)
+      elabCommand (← `(instance (priority := high) $botId:ident $impl* : Fix.BotTotal $fId $k := inferInstance))
+    -- `Bla.mk_cont`
+    if s.fields.isEmpty then continue
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)
     let contId := mkIdentFrom s.name (s.name.getId ++ `mk_cont)
     let fieldFns ← s.fields.mapM fun (f, τ) => `(bracketedBinder| ($f : D → $τ))
