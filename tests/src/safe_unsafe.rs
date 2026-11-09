@@ -266,16 +266,26 @@ pub fn from_raw_parts_mut_over_array() -> u32 {
 }
 
 // ---------------------------------------------------------------------------
-// `ptr::read` copies the bytes: for a non-`Copy` type, the copy and the
-// original both own the value
+// `ptr::read` copies the bytes: for a type which owns memory, the copy and the
+// original both own it
 // ---------------------------------------------------------------------------
 
-/// Two owners of the `Box`. UB (TB: double free; SB: reading `*b` invalidates `b2` first)
-pub fn ptr_read_box_double_free() -> u32 {
-    let mut b = Box::new(1u32);
-    let p = ptr::from_mut(&mut b);
-    let b2 = unsafe { ptr::read(p) };
-    *b2 + *b
+/// A raw pointer which owns the allocation of a `Box`.
+pub struct Owner {
+    ptr: *mut u32,
+}
+
+/// Two owners of the allocation, which both free it. UB (the second
+/// `from_raw` makes a dangling `Box`)
+pub fn ptr_read_owner_double_free() -> u32 {
+    let mut o = Owner {
+        ptr: Box::into_raw(Box::new(1u32)),
+    };
+    let p = ptr::from_mut(&mut o);
+    let o2 = unsafe { ptr::read(p) };
+    let a = unsafe { *Box::from_raw(o2.ptr) };
+    let b = unsafe { *Box::from_raw(o.ptr) };
+    a + b
 }
 
 /// `ptr::read` on a `Copy` type. ok(2)
@@ -381,7 +391,7 @@ mod miri {
         from_raw_parts_write_while_shared,
         from_raw_parts_read_while_shared,
         from_raw_parts_mut_over_array,
-        ptr_read_box_double_free,
+        ptr_read_owner_double_free,
         ptr_read_copy,
         ptr_as_mut_write,
         ptr_as_mut_twice,
