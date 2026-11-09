@@ -12,7 +12,6 @@ the empty heap. Each Rust function falls in one case:
 - UB in Rust, and the model fails: `¬ ⦃ emp ⦄ f ⦃ _ => ⌜True⌝ ⦄`.
 - INCOMPLETE: `ok(n)` in Rust, but the model fails (same statement). Sound, but the model rejects a
   valid program.
-- UNSOUND: UB in Rust, or a result the model cannot produce, while the model runs safely.
 
 Running out of memory (`oom`) satisfies every specification, as the allocations of the model choose
 an encoding and a placement nondeterministically. A refutation `¬ ⦃ emp ⦄ f ⦃ _ => ⌜True⌝ ⦄` thus
@@ -46,14 +45,19 @@ an undefined operation (a checked operation with no successor).
 | `from_raw_parts_write_while_shared`    | UB          | fails      |
 | `from_raw_parts_read_while_shared`     | ok(2)       | INCOMPLETE |
 | `from_raw_parts_mut_over_array`        | ok(5)       | INCOMPLETE |
-| `ptr_read_box_double_free`             | UB          | UNSOUND    |
+| `ptr_read_owner_double_free`           | UB          | fails      |
 | `ptr_read_copy`                        | ok(2)       | ok(2)      |
 | `ptr_as_mut_write` (borrow model)      | ok(6)       | INCOMPLETE |
 | `ptr_as_mut_twice` (borrow model)      | UB          | fails      |
 | `handle_write`                         | ok(4)       | ok(4)      |
 
 The verdicts are the same as in the previous (first-order) heap model; the reason of
-`from_raw_parts_read_while_shared` changed (see its docstring).
+`from_raw_parts_read_while_shared` changed (see its docstring). The model has no unsound case.
+
+The model has no representation of a `Box` in raw memory (a `Box<T>` is its contents, without an
+allocation), so that a program which reads or writes a `Box` through a raw pointer (such as
+`ptr::read` duplicating a `Box`) is not expressible. `ptr_read_owner_double_free` duplicates the
+owner of an allocation made by `Box::into_raw` instead.
 
 The INCOMPLETE cases share one cause: the model ends the borrow behind a raw pointer when the
 functional translation ends it (when the owner is used again, or at the end of the function that
@@ -61,11 +65,6 @@ created the pointer, or in the order of the backward functions), while Rust keep
 until a conflicting access. Ending the borrow of a safe place retires its exposure (later accesses
 through the pointer fail), and requires its cells back (it fails while they are still borrowed or
 shared by a slice built from the pointer).
-
-The UNSOUND case, `ptr_read_box_double_free`: a `Box<T>` is represented as its contents
-(`Pointee (Box T)` is `Repr.iso` of `Pointee T`) and dropping is a no-op, so `ptr::read` duplicating
-the ownership of a `Box` (UB: double free, or aliasing violation) goes unnoticed. The same holds for
-every type which owns memory (`Vec`, `String`, ...).
 -/
 
 open Aeneas Aeneas.Std Aeneas.SepLogic Aeneas.Std.WP Aeneas.Data.Coinductive
@@ -584,13 +583,71 @@ theorem ptr_read_copy.spec : ⦃ emp ⦄ ptr_read_copy ⦃ r => ⌜r = 2#u32⌝ 
   subst_vars
   step*
 
-/-- UNSOUND: Rust drops the `Box` twice, which is UB; the model returns `2`. -/
-theorem ptr_read_box_double_free.unsound :
-    ⦃ emp ⦄ ptr_read_box_double_free ⦃ r => ⌜r = 2#u32⌝ ⦄ := by
-  unfold ptr_read_box_double_free
-  step*
-  subst_vars
-  step*
+/-- The two owners free the allocation: the second `from_raw` reads a retired block. -/
+theorem ptr_read_owner_double_free.ub :
+    ¬ ⦃ emp ⦄ ptr_read_owner_double_free ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := dwp_empty hTriple
+  unfold ptr_read_owner_double_free at hSpec
+  heap_norm
+  obtain ⟨b, hb⟩ : ∃ b : Usize, b.val = 8 := ⟨8#usize, by simp⟩
+  have hSpec := hSpec.heap_newBlock b (by omega) rfl (by heap_check [hb])
+  heap_norm
+  obtain ⟨c, hc⟩ : ∃ c : Usize, c.val = 16 := ⟨16#usize, by simp⟩
+  have hEnc : (Pointee.repr (T := Owner)).encode { ptr := ⟨Heap.empty.next, b⟩ }
+      (Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)) := rfl
+  have hSpec := hSpec.heap_newBlock_data [Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)] c
+    (by simp only [Bool.false_eq_true, ↓reduceIte, State.exposesList]
+        exact ⟨exposes_of_encode hEnc _ _, trivial⟩)
+    (by show 8 ∣ c.val; omega) (by simp [add, update, Heap.empty]) (by
+      have := pow_numBits_gt
+      simp [Heap.check, Heap.validBlock, Heap.bounded, Heap.empty, update, UScalarTy.numBits,
+        Heap.validByte, Std.Repr.create, add, block, Heap.compatible, Heap.overlaps, List.all_eq_true,
+        List.range_succ, List.map_cons, List.map_nil, List.forall_mem_cons, List.flatMap_cons,
+        List.flatMap_nil, hb, hc, Std.Repr.pointerEncoding, RawPtr.cast]
+      have hs8 : (Pointee.repr (T := Owner)).size = 8 := rfl
+      have hs4 : (Pointee.repr (T := U32)).size = 4 := rfl
+      repeat' apply And.intro
+      all_goals first
+        | omega
+        | (simp [hs8, hs4]; omega)
+        | (show 16 + 1 * 8 < _; omega)
+        | (intro _ _ h₁ _ _ h₂
+           have := (List.mem_zipIdx h₁).2.1
+           have := (List.mem_zipIdx h₂).2.1
+           simp [hs8] at *
+           left; omega)
+        | (intro x hx i hi
+           have hi' : i < 8 := hi
+           cases hx with
+           | tail _ h => cases h
+           | head =>
+           erw [Vector.getElem_ofFn]
+           simp
+           omega))
+  heap_norm
+  heap_checked
+  obtain ⟨hr, rfl⟩ := hx
+  simp [Heap.read, add, update, Heap.live, Heap.empty, hb, hc, RawPtr.offsetFrom] at hr
+  rw [read_at (i := 0) (d := 0) (pre := []) (post := []) (data := Std.Repr.pointerEncoding
+      (⟨0, b⟩ : RawPtr U32)) (by simp [Block.bytes, Std.Repr.create]; exact List.append_nil _) rfl hEnc (by decide)] at hr
+  cases hr.2
+  heap_norm
+  heap_checked
+  obtain rfl := read_eq hx
+  heap_checked
+  obtain rfl := returnOwned_eq hx
+  heap_checked
+  obtain ⟨hr, rfl⟩ := hx
+  simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty, hb, hc, RawPtr.offsetFrom] at hr
+  rw [read_at (i := 0) (d := 0) (pre := []) (post := []) (data := Std.Repr.pointerEncoding
+      (⟨0, b⟩ : RawPtr U32)) (by simp [Block.bytes, Std.Repr.create]; exact List.append_nil _) rfl hEnc (by decide)] at hr
+  cases hr.2
+  heap_checked
+  obtain rfl := removeExposure_eq hx
+  heap_stuck
+  obtain ⟨hr, -⟩ := hx
+  simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
 
 /-! ## `<*mut T>::as_mut`
 
