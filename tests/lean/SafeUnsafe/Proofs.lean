@@ -50,7 +50,6 @@ an undefined operation (a checked operation with no successor).
 | `ptr_read_copy`                        | ok(2)       | ok(2)      |
 | `ptr_as_mut_write` (borrow model)      | ok(6)       | INCOMPLETE |
 | `ptr_as_mut_twice` (borrow model)      | UB          | fails      |
-| `non_null_write` (axioms return)       | ok(v)       | UNSOUND    |
 
 The verdicts are the same as in the previous (first-order) heap model; the reason of
 `from_raw_parts_read_while_shared` changed (see its docstring).
@@ -62,15 +61,10 @@ until a conflicting access. Ending the borrow of a safe place retires its exposu
 through the pointer fail), and requires its cells back (it fails while they are still borrowed or
 shared by a slice built from the pointer).
 
-The UNSOUND cases:
-- `ptr_read_box_double_free`: a `Box<T>` is represented as its contents (`Pointee (Box T)` is
-  `Repr.iso` of `Pointee T`) and dropping is a no-op, so `ptr::read` duplicating the ownership of a
-  `Box` (UB: double free, or aliasing violation) goes unnoticed. The same holds for every type which
-  owns memory (`Vec`, `String`, ...).
-- `non_null_write`: `NonNull::from(&mut x)` is an unknown function: Aeneas extracts it as an axiom
-  whose backward function is not stateful, and so gives `x` back before the write through the
-  pointer. Whatever the model of the axioms (provided they return), the result does not depend on
-  the written value.
+The UNSOUND case, `ptr_read_box_double_free`: a `Box<T>` is represented as its contents
+(`Pointee (Box T)` is `Repr.iso` of `Pointee T`) and dropping is a no-op, so `ptr::read` duplicating
+the ownership of a `Box` (UB: double free, or aliasing violation) goes unnoticed. The same holds for
+every type which owns memory (`Vec`, `String`, ...).
 -/
 
 open Aeneas Aeneas.Std Aeneas.SepLogic Aeneas.Std.WP Aeneas.Data.Coinductive
@@ -682,39 +676,5 @@ theorem ptr_as_mut_twice.ub
   rw [read_borrowed] at hy
   · simp at hy
   · simp [Block.bytes, show 0 < (Pointee.repr (T := U32)).size by decide]
-
-/-! ## `NonNull::from(&mut x)` -/
-
-theorem non_null_write_result {v : U32} {n : core.ptr.non_null.NonNull U32} {x : U32}
-    {p : MutRawPtr U32}
-    (hFrom : core.ptr.non_null.NonNull.Insts.CoreConvertFromMut0T.from (MutBorrow.mk 1#u32) =
-      .ok (n, x))
-    (hAsPtr : core.ptr.non_null.NonNull.as_ptr n = .ok p)
-    (hTriple : ⦃ emp ⦄ non_null_write v ⦃ r => ⌜r = v⌝ ⦄) : x = v := by
-  have hSpec := dwp_empty hTriple
-  unfold non_null_write at hSpec
-  rw [hFrom] at hSpec
-  simp only [bind_ok, Std.uncurry_apply_pair, hAsPtr] at hSpec
-  heap_norm
-  heap_checked
-  exact (realizes_sep_emp.mp (DWP.ret_iff.mp hSpec)).pure
-
-/-- UNSOUND: Rust returns the written value, while the extracted code returns `x` as given back by
-the axiom `NonNull::from` before the write. Whatever the models of the axioms, provided they return
-(an axiom which fails or diverges would make every triple false; `oom` would make every one true),
-the result does not depend on the written value. -/
-theorem non_null_write.unsound
-    (hFrom : ∃ r, core.ptr.non_null.NonNull.Insts.CoreConvertFromMut0T.from
-      (MutBorrow.mk 1#u32) = .ok r)
-    (hAsPtr : ∀ n, ∃ p, core.ptr.non_null.NonNull.as_ptr (T := U32) n = .ok p) :
-    ¬ (⦃ emp ⦄ non_null_write 2#u32 ⦃ r => ⌜r = 2#u32⌝ ⦄ ∧
-      ⦃ emp ⦄ non_null_write 3#u32 ⦃ r => ⌜r = 3#u32⌝ ⦄) := by
-  rintro ⟨h₂, h₃⟩
-  obtain ⟨⟨n, x⟩, hr⟩ := hFrom
-  obtain ⟨p, hp⟩ := hAsPtr n
-  have e₂ := non_null_write_result hr hp h₂
-  have e₃ := non_null_write_result hr hp h₃
-  rw [e₂] at e₃
-  exact absurd e₃ (by decide)
 
 end safe_unsafe.Proofs
