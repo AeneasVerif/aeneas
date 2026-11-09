@@ -106,6 +106,12 @@ def wand (H₁ H₂ : IProp) : IProp where
 def postWand {α : Type u} (Q₁ Q₂ : IPost α) : IProp :=
   iforall fun value => wand (Q₁ value) (Q₂ value)
 
+/-- The upward closure of a predicate on fragments: the fragments which contain a fragment which
+satisfies it. -/
+def upClose (A : Fragment → Prop) : IProp where
+  holds h := ∃ a, A a ∧ PartialCommMonoid.Subheap a h
+  up_closed := fun ⟨a, ha, hSub⟩ hExtend => ⟨a, ha, hSub.trans hExtend⟩
+
 end SepLogic
 
 /-! ## Notations, scoped to `Aeneas` -/
