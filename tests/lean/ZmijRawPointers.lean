@@ -67,9 +67,9 @@ def POW10_MAJOR : Array uint128 2#usize :=
 
 /-- [zmij_raw_pointers::pow10_minor]:
     Source: 'tests/src/zmij-raw-pointers.rs', lines 16:0-18:1 -/
-def pow10_minor (i : Std.Usize) : Result Std.U64 := do
+def pow10_minor (placement : Placement) (i : Std.Usize) : Result Std.U64 := do
   let s ← lift (Array.as_slice (SharedBorrow.mk POW10_MINOR))
-  let (p, as_ptr_back) ← Slice.as_ptr s
+  let (p, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
   let p1 ← RawPtr.add p i
   let i1 ← RawPtr.read p1
   as_ptr_back
@@ -77,9 +77,9 @@ def pow10_minor (i : Std.Usize) : Result Std.U64 := do
 
 /-- [zmij_raw_pointers::pow10_major]:
     Source: 'tests/src/zmij-raw-pointers.rs', lines 20:0-22:1 -/
-def pow10_major (i : Std.Usize) : Result uint128 := do
+def pow10_major (placement : Placement) (i : Std.Usize) : Result uint128 := do
   let s ← lift (Array.as_slice (SharedBorrow.mk POW10_MAJOR))
-  let (p, as_ptr_back) ← Slice.as_ptr s
+  let (p, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
   let p1 ← RawPtr.add p i
   let u ← RawPtr.read p1
   as_ptr_back
@@ -129,11 +129,12 @@ def write_digit_dot
     Source: 'tests/src/zmij-raw-pointers.rs', lines 40:0-47:1
     Visibility: public -/
 def format_small
-  (d : Std.U8) (buf : MutBorrow (Array Std.U8 8#usize)) :
+  (placement : Placement) (d : Std.U8) (buf : MutBorrow (Array Std.U8 8#usize))
+  :
   Result (Std.Usize × (Array Std.U8 8#usize))
   := do
   let (s, as_mut_slice_back) ← lift (Array.as_mut_slice buf)
-  let (start, as_mut_ptr_back) ← Slice.as_mut_ptr s
+  let (start, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) s
   let «end» ← write_digit_dot start d
   write_zeros «end» 2#usize
   let s1 ← as_mut_ptr_back

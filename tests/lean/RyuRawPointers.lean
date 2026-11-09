@@ -53,9 +53,11 @@ def write_exponent
     Source: 'tests/src/ryu-raw-pointers.rs', lines 23:0-27:1
     Visibility: public -/
 def write_two_digits
-  (k : Std.Usize) (result : MutRawPtr Std.U8) : Result Unit := do
+  (placement : Placement) (k : Std.Usize) (result : MutRawPtr Std.U8) :
+  Result Unit
+  := do
   let s ← lift (Array.as_slice (SharedBorrow.mk DIGIT_TABLE))
-  let (p, as_ptr_back) ← Slice.as_ptr s
+  let (p, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
   let i ← k * 2#usize
   let d ← RawPtr.add p i
   let d1 ← RawPtr.read d
@@ -83,17 +85,17 @@ def Buffer.new : Result Buffer := do
     Source: 'tests/src/ryu-raw-pointers.rs', lines 38:4-43:5
     Visibility: public -/
 def Buffer.format_exponent
-  (self : MutBorrow Buffer) (k : Std.Isize) :
+  (placement : Placement) (self : MutBorrow Buffer) (k : Std.Isize) :
   Result ((SharedBorrow (Slice Std.U8)) × (Result Buffer))
   := do
   let (s, as_mut_slice_back) ←
     lift (Array.as_mut_slice (MutBorrow.mk self.val.bytes))
-  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr (placement.addr 0) s
   let n ← write_exponent k p
   let s1 ← as_mut_ptr_back
   let a := as_mut_slice_back s1
   let s2 ← lift (Array.as_slice (SharedBorrow.mk a))
-  let (p1, as_ptr_back) ← Slice.as_ptr s2
+  let (p1, as_ptr_back) ← Slice.as_ptr (placement.addr 1) s2
   let (s3, from_raw_parts_back) ← core.slice.raw.from_raw_parts p1 n
   let r := do
            from_raw_parts_back
@@ -104,9 +106,11 @@ def Buffer.format_exponent
 /-- [ryu_raw_pointers::first_char_of_exponent]:
     Source: 'tests/src/ryu-raw-pointers.rs', lines 46:0-50:1
     Visibility: public -/
-def first_char_of_exponent (k : Std.Isize) : Result Std.U8 := do
+def first_char_of_exponent
+  (placement : Placement) (k : Std.Isize) : Result Std.U8 := do
   let buf ← Buffer.new
-  let (s, format_exponent_back) ← Buffer.format_exponent (MutBorrow.mk buf) k
+  let (s, format_exponent_back) ←
+    Buffer.format_exponent (placement.sub 0) (MutBorrow.mk buf) k
   let i ← Slice.index_usize s 0#usize
   let _ ← format_exponent_back
   ok i.val

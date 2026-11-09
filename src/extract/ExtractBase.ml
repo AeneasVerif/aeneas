@@ -621,6 +621,17 @@ type extraction_ctx = {
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
   trait_impls_filter_trait_clauses_map : bool list TraitImplId.TreeMap.t;
+  funs_with_placement : FunDeclId.TreeSet.t;
+      (** Lean: the transparent functions which expose safe places as raw
+          memory, directly or through the functions they call: they receive a
+          placement (see [Placement] in the Lean library) *)
+  placement : (string * int ref) option;
+      (** Lean: when extracting the body of a function which accesses the heap,
+          the name of its placement (the tree of the addresses of its
+          exposures, see [Placement] in the Lean library), and the number of
+          the exposures and calls to functions which access the heap extracted
+          so far: the [k]-th one receives [placement.addr k] (an exposure) or
+          [placement.sub k] (a call). *)
   extracted_opaque : bool ref;
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not

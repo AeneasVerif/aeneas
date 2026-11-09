@@ -709,6 +709,25 @@ let extract_texpr_errors (fmt : F.formatter) =
 
 (** - [inside_do]: [true] if we are inside a do block. In Lean, controls whether
       we can print let-bindings or if we need to insert a [do] first. *)
+(** The transparent functions which access the heap receive the [Pointee]
+    instances of their type parameters (Lean only, see [Pointee.lean]) *)
+let fun_has_pointee_binders (ctx : extraction_ctx) (def : fun_decl) : bool =
+  backend () = Lean
+  && Option.is_some def.body
+  && FunsAnalysis.is_stateful ctx.trans_ctx.fun_ctx.fun_infos def.def_id
+
+(** The transparent functions which access the heap receive a placement: the
+    addresses of the safe places they expose as raw memory (Lean only, see
+    [Placement] in the Lean library) *)
+let fun_has_placement (ctx : extraction_ctx) (def : fun_decl) : bool =
+  backend () = Lean
+  && Option.is_some def.body
+  && FunDeclId.TreeSet.mem def.def_id ctx.funs_with_placement
+
+(** The identifier with which the placement of a function is registered in the
+    context (it doesn't clash with the identifiers of the variables) *)
+let placement_var_id : FVarId.id = FVarId.of_int max_int
+
 let rec extract_texpr (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) ~(inside : bool) ~(inside_do : bool) (e : texpr) : unit
     =
@@ -1084,6 +1103,36 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           F.pp_print_string fmt
             "/- ERROR: ill-formed builtin: invalid number of filtering \
              arguments -/");
+      (* Print the placement argument (Lean only, see [Placement]): the
+         exposures receive an address, the functions which access the heap a
+         sub-placement *)
+      (match fun_id with
+      | FromLlbc (FunId fid, _) -> (
+          let placement_arg =
+            match ctx_lookup_fun_decl_info ctx fid with
+            | Some trans -> (
+                match trans.f.builtin_info with
+                | Some { placement = true; _ } -> Some "addr"
+                | Some _ -> None
+                | None ->
+                    if fun_has_placement ctx trans.f then Some "sub" else None)
+            | None -> None
+          in
+          match placement_arg with
+          | None -> ()
+          | Some kind -> (
+              match ctx.placement with
+              | Some (name, counter) ->
+                  F.pp_print_space fmt ();
+                  F.pp_print_string fmt
+                    ("(" ^ name ^ "." ^ kind ^ " " ^ string_of_int !counter
+                   ^ ")");
+                  incr counter
+              | None ->
+                  [%save_error] span
+                    "Call to a function which needs a placement (it exposes                      safe places as raw memory) from a function which doesn't                      have one";
+                  F.pp_print_string fmt " /- ERROR: missing placement -/"))
+      | _ -> ());
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -1746,13 +1795,6 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
           (List.map snd supd.updates)
     | _ -> [%admit_raise] span "Unreachable" fmt
 
-(** The transparent functions which access the heap receive the [Pointee]
-    instances of their type parameters (Lean only, see [Pointee.lean]) *)
-let fun_has_pointee_binders (ctx : extraction_ctx) (def : fun_decl) : bool =
-  backend () = Lean
-  && Option.is_some def.body
-  && FunsAnalysis.is_stateful ctx.trans_ctx.fun_ctx.fun_infos def.def_id
-
 (** A small utility to print the parameters of a function signature.
 
     We return two contexts:
@@ -1793,6 +1835,18 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
      trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
+  (* The placement (Lean only, see [Placement]) *)
+  let ctx =
+    if fun_has_placement ctx def && Option.is_some def.body then begin
+      let ctx, name =
+        ctx_add_var def.item_meta.span "placement" placement_var_id ctx
+      in
+      insert_req_space fmt space;
+      F.pp_print_string fmt ("(" ^ name ^ " : Placement)");
+      { ctx with placement = Some (name, ref 0) }
+    end
+    else { ctx with placement = None }
+  in
   (* The input parameters - note that doing this adds bindings to the context *)
   [%ldebug
     "Extracting the input parameters of: "

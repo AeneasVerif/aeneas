@@ -27,15 +27,15 @@ theorem incr_ptr.spec (p : MutRawPtr U32) (value : U32) (h : value.val + 1 ≤ U
   step*
 
 /-- The pointer exposes the place of `value` (see `core.ptr.from_mut`): the increment is read back
-through it. -/
-def incr_borrow (value : U32) : Result U32 := do
-  let (p, back) ← core.ptr.from_mut ⟨value⟩
+through it. As in the extracted code, the address of the exposure comes from a placement. -/
+def incr_borrow (placement : Placement) (value : U32) : Result U32 := do
+  let (p, back) ← core.ptr.from_mut (placement.addr 0) ⟨value⟩
   incr_ptr p
   back
 
 @[step]
-theorem incr_borrow.spec (value : U32) (h : value.val + 1 ≤ U32.max) :
-    ⦃ emp ⦄ incr_borrow value ⦃ result => ⌜result.val = value.val + 1⌝⦄ := by
+theorem incr_borrow.spec (placement : Placement) (value : U32) (h : value.val + 1 ≤ U32.max) :
+    ⦃ emp ⦄ incr_borrow placement value ⦃ result => ⌜result.val = value.val + 1⌝⦄ := by
   unfold incr_borrow
   step*
   subst_vars
