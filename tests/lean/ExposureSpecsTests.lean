@@ -36,16 +36,15 @@ theorem initialized_outputs.spec (placement : Placement) :
   simp only [RawPtr.elem_zero] at hw
   step with hw
   step
-  have ha := MaybeUninit.Refines.singleton_some a_post
-  subst ha
+  -- the value read back is `⟨some _⟩` (`MaybeUninit.refines_singleton_some_iff`)
+  subst a_post
   step
   subst b_back_post
   have hw := MutRawPtr.write.spec_uninit pb [⟨none⟩] 0 2#u32 (by simp)
   simp only [RawPtr.elem_zero] at hw
   step with hw
   step
-  have hb := MaybeUninit.Refines.singleton_some b_post
-  subst hb
+  subst b_post
   step*
 
 /-- `Buffer::format_finite`: the digits are written through `as_mut_ptr` on a buffer of

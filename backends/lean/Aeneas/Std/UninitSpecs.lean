@@ -43,9 +43,21 @@ lemmas on `Bytes.rangeWith` (append, focus, bounds, pointer arithmetic) serve al
 Specifications for `step`: the accesses (`MutRawPtr.write.spec_uninit`, `RawPtr.read.spec_uninit`)
 and the pointer movements within `↦?*` (`RawPtr.add.spec_uninit`, `RawPtr.offset.spec_uninit`,
 `RawPtr.sub.spec_uninit`) are `@[step]`, as is `RawPtr.ptr_cast.spec`. `step` doesn't backtrack
-between the specifications whose programs have the same shape (`RawPtr.add (p.elem i) k`, ...): the
+between the specifications whose programs have the same shape (`RawPtr.add (p.elem i) k`, ...): it
+uses the first one which unifies with the program, even if its precondition can't be framed. The
 pointer movements within readable ranges (`RawPtr.add.spec_readable_elem`, `RawPtr.offset.spec_readable`,
-`RawPtr.sub.spec_readable`) are therefore not `@[step]`, and are used with `step with`. -/
+`RawPtr.sub.spec_readable`) are therefore not `@[step]`, and are used with `step with`.
+
+The start of a range. The specifications are stated on the pointers `p.elem i` into a range. The
+programs access the start of a range with the pointer of the range itself (`*buffer = c`,
+`buffer.add(n)`, `copy(src, buffer, n)`, ...), which is `p.elem 0` only up to `RawPtr.elem_zero`
+(a `simp` lemma): the `_head` variants are these specifications at `p`. Their programs
+(`MutRawPtr.write ?p ?v`, ...) have the same shape as the specifications on other assertions
+(`MutRawPtr.write.spec` on `p ↦ v`, `RawPtr.read.spec`, `RawPtr.add.spec` on `p ↦* vs`, ...), so
+`MutRawPtr.write.spec_uninit_head`, `RawPtr.read.spec_uninit_head`, `RawPtr.add.spec_uninit_head`
+and `RawPtr.offset.spec_readable_head` are not `@[step]` (use them with `step with`).
+`RawPtr.offset.spec_uninit_head` is `@[step]`: no other `@[step]` specification of `RawPtr.offset`
+is on the pointer of a range itself (`step` tries the specifications on `p.elem i` first). -/
 
 namespace Aeneas.Std
 
@@ -620,6 +632,37 @@ theorem of_matches {P Q : IProp}
   exact ⟨hInv, _, ⟨h₁, h₂, hd, rfl,
     hPQ s h₁ hInv ((Fragment.matches_union _ _ _).mp hm).1 hP, hF⟩, hm, hAuth⟩
 
+/-! The postconditions of `step` start with pure facts and end with existentials: the rules below
+let a `RealEntails` proof (for instance through `ispec_realEntails_post`, to merge ranges back)
+use the facts and choose the witnesses, as `entails_pure_l` and `entails_exists_l`/`_r` do for
+`⊢`. -/
+
+/-- Uses a pure fact of the source. -/
+theorem pure_l {P : Prop} {H Q : IProp} (h : P → RealEntails H Q) :
+    RealEntails iprop(⌜P⌝ ∗ H) Q := by
+  intro F s hR
+  obtain ⟨hInv, x, hx, hm, ha⟩ := Realizes.mono (entails_of_eq (sep_assoc_eq _ _ _)) hR
+  obtain ⟨hP, hx'⟩ := (sep_pure_l _ _ x).mp hx
+  exact h hP F s ⟨hInv, x, hx', hm, ha⟩
+
+/-- Opens an existential of the source. -/
+theorem exists_l {ι : Sort _} {J : ι → IProp} {Q : IProp} (h : ∀ x, RealEntails (J x) Q) :
+    RealEntails (iexists J) Q := by
+  intro F s hR
+  rw [sep_exists_l_eq] at hR
+  obtain ⟨hInv, fr, hJ, hm, ha⟩ := hR
+  obtain ⟨x, hx⟩ := (exists_holds _ _).mp hJ
+  exact h x F s ⟨hInv, fr, hx, hm, ha⟩
+
+/-- Chooses the witness of an existential of the target. -/
+theorem exists_r {ι : Sort _} {H : IProp} {J : ι → IProp} (x : ι) (h : RealEntails H (J x)) :
+    RealEntails H (iexists J) :=
+  h.trans (of_entails (entails_exists_r x (entails_refl _)))
+
+/-- Weakens the target by an entailment. -/
+theorem trans_entails {H Q R : IProp} (h : RealEntails H Q) (h' : Q ⊢ R) : RealEntails H R :=
+  h.trans (of_entails h')
+
 end RealEntails
 
 theorem ispec_realEntails_pre {α : Type} {P P' : IPre} {m : Result α} {Q : IPost α}
@@ -661,6 +704,9 @@ theorem RawPtr.elem_add {T : Type} [Pointee T] (p : RawPtr T) (i j : Nat) :
 @[simp] theorem RawPtr.cast_self {T : Type} (p : RawPtr T) : p.cast T = p := by
   cases p; rfl
 
+@[simp] theorem RawPtr.cast_address {T U : Type} (p : RawPtr T) : (p.cast U).address = p.address :=
+  rfl
+
 /-- `ptr.cast::<U>()`. -/
 @[step]
 theorem RawPtr.ptr_cast.spec {T : Type} (U : Type) (q : RawPtr T) :
@@ -683,6 +729,15 @@ theorem uninitRange_aligned {T : Type} [Pointee T] (p : RawPtr T) (vs : List (Ma
     p ↦?* vs ⊢ ⌜(Pointee.repr (T := T)).align.val ∣ p.address.val⌝ ∗ p ↦?* vs := by
   rintro h ⟨bptr, a, ⟨data, hv, hlo, ha, hc⟩, hsub⟩
   exact (sep_pure_l _ _ h).mpr ⟨ha, bptr, a, ⟨data, hv, hlo, ha, hc⟩, hsub⟩
+
+/-- A readable range starts at an aligned address. -/
+theorem RawPtr.readable_aligned {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (vs : List T) :
+    p.readable d vs ⊢ ⌜(Pointee.repr (T := T)).align.val ∣ p.address.val⌝ ∗ p.readable d vs := by
+  rintro h ⟨bptr, a, ha, hsub⟩
+  have ha' := ha
+  rw [Bytes.readableRange_eq_rangeWith] at ha'
+  obtain ⟨data, hv, hlo, hal, hc⟩ := ha'
+  exact (sep_pure_l _ _ h).mpr ⟨hal, bptr, a, ha, hsub⟩
 
 /-- Splits a range at any index (the address of the split must not wrap around, which holds in
 every heap: see `uninitRange_split_real`). -/
@@ -862,6 +917,19 @@ theorem RawPtr.read.spec_uninit {T : Type} [Pointee T] [Pointee.Sized T] (p : Ra
         (fun _ _ _ h => h.2)))
     (entails_refl _) (fun _ => iexists_upClose_pure_and)
 
+/-- Writes the first element of a range (`*p = v`, at the pointer of the range itself). -/
+theorem MutRawPtr.write.spec_uninit_head {T : Type} [Pointee T] [Pointee.Sized T]
+    [Pointee.NoPointers T] (p : MutRawPtr T) (vs : List (MaybeUninit T)) (v : T)
+    (hne : 0 < vs.length) :
+    ⦃ p ↦?* vs ⦄ MutRawPtr.write p v ⦃ p ↦?* vs.set 0 ⟨some v⟩ ⦄ := by
+  simpa only [RawPtr.elem_zero] using MutRawPtr.write.spec_uninit p vs 0 v hne
+
+/-- Reads the first element of a range, which is initialized. -/
+theorem RawPtr.read.spec_uninit_head {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (vs : List (MaybeUninit T)) (v : T) (hne : 0 < vs.length) (hv : vs[0] = ⟨some v⟩) :
+    ⦃ p ↦?* vs ⦄ RawPtr.read p ⦃ r => ⌜r = v⌝ ∗ p ↦?* vs ⦄ := by
+  simpa only [RawPtr.elem_zero] using RawPtr.read.spec_uninit p vs 0 v hne hv
+
 /-! ## Pointer arithmetic within `↦?*` and `readable` ranges -/
 
 /-- Pointer arithmetic within a range: the generic form of the specifications below. -/
@@ -899,6 +967,22 @@ theorem RawPtr.offset.spec_uninit {T : Type} [Pointee T] [Pointee.Sized T] (p : 
       ⦃ r => ⌜r = p.elem ((i : Int) + k.val).toNat⌝ ∗ p ↦?* vs ⦄ :=
   RawPtr.offset_elem.spec_rangeWith _ 0 p vs i k.val ((i : Int) + k.val).toNat hne hi (by omega) (by omega)
 
+/-- `add` from the start of a range. -/
+theorem RawPtr.add.spec_uninit_head {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (vs : List (MaybeUninit T)) (k : Usize) (hne : 0 < vs.length) (hle : k.val ≤ vs.length) :
+    ⦃ p ↦?* vs ⦄ RawPtr.add p k ⦃ r => ⌜r = p.elem k.val⌝ ∗ p ↦?* vs ⦄ := by
+  simpa only [RawPtr.elem_zero, Nat.zero_add] using
+    RawPtr.add.spec_uninit p vs 0 k hne (by omega)
+
+/-- `offset` (by a nonnegative count) from the start of a range. -/
+@[step]
+theorem RawPtr.offset.spec_uninit_head {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (vs : List (MaybeUninit T)) (k : Isize) (hne : 0 < vs.length) (hlo : 0 ≤ k.val)
+    (hle : k.val ≤ vs.length) :
+    ⦃ p ↦?* vs ⦄ RawPtr.offset p k ⦃ r => ⌜r = p.elem k.val.toNat⌝ ∗ p ↦?* vs ⦄ := by
+  simpa only [RawPtr.elem_zero, Nat.cast_zero, Int.zero_add] using
+    RawPtr.offset.spec_uninit p vs 0 k hne (by omega) (by omega) (by omega)
+
 /-- `sub` from the `i`-th element of a range (or one past its end). -/
 @[step]
 theorem RawPtr.sub.spec_uninit {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
@@ -934,5 +1018,15 @@ theorem RawPtr.sub.spec_readable {T : Type} [Pointee T] [Pointee.Sized T] (p : R
   RawPtr.offset_elem.spec_rangeWith (fun v bytes => (Pointee.repr (T := T)).decode bytes = some v) depth p vs i
     (-(k.val : Int)) (i - k.val) hne hi (by omega)
     (by omega)
+
+/-- `offset` (by a nonnegative count) from the start of a readable range (for instance the result
+of `as_ptr`). -/
+theorem RawPtr.offset.spec_readable_head {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
+    (depth : Nat) (vs : List T) (k : Isize) (hne : 0 < vs.length) (hlo : 0 ≤ k.val)
+    (hle : k.val ≤ vs.length) :
+    ⦃ p.readable depth vs ⦄ RawPtr.offset p k
+      ⦃ r => ⌜r = p.elem k.val.toNat⌝ ∗ p.readable depth vs ⦄ := by
+  simpa only [RawPtr.elem_zero, Nat.cast_zero, Int.zero_add] using
+    RawPtr.offset.spec_readable p depth vs 0 k hne (by omega) (by omega) (by omega)
 
 end Aeneas.Std

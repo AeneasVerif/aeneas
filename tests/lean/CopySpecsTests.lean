@@ -167,6 +167,24 @@ example (p : MutRawPtr U8) (b : U8) :
   step with core.ptr.copy.spec_uninit_within p [⟨none⟩, ⟨some b⟩, ⟨some b⟩] 2 0 1#usize (by simp) (by simp) (by simp)
     (fits 1#usize (by scalar_tac))
 
+/-- At the start of the ranges, `step` finds `write_bytes.spec_uninit_head`,
+`copy.spec_uninit_within_src_head`/`_dst_head` and `copy_nonoverlapping.spec_readable_head`. -/
+example (p : MutRawPtr U8) (c : U8) :
+    ⦃ p ↦?* [⟨none⟩, ⟨none⟩, ⟨none⟩] ⦄
+      (do core.ptr.write_bytes p c 1#usize
+          core.ptr.copy p (p.elem 1) 1#usize
+          core.ptr.copy (p.elem 2) p 1#usize)
+    ⦃ p ↦?* [⟨none⟩, ⟨some c⟩, ⟨none⟩] ⦄ := by
+  step
+  step
+  step
+
+example (p : MutRawPtr U8) (src : RawPtr U8) (a b : U8) :
+    ⦃ src.readable 1 [a, b] ∗ p ↦?* [⟨none⟩, ⟨none⟩, ⟨none⟩] ⦄
+      core.ptr.copy_nonoverlapping src p 2#usize
+    ⦃ src.readable 1 [a, b] ∗ p ↦?* [⟨some a⟩, ⟨some b⟩, ⟨none⟩] ⦄ := by
+  step
+
 #print axioms write_pairs.spec
 #print axioms zmij_tail.spec
 #print axioms core.ptr.copy_nonoverlapping.spec_readable

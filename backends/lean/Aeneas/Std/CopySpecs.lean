@@ -36,9 +36,10 @@ Specifications (`count` may be `0`, but the ranges must be non-empty: `0 < xs.le
   generic `.spec_rangeWith`: from `src.elem j` of a readable range / range of values / `↦?*`
   range, into `dst.elem i` of a `↦?*` range;
 - `core.ptr.copy.spec_uninit_within` (`@[step]`): `memmove` within one `↦?*` range;
-  `core.ptr.copy.spec_readable` and `.spec_rangeWith` between separate ranges (not `@[step]`: same
-  program shape);
+  `core.ptr.copy.spec_readable` and `.spec_rangeWith` between separate ranges;
 - `core.ptr.write_bytes.spec_uninit` (`@[step]`, bytes);
+- the variants at the start of the ranges (`_src_head`, `_dst_head`, `_head`), for the programs
+  which use the pointer of a range itself;
 - `RawPtr.readable_uscalar_toLEBytes`: the readable view of an unsigned integer is a readable view of
   its little-endian bytes through `p.cast U8`. -/
 
@@ -924,6 +925,167 @@ theorem core.ptr.write_bytes.spec_uninit (p : MutRawPtr U8) (ys : List (MaybeUni
     RawPtr.cast_self]
   exact MutRawPtr.writeBytes.spec_uninit p b count.val i ys hi
 
+/-! ## At the start of the ranges
+
+The programs use the pointer of a range itself for its first element (`copy(src, buffer, n)`,
+`write_bytes(buffer, b, n)`, ...), which is `p.elem 0` only up to `RawPtr.elem_zero`: these are the
+specifications above with the index `0`, at `p`. `step` doesn't backtrack between the
+specifications whose programs have the same shape (see `UninitSpecs.lean`): for each shape, only
+the variant on the same assertions as the `@[step]` specification on `p.elem i` is `@[step]`
+(`copy_nonoverlapping.spec_readable_{src_head,dst_head,head}`, `copy.spec_uninit_within_{dst,src}_head`,
+`write_bytes.spec_uninit_head`); the other ones are used with `step with`. -/
+
+/-- `copy_nonoverlapping` from the start of a readable range into the `i`-th element of a `↦?*` range. -/
+@[step]
+theorem core.ptr.copy_nonoverlapping.spec_readable_src_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (d : Nat) (xs : List T) (ys : List (MaybeUninit T)) (i : Nat)
+    (count : Usize) (hj : count.val ≤ xs.length) (hi : i + count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src.readable d xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping src (dst.elem i) count
+    ⦃ src.readable d xs ∗ dst ↦?* (ys.take i ++ (xs.take count.val).map (fun v => ⟨some v⟩) ++ ys.drop (i + count.val)) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_readable src dst d xs ys 0 i count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the `j`-th element of a readable range to the start of a `↦?*` range. -/
+@[step]
+theorem core.ptr.copy_nonoverlapping.spec_readable_dst_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (d : Nat) (xs : List T) (ys : List (MaybeUninit T)) (j : Nat)
+    (count : Usize) (hj : j + count.val ≤ xs.length) (hi : count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src.readable d xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping (src.elem j) dst count
+    ⦃ src.readable d xs ∗ dst ↦?* (((xs.drop j).take count.val).map (fun v => ⟨some v⟩) ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_readable src dst d xs ys j 0 count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the start of a readable range to the start of a `↦?*` range. -/
+@[step]
+theorem core.ptr.copy_nonoverlapping.spec_readable_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (d : Nat) (xs : List T) (ys : List (MaybeUninit T))
+    (count : Usize) (hj : count.val ≤ xs.length) (hi : count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src.readable d xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping src dst count
+    ⦃ src.readable d xs ∗ dst ↦?* ((xs.take count.val).map (fun v => ⟨some v⟩) ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_readable src dst d xs ys 0 0 count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the start of a range of values into the `i`-th element of a `↦?*` range. -/
+theorem core.ptr.copy_nonoverlapping.spec_range_src_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (d : Nat) (xs : List T) (ys : List (MaybeUninit T)) (i : Nat)
+    (count : Usize) (hj : count.val ≤ xs.length) (hi : i + count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src.range d xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping src (dst.elem i) count
+    ⦃ src.range d xs ∗ dst ↦?* (ys.take i ++ (xs.take count.val).map (fun v => ⟨some v⟩) ++ ys.drop (i + count.val)) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_range src dst d xs ys 0 i count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the `j`-th element of a range of values to the start of a `↦?*` range. -/
+theorem core.ptr.copy_nonoverlapping.spec_range_dst_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (d : Nat) (xs : List T) (ys : List (MaybeUninit T)) (j : Nat)
+    (count : Usize) (hj : j + count.val ≤ xs.length) (hi : count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src.range d xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping (src.elem j) dst count
+    ⦃ src.range d xs ∗ dst ↦?* (((xs.drop j).take count.val).map (fun v => ⟨some v⟩) ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_range src dst d xs ys j 0 count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the start of a range of values to the start of a `↦?*` range. -/
+theorem core.ptr.copy_nonoverlapping.spec_range_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (d : Nat) (xs : List T) (ys : List (MaybeUninit T))
+    (count : Usize) (hj : count.val ≤ xs.length) (hi : count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src.range d xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping src dst count
+    ⦃ src.range d xs ∗ dst ↦?* ((xs.take count.val).map (fun v => ⟨some v⟩) ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_range src dst d xs ys 0 0 count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the start of a possibly uninitialized range into the `i`-th element of a `↦?*` range. -/
+theorem core.ptr.copy_nonoverlapping.spec_uninit_src_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (xs : List (MaybeUninit T)) (ys : List (MaybeUninit T)) (i : Nat)
+    (count : Usize) (hj : count.val ≤ xs.length) (hi : i + count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src ↦?* xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping src (dst.elem i) count
+    ⦃ src ↦?* xs ∗ dst ↦?* (ys.take i ++ xs.take count.val ++ ys.drop (i + count.val)) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_uninit src dst xs ys 0 i count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the `j`-th element of a possibly uninitialized range to the start of a `↦?*` range. -/
+theorem core.ptr.copy_nonoverlapping.spec_uninit_dst_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (xs : List (MaybeUninit T)) (ys : List (MaybeUninit T)) (j : Nat)
+    (count : Usize) (hj : j + count.val ≤ xs.length) (hi : count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src ↦?* xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping (src.elem j) dst count
+    ⦃ src ↦?* xs ∗ dst ↦?* ((xs.drop j).take count.val ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_uninit src dst xs ys j 0 count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `copy_nonoverlapping` from the start of a possibly uninitialized range to the start of a `↦?*` range. -/
+theorem core.ptr.copy_nonoverlapping.spec_uninit_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (src dst : RawPtr T) (xs : List (MaybeUninit T)) (ys : List (MaybeUninit T))
+    (count : Usize) (hj : count.val ≤ xs.length) (hi : count.val ≤ ys.length)
+    (hxs : 0 < xs.length) (hys : 0 < ys.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ src ↦?* xs ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping src dst count
+    ⦃ src ↦?* xs ∗ dst ↦?* (xs.take count.val ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero, List.take_zero, List.nil_append, Nat.zero_add]
+    using core.ptr.copy_nonoverlapping.spec_uninit src dst xs ys 0 0 count (by omega) (by omega)
+      hxs hys hfits
+
+/-- `ptr::copy` within a range, to its start. -/
+@[step]
+theorem core.ptr.copy.spec_uninit_within_dst_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (p : RawPtr T) (vs : List (MaybeUninit T)) (j : Nat) (count : Usize)
+    (hj : j + count.val ≤ vs.length) (hi : count.val ≤ vs.length) (hvs : 0 < vs.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ p ↦?* vs ⦄ core.ptr.copy (p.elem j) p count
+    ⦃ p ↦?* ((vs.drop j).take count.val ++ vs.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.take_zero, List.nil_append, Nat.zero_add] using
+    core.ptr.copy.spec_uninit_within p vs j 0 count hj (by omega) hvs hfits
+
+/-- `ptr::copy` within a range, from its start. -/
+@[step]
+theorem core.ptr.copy.spec_uninit_within_src_head {T : Type} [Pointee T] [Pointee.Sized T]
+    (p : RawPtr T) (vs : List (MaybeUninit T)) (i : Nat) (count : Usize)
+    (hj : count.val ≤ vs.length) (hi : i + count.val ≤ vs.length) (hvs : 0 < vs.length)
+    (hfits : ((count.val * (Pointee.repr (T := T)).size : Nat) : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ p ↦?* vs ⦄ core.ptr.copy p (p.elem i) count
+    ⦃ p ↦?* (vs.take i ++ vs.take count.val ++ vs.drop (i + count.val)) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.drop_zero] using
+    core.ptr.copy.spec_uninit_within p vs 0 i count (by omega) hi hvs hfits
+
+/-- `write_bytes` from the start of a range of bytes. -/
+@[step]
+theorem core.ptr.write_bytes.spec_uninit_head (p : MutRawPtr U8) (ys : List (MaybeUninit U8))
+    (b : U8) (count : Usize) (hi : count.val ≤ ys.length)
+    (hfits : (count.val : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ p ↦?* ys ⦄ core.ptr.write_bytes p b count
+    ⦃ p ↦?* (List.replicate count.val ⟨some b⟩ ++ ys.drop count.val) ⦄ := by
+  simpa only [RawPtr.elem_zero, List.take_zero, List.nil_append, Nat.zero_add] using
+    core.ptr.write_bytes.spec_uninit p ys 0 b count (by omega) hfits
 
 /-! ## The bytes of an unsigned integer -/
 
@@ -1008,13 +1170,12 @@ theorem RawPtr.readable_uscalar_toLEBytes {ty : UScalarTy} (p : RawPtr (UScalar 
 
 /-! ## Sizes, for the side conditions (`count * size ≤ isize::MAX`)
 
-Not `@[simp]`: they would change the simp normal forms on which existing proofs rely. -/
+The byte counts of the copies and of `write_bytes` must fit `isize` (the side conditions `hfits`):
+`IScalar.cMax .Isize` is evaluated by `simp` and `scalar_tac`. The sizes of the scalars, the bytes
+and the arrays (`Pointee.size_uscalar`, `Pointee.size_u8`, ..., in `CastSpecs.lean`) are in the simp
+sets of `scalar_tac` and of `step`'s preconditions, but not `@[simp]`. -/
 
-/-- The size of an unsigned integer. -/
-theorem Pointee.repr_size_uscalar (ty : UScalarTy) :
-    (Pointee.repr (T := UScalar ty)).size = ty.numBits / 8 := rfl
-
-theorem Pointee.repr_size_iscalar (ty : IScalarTy) :
-    (Pointee.repr (T := IScalar ty)).size = ty.numBits / 8 := rfl
+@[simp, scalar_tac_simps]
+theorem IScalar.cMax_Isize : IScalar.cMax .Isize = 2147483647 := rfl
 
 end Aeneas.Std

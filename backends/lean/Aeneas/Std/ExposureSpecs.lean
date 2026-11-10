@@ -618,6 +618,14 @@ theorem MaybeUninit.Refines.singleton_some {T : Type} {r : MaybeUninit T} {v : T
   cases r
   simp_all
 
+/-- The value read back by the backward computation of `MaybeUninit::as_mut_ptr`
+(`MaybeUninit.end_as_mut_ptr.spec`) refines `[⟨some v⟩]` exactly when it is `⟨some v⟩`: in
+`step_post_simps`, `step` gives the value directly (`u = ⟨some v⟩`, for `assume_init`). -/
+@[simp, step_post_simps]
+theorem MaybeUninit.refines_singleton_some_iff {T : Type} (r : MaybeUninit T) (v : T) :
+    MaybeUninit.Refines [r] [⟨some v⟩] ↔ r = ⟨some v⟩ :=
+  ⟨MaybeUninit.Refines.singleton_some, fun h => h ▸ MaybeUninit.Refines.refl _⟩
+
 /-- A list which refines an initialized prefix `xs` followed by anything starts with `xs`. -/
 theorem MaybeUninit.Refines.eq_append {T : Type} {xs : List T} {r ys : List (MaybeUninit T)}
     (h : MaybeUninit.Refines r (xs.map (fun v => ⟨some v⟩) ++ ys)) :

@@ -1,6 +1,7 @@
 /- Separation-logic specifications for typed accesses through casts to byte buffers. -/
 module
 public import Aeneas.Std.UninitSpecs
+public import Aeneas.Std.CopySpecs
 public import Aeneas.Std.Core.PointeeArray
 import all Aeneas.Std.Core.Ptr
 import all Aeneas.Std.Core.RawPtrOps
@@ -23,8 +24,16 @@ The scalars and the arrays of plain values are plain.
   `RawPtr.read_unaligned.spec_cast` (no alignment needed), and `read_unaligned` from readable bytes.
 - `size_of` and `align_of` of the scalars and of the arrays.
 
-The size lemmas (`Pointee.size_uscalar`, `Pointee.size_array`, ...) are not `@[simp]` (making
-them so changes the behavior of `simp` in existing proofs): pass them to `simp` explicitly. -/
+The size lemmas (`Pointee.size_uscalar`, `Pointee.size_iscalar`, `Pointee.size_u8`,
+`Pointee.size_array`) are in `scalar_tac_simps` and `step_pre_simps`, for the side conditions on byte
+counts, but not `@[simp]` (making them so changes the behavior of `simp` in existing proofs, which
+unfold the sizes of the structures): pass them to `simp` explicitly.
+
+`copy_nonoverlapping(from_ref(&x).cast::<u8>(), dst, n)` (copying the bytes of a value) has its
+specification, `core.ptr.copy_nonoverlapping.spec_readable_cast`, which keeps the typed view of the
+source (for the backward function of `from_ref`). It is not `@[step]`: its program also matches
+`core.ptr.copy_nonoverlapping.spec_readable_src_head`, and `step` doesn't backtrack; use it with
+`step with`. -/
 
 namespace Aeneas.Std
 
@@ -342,9 +351,11 @@ namespace Pointee
     (toBytes v).length = (Pointee.repr (T := T)).size :=
   Pointee.Plain.isPlain.length v
 
+@[scalar_tac_simps, step_pre_simps]
 theorem size_uscalar (ty : UScalarTy) :
     (Pointee.repr (T := UScalar ty)).size = ty.numBits / 8 := rfl
 
+@[scalar_tac_simps, step_pre_simps]
 theorem size_iscalar (ty : IScalarTy) :
     (Pointee.repr (T := IScalar ty)).size = ty.numBits / 8 := rfl
 
@@ -354,6 +365,7 @@ theorem align_uscalar (ty : UScalarTy) :
 theorem align_iscalar (ty : IScalarTy) :
     (Pointee.repr (T := IScalar ty)).align.val = ty.numBits / 8 := rfl
 
+@[scalar_tac_simps, step_pre_simps]
 theorem size_array (T : Type) [Pointee T] (N : Usize) :
     (Pointee.repr (T := Array T N)).size = N.val * (Pointee.repr (T := T)).size :=
   Repr.listN_size _ _
@@ -362,6 +374,7 @@ theorem align_array (T : Type) [Pointee T] (N : Usize) (hN : 0 < N.val) :
     (Pointee.repr (T := Array T N)).align.val = (Pointee.repr (T := T)).align.val :=
   Repr.listN_align _ _ hN
 
+@[scalar_tac_simps, step_pre_simps]
 theorem size_u8 : (Pointee.repr (T := U8)).size = 1 := rfl
 
 theorem align_u8 : (Pointee.repr (T := U8)).align.val = 1 := rfl
@@ -385,6 +398,12 @@ theorem Sized.array (T : Type) [Pointee T] [Pointee.Sized T] (N : Usize) (hN : 0
 instance (T : Type) [Pointee T] [Pointee.Sized T] (N : Usize) [Fact (0 < N.val)] :
     Pointee.Sized (Array T N) :=
   Sized.array T N Fact.out
+
+/-- An array whose length is a positive numeral (`Array U64 2#usize`): no `Fact` needed (the
+numeral unifies with `n + 1`). -/
+instance Sized.array_ofNat (T : Type) [Pointee T] [Pointee.Sized T] (n : Nat)
+    (h : n + 1 ≤ UScalar.cMax .Usize) : Pointee.Sized (Array T (Usize.ofNat (n + 1) h)) :=
+  Sized.array T _ (by simp)
 
 theorem Plain.noPointers (T : Type) [Pointee T] [Pointee.Plain T] : Pointee.NoPointers T :=
   ⟨Pointee.Plain.isPlain.noPointers⟩
@@ -619,6 +638,32 @@ theorem readable_bytes_cast {U : Type} [Pointee U] [Pointee.Plain U] (p : RawPtr
   refine ⟨bptr, a, ?_, hsub⟩
   rw [Bytes.readableRange_eq_rangeWith]
   exact Bytes.rangeWith_singleton.mpr ⟨bytes, hdec, hb'⟩
+
+/-- `copy_nonoverlapping(q.cast::<u8>(), dst.add(i), count)` from a readable value of a plain type
+(for instance a `u64` exposed by `ptr::from_ref`): copies the first `count` little-endian bytes of
+the value, and keeps the typed view of the source (`readable_cast_bytes`, `readable_bytes_cast`,
+with the alignment of `q`). -/
+theorem _root_.Aeneas.Std.core.ptr.copy_nonoverlapping.spec_readable_cast {U : Type} [Pointee U]
+    [Pointee.Plain U] [Pointee.Sized U] (q : RawPtr U) (dst : RawPtr U8) (d : Nat) (v : U)
+    (ys : List (MaybeUninit U8)) (i : Nat) (count : Usize)
+    (hj : count.val ≤ (Pointee.repr (T := U)).size) (hi : i + count.val ≤ ys.length)
+    (hys : 0 < ys.length) (hfits : (count.val : Int) ≤ IScalar.cMax .Isize) :
+    ⦃ q.readable d [v] ∗ dst ↦?* ys ⦄
+      core.ptr.copy_nonoverlapping (q.cast U8) (dst.elem i) count
+    ⦃ q.readable d [v] ∗ dst ↦?* (ys.take i ++
+        ((toBytes v).take count.val).map (fun x => ⟨some x⟩) ++ ys.drop (i + count.val)) ⦄ := by
+  refine ispec_conseq (P' := ⌜(Pointee.repr (T := U)).align.val ∣ q.address.val⌝ ∗
+    (q.readable d [v] ∗ dst ↦?* ys)) ?_
+    (entails_trans (sep_mono (RawPtr.readable_aligned q d [v]) (entails_refl _))
+      (entails_of_eq (sep_assoc_eq _ _ _))) (fun _ => entails_refl _)
+  refine ispec_ipure.mpr fun hal => ?_
+  have hlen : (toBytes v).length = (Pointee.repr (T := U)).size := Pointee.length_toBytes v
+  have hc := core.ptr.copy_nonoverlapping.spec_readable_src_head (q.cast U8) dst d (toBytes v) ys
+    i count (by omega) hi (by have := Pointee.Sized.pos (T := U); omega) hys
+    (by rw [Pointee.size_u8]; simpa using hfits)
+  refine ispec_conseq hc (sep_mono (readable_cast_bytes q d v) (entails_refl _))
+    (fun _ => sep_mono ?_ (entails_refl _))
+  simpa using readable_bytes_cast (q.cast U8) d v (by simpa using hal)
 
 /-- An owned value of a plain type is, through `q.cast U8`, the range of its bytes. -/
 theorem pointsTo_cast_bytes {U : Type} [Pointee U] [Pointee.Plain U] (q : RawPtr U) (v : U) :

@@ -540,6 +540,16 @@ theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost 
   · intro hTriple h ⟨x, hJ⟩
     exact hTriple x h hJ
 
+/-- Case split on an `if` program. `split` (and `split_ifs`) run `simp` on the whole goal and can
+exceed the maximum number of steps on large programs (for instance the twenty-branch case analysis
+of `ryu::pretty::format32`); `repeat' (apply ispec_ite <;> intro)` splits them without traversing
+the branches. -/
+theorem ispec_ite {P : IPre} {c : Prop} [Decidable c] {a b : Result α} {Q : IPost α}
+    (h1 : c → ispec P a Q) (h2 : ¬c → ispec P b Q) : ispec P (if c then a else b) Q := by
+  by_cases h : c
+  · rw [if_pos h]; exact h1 h
+  · rw [if_neg h]; exact h2 h
+
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {s : Heap} (hPre : Realizes P s) :
     rawIwp false m Q s := by
