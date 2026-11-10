@@ -54,7 +54,7 @@ let fun_decl_is_anon_const_initializer
     external*.
 
     [filter_external]: if [true], do not consider as opaque the external
-    definitions that we will map to definitions from the standard library.
+    definitions, which we map to models (shipped, or from [-external-names]).
 
     Remark: the list of functions also contains the list of opaque global
     bodies. *)
@@ -145,6 +145,58 @@ let name_with_crate_to_pattern_string (span : Meta.span option)
   in
   let pat = name_to_pattern span mctx c n in
   Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
+
+(** The error for a definition which is mapped to an external name
+    ([extract_name], the model it is mapped to), if it should not be: a model
+    may only replace a missing body.
+
+    [opaque] is [Some b] for the definitions which have a body or not
+    (functions, globals, types: [b] is [true] if there is none), and [None] for
+    the ones which do not (traits and trait impls). [foreign_too] also refuses
+    the definitions of other crates which have a body: Charon translates the
+    body of a function or a global of another crate only when asked to (e.g.
+    with [--include]), but the definition of a public type of another crate by
+    default, which the models describe. *)
+let external_mapping_error (k : crate) (kind : string) ~(opaque : bool option)
+    ~(foreign_too : bool) (item_meta : item_meta) (extract_name : string option)
+    : string option =
+  let refused =
+    match opaque with
+    | Some true -> false
+    | Some false -> item_meta.is_local || foreign_too
+    | None -> item_meta.is_local
+  in
+  if not refused then None
+  else
+    Option.map
+      (fun model ->
+        let fix =
+          match opaque with
+          | None -> " Remove that entry."
+          | Some _ ->
+              let pattern =
+                name_with_crate_to_pattern_string (Some item_meta.span) k
+                  item_meta.name
+              in
+              " Remove that entry, or make the definition opaque for Charon"
+              ^ " (--opaque '" ^ pattern ^ "')."
+        in
+        let what =
+          if item_meta.is_local then " is defined in this crate"
+          else " has a body"
+        in
+        kind ^ what
+        ^ ", but an external name (user-provided or built-in) maps it to the \
+           model '" ^ model ^ "', which would silently replace it." ^ fix)
+      extract_name
+
+(** Saves the error of {!external_mapping_error}, if any. *)
+let check_not_external (k : crate) (kind : string) ~(opaque : bool option)
+    ~(foreign_too : bool) (item_meta : item_meta) (extract_name : string option)
+    : unit =
+  Option.iter
+    (fun msg -> [%save_error] item_meta.span msg)
+    (external_mapping_error k kind ~opaque ~foreign_too item_meta extract_name)
 
 let name_with_generics_to_pattern (span : Meta.span option)
     (ctx : Charon.NameMatcher.ctx) (c : Charon.NameMatcher.to_pat_config)

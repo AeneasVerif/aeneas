@@ -134,23 +134,23 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
     | Opaque -> (
         (* Try to lookup the external information, if there is *)
         match get_external_info () with
-        | Some info ->
-            (* *)
+        | Some { mut_regions = Some info_mut_regions; _ } ->
             let len = List.length def.generics.regions in
-            if List.for_all (fun i -> i < len) info.mut_regions then
+            if List.for_all (fun i -> i < len) info_mut_regions then
               RegionId.Set.of_list
                 (List.map
                    (fun i ->
                      (Collections.List.nth def.generics.regions i).index)
-                   info.mut_regions)
+                   info_mut_regions)
             else (
               [%warn_opt_span] span
-                ("Found invalid builtin information for a type declaration: \
+                ("Found invalid external information for a type declaration: \
                   the indices used for the mutable regions are out of bounds.\n\
                   Type: " ^ name_to_string ());
               RegionId.Set.empty)
-        | None ->
-            (* No external information: use Charon's per-region [mutability] analysis *)
+        | Some { mut_regions = None; _ } | None ->
+            (* No information about the regions: use Charon's per-region
+               [mutability] analysis *)
             let has_unknown_regions = ref false in
             let mut_regions =
               RegionId.Set.of_list

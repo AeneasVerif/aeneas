@@ -24,7 +24,7 @@ type function_entry = {
   rust_name : string;  (** Fully-qualified Rust name (from [item_meta.name]). *)
   rust_pattern : string option; [@default None]
       (** The Rust name, in the syntax of the name matcher. Absent when the name
-          has no pattern. *)
+          has no pattern: [-external-names] then skips the entry. *)
   is_local : bool;
       (** [true] if defined in the current crate, [false] if external. *)
   source : source;  (** Rust source location (from [item_meta.span]). *)
@@ -93,11 +93,13 @@ type trait_impl_entry = {
   impl_trait_def_id : int;
       (** [TraitDeclId] of the implemented trait. A valid LLBC trait decl but
           has entry in [trait_decls] iff the trait is not mapped to external
-          names. *)
+          names (the models which ship with Aeneas, or those imported through
+          [-external-names]). *)
   impl_trait_rust_name : string;
       (** Full Rust path of the implemented trait. *)
   impl_trait_is_builtin : bool;
-      (** [true] when the implemented trait is mapped to external names. *)
+      (** [true] when the implemented trait is mapped to external names (the
+          builtin models, or those imported through [-external-names]). *)
 }
 [@@deriving to_yojson]
 
@@ -193,11 +195,11 @@ let pattern_matches_more (pattern : Charon.NameMatcher.pattern) : bool =
     false
   with Found -> true
 
-(** Print a pattern computed by [compute], in the syntax of the name matcher.
-    Some names have no pattern (Charon's conversion fails on them, or gives a
-    pattern which also matches other names): we then warn and leave the pattern
-    out, rather than stop writing the manifest. We call Charon directly, as the
-    helpers of {!LlbcAstUtils} register an error. *)
+(** Print a pattern computed by [compute], in the syntax which [-external-names]
+    parses. Some names have no pattern (Charon's conversion fails on them, or
+    gives a pattern which also matches other names): we then warn and leave the
+    pattern out, rather than stop writing the manifest. We call Charon directly,
+    as the helpers of {!LlbcAstUtils} register an error. *)
 let try_rust_pattern (ctx : ExtractBase.extraction_ctx) (span : Meta.span)
     (compute :
       Charon.NameMatcher.ctx ->
@@ -211,7 +213,9 @@ let try_rust_pattern (ctx : ExtractBase.extraction_ctx) (span : Meta.span)
     }
   in
   let no_pattern (why : string) : string option =
-    [%warn] span ("-emit-json: " ^ why ^ "; its entry has no \"rust_pattern\"");
+    [%warn] span
+      ("-emit-json: " ^ why
+     ^ "; its entry has no \"rust_pattern\", and -external-names will skip it");
     None
   in
   match
@@ -226,7 +230,7 @@ let try_rust_pattern (ctx : ExtractBase.extraction_ctx) (span : Meta.span)
          as dyn Trait), so that its pattern would also match other names"
   | _, pattern -> Some pattern
 
-(** The Rust name, in the pattern syntax of the name matcher. *)
+(** The Rust name, in the pattern syntax which [-external-names] parses. *)
 let rust_pattern_of_name (ctx : ExtractBase.extraction_ctx) (span : Meta.span)
     (name : Types.name) : string option =
   try_rust_pattern ctx span (fun mctx c ->

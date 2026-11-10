@@ -41,6 +41,12 @@ package «tests» {}
 @[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib ExternalNames
+@[default_target] lean_lib ExternalNamesFields
+@[default_target] lean_lib ExternalNamesModel
+@[default_target] lean_lib ExternalNamesSkipped
+@[default_target] lean_lib ExternalNamesSplit
+@[default_target] lean_lib ExternalNamesTraits
 @[default_target] lean_lib ExtraIncludes
 @[default_target] lean_lib ExtraIncludesModel
 @[default_target] lean_lib FnPtrGeneric

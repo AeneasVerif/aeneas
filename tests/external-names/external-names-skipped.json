@@ -1,0 +1,29 @@
+{
+  "types": [
+    {
+      "rust_pattern": "core::num::FpCategory",
+      "lean_name": "ExternalNamesModel.FpCategory",
+      "body": {
+        "kind": "enum",
+        "variants": [
+          { "rust": "Infinite", "extract": "Infinite" },
+          { "rust": "Zero", "extract": "Zero" },
+          { "rust": "Subnormal", "extract": "Subnormal" },
+          { "rust": "Normal", "extract": "Normal" }
+        ]
+      }
+    }
+  ],
+  "functions": [
+    {
+      "lean_name": "ExternalNamesModel.noPattern"
+    }
+  ],
+  "trait_decls": [
+    {
+      "rust_pattern": "core::fmt::{",
+      "lean_name": "ExternalNamesModel.Unparsable",
+      "methods": [{ "rust": "f", "extract": "f" }]
+    }
+  ]
+}

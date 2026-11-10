@@ -1,0 +1,8 @@
+{
+  "trait_impls": [
+    {
+      "rust_pattern": "external_names_local_impl::Tr<u32>",
+      "lean_name": "ExternalNamesModel.TrU32"
+    }
+  ]
+}

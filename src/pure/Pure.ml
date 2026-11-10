@@ -189,17 +189,19 @@ type external_type_info = {
 
           For instance, `Vec` type takes a type parameter for the allocator,
           which we want to ignore. *)
-  mut_regions : int list;
+  mut_regions : int list option;
       (** The regions which are used for mutable borrows.
 
           The integer represents the position of the region in the list of
-          parameters, not its id. *)
+          parameters, not its id. [None] means that the information does not
+          say: we then use Charon's analysis, as for an opaque type with no
+          external information. The packaged types always give it. *)
   body_info : external_type_body_info option;
 }
 [@@deriving show, ord]
 
 type external_global_info = {
-  rust_name : string;
+  rust_name : NameMatcher.pattern;
   extract_name : string;
   can_fail : bool;
 }
@@ -233,6 +235,13 @@ type external_trait_decl_info = {
           - a Rust name
           - an extraction name *)
   methods : (string * external_fun_info) list;
+  packaged : bool;
+      (** [true] for the models which ship with Aeneas, [false] for the ones
+          read from an [-external-names] file. Only the packaged models are
+          checked against the trait: [-filter-trait-methods] drops the methods
+          they do not list, and a method they do not list is reported. The
+          models read from a file are trusted, and they only supply names: the
+          methods they do not list get computed names. *)
 }
 [@@deriving show]
 

@@ -237,7 +237,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       "This global definition is in a group of mutually recursive definitions";
     [%cassert] (List.hd d).item_meta.span
       ((not !group_has_external_info) || List.length d = 1)
-      "This builtin function belongs to a group of mutually recursive \
+      "This external function belongs to a group of mutually recursive \
        definitions";
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation

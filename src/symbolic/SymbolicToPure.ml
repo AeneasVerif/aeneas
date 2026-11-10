@@ -219,6 +219,12 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     match_name_find_opt ctx trait_decl.item_meta.name
       (ExternalNames.external_trait_decls_map ())
   in
+  (* Check if the trait is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This trait declaration"
+    ~opaque:None ~foreign_too:false trait_decl.item_meta
+    (Option.map
+       (fun (i : external_trait_decl_info) -> i.extract_name)
+       external_info);
   if (not (T.AssocTypeId.Map.is_empty types)) && external_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
     [%warn] span
@@ -347,6 +353,12 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       llbc_impl_trait.generics
       (ExternalNames.external_trait_impls_map ())
   in
+  (* Check if the impl is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This trait implementation"
+    ~opaque:None ~foreign_too:false item_meta
+    (Option.map
+       (fun (i : external_trait_impl_info) -> i.extract_name)
+       external_info);
   {
     def_id;
     name;
@@ -382,6 +394,18 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     match_name_find_opt ctx item_meta.name
       (ExternalNames.external_globals_map ())
   in
+  (* Check if the global is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This global" ~foreign_too:true
+    ~opaque:
+      (Some
+         (match FunDeclId.Map.find_opt body_id ctx.crate.fun_decls with
+         | Some (d : LlbcAst.fun_decl) ->
+             not (LlbcAstUtils.body_is_known d.body)
+         | None -> true))
+    item_meta
+    (Option.map
+       (fun (i : external_global_info) -> i.extract_name)
+       external_info);
   let can_fail =
     match external_info with
     | Some info -> info.can_fail

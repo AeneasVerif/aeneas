@@ -173,6 +173,12 @@ command `make extract-lean-std`. This command will build the Lean library for Ae
 collect those definitions, and regenerate the `src/extract/ExtractBuiltinLean.ml` file,
 which provides information about those models.
 
+Models which live in another Lean library can also be given to Aeneas with
+`-external-names file.json`, without changing Aeneas: the file maps Rust names to Lean
+names, and `-extra-includes` imports the library in the generated files. Such a file can be
+written by hand, or produced by translating a crate with `-emit-json`. See
+[`documentation/emit-json.md`](documentation/emit-json.md).
+
 Note that Aeneas automatically introduces the `rust_type`, etc. attributes when
 listing the missing external definitions in the `TypesExternal.lean`, etc. files:
 the user just needs to copy/paste those definitions and fill in the holes. Also note that

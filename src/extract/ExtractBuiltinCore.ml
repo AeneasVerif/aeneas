@@ -149,7 +149,13 @@ let mk_type ?(keep_params : bool list option = None)
         in
         Some (Enum variants)
   in
-  { rust_name = pattern; extract_name; keep_params; mut_regions; body_info }
+  {
+    rust_name = pattern;
+    extract_name;
+    keep_params;
+    mut_regions = Some mut_regions;
+    body_info;
+  }
 
 let mk_trait_decl ?(parent_clauses : string list = [])
     ?(consts : (string * string) list = [])
@@ -184,6 +190,7 @@ let mk_trait_decl ?(parent_clauses : string list = [])
     consts;
     types;
     methods;
+    packaged = true;
   }
 
 let mk_trait_impl ?(keep_params : bool list option = None)

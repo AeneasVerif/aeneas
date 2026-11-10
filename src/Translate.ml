@@ -126,6 +126,18 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
     trans_ctx.type_ctx.type_decls fdef;
 
+  (* A function mapped to an external name is never extracted: a model may only
+     replace a missing body *)
+  Option.iter
+    (fun msg -> [%craise] fdef.item_meta.span msg)
+    (LlbcAstUtils.external_mapping_error trans_ctx.crate "This function"
+       ~opaque:(Some (not (LlbcAstUtils.body_is_known fdef.body)))
+       ~foreign_too:true fdef.item_meta
+       (Option.map
+          (fun (i : Pure.external_fun_info) -> i.extract_name)
+          (match_name_find_opt trans_ctx fdef.item_meta.name
+             (ExternalNames.external_funs_map ()))));
+
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
     translate_function_to_symbolics trans_ctx marked_ids fdef
@@ -639,7 +651,7 @@ type gen_config = {
 (** Returns the pair: (has opaque type decls, has opaque fun decls).
 
     [filter_external]: if [true], do not consider as opaque the external
-    definitions that we will map to definitions from the standard library. *)
+    definitions, which we map to models (shipped, or from [-external-names]). *)
 let crate_has_opaque_non_external_decls (ctx : gen_ctx) (filter_external : bool)
     : bool * bool =
   let types, funs =
@@ -698,6 +710,25 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     if extract_extra_info then
       Extract.extract_type_decl_extra_info ctx fmt kind def)
 
+(** Check that all the types of a group of mutually recursive types are
+    external, given that at least one of them is. The packaged lists respect
+    this, but a list of external names given through [-external-names] may map
+    only some of them. (The functions are checked by {!FunsAnalysis}.) *)
+let check_group_all_or_none_external (span : Meta.span) (names : string list)
+    (externals : bool list) : unit =
+  let names (mapped : bool) : string =
+    String.concat ", "
+      (List.filter_map
+         (fun (name, b) -> if b = mapped then Some name else None)
+         (List.combine names externals))
+  in
+  [%classert] span
+    (List.for_all (fun b -> b) externals)
+    (lazy
+      ("In a group of mutually recursive types, either all or none of the \
+        types must be mapped to external names. Mapped: " ^ names true
+     ^ "; not mapped: " ^ names false))
+
 (** Export a group of types.
 
     [is_rec]: [true] if the types are recursive. Necessarily [true] if there is
@@ -751,8 +782,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
   in
 
   if List.exists (fun b -> b) externals then
-    (* Sanity check *)
-    assert (List.for_all (fun b -> b) externals)
+    check_group_all_or_none_external (List.hd defs).item_meta.span
+      (List.map
+         (fun (d : Pure.type_decl) ->
+           name_to_string ctx.trans_ctx d.item_meta.name)
+         defs)
+      externals
   else if List.exists dont_extract defs then
     (* Check if we have to ignore declarations *)
     (* Sanity check *)
@@ -1008,7 +1043,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
 
   (* Check if it is an external global - if yes, we ignore it (together with the
      auxiliary functions introduced for the loops it may contain) because we
-     map the definition to one in the standard library *)
+     map the definition to a model (shipped, or from [-external-names]) *)
   let is_external =
     let open ExternalNames in
     match_name_find_opt ctx.trans_ctx global.item_meta.name
