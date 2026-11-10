@@ -1915,7 +1915,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
             (fun p ->
               F.pp_print_space fmt ();
               F.pp_print_string fmt p)
-            type_params;
+            (type_params @ cg_params);
           F.pp_print_string fmt ")";
 
           F.pp_print_space fmt ();
