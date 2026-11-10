@@ -4,12 +4,13 @@ open Aeneas Aeneas.Std Aeneas.SepLogic Aeneas.Std.WP Result
 
 namespace zmij_raw_pointers
 
-/-- `uint128` is not zero-sized: its representation contains that of a `u64`. -/
-instance : Pointee.Sized uint128 := ⟨by
+/-- `uint128` is not zero-sized: its fields (`u64`) aren't (its layout is unspecified, see
+`Repr.unspecified`). -/
+instance : Pointee.Sized uint128 := ⟨Repr.unspecified_sized (by
   show 0 < Repr.prodSize (Pointee.repr (T := U64)) (Pointee.repr (T := U64))
   have := Repr.prodEnd_le (Pointee.repr (T := U64)) (Pointee.repr (T := U64))
   have := Pointee.Sized.pos (T := U64)
-  omega⟩
+  omega)⟩
 
 /-- Write through the pointer to the first slot of a range. -/
 theorem write_head.spec {T : Type} [Pointee T] [Pointee.Sized T] [Pointee.NoPointers T]
