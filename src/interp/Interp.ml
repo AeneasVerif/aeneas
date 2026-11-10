@@ -382,6 +382,13 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
   (* Return *)
   (ctx, input_svs, inst_sg)
 
+let alive_abs_ids_in_env (env : env) : AbsId.id list =
+  List.filter_map
+    (function
+      | EAbs abs when Option.is_some abs.alive_hint -> Some abs.abs_id
+      | _ -> None)
+    env
+
 (** Small helper.
 
     This is a continuation function called by the symbolic interpreter upon
@@ -390,7 +397,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
     synthesis (mostly by ending abstractions). *)
 let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (fdef : fun_decl) (inst_sg : inst_fun_sig) (back_id : RegionGroupId.id)
-    (ret_value : tvalue) (ctx : eval_ctx) : SA.expr =
+    ~(is_keep_alive_rg : bool) (ret_value : tvalue) (ctx : eval_ctx) : SA.expr =
   let span = fdef.item_meta.span in
   [%ltrace
     "- fname: "
@@ -551,11 +558,37 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      (see [abs_is_endable]) *)
   let ctx = if is_static_rg then { ctx with can_end_static = true } else ctx in
 
+  let alive_before = alive_abs_ids_in_env ctx.env in
+
   (* Actually end them *)
   let ctx, cc =
     fold_left_apply_continuation
       (fun id ctx -> end_abs config span id 0 ctx)
       target_abs_ids ctx
+  in
+  (* Handle any remaining #[verify::keep_alive] abstractions:
+     - If this region group carries #[verify::keep_alive], end any remaining
+       keep-alive abstractions (e.g., borrowing 'static) so their backward
+       effects flow into this backward function.
+     - Otherwise, check that ending this region group did not prematurely end
+       any active keep-alive abstraction. *)
+  let ctx, cc =
+    if is_keep_alive_rg then
+      let remaining_alive = alive_abs_ids_in_env ctx.env in
+      comp cc
+        (fold_left_apply_continuation
+           (fun id ctx -> end_abs config span id 0 ctx)
+           remaining_alive ctx)
+    else (
+      if
+        List.exists
+          (fun id -> Option.is_none (ctx_lookup_abs_opt ctx id))
+          alive_before
+      then
+        [%craise] span
+          "A non-keep-alive backward function cannot end an active \
+           #[verify::keep_alive] region abstraction";
+      (ctx, cc))
   in
   (* Generate the Return node *)
   let return_expr = SA.Return (ctx, None) in
@@ -655,6 +688,110 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
             in
             (ret_value, { ctx with env }, cc_simpl)
         in
+        let has_keep_alive =
+          match
+            FunsAnalysis.lookup_fun_decl_info decls_ctx.fun_ctx.fun_infos
+              fdef.def_id
+          with
+          | Some info -> Option.is_some info.alive_hint
+          | None -> false
+        in
+        let has_alive_abs env = alive_abs_ids_in_env env <> [] in
+        let keep_alive_rgs : RegionGroupId.id list =
+          if has_keep_alive then
+            List.map (fun (rg : region_group) -> rg.id) regions_hierarchy
+          else []
+        in
+        (* Decide how remaining #[verify::keep_alive] abstractions behave at
+           return based on which output region groups carry #[verify::keep_alive]:
+           - None ([]): no backward function may consume remaining keep-alive
+             abstractions, so end any whose loans are gone at the end of the
+             forward function (raising an error if any still remain active).
+           - One ([ _ka_gid ]): let remaining keep-alive abstractions stay
+             active past forward return so they flow into that backward function.
+           - Multiple (_ :: _ :: _): not yet supported without per-lifetime
+             #[verify::keep_alive('a)] annotations. *)
+        let ret_value, ctx, cc_end_alive =
+          match keep_alive_rgs with
+          | [] ->
+              if has_keep_alive then
+                [%craise] span
+                  "#[verify::keep_alive] requires at least one lifetime in the \
+                   function signature";
+              let ret_value, ctx, cc_end_alive =
+                if not (has_alive_abs ctx.env) then (ret_value, ctx, fun e -> e)
+                else
+                  let ret_binder : real_var_binder =
+                    { index = Expressions.LocalId.zero; name = None }
+                  in
+                  let ctx =
+                    {
+                      ctx with
+                      env = EBinding (BVar ret_binder, ret_value) :: ctx.env;
+                    }
+                  in
+                  let rec end_alive_abs_with_no_loans (ctx : eval_ctx) :
+                      eval_ctx * (SA.expr -> SA.expr) =
+                    let no_loans_abs =
+                      List.filter_map
+                        (function
+                          | EAbs abs ->
+                              if
+                                Option.is_some abs.alive_hint
+                                && AbsId.Set.for_all
+                                     (fun pid ->
+                                       Option.is_none
+                                         (ctx_lookup_abs_opt ctx pid))
+                                     abs.parents
+                                && Option.is_none
+                                     (InterpBorrowsCore
+                                      .get_first_non_ignored_aloan_in_abs span
+                                        abs 0 (-1))
+                                && abs_is_endable ctx abs
+                              then Some abs.abs_id
+                              else None
+                          | EBinding _ | EFrame -> None)
+                        ctx.env
+                    in
+                    if no_loans_abs = [] then (ctx, fun e -> e)
+                    else
+                      let no_loans_abs =
+                        AbsIdWithLevelSet.of_list
+                          (List.map
+                             (fun abs_id -> { abs_id; level = 0 })
+                             no_loans_abs)
+                      in
+                      let ctx, cc_end =
+                        InterpBorrows.end_abs_set config span no_loans_abs ctx
+                      in
+                      let ctx, cc_simpl =
+                        InterpBorrows.simplify_dummy_values_useless_abs config
+                          ~filter_avalues:false span ctx
+                      in
+                      let cc = cc_comp cc_end cc_simpl in
+                      comp cc (end_alive_abs_with_no_loans ctx)
+                  in
+                  let ctx, cc_end_alive = end_alive_abs_with_no_loans ctx in
+                  let ret_value, env =
+                    env_pop_var
+                      (fun _ -> [%internal_error] span)
+                      ret_binder ctx.env
+                  in
+                  (ret_value, { ctx with env }, cc_end_alive)
+              in
+              if has_alive_abs ctx.env then
+                [%craise] span
+                  "This function returns while a #[verify::keep_alive] region \
+                   abstraction is still active (so its backward function would \
+                   need to end it); mark this function #[verify::keep_alive] \
+                   as well";
+              (ret_value, ctx, cc_end_alive)
+          | [ _ka_gid ] -> (ret_value, ctx, fun e -> e)
+          | _ :: _ :: _ ->
+              [%craise] span
+                "#[verify::keep_alive] is not yet supported on functions with \
+                 multiple lifetime region groups"
+        in
         let ctx_return = ctx in
         [%ltrace
           "after popping the frame:\n- returned value:\n"
@@ -669,8 +806,9 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
            abstractions up to the one in which we are interested.
         *)
         let finish_back_eval back_id =
+          let is_keep_alive_rg = List.mem back_id keep_alive_rgs in
           evaluate_function_symbolic_synthesize_backward_from_return config fdef
-            inst_sg back_id ret_value ctx
+            inst_sg back_id ~is_keep_alive_rg ret_value ctx
         in
         let back_el =
           RegionGroupId.mapi
@@ -681,7 +819,9 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         (* Put everything together *)
         cc_pop
           (cc_simpl
-             (SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el)))
+             (cc_end_alive
+                (SA.ForwardEnd
+                   (Some (ctx_return, ret_value), ctx0, fwd_e, back_el))))
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)
