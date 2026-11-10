@@ -8,6 +8,7 @@ public import Aeneas.Std.PrimitivesLemmas
 public import Aeneas.Std.Scalar
 public import Aeneas.Std.Slice
 public import Aeneas.Std.RawPtrSpecs
+public import Aeneas.Std.UninitSpecs
 public import Aeneas.Std.Core.PtrMovement
 public import Aeneas.Std.Core.RawPtrOps
 public import Aeneas.Std.Core.MaybeUninit
