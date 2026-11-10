@@ -673,13 +673,14 @@ theorem RawPtr.uninitRange_eq_rangeWith {T : Type} [Pointee T] (p : RawPtr T)
 /-! ## Pure facts of the copies -/
 
 /-- In every heap, the `j`-th element of a range and the `i`-th element of a separate exclusive range
-are aligned, and the `n` elements from them don't overlap. -/
+are non-null and aligned, and the `n` elements from them don't overlap. -/
 theorem copy_sep.facts {T V : Type} [Pointee T] [Pointee.Sized T]
     (valid : V → Vector Byte (Pointee.repr (T := T)).size → Prop) (src dst : RawPtr T)
     (xs : List V) (ys : List (MaybeUninit T)) (d j i n : Nat) (hj : j + n ≤ xs.length)
     (hi : i + n ≤ ys.length) (hxs : 0 < xs.length) (hys : 0 < ys.length) :
     RealEntails (src.rangeWith valid d xs ∗ dst ↦?* ys)
-      (⌜(Pointee.repr (T := T)).align.val ∣ (src.elem j).address.val ∧
+      (⌜(src.elem j).address.val ≠ 0 ∧ (dst.elem i).address.val ≠ 0 ∧
+          (Pointee.repr (T := T)).align.val ∣ (src.elem j).address.val ∧
           (Pointee.repr (T := T)).align.val ∣ (dst.elem i).address.val ∧
           ((src.elem j).address.val + n * (Pointee.repr (T := T)).size ≤ (dst.elem i).address.val ∨
             (dst.elem i).address.val + n * (Pointee.repr (T := T)).size ≤
@@ -697,6 +698,8 @@ theorem copy_sep.facts {T V : Type} [Pointee T] [Pointee.Sized T]
   have hsize := Pointee.Sized.pos (T := T)
   have boundS := Bytes.rangeWith_bound _ valid src bS (listVec xs) d hxs hsize a s ha hma hinv
   have boundD := Bytes.rangeWith_bound _ _ dst bD (listVec ys) 0 hys hsize b s hb hmb hinv
+  have posS := Bytes.rangeWith_pos _ valid src bS (listVec xs) d hxs hsize a s ha hma hinv
+  have posD := Bytes.rangeWith_pos _ _ dst bD (listVec ys) 0 hys hsize b s hb hmb hinv
   obtain ⟨dsS, hlS, -, hloS, halS, rfl⟩ := (Bytes.rangeWith_iff_list _ _ _ _ _ _ _).mp ha
   obtain ⟨dsD, hlD, -, hloD, halD, rfl⟩ := (Bytes.rangeWith_iff_list _ _ _ _ _ _ _).mp hb
   have mj := Nat.mul_le_mul_right (Pointee.repr (T := T)).size hj
@@ -704,7 +707,7 @@ theorem copy_sep.facts {T V : Type} [Pointee T] [Pointee.Sized T]
   rw [Nat.add_mul] at mj mi
   have hsj := RawPtr.elem_address src j (by omega)
   have hdi := RawPtr.elem_address dst i (by omega)
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨by rw [hsj]; omega, by rw [hdi]; omega, ?_, ?_, ?_⟩
   · rw [hsj]; exact Nat.dvd_add halS (Repr.aligned_stride _ j)
   · rw [hdi]; exact Nat.dvd_add halD (Repr.aligned_stride _ i)
   · have := Bytes.nonoverlap_of_cells hinv hma hmb hab (j * (Pointee.repr (T := T)).size)
@@ -714,21 +717,24 @@ theorem copy_sep.facts {T V : Type} [Pointee T] [Pointee.Sized T]
     simp only [RawPtr.offsetFrom] at this
     omega
 
-/-- In every heap, the `j`-th and `i`-th elements of a range are aligned. -/
+/-- In every heap, the `j`-th and `i`-th elements of a range are non-null and aligned. -/
 theorem copy_within.facts {T : Type} [Pointee T] [Pointee.Sized T] (p : RawPtr T)
     (vs : List (MaybeUninit T)) (j i : Nat) (hj : j ≤ vs.length) (hi : i ≤ vs.length)
     (hvs : 0 < vs.length) :
     RealEntails (p ↦?* vs)
-      (⌜(Pointee.repr (T := T)).align.val ∣ (p.elem j).address.val ∧
+      (⌜(p.elem j).address.val ≠ 0 ∧ (p.elem i).address.val ≠ 0 ∧
+          (Pointee.repr (T := T)).align.val ∣ (p.elem j).address.val ∧
           (Pointee.repr (T := T)).align.val ∣ (p.elem i).address.val⌝ ∗ p ↦?* vs) := by
   refine RealEntails.of_matches fun s h hinv hm hP => (sep_pure_l _ _ h).mpr ⟨?_, hP⟩
   obtain ⟨b, a, ha, hsa⟩ := hP
   have hma := Fragment.matches_of_subheap hsa hm
   have bound := Bytes.rangeWith_bound _ _ p b (listVec vs) 0 hvs Pointee.Sized.pos a s ha hma hinv
+  have pos := Bytes.rangeWith_pos _ _ p b (listVec vs) 0 hvs Pointee.Sized.pos a s ha hma hinv
   obtain ⟨_, _, _, hal, _⟩ := ha
   have mj := Nat.mul_le_mul_right (Pointee.repr (T := T)).size hj
   have mi := Nat.mul_le_mul_right (Pointee.repr (T := T)).size hi
-  refine ⟨?_, ?_⟩
+  refine ⟨by rw [RawPtr.elem_address p j (by omega)]; omega,
+    by rw [RawPtr.elem_address p i (by omega)]; omega, ?_, ?_⟩
   · rw [RawPtr.elem_address p j (by omega)]
     exact Nat.dvd_add hal (Repr.aligned_stride _ j)
   · rw [RawPtr.elem_address p i (by omega)]
@@ -753,9 +759,10 @@ theorem core.ptr.copy.spec_rangeWith {T V : Type} [Pointee T] [Pointee.Sized T]
     ⦃ src.rangeWith valid d xs ∗
         dst ↦?* (ys.take i ++ ((xs.drop j).take count.val).map f ++ ys.drop (i + count.val)) ⦄ := by
   refine ispec_realEntails_pre (copy_sep.facts valid src dst xs ys d j i count.val hj hi hxs hys) ?_
-  refine ispec_ipure.mpr fun ⟨hal₁, hal₂, _⟩ => ?_
+  refine ispec_ipure.mpr fun ⟨hnz₁, hnz₂, hal₁, hal₂, _⟩ => ?_
   unfold core.ptr.copy
-  simp only [RawPtr.byteCount, hfits, ite_true, bind_tc_ok, hal₁, hal₂, and_self]
+  simp only [RawPtr.byteCount, hfits, ite_true, bind_tc_ok, hnz₁, hnz₂, hal₁, hal₂, ne_eq,
+    not_false_eq_true, and_self]
   refine ispec_conseq (ispec_exists.mpr fun bb => ?_) iexists_upClose_sep
     (fun _ => upClose_sep_iexists)
   exact ispec_conseq (ispec_copyBytes
@@ -779,7 +786,7 @@ theorem core.ptr.copy_nonoverlapping.spec_rangeWith {T V : Type} [Pointee T] [Po
     ⦃ src.rangeWith valid d xs ∗
         dst ↦?* (ys.take i ++ ((xs.drop j).take count.val).map f ++ ys.drop (i + count.val)) ⦄ := by
   refine ispec_realEntails_pre (copy_sep.facts valid src dst xs ys d j i count.val hj hi hxs hys) ?_
-  refine ispec_ipure.mpr fun ⟨_, _, hno⟩ => ?_
+  refine ispec_ipure.mpr fun ⟨_, _, _, _, hno⟩ => ?_
   unfold core.ptr.copy_nonoverlapping
   simp only [RawPtr.byteCount, hfits, ite_true, bind_tc_ok, hno]
   exact core.ptr.copy.spec_rangeWith valid f hf src dst d xs ys j i count hj hi hxs hys hfits
@@ -857,9 +864,10 @@ theorem core.ptr.copy.spec_uninit_within {T : Type} [Pointee T] [Pointee.Sized T
     ⦃ p ↦?* vs ⦄ core.ptr.copy (p.elem j) (p.elem i) count
     ⦃ p ↦?* (vs.take i ++ (vs.drop j).take count.val ++ vs.drop (i + count.val)) ⦄ := by
   refine ispec_realEntails_pre (copy_within.facts p vs j i (by omega) (by omega) hvs) ?_
-  refine ispec_ipure.mpr fun ⟨hal₁, hal₂⟩ => ?_
+  refine ispec_ipure.mpr fun ⟨hnz₁, hnz₂, hal₁, hal₂⟩ => ?_
   unfold core.ptr.copy
-  simp only [RawPtr.byteCount, hfits, ite_true, bind_tc_ok, hal₁, hal₂, and_self]
+  simp only [RawPtr.byteCount, hfits, ite_true, bind_tc_ok, hnz₁, hnz₂, hal₁, hal₂, ne_eq,
+    not_false_eq_true, and_self]
   refine ispec_exists.mpr fun b => ?_
   exact ispec_conseq (ispec_copyBytes (fun _ h => Bytes.NoOwned_rangeWith h)
       (Bytes.copy_within.run p b vs j i count.val hj hi hvs Pointee.Sized.pos))
@@ -911,18 +919,21 @@ theorem MutRawPtr.writeBytes.spec_uninit (p : MutRawPtr U8) (b : U8) :
       rw [List.take_set_replicate _ _ _ _ (by omega)]
 
 /-- `write_bytes(p.elem i, b, count)` on a possibly uninitialized range of bytes: the elements
-`[i, i + count)` become `b`. -/
+`[i, i + count)` become `b`. The range is non-empty (`hne`), so that the pointer isn't null, even if
+`count` is `0`. -/
 @[step]
 theorem core.ptr.write_bytes.spec_uninit (p : MutRawPtr U8) (ys : List (MaybeUninit U8)) (i : Nat)
-    (b : U8) (count : Usize) (hi : i + count.val ≤ ys.length)
+    (b : U8) (count : Usize) (hi : i + count.val ≤ ys.length) (hne : 0 < ys.length)
     (hfits : (count.val : Int) ≤ IScalar.cMax .Isize) :
     ⦃ p ↦?* ys ⦄ core.ptr.write_bytes (p.elem i) b count
     ⦃ p ↦?* (ys.take i ++ List.replicate count.val ⟨some b⟩ ++ ys.drop (i + count.val)) ⦄ := by
+  refine ispec_realEntails_pre (copy_within.facts p ys i i (by omega) (by omega) hne) ?_
+  refine ispec_ipure.mpr fun ⟨hnz, _, _, _⟩ => ?_
   unfold core.ptr.write_bytes
   have h₁ : (Pointee.repr (T := U8)).size = 1 := rfl
   have h₂ : (Pointee.repr (T := U8)).align.val = 1 := rfl
   simp only [RawPtr.byteCount, h₁, Nat.mul_one, hfits, ite_true, bind_tc_ok, h₂, Nat.one_dvd,
-    RawPtr.cast_self]
+    RawPtr.cast_self, ne_eq, hnz, not_false_eq_true, and_self]
   exact MutRawPtr.writeBytes.spec_uninit p b count.val i ys hi
 
 /-! ## At the start of the ranges
@@ -1080,12 +1091,12 @@ theorem core.ptr.copy.spec_uninit_within_src_head {T : Type} [Pointee T] [Pointe
 /-- `write_bytes` from the start of a range of bytes. -/
 @[step]
 theorem core.ptr.write_bytes.spec_uninit_head (p : MutRawPtr U8) (ys : List (MaybeUninit U8))
-    (b : U8) (count : Usize) (hi : count.val ≤ ys.length)
+    (b : U8) (count : Usize) (hi : count.val ≤ ys.length) (hne : 0 < ys.length)
     (hfits : (count.val : Int) ≤ IScalar.cMax .Isize) :
     ⦃ p ↦?* ys ⦄ core.ptr.write_bytes p b count
     ⦃ p ↦?* (List.replicate count.val ⟨some b⟩ ++ ys.drop count.val) ⦄ := by
   simpa only [RawPtr.elem_zero, List.take_zero, List.nil_append, Nat.zero_add] using
-    core.ptr.write_bytes.spec_uninit p ys 0 b count (by omega) hfits
+    core.ptr.write_bytes.spec_uninit p ys 0 b count (by omega) hne hfits
 
 /-! ## The bytes of an unsigned integer -/
 

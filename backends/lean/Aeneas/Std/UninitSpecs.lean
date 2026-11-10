@@ -350,6 +350,27 @@ theorem rangeWith_bound {T V : Type} (repr : Repr T) (valid : V → Vector Byte 
   subst hbase
   omega
 
+/-- A non-empty range which holds in a heap isn't at the null address (the blocks of the heap are
+bounded: their base pointer is positive). -/
+theorem rangeWith_pos {T V : Type} (repr : Repr T) (valid : V → Vector Byte repr.size → Prop)
+    (p : RawPtr T) (base : BasePtr) (values : Vector V count) (depth : Nat) (hcount : 0 < count)
+    (hsize : 0 < repr.size) (h : Fragment) (s : Heap)
+    (hp : rangeWith repr valid p base values depth h) (hm : Fragment.Matches s h) (hi : s.Inv) :
+    0 < p.address.val := by
+  obtain ⟨data, _, hlo, _, rfl⟩ := hp
+  obtain ⟨blk, hb, hl, _, hbase, _⟩ :=
+    bytes_of_matches (repr := repr.region count) (p := p.cast Unit)
+      (data := data.flatMap (fun b => b.map (Cell.shared depth)))
+      (Nat.mul_pos hcount hsize) hm
+  have bounded := hi.validBlock hl
+  simp only [Heap.validBlock, Bool.and_eq_true] at bounded
+  have bounds : 0 < blk.bptr.val ∧
+      blk.bptr.val + blk.repr.length < 2 ^ UScalarTy.numBits .Usize := by
+    simpa [Heap.bounded] using bounded.1.1
+  subst hbase
+  change blk.bptr.val ≤ p.address.val at hlo
+  omega
+
 /-- Two non-empty blocks of the same view, which hold in the same heap, have the same base
 pointer. -/
 theorem block_bptr_eq {T U : Type} {repr : Repr T} {repr' : Repr U} {p : RawPtr T} {q : RawPtr U}

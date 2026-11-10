@@ -117,7 +117,7 @@ theorem zmij_tail.spec (buf : MutRawPtr U8) (xp : ConstRawPtr U64) (x : U64) (c�
   subst z_post
   have hw := core.ptr.write_bytes.spec_uninit buf
     [⟨some c₁⟩, ⟨some c₂⟩, ⟨some c₃⟩, ⟨some c₃⟩, ⟨none⟩, ⟨none⟩, ⟨none⟩, ⟨none⟩, ⟨none⟩]
-    (0 + 3#usize.val) 48#u8 2#usize (by simp) (by rw [show IScalar.cMax .Isize = 2147483647 from rfl]; simp)
+    (0 + 3#usize.val) 48#u8 2#usize (by simp) (by simp) (by rw [show IScalar.cMax .Isize = 2147483647 from rfl]; simp)
   simp at hw
   step with hw
   -- `copy_nonoverlapping(from_ref(&x).cast::<u8>(), buffer.add(5), 4)`
@@ -196,3 +196,12 @@ example (p : MutRawPtr U8) (src : RawPtr U8) (a b : U8) :
 #print axioms RawPtr.readable_uscalar_toLEBytes
 
 end copy_specs_tests
+
+/-! The null pointer is invalid even for the accesses of zero bytes. -/
+
+example (b : U8) (p : MutRawPtr U8) :
+    core.ptr.write_bytes (T := U8) ⟨0, 0#usize⟩ b 0#usize = .fail .undef ∧
+    core.ptr.copy (T := U8) ⟨0, 0#usize⟩ p 0#usize = .fail .undef ∧
+    core.ptr.copy (T := U8) p ⟨0, 0#usize⟩ 0#usize = .fail .undef ∧
+    core.ptr.copy_nonoverlapping (T := U8) ⟨0, 0#usize⟩ p 0#usize = .fail .undef := by
+  simp [core.ptr.write_bytes, core.ptr.copy, core.ptr.copy_nonoverlapping, RawPtr.byteCount]

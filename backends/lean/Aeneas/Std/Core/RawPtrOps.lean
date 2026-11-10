@@ -50,13 +50,14 @@ def RawPtr.byteCount [Pointee T] (count : Usize) : Result Nat :=
   if (n : Int) ≤ IScalar.cMax .Isize then .ok n else .fail .undef
 
 /-- `ptr::copy`: memmove of `count` elements, preserving the initialization and the pointer bytes.
-Both pointers must be aligned. -/
+Both pointers must be non-null and aligned, even if `count` is `0`. -/
 @[rust_fun "core::ptr::copy"]
 def core.ptr.copy [Pointee T] (src : ConstRawPtr T) (dst : MutRawPtr T) (count : Usize) :
     Result Unit := do
   let n ← RawPtr.byteCount (T := T) count
   let align := (Pointee.repr (T := T)).align.val
-  if align ∣ src.address.val ∧ align ∣ dst.address.val then
+  if src.address.val ≠ 0 ∧ dst.address.val ≠ 0 ∧ align ∣ src.address.val ∧
+      align ∣ dst.address.val then
     Result.checkedModify fun s _ s' => Heap.copyBytes src dst n s = some s'
   else .fail .undef
 
@@ -79,12 +80,13 @@ def MutRawPtr.writeBytes (q : MutRawPtr U8) (byte : U8) : Nat → Result Unit
       let q' ← RawPtr.add q 1#usize
       MutRawPtr.writeBytes q' byte n
 
-/-- `ptr::write_bytes`: sets `count * size_of::<T>()` bytes to `byte`; the pointer must be aligned. -/
+/-- `ptr::write_bytes`: sets `count * size_of::<T>()` bytes to `byte`; the pointer must be non-null
+and aligned, even if `count` is `0` (no byte is then written: the heap doesn't check the pointer). -/
 @[rust_fun "core::ptr::write_bytes"]
 def core.ptr.write_bytes [Pointee T] (dst : MutRawPtr T) (byte : U8) (count : Usize) :
     Result Unit := do
   let n ← RawPtr.byteCount (T := T) count
-  if (Pointee.repr (T := T)).align.val ∣ dst.address.val then
+  if dst.address.val ≠ 0 ∧ (Pointee.repr (T := T)).align.val ∣ dst.address.val then
     MutRawPtr.writeBytes (RawPtr.cast U8 dst) byte n
   else .fail .undef
 
@@ -95,13 +97,16 @@ def core.ptr.null_mut (T : Type) : Result (MutRawPtr T) := .ok ⟨0, 0#usize⟩
 @[rust_fun "core::ptr::null"]
 def core.ptr.null (T : Type) : Result (ConstRawPtr T) := .ok ⟨0, 0#usize⟩
 
-/-- `size_of::<T>()`: the size of the representation of `T` (`Pointee.Calibrated` relates it to the
-Rust layout). -/
+/-- `size_of::<T>()`: the size of the representation of `T`. It is known for the integers, booleans,
+raw pointers and arrays of them, but not for the structures and tuples, whose layout is unspecified
+(see `Repr.unspecified`): the code which depends on it can't be verified. -/
 @[rust_fun "core::mem::size_of"]
 def core.mem.size_of (T : Type) [Pointee T] : Result Usize :=
   let n := (Pointee.repr (T := T)).size
   if _h : n ≤ Usize.max then .ok ⟨BitVec.ofNat _ n⟩ else .fail .undef
 
+/-- `align_of::<T>()`: the alignment of the representation of `T` (unknown for the structures and
+tuples, as for `size_of`). -/
 @[rust_fun "core::mem::align_of"]
 def core.mem.align_of (T : Type) [Pointee T] : Result Usize :=
   let n := (Pointee.repr (T := T)).align.val
