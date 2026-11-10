@@ -225,9 +225,9 @@ structure Table where
   first : Std.U8
   second : Std.U8
 
-instance : Pointee Table := ⟨Repr.iso (Repr.prod (Pointee.repr (T := Std.U8))
-  (Pointee.repr (T := Std.U8))) (fun x => (x.1, x.2)) (fun p => ⟨p.1, p.2⟩)
-  (fun _ => rfl)⟩
+instance : Pointee Table := ⟨(Repr.unspecified Table (Repr.iso (Repr.prod
+  (Pointee.repr (T := Std.U8)) (Pointee.repr (T := Std.U8)))
+  (fun x => (x.1, x.2)) (fun p => ⟨p.1, p.2⟩) (fun _ => rfl))).1⟩
 
 /-- [raw_ryu_zmij_idioms::compute_table]:
     Source: 'tests/src/raw_ryu_zmij_idioms.rs', lines 113:0-120:1 -/
