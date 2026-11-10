@@ -316,8 +316,8 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
   let group_scc (g : LlbcAst.declaration_group) : SCC.SccId.id option =
     List.find_map
       (fun id ->
-        Option.bind (LlbcAstUtils.AnyDeclIdMap.find_opt id fg.item_bucket)
-          (fun b -> BucketMap.find_opt b bucket_to_scc))
+        Option.bind (Meta.AnyDeclIdMap.find_opt id fg.item_bucket) (fun b ->
+            BucketMap.find_opt b bucket_to_scc))
       (LlbcAstUtils.declaration_group_to_list g)
   in
   (* The declaration groups of each SCC, in [crate.declarations] order (so
@@ -346,10 +346,10 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
     List.fold_left
       (fun acc g ->
         List.fold_left
-          (fun acc id -> LlbcAstUtils.AnyDeclIdMap.add id g acc)
+          (fun acc id -> Meta.AnyDeclIdMap.add id g acc)
           acc
           (LlbcAstUtils.declaration_group_to_list g))
-      LlbcAstUtils.AnyDeclIdMap.empty
+      Meta.AnyDeclIdMap.empty
       (Option.get crate.declarations)
   in
   (* The groups a group uses. [cut_layers] ignores the ones outside the
@@ -359,9 +359,9 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
     List.concat_map
       (fun id ->
         List.filter_map
-          (fun used -> LlbcAstUtils.AnyDeclIdMap.find_opt used group_of_item)
+          (fun used -> Meta.AnyDeclIdMap.find_opt used group_of_item)
           (Option.value
-             (LlbcAstUtils.AnyDeclIdMap.find_opt id fg.item_uses)
+             (Meta.AnyDeclIdMap.find_opt id fg.item_uses)
              ~default:[]))
       (LlbcAstUtils.declaration_group_to_list g)
   in

@@ -5,6 +5,7 @@
 open LlbcAst
 open LlbcAstUtils
 open Types
+open Meta
 
 (** Where a declaration/reference lands in the projected file graph.
 
@@ -115,7 +116,7 @@ let compute (crate : crate) : t =
   in
   let item_names =
     NameSet.of_list
-      (List.map (fun (_, name) -> strip_target_suffix name) crate.item_names)
+      (List.map strip_target_suffix (AnyDeclIdHashMap.values crate.item_names))
   in
   let item_bucket : bucket AnyDeclIdMap.t =
     List.fold_left
