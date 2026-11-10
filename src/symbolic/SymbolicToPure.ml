@@ -252,9 +252,17 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     TraitDeclId.Map.find def_id ctx.trait_methods_to_extract
   in
   let methods =
-    List.map
+    List.filter_map
       (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
-        translate_trait_method ctx opt_span translate_ty trait_decl method_id m)
+        try
+          Some
+            (translate_trait_method ctx opt_span translate_ty trait_decl
+               method_id m)
+        with CFailure error ->
+          [%warn_opt_span] error.span
+            ("Ignoring the method '" ^ m.binder_value.name ^ "' of the trait '"
+           ^ name ^ "' because of previous error");
+          None)
       (TraitMethodId.Map.to_list methods_to_extract)
   in
   {
