@@ -675,26 +675,27 @@ let simplify_let_bindings =
       let a1 = array_update a i2 x2
     ]}
 
-    This micro pass removes those duplicate function calls.
-
-    TODO: this micro-pass will not be sound anymore once we allow stateful
-    (backward) functions. *)
+    This micro pass only deduplicates primitive monadic operations (checked
+    unary/binary operations), constant reads (globals and trait associated
+    constants), and pure backward function calls. It does not deduplicate
+    general monadic expressions or function calls. *)
 let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
   object (self)
     inherit [_] map_expr as super
 
     method! visit_Let env monadic pat bound next =
       let bound = self#visit_texpr env bound in
-      (* Register the function call if the pattern doesn't contain ignored
-         variables *)
+      (* Register the expression if it is safe to deduplicate and the pattern
+         doesn't contain ignored variables *)
       let env =
         let factor =
-          monadic
-          ||
           match destruct_apps bound with
+          | { e = Qualif { id = FunOrOp (Unop _ | Binop _); _ }; _ }, _ :: _ ->
+              monadic
+          | { e = Qualif { id = TraitConst _ | Global _; _ }; _ }, [] -> monadic
           | { e = FVar _; _ }, _ :: _ ->
-              (* May be a backward function call *)
-              true
+              (* Pure backward function call *)
+              (not monadic) && not (is_result_ty bound.ty)
           | _ -> false
         in
         if factor then

@@ -48,6 +48,7 @@ def call_fn_ref
   T0 Std.U8 Std.U8) (g : T0) (x : Std.U8) :
   Result Std.U8
   := do
+  let _ ← coreopsfunctionFnT0TupleSharedU8U8Inst.call g x
   coreopsfunctionFnT0TupleSharedU8U8Inst.call g x
 
 /-- [higher_ranked_trait_bounds::call_fnmut_ref]:

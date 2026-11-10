@@ -359,15 +359,16 @@ def index_mut_slice_u32_0
 def index_all : Result Std.U32 := do
   let x := Array.repeat 2#usize 0#u32
   let i ← index_array x
-  let i1 ← i + i
-  let i2 ← index_array_borrow x
-  let i3 ← i1 + i2
+  let i1 ← index_array x
+  let i2 ← i + i1
+  let i3 ← index_array_borrow x
+  let i4 ← i2 + i3
   let s ← lift (Array.to_slice x)
-  let i4 ← index_slice_u32_0 s
-  let i5 ← i3 + i4
+  let i5 ← index_slice_u32_0 s
+  let i6 ← i4 + i5
   let (s1, _) ← lift (Array.to_slice_mut x)
-  let (i6, _) ← index_mut_slice_u32_0 s1
-  i5 + i6
+  let (i7, _) ← index_mut_slice_u32_0 s1
+  i6 + i7
 
 /-- [arrays::update_array]:
     Source: 'tests/src/arrays.rs', lines 219:0-221:1

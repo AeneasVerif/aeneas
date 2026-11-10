@@ -304,15 +304,16 @@ let index_mut_slice_u32_0 (x : slice u32) : result (u32 & (slice u32)) =
 let index_all : result u32 =
   let x = array_repeat 2 0 in
   let* i = index_array x in
-  let* i1 = u32_add i i in
-  let* i2 = index_array_borrow x in
-  let* i3 = u32_add i1 i2 in
+  let* i1 = index_array x in
+  let* i2 = u32_add i i1 in
+  let* i3 = index_array_borrow x in
+  let* i4 = u32_add i2 i3 in
   let s = array_to_slice x in
-  let* i4 = index_slice_u32_0 s in
-  let* i5 = u32_add i3 i4 in
+  let* i5 = index_slice_u32_0 s in
+  let* i6 = u32_add i4 i5 in
   let (s1, _) = array_to_slice_mut x in
-  let* (i6, _) = index_mut_slice_u32_0 s1 in
-  u32_add i5 i6
+  let* (i7, _) = index_mut_slice_u32_0 s1 in
+  u32_add i6 i7
 
 (** [arrays::update_array]:
     Source: 'tests/src/arrays.rs', lines 219:0-221:1

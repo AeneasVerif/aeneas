@@ -361,16 +361,17 @@ Definition index_mut_slice_u32_0
 Definition index_all : result u32 :=
   let x := array_repeat 2%usize 0%u32 in
   i <- index_array x;
-  i1 <- u32_add i i;
-  i2 <- index_array_borrow x;
-  i3 <- u32_add i1 i2;
+  i1 <- index_array x;
+  i2 <- u32_add i i1;
+  i3 <- index_array_borrow x;
+  i4 <- u32_add i2 i3;
   let s := array_to_slice x in
-  i4 <- index_slice_u32_0 s;
-  i5 <- u32_add i3 i4;
+  i5 <- index_slice_u32_0 s;
+  i6 <- u32_add i4 i5;
   let (s1, _) := array_to_slice_mut x in
   p <- index_mut_slice_u32_0 s1;
-  let (i6, _) := p in
-  u32_add i5 i6
+  let (i7, _) := p in
+  u32_add i6 i7
 .
 
 (** [arrays::update_array]:

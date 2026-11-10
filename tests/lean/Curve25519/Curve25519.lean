@@ -58,61 +58,101 @@ def mul_internal
   let i1 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 0#usize
   let i2 ← m i i1
   let z1 ← Array.update z 0#usize i2
-  let i3 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
-  let i4 ← m i i3
-  let i5 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
-  let i6 ← m i5 i1
-  let i7 ← i4 + i6
-  let z2 ← Array.update z1 1#usize i7
-  let i8 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
-  let i9 ← m i i8
-  let i10 ← m i5 i3
-  let i11 ← i9 + i10
-  let i12 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
-  let i13 ← m i12 i1
-  let i14 ← i11 + i13
-  let z3 ← Array.update z2 2#usize i14
-  let i15 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
-  let i16 ← m i i15
-  let i17 ← m i5 i8
-  let i18 ← i16 + i17
-  let i19 ← m i12 i3
-  let i20 ← i18 + i19
-  let i21 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
-  let i22 ← m i21 i1
-  let i23 ← i20 + i22
-  let z4 ← Array.update z3 3#usize i23
-  let i24 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
-  let i25 ← m i i24
-  let i26 ← m i5 i15
-  let i27 ← i25 + i26
-  let i28 ← m i12 i8
-  let i29 ← i27 + i28
-  let i30 ← m i21 i3
-  let i31 ← i29 + i30
-  let i32 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
-  let i33 ← m i32 i1
-  let i34 ← i31 + i33
-  let z5 ← Array.update z4 4#usize i34
-  let i35 ← m i5 i24
-  let i36 ← m i12 i15
-  let i37 ← i35 + i36
-  let i38 ← m i21 i8
-  let i39 ← i37 + i38
-  let i40 ← m i32 i3
-  let i41 ← i39 + i40
-  let z6 ← Array.update z5 5#usize i41
-  let i42 ← m i12 i24
-  let i43 ← m i21 i15
-  let i44 ← i42 + i43
-  let i45 ← m i32 i8
-  let i46 ← i44 + i45
-  let z7 ← Array.update z6 6#usize i46
-  let i47 ← m i21 i24
-  let i48 ← m i32 i15
-  let i49 ← i47 + i48
-  let z8 ← Array.update z7 7#usize i49
-  let i50 ← m i32 i24
-  Array.update z8 8#usize i50
+  let i3 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 0#usize
+  let i4 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
+  let i5 ← m i3 i4
+  let i6 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
+  let i7 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 0#usize
+  let i8 ← m i6 i7
+  let i9 ← i5 + i8
+  let z2 ← Array.update z1 1#usize i9
+  let i10 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 0#usize
+  let i11 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
+  let i12 ← m i10 i11
+  let i13 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
+  let i14 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
+  let i15 ← m i13 i14
+  let i16 ← i12 + i15
+  let i17 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
+  let i18 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 0#usize
+  let i19 ← m i17 i18
+  let i20 ← i16 + i19
+  let z3 ← Array.update z2 2#usize i20
+  let i21 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 0#usize
+  let i22 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
+  let i23 ← m i21 i22
+  let i24 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
+  let i25 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
+  let i26 ← m i24 i25
+  let i27 ← i23 + i26
+  let i28 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
+  let i29 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
+  let i30 ← m i28 i29
+  let i31 ← i27 + i30
+  let i32 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
+  let i33 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 0#usize
+  let i34 ← m i32 i33
+  let i35 ← i31 + i34
+  let z4 ← Array.update z3 3#usize i35
+  let i36 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 0#usize
+  let i37 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
+  let i38 ← m i36 i37
+  let i39 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
+  let i40 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
+  let i41 ← m i39 i40
+  let i42 ← i38 + i41
+  let i43 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
+  let i44 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
+  let i45 ← m i43 i44
+  let i46 ← i42 + i45
+  let i47 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
+  let i48 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
+  let i49 ← m i47 i48
+  let i50 ← i46 + i49
+  let i51 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
+  let i52 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 0#usize
+  let i53 ← m i51 i52
+  let i54 ← i50 + i53
+  let z5 ← Array.update z4 4#usize i54
+  let i55 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 1#usize
+  let i56 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
+  let i57 ← m i55 i56
+  let i58 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
+  let i59 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
+  let i60 ← m i58 i59
+  let i61 ← i57 + i60
+  let i62 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
+  let i63 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
+  let i64 ← m i62 i63
+  let i65 ← i61 + i64
+  let i66 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
+  let i67 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 1#usize
+  let i68 ← m i66 i67
+  let i69 ← i65 + i68
+  let z6 ← Array.update z5 5#usize i69
+  let i70 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 2#usize
+  let i71 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
+  let i72 ← m i70 i71
+  let i73 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
+  let i74 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
+  let i75 ← m i73 i74
+  let i76 ← i72 + i75
+  let i77 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
+  let i78 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 2#usize
+  let i79 ← m i77 i78
+  let i80 ← i76 + i79
+  let z7 ← Array.update z6 6#usize i80
+  let i81 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 3#usize
+  let i82 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
+  let i83 ← m i81 i82
+  let i84 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
+  let i85 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 3#usize
+  let i86 ← m i84 i85
+  let i87 ← i83 + i86
+  let z8 ← Array.update z7 7#usize i87
+  let i88 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index a 4#usize
+  let i89 ← Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index b 4#usize
+  let i90 ← m i88 i89
+  Array.update z8 8#usize i90
 
 end curve25519

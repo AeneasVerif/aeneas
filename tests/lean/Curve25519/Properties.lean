@@ -32,7 +32,7 @@ theorem mul_internal_spec (a b : Array U64 5#usize)
     mul_internal a b ⦃ result =>
       Scalar52.wideAsNat result = Scalar52.asNat a * Scalar52.asNat b ⦄ := by
   unfold mul_internal
-  simp [Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index]
+  simp [Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index, Array.index_usize]
   step*
   -- Post-condition
   simp [*, Scalar52.wideAsNat, Scalar52.asNat, Finset.sum_fin_eq_sum_range, Finset.sum_range_succ]

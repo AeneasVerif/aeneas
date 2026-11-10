@@ -34,8 +34,11 @@ def opt_add_2 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b
             then ok 1#u32
             else ok 0#u32
+  let z ← if b
+            then ok 1#u32
+            else ok 0#u32
   let i ← x + y
-  i + y
+  i + z
 
 /-- [joins::opt_add_1_or_panic]:
     Source: 'tests/src/joins.rs', lines 15:0-18:1 -/
