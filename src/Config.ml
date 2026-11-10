@@ -74,7 +74,7 @@ let borrow_check = ref false
 (** Get the target backend
 
     If there is no backend (we are borrow-checking) we default to Lean - it
-    happens when looking up the builtin information: we use Lean as it has the
+    happens when looking up the external information: we use Lean as it has the
     most complete library.
 
     TODO: turn borrow-checking into a backend. *)

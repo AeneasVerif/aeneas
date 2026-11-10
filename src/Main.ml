@@ -38,14 +38,14 @@ Usage: %s [OPTIONS] FILE
 let matches_name (c : crate) (name : Types.name)
     (m : 'a ExtractName.NameMatcherMap.t) : bool =
   let mctx = Charon.NameMatcher.ctx_from_crate c in
-  let open ExtractBuiltin in
+  let open ExtractName in
   NameMatcherMap.mem mctx name m
 
 let matches_name_with_generics (c : crate) (name : Types.name)
     (generics : Types.generic_args) (m : 'a ExtractName.NameMatcherMap.t) : bool
     =
   let mctx = Charon.NameMatcher.ctx_from_crate c in
-  let open ExtractBuiltin in
+  let open ExtractName in
   Option.is_some (NameMatcherMap.find_with_generics_opt mctx name generics m)
 
 let activated_loggers : (EL.level * string) list ref = ref []
@@ -558,12 +558,12 @@ let () =
 
   (* If running in parallel mode there can be racing conditions on the memoized
      elements. Precompute them so that it doesn't happen. *)
-  let _ = ExtractBuiltin.builtin_globals_map () in
-  let _ = ExtractBuiltin.builtin_types_map () in
-  let _ = ExtractBuiltin.builtin_trait_decls_map () in
-  let _ = ExtractBuiltin.builtin_trait_impls_map () in
-  let _ = ExtractBuiltin.builtin_funs_map () in
-  let _ = ExtractBuiltin.builtin_fun_effects_map () in
+  let _ = ExternalNames.external_globals_map () in
+  let _ = ExternalNames.external_types_map () in
+  let _ = ExternalNames.external_trait_decls_map () in
+  let _ = ExternalNames.external_trait_impls_map () in
+  let _ = ExternalNames.external_funs_map () in
+  let _ = ExternalNames.external_fun_effects_map () in
 
   (* Retrieve and check the filename *)
   let filename =
@@ -634,7 +634,7 @@ let () =
         let type_decls =
           Types.TypeDeclId.Map.filter
             (fun _ (d : Types.type_decl) ->
-              let names_map = ExtractBuiltin.builtin_types_map () in
+              let names_map = ExternalNames.external_types_map () in
               (not d.item_meta.is_local)
               && not (matches_name m d.item_meta.name names_map))
             type_decls
@@ -642,7 +642,7 @@ let () =
         let fun_decls =
           LlbcAst.FunDeclId.Map.filter
             (fun _ (d : LlbcAst.fun_decl) ->
-              let names_map = ExtractBuiltin.builtin_funs_map () in
+              let names_map = ExternalNames.external_funs_map () in
               (not d.item_meta.is_local)
               && (not (matches_name m d.item_meta.name names_map))
               (* We also ignore the trait method declarations *)
@@ -655,7 +655,7 @@ let () =
         let global_decls =
           LlbcAst.GlobalDeclId.Map.filter
             (fun _ (d : LlbcAst.global_decl) ->
-              let globals_map = ExtractBuiltin.builtin_globals_map () in
+              let globals_map = ExternalNames.external_globals_map () in
               (not d.item_meta.is_local)
               && not (matches_name m d.item_meta.name globals_map))
             global_decls
@@ -663,7 +663,7 @@ let () =
         let trait_decls =
           LlbcAst.TraitDeclId.Map.filter
             (fun _ (d : LlbcAst.trait_decl) ->
-              let names_map = ExtractBuiltin.builtin_trait_decls_map () in
+              let names_map = ExternalNames.external_trait_decls_map () in
               (not d.item_meta.is_local)
               && not (matches_name m d.item_meta.name names_map))
             trait_decls
@@ -671,7 +671,7 @@ let () =
         let trait_impls =
           List.filter_map
             (fun (d : LlbcAst.trait_impl) ->
-              let names_map = ExtractBuiltin.builtin_trait_impls_map () in
+              let names_map = ExternalNames.external_trait_impls_map () in
               match
                 LlbcAst.TraitDeclId.Map.find_opt d.impl_trait.id m.trait_decls
               with

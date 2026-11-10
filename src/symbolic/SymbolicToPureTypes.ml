@@ -307,16 +307,16 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   [%ldebug "explicit info:\n" ^ show_explicit_info explicit_info];
   let kind = translate_type_decl_kind span def.T.kind in
   let item_meta = def.item_meta in
-  (* Lookup the builtin information, if there is *)
-  let builtin_info =
+  (* Lookup the external information, if there is *)
+  let external_info =
     match_name_find_opt ctx def.item_meta.name
-      (ExtractBuiltin.builtin_types_map ())
+      (ExternalNames.external_types_map ())
   in
   {
     def_id;
     name;
     item_meta;
-    builtin_info;
+    external_info;
     generics;
     explicit_info;
     llbc_generics = def.generics;

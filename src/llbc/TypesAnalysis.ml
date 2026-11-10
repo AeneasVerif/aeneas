@@ -117,10 +117,10 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
      have any more custom treatment than this, and these types can be modeled
      suitably in the backend libraries, rather than special-casing for them all the
      way. *)
-  let get_builtin_info () : Pure.builtin_type_info option =
-    let open ExtractBuiltin in
-    NameMatcherMap.find_opt name_matcher_ctx def.item_meta.name
-      (builtin_types_map ())
+  let get_external_info () : Pure.external_type_info option =
+    let open ExternalNames in
+    ExtractName.NameMatcherMap.find_opt name_matcher_ctx def.item_meta.name
+      (external_types_map ())
   in
   let name_to_string () =
     let env = Charon.Print.crate_to_fmt_env crate in
@@ -132,8 +132,8 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
   let mut_regions =
     match def.kind with
     | Opaque -> (
-        (* Try to lookup the builtin information, if there is *)
-        match get_builtin_info () with
+        (* Try to lookup the external information, if there is *)
+        match get_external_info () with
         | Some info ->
             (* *)
             let len = List.length def.generics.regions in
@@ -150,7 +150,7 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
                   Type: " ^ name_to_string ());
               RegionId.Set.empty)
         | None ->
-            (* No builtin information: use Charon's per-region [mutability] analysis *)
+            (* No external information: use Charon's per-region [mutability] analysis *)
             let has_unknown_regions = ref false in
             let mut_regions =
               RegionId.Set.of_list

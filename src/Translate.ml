@@ -638,12 +638,12 @@ type gen_config = {
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls).
 
-    [filter_builtin]: if [true], do not consider as opaque the external
+    [filter_external]: if [true], do not consider as opaque the external
     definitions that we will map to definitions from the standard library. *)
-let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
-    bool * bool =
+let crate_has_opaque_non_external_decls (ctx : gen_ctx) (filter_external : bool)
+    : bool * bool =
   let types, funs =
-    LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
+    LlbcAstUtils.crate_get_opaque_non_external_decls ctx.crate filter_external
       ctx.trans_ctx.type_ctx.to_extract ctx.trans_ctx.fun_ctx.to_extract
   in
   [%ldebug
@@ -683,10 +683,10 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
         (true, kind)
   in
   (* Extract, if the config instructs to do so (depending on whether the type
-     is opaque or not). Remark: we don't check if the definitions are builtin
+     is opaque or not). Remark: we don't check if the definitions are external
      here but in the function [export_types_group]: the reason is that if one
-     definition in the group is builtin, then we must check that all the
-     definitions are marked builtin *)
+     definition in the group is external, then we must check that all the
+     definitions are marked external *)
   let extract =
     (is_opaque && config.extract_opaque)
     || ((not is_opaque) && config.extract_transparent)
@@ -729,12 +729,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
       ids
   in
 
-  (* Check if the definition are builtin - if yes they must be ignored.
-     Note that if one definition in the group is builtin, then all the
-     definitions must be builtin *)
-  let builtin =
-    let open ExtractBuiltin in
-    let types_map = builtin_types_map () in
+  (* Check if the definitions are external - if yes they must be ignored.
+     Note that if one definition in the group is external, then all the
+     definitions must be external *)
+  let externals =
+    let open ExternalNames in
+    let types_map = external_types_map () in
     List.map
       (fun (def : Pure.type_decl) ->
         match_name_find_opt ctx.trans_ctx def.item_meta.name types_map <> None)
@@ -750,9 +750,9 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     List.exists (fun (d : Pure.type_decl) -> d.kind = Opaque) defs
   in
 
-  if List.exists (fun b -> b) builtin then
+  if List.exists (fun b -> b) externals then
     (* Sanity check *)
-    assert (List.for_all (fun b -> b) builtin)
+    assert (List.for_all (fun b -> b) externals)
   else if List.exists dont_extract defs then
     (* Check if we have to ignore declarations *)
     (* Sanity check *)
@@ -942,12 +942,12 @@ let export_fun_decls_scc (fmt : Format.formatter) (config : gen_config)
     check if the forward and backward functions are mutually recursive. *)
 let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (pure_ls : pure_fun_translation list) : unit =
-  (* Check if the definition are builtin - if yes they must be ignored.
-     Note that if one definition in the group is builtin, then all the
-     definitions must be builtin *)
-  let builtin =
-    let open ExtractBuiltin in
-    let funs_map = builtin_funs_map () in
+  (* Check if the definitions are external - if yes they must be ignored.
+     Note that if one definition in the group is external, then all the
+     definitions must be external *)
+  let externals =
+    let open ExternalNames in
+    let funs_map = external_funs_map () in
     List.map
       (fun (trans : pure_fun_translation) ->
         match_name_find_opt ctx.trans_ctx trans.f.item_meta.name funs_map
@@ -955,9 +955,9 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
       pure_ls
   in
 
-  if List.exists (fun b -> b) builtin then
+  if List.exists (fun b -> b) externals then
     (* Sanity check *)
-    assert (List.for_all (fun b -> b) builtin)
+    assert (List.for_all (fun b -> b) externals)
   else (
     (* Extract the decrease clauses template bodies. We only generate them for
        the forward functions and the loops (not the decomposed loop bodies). *)
@@ -1006,13 +1006,13 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   (* Save the fact that we extract opaque definitions, if we do *)
   ctx.extracted_opaque := is_opaque || !(ctx.extracted_opaque);
 
-  (* Check if it is a builtin global - if yes, we ignore it (together with the
+  (* Check if it is an external global - if yes, we ignore it (together with the
      auxiliary functions introduced for the loops it may contain) because we
      map the definition to one in the standard library *)
-  let is_builtin =
-    let open ExtractBuiltin in
+  let is_external =
+    let open ExternalNames in
     match_name_find_opt ctx.trans_ctx global.item_meta.name
-      (builtin_globals_map ())
+      (external_globals_map ())
     <> None
   in
 
@@ -1027,7 +1027,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     config.extract_globals
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
-    && (not is_builtin) && not is_anon_const
+    && (not is_external) && not is_anon_const
   in
   if extract then (
     (* We don't wrap global declaration groups between calls to functions
@@ -1047,17 +1047,17 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Extract.extract_global_decl ctx fmt pure_global body config.interface;
     Option.iter (EmitJson.record_global_if_enabled ctx) pure_global)
 
-let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
+let trait_decl_is_external (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
   let trait_decl =
     [%silent_unwrap_opt_span] None
       (TraitDeclId.Map.find_opt id ctx.trans_trait_decls)
   in
-  let open ExtractBuiltin in
+  let open ExternalNames in
   Option.is_some
     (match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
-       (builtin_trait_decls_map ()))
+       (external_trait_decls_map ()))
 
-let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
+let trait_impl_is_external (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
   let trait_impl =
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt id ctx.trans_trait_impls)
@@ -1066,16 +1066,16 @@ let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
     Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
       ctx.trans_trait_decls
   in
-  let builtin_info =
-    let open ExtractBuiltin in
+  let external_info =
+    let open ExternalNames in
     let trait_impl =
       TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
     in
     match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
       trait_impl.impl_trait.generics
-      (builtin_trait_impls_map ())
+      (external_trait_impls_map ())
   in
-  Option.is_some builtin_info
+  Option.is_some external_info
 
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
@@ -1085,8 +1085,8 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
   in
-  (* Check if the trait declaration is builtin, in which case we ignore it *)
-  if not (trait_decl_is_builtin ctx trait_decl_id) then (
+  (* Check if the trait declaration is external, in which case we ignore it *)
+  if not (trait_decl_is_external ctx trait_decl_id) then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
     if extract_decl then (
       Extract.extract_trait_decl ctx fmt trait_decl;
@@ -1104,7 +1104,7 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
-  if not (trait_impl_is_builtin ctx trait_impl_id) then (
+  if not (trait_impl_is_external ctx trait_impl_id) then (
     Extract.extract_trait_impl ctx fmt ~is_rec trait_impl;
     EmitJson.record_trait_impl_if_enabled ctx trait_impl)
 
@@ -1192,7 +1192,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
                 ^ Errors.raw_span_to_string d.item_meta.span
           in
           let decls = List.map to_string ids in
-          if not (List.for_all (trait_decl_is_builtin ctx) ids) then (
+          if not (List.for_all (trait_decl_is_external ctx) ids) then (
             if List.length decls = 1 then
               [%warn_opt_span] None
                 ("Recursive trait declarations are not supported; the \
@@ -1239,7 +1239,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
                 ^ Errors.raw_span_to_string d.item_meta.span
           in
           let decls = List.map to_string ids in
-          if not (List.for_all (trait_impl_is_builtin ctx) ids) then (
+          if not (List.for_all (trait_impl_is_external ctx) ids) then (
             (* We actually have a special elaboration in Lean that allows us
                to support recursive trait impls *)
             if List.length decls = 1 then
@@ -1872,7 +1872,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   (* Check if there are opaque types and functions (we need this to know whether
      we need to generate interface files, etc.) *)
   let has_opaque_types, has_opaque_funs =
-    crate_has_opaque_non_builtin_decls ctx true
+    crate_has_opaque_non_external_decls ctx true
   in
   let has_opaque = has_opaque_types || has_opaque_funs in
 

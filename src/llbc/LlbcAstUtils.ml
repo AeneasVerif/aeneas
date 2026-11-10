@@ -51,41 +51,44 @@ let fun_decl_is_anon_const_initializer
   | _ -> false
 
 (** Return the opaque declarations found in the crate, which are also *not
-    builtin*.
+    external*.
 
-    [filter_builtin]: if [true], do not consider as opaque the external
+    [filter_external]: if [true], do not consider as opaque the external
     definitions that we will map to definitions from the standard library.
 
     Remark: the list of functions also contains the list of opaque global
     bodies. *)
-let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
+let crate_get_opaque_non_external_decls (k : crate) (filter_external : bool)
     (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t) : type_decl list * fun_decl list =
-  let open ExtractBuiltin in
+  let open ExtractName in
+  let open ExternalNames in
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
     (not (body_is_known d.body))
-    && ((not filter_builtin)
+    && ((not filter_external)
        || (not
-             (NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ())))
-          && not (NameMatcherMap.mem ctx d.item_meta.name (builtin_funs_map ()))
+             (NameMatcherMap.mem ctx d.item_meta.name (external_globals_map ())))
+          && not
+               (NameMatcherMap.mem ctx d.item_meta.name (external_funs_map ()))
        )
   in
   let is_opaque_type (d : type_decl) : bool =
     d.kind = Opaque
-    && ((not filter_builtin)
-       || not (NameMatcherMap.mem ctx d.item_meta.name (builtin_types_map ())))
+    && ((not filter_external)
+       || not (NameMatcherMap.mem ctx d.item_meta.name (external_types_map ()))
+       )
   in
   (* Note that by checking the function bodies we also the globals *)
   ( List.filter is_opaque_type (TypeDeclId.Map.values type_decls),
     List.filter is_opaque_fun (FunDeclId.Map.values fun_decls) )
 
-(** Return true if the crate contains opaque declarations, ignoring the builtin
+(** Return true if the crate contains opaque declarations, ignoring the external
     definitions. *)
-let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
+let crate_has_opaque_non_external_decls (k : crate) (filter_external : bool)
     (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t) : bool =
-  crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
+  crate_get_opaque_non_external_decls k filter_external type_decls fun_decls
   <> ([], [])
 
 (** Strip trailing [PeTarget] elements from a name.

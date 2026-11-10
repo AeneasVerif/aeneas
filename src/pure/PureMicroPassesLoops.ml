@@ -3195,7 +3195,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
      *but* replace its span with the span of the loop *)
     let item_meta = { def.item_meta with span = loop.span } in
 
-    [%sanity_check] def.item_meta.span (def.builtin_info = None);
+    [%sanity_check] def.item_meta.span (def.external_info = None);
 
     let loop_pos =
       [%unwrap_with_span] span
@@ -3207,7 +3207,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       {
         def_id = def.def_id;
         item_meta;
-        builtin_info = def.builtin_info;
+        external_info = def.external_info;
         src = def.src;
         backend_attributes = def.backend_attributes;
         num_loops;
@@ -3545,7 +3545,7 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
     {
       def_id = def.def_id;
       item_meta = def.item_meta;
-      builtin_info = def.builtin_info;
+      external_info = def.external_info;
       src = def.src;
       backend_attributes = def.backend_attributes;
       num_loops = def.num_loops;

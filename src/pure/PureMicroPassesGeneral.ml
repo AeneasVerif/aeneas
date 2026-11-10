@@ -750,14 +750,14 @@ let inline_binop binop = not (lift_binop binop)
 
 (** A helper predicate *)
 let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
-  (* Lookup if the function is builtin: we only lift builtin functions
+  (* Lookup if the function is external: we only lift external functions
      which were explictly marked to be lifted. *)
   match fun_id with
   | FromLlbc (FunId fid, _) -> begin
       match FunDeclId.Map.find_opt fid ctx.fun_decls with
       | None -> false
       | Some def -> (
-          match def.builtin_info with
+          match def.external_info with
           | None -> false
           | Some info -> info.lift)
     end

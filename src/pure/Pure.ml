@@ -157,32 +157,31 @@ type pure_builtin_fun_id =
           beginning of their body. *)
 [@@deriving show, ord]
 
-(* Builtin declarations coming from external libraries.
+(* Declarations coming from external libraries.
 
-   Those are not too be understood as the builtin definitions like `U32`:
-   the builtin declarations decribed with, e.g., `builtin_type_info`, are
-   declarations coming from external libraries and which we should thus not
-   extract (for instance: `std::vec::Vec`, `std::option::Option`, etc.).
+   Those are declarations which we should not extract, but rather map to
+   handwritten models in the backends (for instance: `std::vec::Vec`,
+   `std::option::Option`, etc.).
 *)
 
-type builtin_variant_info = { fields : (string * string) list }
+type external_variant_info = { fields : (string * string) list }
 [@@deriving show, ord]
 
-type builtin_enum_variant_info = {
+type external_enum_variant_info = {
   rust_variant_name : string;
   extract_variant_name : string;
   fields : string list option;
 }
 [@@deriving show, ord]
 
-type builtin_type_body_info =
+type external_type_body_info =
   | Struct of string * (string * string) list
     (* The constructor name and the map for the field names *)
-  | Enum of builtin_enum_variant_info list
+  | Enum of external_enum_variant_info list
 (* For every variant, a map for the field names *)
 [@@deriving show, ord]
 
-type builtin_type_info = {
+type external_type_info = {
   rust_name : NameMatcher.pattern;
   extract_name : string;
   keep_params : bool list option;
@@ -195,18 +194,18 @@ type builtin_type_info = {
 
           The integer represents the position of the region in the list of
           parameters, not its id. *)
-  body_info : builtin_type_body_info option;
+  body_info : external_type_body_info option;
 }
 [@@deriving show, ord]
 
-type builtin_global_info = {
+type external_global_info = {
   rust_name : string;
   extract_name : string;
   can_fail : bool;
 }
 [@@deriving show]
 
-type builtin_fun_info = {
+type external_fun_info = {
   keep_params : bool list option;
   keep_trait_clauses : bool list option;
   extract_name : string;
@@ -223,7 +222,7 @@ type builtin_fun_info = {
 }
 [@@deriving show]
 
-type builtin_trait_decl_info = {
+type external_trait_decl_info = {
   rust_name : NameMatcher.pattern;
   extract_name : string;
   constructor : string;
@@ -233,11 +232,11 @@ type builtin_trait_decl_info = {
       (** Every type has:
           - a Rust name
           - an extraction name *)
-  methods : (string * builtin_fun_info) list;
+  methods : (string * external_fun_info) list;
 }
 [@@deriving show]
 
-type builtin_trait_impl_info = {
+type external_trait_impl_info = {
   extract_name : string;
   keep_params : bool list option;
   keep_trait_clauses : bool list option;
@@ -773,7 +772,7 @@ class ['self] iter_type_decl_base =
     inherit [_] iter_ty
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
 
-    method visit_builtin_type_info : 'env -> builtin_type_info -> unit =
+    method visit_external_type_info : 'env -> external_type_info -> unit =
       fun _ _ -> ()
   end
 
@@ -783,8 +782,8 @@ class ['self] map_type_decl_base =
     inherit [_] map_ty
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
 
-    method visit_builtin_type_info :
-        'env -> builtin_type_info -> builtin_type_info =
+    method visit_external_type_info :
+        'env -> external_type_info -> external_type_info =
       fun _ x -> x
   end
 
@@ -794,7 +793,7 @@ class virtual ['self] reduce_type_decl_base =
     inherit [_] reduce_ty
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
 
-    method visit_builtin_type_info : 'env -> builtin_type_info -> 'a =
+    method visit_external_type_info : 'env -> external_type_info -> 'a =
       fun _ _ -> self#zero
   end
 
@@ -806,8 +805,8 @@ class virtual ['self] mapreduce_type_decl_base =
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_builtin_type_info :
-        'env -> builtin_type_info -> builtin_type_info * 'a =
+    method visit_external_type_info :
+        'env -> external_type_info -> external_type_info * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -896,7 +895,7 @@ and type_decl = {
           derive them from the original LLBC types from before the
           simplification of types like boxes and references. *)
   kind : type_decl_kind;
-  builtin_info : builtin_type_info option;
+  external_info : external_type_info option;
   preds : predicates;
 }
 [@@deriving
@@ -1816,7 +1815,7 @@ type 'a binder = {
 type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
-  builtin_info : builtin_fun_info option;
+  external_info : external_fun_info option;
   src : fun_source;
   backend_attributes : backend_attributes;
   num_loops : int;
@@ -1859,7 +1858,7 @@ type global_decl = {
   def_id : GlobalDeclId.id;
   span : span;
   item_meta : T.item_meta;
-  builtin_info : builtin_global_info option;
+  external_info : external_global_info option;
   name : string;
       (** We use the name only for printing purposes (for debugging): the name
           used at extraction time will be derived from the llbc_name. *)
@@ -1894,7 +1893,7 @@ type trait_decl = {
   def_id : trait_decl_id;
   name : string;
   item_meta : T.item_meta;
-  builtin_info : builtin_trait_decl_info option;
+  external_info : external_trait_decl_info option;
   generics : generic_params;
   explicit_info : explicit_info;
       (** Information about which inputs parameters are explicit/implicit *)
@@ -1917,7 +1916,7 @@ type trait_impl = {
   def_id : trait_impl_id;
   name : string;
   item_meta : T.item_meta;
-  builtin_info : builtin_trait_impl_info option;
+  external_info : external_trait_impl_info option;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)

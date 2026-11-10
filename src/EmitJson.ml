@@ -85,11 +85,12 @@ type trait_impl_entry = {
   source : source;
   impl_trait_def_id : int;
       (** [TraitDeclId] of the implemented trait. A valid LLBC trait decl but
-          has entry in [trait_decls] iff the trait is not builtin. *)
+          has entry in [trait_decls] iff the trait is not mapped to external
+          names. *)
   impl_trait_rust_name : string;
       (** Full Rust path of the implemented trait. *)
   impl_trait_is_builtin : bool;
-      (** [true] when the implemented trait is builtin. *)
+      (** [true] when the implemented trait is mapped to external names. *)
 }
 [@@deriving to_yojson]
 
@@ -266,7 +267,7 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
     impl_trait_def_id = Pure.TraitDeclId.to_int impl_trait_id;
     impl_trait_rust_name =
       ExtractBase.name_to_string ctx impl_trait_decl.item_meta.name;
-    impl_trait_is_builtin = Option.is_some impl_trait_decl.builtin_info;
+    impl_trait_is_builtin = Option.is_some impl_trait_decl.external_info;
   }
 
 (* ------------------------------------------------------------------------ *)

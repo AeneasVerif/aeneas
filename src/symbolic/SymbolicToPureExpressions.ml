@@ -205,7 +205,7 @@ let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
     else
       match
         match_name_find_opt ctx.decls_ctx decl.item_meta.name
-          (ExtractBuiltin.builtin_funs_map ())
+          (ExternalNames.external_funs_map ())
       with
       | Some { extract_name; _ } ->
           Some (Collections.List.last (String.split_on_char '.' extract_name))

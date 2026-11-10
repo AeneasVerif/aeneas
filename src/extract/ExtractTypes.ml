@@ -753,9 +753,9 @@ and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   let span = def.item_meta.span in
-  (* Register the filtering information, if the type has builtin information *)
+  (* Register the filtering information, if the type has external information *)
   let ctx =
-    match def.builtin_info with
+    match def.external_info with
     | Some { keep_params = Some keep; _ } ->
         {
           ctx with
@@ -767,7 +767,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   in
   (* Compute and register the type decl name *)
   let def_name =
-    match def.builtin_info with
+    match def.external_info with
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
@@ -801,7 +801,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           in
           (* Compute the names *)
           let field_names, cons_name =
-            match def.builtin_info with
+            match def.external_info with
             | None | Some { body_info = None; _ } -> compute_info_from_llbc ()
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
                 let field_names =
@@ -833,7 +833,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about a structure, got:\n"
-                  ^ show_builtin_type_info info
+                  ^ show_external_type_info info
                   ^ ". The " ^ Config.backend_name ()
                   ^ " model defined in the standard library seems to be wrong."
                   );
@@ -859,7 +859,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
       | Enum variants ->
           let variant_names =
-            match def.builtin_info with
+            match def.external_info with
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
@@ -878,7 +878,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 let variant_map =
                   StringMap.of_list
                     (List.map
-                       (fun (info : builtin_enum_variant_info) ->
+                       (fun (info : external_enum_variant_info) ->
                          (info.rust_variant_name, info.extract_variant_name))
                        variant_infos)
                 in
@@ -891,7 +891,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about an enumeration, got:\n"
-                  ^ show_builtin_type_info info)
+                  ^ show_external_type_info info)
           in
           List.fold_left
             (fun ctx (vid, vname) ->
