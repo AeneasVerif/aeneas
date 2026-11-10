@@ -206,7 +206,7 @@ def pair
   let s ← lift (Array.as_slice (SharedBorrow.mk PAIRS))
   let (p, as_ptr_back) ← Slice.as_ptr (placement.addr 0) s
   let p1 ← RawPtr.add p i
-  let i1 ← RawPtr.as_ref_unchecked p1
+  let (i1, _) ← RawPtr.as_ref_unchecked p1
   as_ptr_back
   ok i1
 
