@@ -618,17 +618,43 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
            abstractions to consume the return value, then end all the
            abstractions up to the one in which we are interested.
         *)
+        (* Do not pop the locals if this is a global and [borrow_check_globals]
+           is false *)
+        let pop_locals =
+          if !Config.borrow_check_globals then true
+          else not (fun_decl_is_global_initializer fdef)
+        in
         (* Whatever the scenario, we need to pop the frame and retrieve the returned value *)
         let ret_value, ctx, cc_pop =
-          (* Do not pop the locals if this is a global and [borrow_check_globals]
-           is false *)
-          let pop_locals =
-            if !Config.borrow_check_globals then true
-            else not (fun_decl_is_global_initializer fdef)
-          in
           pop_frame config span ~pop_locals ~pop_return_value:true ctx
         in
         let ret_value = Option.get ret_value in
+        (* Clean up any remaining dummy borrows from popped locals/parameters
+           (while protecting [ret_value] as a temporary [BVar]). Pass
+           [~filter_avalues:false] so [AEndedProjLoans] entries are preserved in
+           existing [Loop]/[FunCall]/[SynthInput] abstractions for backward
+           synthesis. *)
+        let ret_value, ctx, cc_simpl =
+          if not pop_locals then (ret_value, ctx, fun e -> e)
+          else
+            let ret_binder : real_var_binder =
+              { index = Expressions.LocalId.zero; name = None }
+            in
+            let ctx =
+              {
+                ctx with
+                env = EBinding (BVar ret_binder, ret_value) :: ctx.env;
+              }
+            in
+            let ctx, cc_simpl =
+              InterpBorrows.simplify_dummy_values_useless_abs config
+                ~filter_avalues:false span ctx
+            in
+            let ret_value, env =
+              env_pop_var (fun _ -> [%internal_error] span) ret_binder ctx.env
+            in
+            (ret_value, { ctx with env }, cc_simpl)
+        in
         let ctx_return = ctx in
         [%ltrace
           "after popping the frame:\n- returned value:\n"
@@ -637,7 +663,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
           ^ eval_ctx_to_string ctx_return];
 
         (* Forward translation: generate the Return node *)
-        let fwd_e = cc_pop (SA.Return (ctx, Some ret_value)) in
+        let fwd_e = SA.Return (ctx, Some ret_value) in
         (* Backward translation: introduce "return"
            abstractions to consume the return value, then end all the
            abstractions up to the one in which we are interested.
@@ -648,12 +674,14 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         in
         let back_el =
           RegionGroupId.mapi
-            (fun gid _ -> (gid, cc_pop (finish_back_eval gid)))
+            (fun gid _ -> (gid, finish_back_eval gid))
             regions_hierarchy
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el)
+        cc_pop
+          (cc_simpl
+             (SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el)))
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

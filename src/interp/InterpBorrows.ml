@@ -2286,11 +2286,20 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
     object
       inherit [_] iter_eval_ctx as super
 
-      method! visit_borrow_content _ _ =
-        (* We can get there through shared loans: let's just ignore it for now
-           (this function should be used to explore abstractions which don't
-           have remaining loans - see its use below) *)
-        [%internal_error] span
+      method! visit_borrow_content env bc =
+        (* We can get there through shared values inside [AEndedSharedLoan] *)
+        super#visit_borrow_content env bc;
+        match bc with
+        | VMutBorrow (bid, _) ->
+            (* Lookup the loan *)
+            let abs_or_var, _ = ctx_lookup_loan span ek_all bid ctx in
+            begin
+              match abs_or_var with
+              | AbsId abs_id ->
+                  if AbsId.Set.mem abs_id fixed_abs_ids then raise Found else ()
+              | LocalId _ | DummyVarId _ -> ()
+            end
+        | VSharedBorrow _ | VReservedMutBorrow _ -> ()
 
       method! visit_aborrow_content env lc =
         super#visit_aborrow_content env lc;
@@ -2303,8 +2312,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
               | AbsId abs_id ->
                   if AbsId.Set.mem abs_id fixed_abs_ids then raise Found else ()
               | LocalId _ | DummyVarId _ -> ()
-            end;
-            super#visit_aborrow_content env lc
+            end
         | ASharedBorrow _
         | AIgnoredMutBorrow _
         | AEndedMutBorrow _
