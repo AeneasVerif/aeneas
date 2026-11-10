@@ -33,6 +33,7 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 | `lean_name` | yes | Full Lean name (`Namespace.Name`) |
 | `lean_file` | yes | The Lean file this is in, relative to translate.json |
 | `rust_name` | yes | Full Rust name |
+| `rust_pattern` | no | `rust_name` in name-pattern syntax; absent, with a warning, when the name has no pattern (see below) |
 | `is_local` | yes | `true` if defined in the current crate, `false` if external |
 | `source` | yes | Rust source location: `{ "file": "...", "begin_line": N, "end_line": M }` |
 | `is_opaque` | yes | Extracted as an axiom |
@@ -51,11 +52,11 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 
 ### Type and global entries
 
-Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively.
+Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `rust_pattern`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively.
 
 ### Trait entries
 
-`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`. Traits mapped to external names are not included in the outputted json.
+`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `rust_name`, `rust_pattern`, `is_local`, and `source`. Traits mapped to external names are not included in the outputted json.
 
 `trait_impls` entries carry the same standard fields (`def_id` is a `TraitImplId`) plus a link to the trait they implement:
 
@@ -66,3 +67,15 @@ Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `
 | `impl_trait_is_builtin` | `true` when the implemented trait is mapped to external names |
 
 **Note:** `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for traits mapped to external names. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
+
+## `rust_pattern`
+
+**`rust_pattern`** is the Rust name in the syntax of Aeneas's name matcher, which is *not*
+always the pattern form of `rust_name`: the latter is human-readable and stops being
+pattern syntax once an impl block is involved (`m::{impl m::Trait for bool}::f` against
+`m::{m::Trait<bool>}::f`), and on `trait_impls` the two describe different things, since
+an implementation is looked up under the trait it implements applied to its arguments
+(`m::Trait<m::Ty>`) rather than under its own path. Some names cannot be converted to a
+pattern, or only to one which would also match other names (a name involving a type the
+pattern syntax cannot spell, such as `dyn Trait`): their entry has no `rust_pattern`, and
+`-emit-json` prints a warning.
