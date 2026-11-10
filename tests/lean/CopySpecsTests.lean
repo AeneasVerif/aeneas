@@ -63,9 +63,7 @@ theorem write_pairs.spec (table : ConstRawPtr U8) (out : MutRawPtr U8) (tbl : Li
     (by scalar_tac) (by simp) (by omega) (by simp) (fits 2#usize (by scalar_tac))
   simp [take_two_drop tbl b.val hb] at hc'
   simp only [Nat.sub_self, RawPtr.elem_zero]
-  refine ispec_conseq hc' ?_ (fun _ => entails_refl _)
-  rintro h ⟨_, hh⟩
-  exact hh
+  exact hc'
 
 /-! ## Zmij: the tail of `write` -/
 
@@ -137,11 +135,7 @@ theorem zmij_tail.spec (buf : MutRawPtr U8) (xp : ConstRawPtr U64) (x : U64) (c�
   simp only [RawPtr.elem_zero] at hcp
   simp at hcp
   refine ispec_conseq hcp ?_ (fun _ => ?_)
-  · rintro h ⟨bp, hh⟩
-    simp only at hh
-    rw [sep_comm_eq] at hh
-    refine sep_mono ?_ (entails_refl _) h hh
-    exact fun _ hr => ⟨bp, hr⟩
+  · exact entails_of_eq (sep_comm_eq _ _)
   · refine entails_trans (entails_of_eq (sep_comm_eq _ _)) (entails_of_eq ?_)
     simp
 

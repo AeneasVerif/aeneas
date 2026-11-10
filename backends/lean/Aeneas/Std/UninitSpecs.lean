@@ -1050,4 +1050,70 @@ theorem RawPtr.offset.spec_readable_head {T : Type} [Pointee T] [Pointee.Sized T
   simpa only [RawPtr.elem_zero, Nat.cast_zero, Int.zero_add] using
     RawPtr.offset.spec_readable p depth vs 0 k hne (by omega) (by omega) (by omega)
 
+/-! ## Normal forms for `step`
+
+`step` runs `step_simps` on the goal after each step. The frame inference of `iframe` can return
+the atoms `p ↦?* vs`, `p.readable d vs` and `p.range d vs` with their definitions exposed (an `∃`
+over the base pointer); the folding lemmas below restore them, so that the next specification can
+be framed (the `∃` floated out of a `∗` by `normalizeSep` is pushed back first). The specifications of the pointer movements are stated from `p.elem i`; on the start of
+a range (`i = 0`, through `RawPtr.elem_zero`) their results are normalized by
+`RawPtr.elem_cast_zero_add` and `RawPtr.elem_zero_add`. -/
+
+@[step_simps]
+theorem RawPtr.uninitRange_fold {T : Type} [Pointee T] (p : RawPtr T) (vs : List (MaybeUninit T)) :
+    (iexists fun bptr => upClose (Bytes.uninitRange (Pointee.repr (T := T)) p bptr (listVec vs))) =
+      (p ↦?* vs) := rfl
+
+@[step_simps]
+theorem RawPtr.readable_fold {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (vs : List T) :
+    (iexists fun bptr => upClose (readableRange (Pointee.repr (T := T)) p bptr (listVec vs) d)) =
+      p.readable d vs := rfl
+
+@[step_simps]
+theorem RawPtr.range_fold {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (vs : List T) :
+    (iexists fun bptr => upClose (Bytes.pointsToRange (Pointee.repr (T := T)) p bptr (listVec vs) d)) =
+      p.range d vs := rfl
+
+@[step_simps]
+theorem RawPtr.elem_cast_zero_add {T : Type} [Pointee T] (p : RawPtr T) (k : Int) :
+    p.elem (((0 : Nat) : Int) + k).toNat = p.elem k.toNat := by simp
+
+@[step_simps]
+theorem RawPtr.elem_zero_add {T : Type} [Pointee T] (p : RawPtr T) (k : Nat) :
+    p.elem (0 + k) = p.elem k := by simp
+
+/-- `J` is (a `∗` of atoms containing) the exposed definition of `p ↦?* vs`, `p.readable d vs` or
+`p.range d vs`: the only `∃`s pushed back into a `∗` by the lemmas below are those which the
+folding lemmas above then refold, so that the other existentials are left as they are. -/
+class ExposedBody {ι : Sort _} (J : ι → IProp) : Prop where
+
+instance ExposedBody.uninitRange {T : Type} [Pointee T] (p : RawPtr T) (vs : List (MaybeUninit T)) :
+    ExposedBody (fun bptr => upClose (Bytes.uninitRange (Pointee.repr (T := T)) p bptr (listVec vs))) :=
+  ⟨⟩
+
+instance ExposedBody.readable {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (vs : List T) :
+    ExposedBody (fun bptr => upClose (readableRange (Pointee.repr (T := T)) p bptr (listVec vs) d)) :=
+  ⟨⟩
+
+instance ExposedBody.range {T : Type} [Pointee T] (p : RawPtr T) (d : Nat) (vs : List T) :
+    ExposedBody (fun bptr => upClose (Bytes.pointsToRange (Pointee.repr (T := T)) p bptr (listVec vs) d)) :=
+  ⟨⟩
+
+instance ExposedBody.sep_right {ι : Sort _} (H : IProp) (J : ι → IProp)
+    [ExposedBody J] : ExposedBody (fun x => H ∗ J x) := ⟨⟩
+
+instance ExposedBody.sep_left {ι : Sort _} (J : ι → IProp) (H : IProp)
+    [ExposedBody J] : ExposedBody (fun x => J x ∗ H) := ⟨⟩
+
+/-- Pushes the `∃` of an exposed atom back into the right operand of a `∗` (the inverse of
+`sep_exists_r_eq`, which `normalizeSep` uses). -/
+@[step_simps]
+theorem sep_exists_r_push {ι : Sort _} (H : IProp) (J : ι → IProp)
+    [ExposedBody J] : iprop(∃ x, H ∗ J x) = (H ∗ iexists J) := (sep_exists_r_eq H J).symm
+
+/-- Pushes the `∃` of an exposed atom back into the left operand of a `∗`. -/
+@[step_simps]
+theorem sep_exists_l_push {ι : Sort _} (J : ι → IProp) (H : IProp)
+    [ExposedBody J] : iprop(∃ x, J x ∗ H) = (iexists J ∗ H) := (sep_exists_l_eq J H).symm
+
 end Aeneas.Std

@@ -301,7 +301,6 @@ theorem as_ptr_read_while_shared.spec (placement : Placement) : ⦃ emp ⦄ as_p
   have hx : x.val = 2#u32 := by rw [x_post]; simp [hs]
   have hp1 : p1 = 1#u32 := by simp [p1_post, hs]
   step
-  iwp => iintro _
   subst as_ptr_back_post
   step with Slice.end_as_ptr.spec s.val p (by simp [Slice.length, hs])
   step*
