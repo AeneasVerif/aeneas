@@ -27,6 +27,7 @@ package «tests» {}
 @[default_target] lean_lib Closures
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
+@[default_target] lean_lib CopySpecsTests
 @[default_target] lean_lib ConstShadow
 @[default_target] lean_lib Curve25519
 @[default_target] lean_lib Default

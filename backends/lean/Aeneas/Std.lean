@@ -10,6 +10,7 @@ public import Aeneas.Std.Slice
 public import Aeneas.Std.RawPtrSpecs
 public import Aeneas.Std.UninitSpecs
 public import Aeneas.Std.ExposureSpecs
+public import Aeneas.Std.CopySpecs
 public import Aeneas.Std.Core.PtrMovement
 public import Aeneas.Std.Core.RawPtrOps
 public import Aeneas.Std.Core.MaybeUninit
