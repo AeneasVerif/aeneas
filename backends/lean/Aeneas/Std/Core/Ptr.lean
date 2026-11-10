@@ -103,15 +103,40 @@ No representation, alignment, or bounds check is needed to form the pointer. In 
 misaligned pointers are representable; typed accesses check alignment, bounds, permissions,
 and decoding. Casting changes neither bytes nor permissions and assumes no decoder relation.
 This helper is used by manually adapted examples, not yet inserted by the compiler. -/
+
+/-- The block of `p` is live: it is active (not retired) and its allocation is alive.
+
+The heap model only requires the allocation to be alive for pointer arithmetic (`Heap.offset`,
+`Heap.distance`). But a retired block doesn't tell whether the Rust allocation is still alive: the
+exposure of a safe place is retired when the borrow ends, and the place may die afterwards without
+the model seeing it (the root of an exposure is never deallocated). The models of the pointer
+arithmetic thus also require the block of the pointer to be live. -/
+def Heap.ptrLive (s : Heap) (p : RawPtr T) : Bool :=
+  match s.allocations p.provenance with
+  | some block => s.live block
+  | none => false
+
+/-- `Heap.offset` from a pointer whose block is live (see `Heap.ptrLive`). -/
+def Heap.liveOffset (repr : Repr T) (p : RawPtr T) (count : Int) (s : Heap) :
+    Option (RawPtr T) :=
+  if s.ptrLive p then Heap.offset repr p count s else none
+
+/-- `State.offset` from a pointer whose block is live (see `Heap.ptrLive`): in Rust, offsetting a
+pointer to a dead allocation is undefined behavior. This is incomplete when the block is a retired
+exposure of a safe place which is still alive. -/
+def State.liveOffset (repr : Repr T) (p : RawPtr T) (count : Int)
+    (s₀ : State) (result : RawPtr T) (s₁ : State) : Prop :=
+  Heap.liveOffset repr p count s₀ = some result ∧ s₁ = s₀
+
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
 def RawPtr.add [Pointee T] (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
-  Result.checkedModify (State.offset (Pointee.repr (T := T)) q count.val)
+  Result.checkedModify (State.liveOffset (Pointee.repr (T := T)) q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::offset"]
 def RawPtr.offset [Pointee T] (q : RawPtr T) (count : Isize) : Result (RawPtr T) :=
-  Result.checkedModify (State.offset (Pointee.repr (T := T)) q count.val)
+  Result.checkedModify (State.liveOffset (Pointee.repr (T := T)) q count.val)
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::offset"] RawPtr.offset
 

@@ -84,15 +84,18 @@ address identity across repeated conversions. -/
 def alloc.boxed.Box.into_raw [Pointee T] (b : Box T) : Result (MutRawPtr T) :=
   RawPtr.newBlock (Pointee.repr (T := T)) [b.val] true
 
-/-- Moves the value out of explicit memory with `State.returnOwned`, without physical death.
-In Rust, `from_raw` doesn't call the global allocator either: it only converts the pointer, and
-the memory is freed when the box is dropped. But the model of `Box<T>` is the wrapper `Box T`, so the value can't
-stay explicitly active. Immutable metadata retains the old pointer's address, but converting
-the same Box back to raw still forgets its safe-place identity in this prototype. -/
+/-- Moves the value out of explicit memory, and deallocates the block (`State.dealloc`).
+In Rust, `from_raw` doesn't call the global allocator: it only converts the pointer, and
+the memory is freed when the box is dropped. But the model of `Box<T>` is the wrapper `Box T`, so the
+value can't stay explicitly active, and the drop of the box, in safe Rust, is not seen by the model.
+Deallocating already here makes the later uses of the pointer (accesses, but also pointer
+arithmetic, which only requires the allocation to be alive) fail, as they do in Rust once the box is
+dropped. This is incomplete when the box isn't dropped (`Box::leak`, `Box::into_raw`, `mem::forget`),
+but sound. -/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
 def alloc.boxed.Box.from_raw [Pointee T] (p : MutRawPtr T) : Result (Box T) := do
   let value ← RawPtr.read p
-  Result.checkedModify (State.returnOwned (Pointee.repr (T := T)) p 1)
+  Result.checkedModify (State.dealloc (Pointee.repr (T := T)) p 1)
   pure ⟨value⟩
 
 end Aeneas.Std

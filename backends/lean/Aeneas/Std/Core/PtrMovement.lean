@@ -24,19 +24,31 @@ def Repr.byteStride : Repr Unit where
     subst bytes
     simp
 
+/-- Byte offset from a pointer whose block is live (see `Heap.ptrLive`). -/
 def Heap.byteOffset (p : RawPtr T) (count : Int) (s : Heap) : Option (RawPtr T) :=
-  (Heap.offset Repr.byteStride (RawPtr.cast Unit p) count s).map (RawPtr.cast T)
+  (Heap.liveOffset Repr.byteStride (RawPtr.cast Unit p) count s).map (RawPtr.cast T)
 
-/-- Restricted to live views of a common root, including one-past.
-Both byte distance and element distance must fit `isize`; ZSTs are rejected. -/
-def Heap.offsetFrom (repr : Repr T) (p origin : RawPtr T) (s : Heap) : Option Isize := do
-  let elements ← Heap.distance repr p origin s
-  let a := p.address
-  let b := origin.address
-  let bytes := (a.val : Int) - b.val
-  if IScalar.cMin .Isize ≤ bytes && bytes ≤ IScalar.cMax .Isize then
-    if h : IScalar.cMin .Isize ≤ elements ∧ elements ≤ IScalar.cMax .Isize then
-      some (IScalar.ofInt elements h)
+/-- Restricted to views of a common root, including one-past.
+Both byte distance and element distance must fit `isize`; ZSTs are rejected.
+
+One of the two views must be live (see `Heap.ptrLive`): it witnesses that the allocation is still
+alive, and the other pointer may come from an earlier, retired exposure of the same safe place (as in
+Zmij's `Buffer::format_finite`, which subtracts a pointer of its first exposure of the buffer from a
+pointer of the second one). Requiring both views to be live would reject this code, which Rust
+accepts. But this is not sound in general: if the place of the retired exposure died and the place
+of the live exposure reuses its address, both exposures have the same root in the model (the root of
+an exposure is never deallocated), whereas in Rust the two pointers are in different allocations
+and `offset_from` is undefined behavior. -/
+def Heap.offsetFrom (repr : Repr T) (p origin : RawPtr T) (s : Heap) : Option Isize :=
+  if s.ptrLive p || s.ptrLive origin then do
+    let elements ← Heap.distance repr p origin s
+    let a := p.address
+    let b := origin.address
+    let bytes := (a.val : Int) - b.val
+    if IScalar.cMin .Isize ≤ bytes && bytes ≤ IScalar.cMax .Isize then
+      if h : IScalar.cMin .Isize ≤ elements ∧ elements ≤ IScalar.cMax .Isize then
+        some (IScalar.ofInt elements h)
+      else none
     else none
   else none
 
