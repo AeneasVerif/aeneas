@@ -12,7 +12,7 @@ raw-pointer functions to read and write values of type `T` in the heap.
 
 The extracted code doesn't pass it explicitly: it is found by instance resolution. The stateful
 functions receive the instances of their type parameters, and Aeneas generates the instances of the
-structures (see `Repr.prod` and `Repr.iso`). -/
+structures (see `Repr.unspecified`, `Repr.prod` and `Repr.iso`). -/
 class Pointee (T : Type) where
   repr : Repr T
 
@@ -167,9 +167,13 @@ def bool : Repr Bool :=
 
 /-! ### Representations of the structures
 
-A value of a structure is stored as the values of its fields, one after the other, with padding to
-align them (as nested pairs: see `prod`). Rust doesn't specify the layout of the structures (unless
-they are `#[repr(C)]`), so any layout is a correct model of the code which doesn't depend on it. -/
+The *model* of the representation of a structure stores the values of its fields, one after the
+other, with padding to align them (as nested pairs: see `prod`). But Rust doesn't specify the layout
+of the structures and tuples (`repr(Rust)`): the compiler can reorder the fields, add padding, and two
+structures with the same fields need not have the same layout. The representation of a structure is
+thus `Repr.unspecified`, an unknown representation of its own, of which only a few properties of the
+model are known: the code which depends on the layout (through `size_of`, `align_of`, or byte
+accesses of the structure) can't be verified. -/
 
 /-- The zero-sized representation of the types with a single value. -/
 def unit (T : Type) (value : T) (unique : ∀ x : T, x = value) : Repr T where
@@ -359,14 +363,49 @@ def prod {A B : Type} (ra : Repr A) (rb : Repr B) : Repr (A × B) where
 
 end Repr
 
+/-- The properties which every representation of a structure (or tuple) by rustc has, given its
+model `model` (the fields one after the other, see `prod`), whatever its layout: the actual
+representation stores the encodings of the fields at some offsets, without overlap, and leaves the
+rest (the padding) uninitialized.
+- `sized`: if a field isn't zero-sized, the structure isn't either (the fields don't overlap and are
+  within the structure).
+- `carries`: the pointers carried by the encodings of a value (see `Repr.Carries`) are carried by the
+  encodings of its fields, thus by the model.
+
+It contains nothing about the size, the alignment or the offsets of the fields, which depend on the
+layout. In particular, the model being calibrated (see `Pointee.Calibrated`) doesn't imply that the
+actual representation is: a calibrated model has no padding, but the actual layout may have some (for
+instance after reordering the fields, as with `-Zrandomize-layout`), and the padding of an encoding is
+uninitialized whereas the bytes from which a value is decoded may initialize it. -/
+structure Repr.LayoutOf {T : Type} (model r : Repr T) : Prop where
+  sized : 0 < model.size → 0 < r.size
+  carries : ∀ value q, r.Carries value q → model.Carries value q
+
+/-- The unknown representation of the structure (or tuple) `T`, whose model is `model` (see
+`Repr.LayoutOf`). It is indexed by the type `T`, so that two distinct types with the same model can't be
+proved to have the same representation. It is opaque: its value (the model) is only used to show that
+such a representation exists. -/
+opaque Repr.unspecified (T : Type) (model : Repr T) : {r : Repr T // Repr.LayoutOf model r} :=
+  ⟨model, ⟨id, fun _ _ h => h⟩⟩
+
+theorem Repr.unspecified_sized {T : Type} {model : Repr T} (h : 0 < model.size) :
+    0 < (Repr.unspecified T model).1.size :=
+  (Repr.unspecified T model).2.sized h
+
+theorem Repr.unspecified_carries {T : Type} {model : Repr T} {value : T} {q : RawPtr Unit}
+    (h : (Repr.unspecified T model).1.Carries value q) : model.Carries value q :=
+  (Repr.unspecified T model).2.carries value q h
+
 /-! ### Instances -/
 
 instance (ty : UScalarTy) : Pointee (UScalar ty) := ⟨Repr.uscalar ty⟩
 instance (ty : IScalarTy) : Pointee (IScalar ty) := ⟨Repr.iscalar ty⟩
 instance : Pointee Bool := ⟨Repr.bool⟩
 instance {T : Type} : Pointee (RawPtr T) := ⟨Repr.pointer T⟩
+/-- The unit type `()` is guaranteed to have size 0 and alignment 1. -/
 instance : Pointee Unit := ⟨Repr.unit Unit () (fun _ => rfl)⟩
+/-- The layout of the tuples is unspecified (see `Repr.unspecified`). -/
 instance {A B : Type} [Pointee A] [Pointee B] : Pointee (A × B) :=
-  ⟨Repr.prod (Pointee.repr (T := A)) (Pointee.repr (T := B))⟩
+  ⟨(Repr.unspecified (A × B) (Repr.prod (Pointee.repr (T := A)) (Pointee.repr (T := B)))).1⟩
 
 end Aeneas.Std

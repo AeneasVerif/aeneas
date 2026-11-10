@@ -158,8 +158,9 @@ structure Counter (Self : Type _) where
 structure PtrCounter where
   p : MutRawPtr Std.U32
 
-instance : Pointee PtrCounter := ⟨Repr.iso (Pointee.repr (T := MutRawPtr
-  Std.U32)) (fun x => x.1) (fun p => ⟨p⟩) (fun _ => rfl)⟩
+instance : Pointee PtrCounter := ⟨(Repr.unspecified PtrCounter (Repr.iso
+  (Pointee.repr (T := MutRawPtr Std.U32)) (fun x => x.1) (fun p => ⟨p⟩)
+  (fun _ => rfl))).1⟩
 
 /-- [raw_pointers::{impl raw_pointers::Counter for raw_pointers::PtrCounter}::next]:
     Source: 'tests/src/raw_pointers.rs', lines 98:4-104:5 -/

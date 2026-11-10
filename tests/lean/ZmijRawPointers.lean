@@ -26,9 +26,9 @@ structure uint128 where
   hi : Std.U64
   lo : Std.U64
 
-instance : Pointee uint128 := ⟨Repr.iso (Repr.prod (Pointee.repr (T :=
-  Std.U64)) (Pointee.repr (T := Std.U64))) (fun x => (x.1, x.2))
-  (fun p => ⟨p.1, p.2⟩) (fun _ => rfl)⟩
+instance : Pointee uint128 := ⟨(Repr.unspecified uint128 (Repr.iso (Repr.prod
+  (Pointee.repr (T := Std.U64)) (Pointee.repr (T := Std.U64)))
+  (fun x => (x.1, x.2)) (fun p => ⟨p.1, p.2⟩) (fun _ => rfl))).1⟩
 
 /-- [zmij_raw_pointers::{impl core::clone::Clone for zmij_raw_pointers::uint128}::clone]:
     Source: 'tests/src/zmij-raw-pointers.rs', lines 6:15-6:20

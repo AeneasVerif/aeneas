@@ -2233,13 +2233,14 @@ and type_decl_has_pointee_instance (ctx : extraction_ctx) (decl : type_decl) :
         fields
   | Enum _ | Opaque -> false
 
-(** Lean: the [Pointee] instance of a structure (see [Pointee.lean]): the fields
-    are stored one after the other, as nested pairs. For instance:
+(** Lean: the [Pointee] instance of a structure (see [Pointee.lean]). Its
+    layout is unspecified ([Repr.unspecified]), and its model stores the fields
+    one after the other, as nested pairs. For instance:
     {[
       instance {T : Type _} [Pointee (MutRawPtr T)] : Pointee (S T) :=
-        ⟨Repr.iso (Repr.prod (Pointee.repr (T := MutRawPtr T))
-          (Pointee.repr (T := Std.U32))) (fun x => (x.1, x.2))
-          (fun p => ⟨p.1, p.2⟩) (fun _ => rfl)⟩
+        ⟨(Repr.unspecified (S T) (Repr.iso (Repr.prod
+          (Pointee.repr (T := MutRawPtr T)) (Pointee.repr (T := Std.U32)))
+          (fun x => (x.1, x.2)) (fun p => ⟨p.1, p.2⟩) (fun _ => rfl))).1⟩
     ]} *)
 let extract_type_decl_pointee_instance (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
@@ -2287,7 +2288,15 @@ let extract_type_decl_pointee_instance (ctx : extraction_ctx)
       F.pp_print_string fmt ":=";
       F.pp_print_space fmt ();
       let n = List.length field_tys in
-      if n = 0 then F.pp_print_string fmt "⟨Repr.unit _ ⟨⟩ (fun _ => rfl)⟩"
+      (* The layout of the structure is unspecified: the representation is
+         [Repr.unspecified], of which the fields stored one after the other
+         is only the model *)
+      F.pp_print_string fmt "⟨(Repr.unspecified";
+      F.pp_print_space fmt ();
+      extract_ty ~inside:true
+        (TAdt (TAdtId decl.def_id, generic_args_of_params decl.generics));
+      F.pp_print_space fmt ();
+      if n = 0 then F.pp_print_string fmt "(Repr.unit _ ⟨⟩ (fun _ => rfl))"
       else begin
         let print_repr ty =
           F.pp_print_string fmt "(Pointee.repr (T :=";
@@ -2307,7 +2316,7 @@ let extract_type_decl_pointee_instance (ctx : extraction_ctx)
               print_reprs tys;
               F.pp_print_string fmt ")"
         in
-        F.pp_print_string fmt "⟨Repr.iso";
+        F.pp_print_string fmt "(Repr.iso";
         F.pp_print_space fmt ();
         print_reprs field_tys;
         (* The projection: [fun x => (x.1, ..., x.n)] *)
@@ -2327,8 +2336,9 @@ let extract_type_decl_pointee_instance (ctx : extraction_ctx)
         F.pp_print_string fmt
           ("(fun p => ⟨" ^ String.concat ", " (List.init n comp) ^ "⟩)");
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "(fun _ => rfl)⟩"
+        F.pp_print_string fmt "(fun _ => rfl))"
       end;
+      F.pp_print_string fmt ").1⟩";
       F.pp_close_box fmt ();
       F.pp_print_break fmt 0 0
   | _ -> ()

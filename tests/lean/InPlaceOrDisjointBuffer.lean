@@ -28,7 +28,8 @@ namespace in_place_or_disjoint_buffer
 structure core.marker.PhantomData (T : Type _) where
 
 instance {T : Type _} : Pointee (core.marker.PhantomData T) :=
-  ⟨Repr.unit _ ⟨⟩ (fun _ => rfl)⟩
+  ⟨(Repr.unspecified (core.marker.PhantomData T)
+  (Repr.unit _ ⟨⟩ (fun _ => rfl))).1⟩
 
 /-- [in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer]
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 7:0-12:1
@@ -41,11 +42,12 @@ structure InPlaceOrDisjointBuffer (T : Type _) where
 
 instance {T : Type _} [Pointee (ConstRawPtr T)] [Pointee (MutRawPtr T)]
   [Pointee (core.marker.PhantomData (MutBorrow (Slice T)))] : Pointee
-  (InPlaceOrDisjointBuffer T) := ⟨Repr.iso (Repr.prod (Pointee.repr (T :=
-  ConstRawPtr T)) (Repr.prod (Pointee.repr (T := MutRawPtr T)) (Repr.prod
-  (Pointee.repr (T := Std.Usize)) (Pointee.repr (T := core.marker.PhantomData
-  (MutBorrow (Slice T))))))) (fun x => (x.1, x.2, x.3, x.4))
-  (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2⟩) (fun _ => rfl)⟩
+  (InPlaceOrDisjointBuffer T) := ⟨(Repr.unspecified (InPlaceOrDisjointBuffer
+  T) (Repr.iso (Repr.prod (Pointee.repr (T := ConstRawPtr T)) (Repr.prod
+  (Pointee.repr (T := MutRawPtr T)) (Repr.prod (Pointee.repr (T := Std.Usize))
+  (Pointee.repr (T := core.marker.PhantomData (MutBorrow (Slice T)))))))
+  (fun x => (x.1, x.2, x.3, x.4)) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2⟩)
+  (fun _ => rfl))).1⟩
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_in_place]:
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 15:4-27:5
