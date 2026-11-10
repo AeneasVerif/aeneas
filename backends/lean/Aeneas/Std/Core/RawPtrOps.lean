@@ -111,15 +111,18 @@ end Aeneas.Std
 namespace Aeneas.Std
 
 /-- `&*p`: a shared reborrow of the value behind a raw pointer (introduced by the pre-pass
-`decompose_raw_ptr_derefs`). The functional translation of a shared borrow is its value, read when
-the borrow is created. Mutations of these cells through other pointers while the borrow is live are
-undefined behavior in Rust; the model does not detect them. -/
-@[rust_fun "core::ptr::const_ptr::{*const @T}::as_ref_unchecked"]
-def RawPtr.as_ref_unchecked [Pointee T] (q : RawPtr T) : Result (SharedBorrow T) := do
-  let value ← RawPtr.read q
-  .ok ⟨value⟩
+`decompose_raw_ptr_derefs`). As for `from_raw_parts`, the cell is shared while the borrow is live:
+writing it through any pointer is then undefined behavior (`fail .undef`), as in Rust. The backward
+computation ends the share when the lifetime of the borrow ends. -/
+@[rust_fun "core::ptr::const_ptr::{*const @T}::as_ref_unchecked" (statefulLifetimes := [0])]
+def RawPtr.as_ref_unchecked [Pointee T] (q : RawPtr T) : Result (SharedBorrow T × Result Unit) :=
+  Aeneas.Std.bind (q.shareRange (Pointee.repr (T := T)) 1) fun values =>
+  match values with
+  | [value] => .ok (⟨value⟩, q.endShareRange (Pointee.repr (T := T)) [value])
+  | _ => .fail .undef
 
-attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::as_ref_unchecked"] RawPtr.as_ref_unchecked
+attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::as_ref_unchecked" (statefulLifetimes := [0])]
+  RawPtr.as_ref_unchecked
 
 /-- `&mut *p`: the value is exclusively borrowed from the heap (raw accesses to its cells fail)
 until the borrow ends, when the backward computation writes the final value back. -/

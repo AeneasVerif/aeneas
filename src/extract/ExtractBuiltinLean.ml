@@ -1095,7 +1095,8 @@ let lean_builtin_funs =
     mk_fun "core::ptr::const_ptr::{*const @T}::add" "RawPtr.add";
     (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 117 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::as_ref_unchecked"
-      "RawPtr.as_ref_unchecked";
+      "RawPtr.as_ref_unchecked"
+      ~stateful_lifetimes:[0];
     (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 20 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::cast" "RawPtr.ptr_cast";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 116 *)
@@ -1117,20 +1118,21 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 260 *)
     mk_fun "core::ptr::from_mut" "core.ptr.from_mut" ~stateful_lifetimes:[0]
       ~placement:true;
-    (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 134 *)
+    (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 137 *)
     mk_fun "core::ptr::from_ref"
       "core.ptr.from_ref_model"
       ~stateful_lifetimes:[0]
       ~placement:true;
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 106 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::add" "RawPtr.add";
-    (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 126 *)
+    (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 129 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::as_mut_unchecked"
       "RawPtr.as_mut_unchecked"
       ~stateful_lifetimes:[0];
-    (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 122 *)
+    (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 124 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::as_ref_unchecked"
-      "RawPtr.as_ref_unchecked";
+      "RawPtr.as_ref_unchecked"
+      ~stateful_lifetimes:[0];
     (* file: "Aeneas/Std/Core/RawPtrOps.lean", line: 16 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::cast" "RawPtr.ptr_cast";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 118 *)

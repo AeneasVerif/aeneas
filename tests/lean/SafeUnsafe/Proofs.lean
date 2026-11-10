@@ -54,6 +54,9 @@ the exposures of a function at distinct addresses (`8`, `16`, ...).
 | `ptr_read_copy`                        | ok(2)       | ok(2)      |
 | `ptr_as_mut_write` (borrow model)      | ok(6)       | INCOMPLETE |
 | `ptr_as_mut_twice` (borrow model)      | UB          | fails      |
+| `reborrow_write_while_shared`          | UB          | fails      |
+| `reborrow_read_while_shared`           | ok(2)       | INCOMPLETE |
+| `reborrow_then_write`                  | ok(2)       | INCOMPLETE |
 | `handle_write`                         | ok(4)       | ok(4)      |
 
 The verdicts are the same as in the previous (first-order) heap model; the reason of
@@ -63,6 +66,9 @@ The model has no representation of a `Box` in raw memory (a `Box<T>` is its cont
 allocation), so that a program which reads or writes a `Box` through a raw pointer (such as
 `ptr::read` duplicating a `Box`) is not expressible. `ptr_read_owner_double_free` duplicates the
 owner of an allocation made by `Box::into_raw` instead.
+
+A shared reference made from a raw pointer (`&*p`) shares the cell until its lifetime ends, so that
+writing the cell while the reference is live fails (`reborrow_write_while_shared`).
 
 The INCOMPLETE cases share one cause: the model ends the borrow behind a raw pointer when the
 functional translation ends it (when the owner is used again, or at the end of the function that
@@ -777,5 +783,123 @@ theorem handle_write.spec (placement : Placement) :
   simp only at hBack ⊢
   subst hBack
   step*
+
+/-! ## `&*p`: a shared reference made from a raw pointer -/
+
+/-- The cell is shared by the reference: writing through the pointer fails. -/
+theorem reborrow_write_while_shared.ub :
+    ¬ ⦃ emp ⦄ reborrow_write_while_shared distinct ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := dwp_empty hTriple
+  unfold reborrow_write_while_shared at hSpec
+  heap_norm
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
+  heap_norm
+  heap_checked
+  obtain ⟨hr, hx⟩ := hx
+  simp [Heap.readRange, add, block, update, Heap.empty, Heap.live, hb, align_u32, List.range_succ,
+    List.mapM_cons, Option.bind_eq_some_iff] at hr
+  obtain ⟨-, -, a, -, rfl⟩ := hr
+  simp [Heap.shareRange, Heap.modifyRange, Heap.modify, add, block, update, Heap.empty, Heap.live,
+    hb, align_u32, RawPtr.offsetFrom] at hx
+  obtain ⟨out, hout, hc⟩ := Option.bind_eq_some_iff.mp hx
+  split at hout
+  case isFalse => simp at hout
+  have hout := share_at (pre := []) (post := []) (data := enc 1#u32) (by simp [Block.bytes, Std.Repr.create]; rfl) rfl hout
+  obtain ⟨rfl, -⟩ := Heap.commit_success _ _ hc
+  rw [hout] at hSpec
+  simp only [List.nil_append, List.append_nil, bind_ok, Std.uncurry_apply_pair] at hSpec
+  heap_stuck
+  obtain ⟨_, _, hw⟩ := hx
+  simp [Heap.write, Heap.modify, update, Heap.live, Heap.empty, hb, RawPtr.offsetFrom,
+    Heap.storeRepr] at hw
+  obtain ⟨-, hw⟩ := hw
+  rw [write_unwritable (c := Cell.shared 1 ((enc 1#u32)[0]'(by decide))) ?_ (fun _ => rfl)] at hw
+  · simp at hw
+  · show (List.map (Cell.shared 1) (enc 1#u32).toList)[0]? = _
+    simp [Vector.getElem?_eq_getElem (show 0 < (Pointee.repr (T := U32)).size by decide)]
+
+/-- INCOMPLETE: the borrow of the local ends (`from_mut_back`) before the lifetime of the
+reference (`as_ref_unchecked_back`): ending the exposure requires its cells back, and they are
+still shared by the reference. -/
+theorem reborrow_read_while_shared.incomplete :
+    ¬ ⦃ emp ⦄ reborrow_read_while_shared distinct ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := dwp_empty hTriple
+  unfold reborrow_read_while_shared at hSpec
+  heap_norm
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
+  heap_norm
+  heap_checked
+  obtain ⟨hr, hx⟩ := hx
+  simp [Heap.readRange, add, block, update, Heap.empty, Heap.live, hb, align_u32, List.range_succ, RawPtr.offsetFrom,
+    List.mapM_cons, Option.bind_eq_some_iff] at hr
+  obtain ⟨-, -, a, ha, rfl⟩ := hr
+  rw [read_at (i := 0) (pre := []) (post := []) (data := enc 1#u32) (by simp [Block.bytes, Std.Repr.create]; rfl) rfl (encode_enc _) (by decide)] at ha
+  cases ha
+  simp [Heap.shareRange, Heap.modifyRange, Heap.modify, add, block, update, Heap.empty, Heap.live,
+    hb, align_u32, RawPtr.offsetFrom] at hx
+  obtain ⟨out, hout, hc⟩ := Option.bind_eq_some_iff.mp hx
+  split at hout
+  case isFalse => simp at hout
+  have hout := share_at (pre := []) (post := []) (data := enc 1#u32)
+    (by simp [Block.bytes, Std.Repr.create]; rfl) rfl hout
+  obtain ⟨rfl, -⟩ := Heap.commit_success _ _ hc
+  rw [hout] at hSpec
+  simp only [List.nil_append, List.append_nil, bind_ok, Std.uncurry_apply_pair] at hSpec
+  heap_checked
+  obtain ⟨hy, rfl⟩ := hx
+  simp [Heap.read, Heap.storeRepr, update, Heap.live, hb, align_u32, RawPtr.offsetFrom,
+    Heap.empty] at hy
+  rw [read_at (i := 0) (pre := []) (post := []) (d := 1) (data := enc 1#u32) (by simp [Block.bytes]) rfl
+    (encode_enc _) (by decide)] at hy
+  cases hy
+  simp only [show (1#u32 + 1#u32 : Result U32) = .ok 2#u32 from rfl, bind_ok] at hSpec
+  heap_checked
+  obtain ⟨-, rfl⟩ := hx
+  heap_stuck
+  simp [State.removeExposure, Heap.endExposureAt, Heap.storeRepr, update, Heap.live, Heap.empty] at hx
+  exact hx.2.1 _ (Vector.getElem_mem (i := 0) (by decide))
+
+/-- INCOMPLETE: the lifetime of the reference ends at the end of the function (when the
+functional translation ends it), not where the reference is dead: the write through the pointer,
+which Rust accepts after the last use of the reference, fails while the cell is still shared. -/
+theorem reborrow_then_write.incomplete :
+    ¬ ⦃ emp ⦄ reborrow_then_write distinct ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := dwp_empty hTriple
+  unfold reborrow_then_write at hSpec
+  heap_norm
+  set b : Usize := distinct [0]
+  have hb : b.val = 8 := distinct_val [0] (by decide)
+  have hSpec := hSpec.heap_exposeAt (by omega) rfl (by heap_check [hb])
+  heap_norm
+  heap_checked
+  obtain ⟨hr, hx⟩ := hx
+  simp [Heap.readRange, add, block, update, Heap.empty, Heap.live, hb, align_u32, List.range_succ,
+    List.mapM_cons, Option.bind_eq_some_iff] at hr
+  obtain ⟨-, -, a, -, rfl⟩ := hr
+  simp [Heap.shareRange, Heap.modifyRange, Heap.modify, add, block, update, Heap.empty, Heap.live,
+    hb, align_u32, RawPtr.offsetFrom] at hx
+  obtain ⟨out, hout, hc⟩ := Option.bind_eq_some_iff.mp hx
+  split at hout
+  case isFalse => simp at hout
+  have hout := share_at (pre := []) (post := []) (data := enc 1#u32) (by simp [Block.bytes, Std.Repr.create]; rfl) rfl hout
+  obtain ⟨rfl, -⟩ := Heap.commit_success _ _ hc
+  rw [hout] at hSpec
+  simp only [List.nil_append, List.append_nil, bind_ok, Std.uncurry_apply_pair] at hSpec
+  heap_stuck
+  obtain ⟨_, _, hw⟩ := hx
+  simp [Heap.write, Heap.modify, update, Heap.live, Heap.empty, hb, RawPtr.offsetFrom,
+    Heap.storeRepr] at hw
+  obtain ⟨-, hw⟩ := hw
+  rw [write_unwritable (c := Cell.shared 1 ((enc 1#u32)[0]'(by decide))) ?_ (fun _ => rfl)] at hw
+  · simp at hw
+  · show (List.map (Cell.shared 1) (enc 1#u32).toList)[0]? = _
+    simp [Vector.getElem?_eq_getElem (show 0 < (Pointee.repr (T := U32)).size by decide)]
 
 end safe_unsafe.Proofs

@@ -322,6 +322,37 @@ pub fn ptr_as_mut_twice() -> u32 {
 }
 
 // ---------------------------------------------------------------------------
+// `&*p`: a shared reference made from a raw pointer
+// ---------------------------------------------------------------------------
+
+/// Writing through the pointer while the shared reference is live. UB
+pub fn reborrow_write_while_shared() -> u32 {
+    let mut x = 1u32;
+    let p = ptr::from_mut(&mut x);
+    let r = unsafe { &*p };
+    unsafe { *p = 2 };
+    *r
+}
+
+/// Reading through the pointer while the shared reference is live. ok(2)
+pub fn reborrow_read_while_shared() -> u32 {
+    let mut x = 1u32;
+    let p = ptr::from_mut(&mut x);
+    let r = unsafe { &*p };
+    let y = unsafe { *p };
+    *r + y
+}
+
+/// Writing through the pointer once the shared reference is dead. ok(2)
+pub fn reborrow_then_write() -> u32 {
+    let mut x = 1u32;
+    let p = ptr::from_mut(&mut x);
+    let y = unsafe { *(&*p) };
+    unsafe { *p = 2 };
+    x + y - 1
+}
+
+// ---------------------------------------------------------------------------
 // A raw pointer hidden in a type which keeps the borrow alive (like
 // `NonNull::from(&mut x)`, with the lifetime of the borrow)
 // ---------------------------------------------------------------------------
@@ -390,6 +421,9 @@ mod miri {
         ptr_read_copy,
         ptr_as_mut_write,
         ptr_as_mut_twice,
+        reborrow_write_while_shared,
+        reborrow_read_while_shared,
+        reborrow_then_write,
         handle_write
     );
 }

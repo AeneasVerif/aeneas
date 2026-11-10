@@ -278,7 +278,7 @@ macro "heap_norm" : tactic => `(tactic|
     MutRawPtr.write, RawPtr.add, RawPtr.endExposure, RawPtr.readRange, RawPtr.shareRange,
     RawPtr.endShareRange, RawPtr.borrowRange, RawPtr.endBorrowRange, RawPtr.borrowSlice,
     RawPtr.cast_const_eq, Slice.as_ptr_eq, Slice.end_as_ptr, Slice.as_mut_ptr_eq, Slice.end_as_mut_ptr,
-    core.slice.raw.from_raw_parts, core.slice.raw.from_raw_parts_mut,
+    core.slice.raw.from_raw_parts, core.slice.raw.from_raw_parts_mut, RawPtr.as_ref_unchecked,
     core.slice.raw.from_raw_parts_mut.back, alloc.boxed.Box.into_raw, alloc.boxed.Box.from_raw,
     Array.as_mut_slice, Array.as_slice, Array.val_to_slice, Array.repeat_val, Array.make_val,
     Slice.from_val, Slice.length, List.replicate_succ, List.replicate_zero, UScalar.ofNatCore_val_eq,
