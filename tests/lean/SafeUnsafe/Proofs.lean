@@ -234,7 +234,7 @@ theorem as_mut_ptr_write_one_past_end.ub :
   heap_checked
   obtain ⟨hq, rfl⟩ := hx
   have := pow_numBits_gt
-  simp [Heap.offset, add, block, update, Heap.empty, Heap.allocationAlive, hb, size_u32,
+  simp [Heap.liveOffset, Heap.ptrLive, Heap.live, Heap.offset, add, block, update, Heap.empty, Heap.allocationAlive, hb, size_u32,
     UScalarTy.numBits] at hq
   obtain ⟨-, -, rfl⟩ := hq
   heap_stuck
@@ -260,7 +260,7 @@ theorem as_mut_ptr_add_out_of_bounds.ub :
   heap_norm
   heap_stuck
   obtain ⟨hq, -⟩ := hx
-  simp [Heap.offset, add, block, update, Heap.empty, Heap.allocationAlive, hb,
+  simp [Heap.liveOffset, Heap.ptrLive, Heap.live, Heap.offset, add, block, update, Heap.empty, Heap.allocationAlive, hb,
     create_enc_length] at hq
   obtain ⟨h, -⟩ := hq
   simp [size_u32] at h
@@ -350,10 +350,12 @@ theorem box_double_free.ub : ¬ ⦃ emp ⦄ box_double_free ⦃ _ => ⌜True⌝ 
   heap_checked
   obtain rfl := read_eq hx
   heap_checked
-  obtain rfl := returnOwned_eq hx
+  obtain ⟨_, hblk, rfl⟩ := dealloc_eq hx
+  simp [add, block, update, Heap.empty] at hblk
+  subst hblk
   heap_stuck
   obtain ⟨hr, -⟩ := hx
-  simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
+  simp [Heap.read, Heap.retire, Heap.killRoot, add, update, Heap.live, Heap.empty] at hr
 
 theorem box_use_after_free.ub : ¬ ⦃ emp ⦄ box_use_after_free ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
@@ -366,10 +368,12 @@ theorem box_use_after_free.ub : ¬ ⦃ emp ⦄ box_use_after_free ⦃ _ => ⌜Tr
   heap_checked
   obtain rfl := read_eq hx
   heap_checked
-  obtain rfl := returnOwned_eq hx
+  obtain ⟨_, hblk, rfl⟩ := dealloc_eq hx
+  simp [add, block, update, Heap.empty] at hblk
+  subst hblk
   heap_stuck
   obtain ⟨hr, -⟩ := hx
-  simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
+  simp [Heap.read, Heap.retire, Heap.killRoot, add, update, Heap.live, Heap.empty] at hr
 
 theorem box_free_local.ub : ¬ ⦃ emp ⦄ box_free_local distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
@@ -383,7 +387,7 @@ theorem box_free_local.ub : ¬ ⦃ emp ⦄ box_free_local distinct ⦃ _ => ⌜T
   heap_checked
   obtain rfl := read_eq hx
   heap_stuck
-  simp [State.returnOwned, Heap.returnOwned, add, block, update, Heap.empty] at hx
+  simp [State.dealloc, Heap.dealloc, Heap.returnOwned, add, block, update, Heap.empty] at hx
 
 theorem box_free_array_element.ub : ¬ ⦃ emp ⦄ box_free_array_element distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
@@ -400,7 +404,7 @@ theorem box_free_array_element.ub : ¬ ⦃ emp ⦄ box_free_array_element distin
   heap_checked
   obtain rfl := read_eq hx
   heap_stuck
-  simp [State.returnOwned, Heap.returnOwned, add, block, update, Heap.empty] at hx
+  simp [State.dealloc, Heap.dealloc, Heap.returnOwned, add, block, update, Heap.empty] at hx
 
 /-- Leaking is not undefined behaviour: the postcondition drops the allocation. -/
 theorem box_leak.spec : ⦃ emp ⦄ box_leak ⦃ r => ⌜r = 3#u32⌝ ⦄ := by
@@ -604,7 +608,7 @@ theorem ptr_read_copy.spec (placement : Placement) : ⦃ emp ⦄ ptr_read_copy p
   subst_vars
   step*
 
-/-- The two owners free the allocation: the second `from_raw` reads a retired block. -/
+/-- The two owners free the allocation: the second `from_raw` reads a deallocated block. -/
 theorem ptr_read_owner_double_free.ub :
     ¬ ⦃ emp ⦄ ptr_read_owner_double_free distinct ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
@@ -616,7 +620,7 @@ theorem ptr_read_owner_double_free.ub :
   heap_norm
   set c : Usize := distinct [0]
   have hc : c.val = 8 := distinct_val [0] (by decide)
-  have hEnc : (Pointee.repr (T := Owner)).encode { ptr := ⟨Heap.empty.next, b⟩ }
+  have hEnc : (Pointee.repr (T := RawPtr U32)).encode ⟨Heap.empty.next, b⟩
       (Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)) := rfl
   have hSpec := hSpec.heap_exposeAt_data
     [Std.Repr.pointerEncoding (⟨Heap.empty.next, b⟩ : RawPtr U32)]
@@ -627,7 +631,7 @@ theorem ptr_read_owner_double_free.ub :
         Heap.validByte, Std.Repr.create, add, block, Heap.compatible, Heap.overlaps, List.all_eq_true,
         List.range_succ, List.map_cons, List.map_nil, List.forall_mem_cons, List.flatMap_cons,
         List.flatMap_nil, hb, hc, Std.Repr.pointerEncoding, RawPtr.cast]
-      have hs8 : (Pointee.repr (T := Owner)).size = 8 := rfl
+      have hs8 : (Pointee.repr (T := RawPtr U32)).size = 8 := rfl
       have hs4 : (Pointee.repr (T := U32)).size = 4 := rfl
       repeat' apply And.intro
       all_goals first
@@ -658,10 +662,12 @@ theorem ptr_read_owner_double_free.ub :
   heap_checked
   obtain rfl := read_eq hx
   heap_checked
-  obtain rfl := returnOwned_eq hx
+  obtain ⟨_, hblk, rfl⟩ := dealloc_eq hx
+  simp [add, block, update, Heap.empty] at hblk
+  subst hblk
   heap_checked
   obtain ⟨hr, rfl⟩ := hx
-  simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty, hb, hc, RawPtr.offsetFrom] at hr
+  simp [Heap.read, Heap.retire, Heap.killRoot, add, update, Heap.live, Heap.empty, hb, hc, RawPtr.offsetFrom] at hr
   rw [read_at (i := 0) (d := 0) (pre := []) (post := []) (data := Std.Repr.pointerEncoding
       (⟨0, b⟩ : RawPtr U32)) (by simp [Block.bytes, Std.Repr.create]; exact List.append_nil _) rfl hEnc (by decide)] at hr
   cases hr.2
@@ -669,7 +675,7 @@ theorem ptr_read_owner_double_free.ub :
   obtain rfl := removeExposure_eq hx
   heap_stuck
   obtain ⟨hr, -⟩ := hx
-  simp [Heap.read, Heap.retire, add, update, Heap.live, Heap.empty] at hr
+  simp [Heap.read, Heap.retire, Heap.killRoot, add, update, Heap.live, Heap.empty] at hr
 
 /-! ## `<*mut T>::as_mut`
 

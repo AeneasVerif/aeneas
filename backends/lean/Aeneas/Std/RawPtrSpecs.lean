@@ -393,7 +393,7 @@ theorem Bytes.endExposure.auth {T : Type} (repr : Repr T) (p : RawPtr T) (bptr :
 theorem Bytes.add.auth {T : Type} (repr : Repr T) (p : RawPtr T) (base : BasePtr)
     (values : Vector T count) (depth : Nat) (i : Usize) (P : Fragment → Prop)
     (view : ∀ h, P h → readableRange repr p base values depth h) :
-    Bytes.AuthPres P (State.offset repr p i.val)
+    Bytes.AuthPres P (State.liveOffset repr p i.val)
       (fun result h => result.provenance = p.provenance ∧
         result.address.val = p.address.val + i.val * repr.size ∧ P h) :=
   Bytes.AuthPres.of_eq (fun _ _ h => NoOwned.readableRange (view _ h.2.2)) (fun _ _ _ h => h.2)
@@ -709,7 +709,7 @@ theorem Bytes.add.local {T : Type} (repr : Repr T) (p : RawPtr T) (base : BasePt
     (values : Vector T count) (depth : Nat) (i : Usize) (hcount : 0 < count)
     (hsize : 0 < repr.size) (hle : i.val ≤ count) (P : Fragment → Prop)
     (view : ∀ h, P h → readableRange repr p base values depth h) :
-    Bytes.LocalOp P (State.offset repr p i.val)
+    Bytes.LocalOp P (State.liveOffset repr p i.val)
       (fun result h => result.provenance = p.provenance ∧
         result.address.val = p.address.val + i.val * repr.size ∧ P h) := by
   intro h F s hP hd hm hi
@@ -744,14 +744,14 @@ theorem Bytes.add.local {T : Type} (repr : Repr T) (p : RawPtr T) (base : BasePt
   have hval : result.address.val = p.address.val + i.val * repr.size := by
     change (BitVec.ofNat _ _).toNat = _
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hfit]
-  have hrun : Heap.offset repr p i.val s = some result := by
+  have hrun : Heap.liveOffset repr p i.val s = some result := by
     have hf : (p.address.val : Int) + i.val * repr.size <
         (2 : Int) ^ System.Platform.numBits := by
       simpa only [Nat.cast_pow, Nat.cast_ofNat, UScalarTy.Usize_numBits_eq] using hfit'
     have target_nat : ((p.address.val : Int) + i.val * repr.size).toNat =
         p.address.val + i.val * repr.size := by
       exact_mod_cast Int.toNat_natCast (p.address.val + i.val * repr.size)
-    simp [Heap.offset, hl, hlive, hbase, hlo, hstart, hlo', hhi', hf, target_nat, result]
+    simp [Heap.liveOffset, Heap.ptrLive, Heap.offset, hl, hlive, hbase, hlo, hstart, hlo', hhi', hf, target_nat, result]
   refine ⟨⟨result, s, hrun, rfl⟩, ?_⟩
   rintro answer s' ⟨he, rfl⟩
   have he := Option.some.inj (he.symm.trans hrun)
@@ -1585,7 +1585,145 @@ theorem RawPtr.returnOwned.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : Mu
   · exact Or.inl (Or.inr hb)
   · exact Or.inr hb
 
-/-- `Box::from_raw`: reads the value, and returns the owned block to the allocator. -/
+theorem Heap.noAliases_killRoot (s : Heap) (base root killed : Nat) :
+    (s.killRoot killed).noAliases base root = s.noAliases base root := by
+  unfold Heap.noAliases
+  apply congrArg (List.all _)
+  funext j
+  by_cases he : j = killed
+  · subst j
+    cases h : s.allocations killed <;> simp [Heap.killRoot, update, h]
+  · simp [Heap.killRoot, update, he]
+
+theorem Heap.killRoot_allocations (s : Heap) (root id : Nat) :
+    (s.killRoot root).allocations id =
+      (s.allocations id).map (fun blk => if id = root then { blk with alive := false } else blk) := by
+  by_cases same : id = root
+  · simp [Heap.killRoot, update, same]
+  · simp [Heap.killRoot, update, same]
+
+theorem AllExclusive.of_killRoot {s : Heap} {root base : Nat}
+    (h : AllExclusive (s.killRoot root) base) : AllExclusive s base := by
+  intro blk hl i hi
+  have := h (if base = root then { blk with alive := false } else blk)
+    (by rw [Heap.killRoot_allocations, hl]; rfl) i (by split <;> simpa using hi)
+  split at this <;> simpa using this
+
+theorem Bytes.RootReturn.killRoot {s : Heap} {base : Nat} (authority : Bytes.RootReturn s base)
+    (root : Nat) : Bytes.RootReturn (s.killRoot root) base := by
+  intro blk hl
+  rw [Heap.killRoot_allocations] at hl
+  cases hb : s.allocations base with
+  | none => simp [hb] at hl
+  | some blk₀ =>
+    simp only [hb, Option.map_some, Option.some.injEq] at hl
+    obtain ⟨r, hr, hbptr, hlen, hno⟩ := authority blk₀ hb
+    have hroot : blk.root = blk₀.root := by subst hl; split <;> rfl
+    have hbptr' : blk.bptr = blk₀.bptr := by subst hl; split <;> rfl
+    have hlen' : blk.repr = blk₀.repr := by subst hl; split <;> rfl
+    refine ⟨if blk₀.root = root then { r with alive := false } else r, ?_, ?_, ?_, ?_⟩
+    · rw [hroot, Heap.killRoot_allocations, hr]; rfl
+    · rw [hbptr', hbptr]; split <;> rfl
+    · rw [hlen', hlen]; split <;> rfl
+    · rw [hroot, Heap.noAliases_killRoot]; exact hno
+
+/-- Deallocates an owned block of one value. Owning its cleanup and its (exclusive) cells gives the
+authority to do so (see `AuthOK`), as for `RawPtr.returnOwned.spec`: there is no other active view
+of its root, so that killing the root preserves the other resources. -/
+theorem RawPtr.dealloc.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : MutRawPtr T)
+    (value : T) :
+    ⦃ p ↦ value ∗ p.freeable 1 ⦄
+      Result.checkedModify (State.dealloc (Pointee.repr (T := T)) p 1) ⦃ emp ⦄ := by
+  have hEq : p ↦ value ∗ p.freeable 1 ⊢
+      iexists fun bptr => upClose (Bytes.sep (Bytes.alloc (Pointee.repr (T := T)) p p.address 1
+        true) (Bytes.pointsTo (Pointee.repr (T := T)) p bptr value)) := by
+    rintro h ⟨h₁, h₂, hd, rfl, ⟨bptr, hP⟩, hF⟩
+    refine ⟨bptr, sep_upClose (A := Bytes.alloc (Pointee.repr (T := T)) p p.address 1 true)
+      (B := Bytes.pointsTo (Pointee.repr (T := T)) p bptr value) _
+      ⟨h₂, h₁, hd.symm, Fragment.union_comm _ _, hF, hP⟩⟩
+  refine ispec_conseq (ispec_exists.mpr fun bptr => ?_) hEq (fun _ => entails_refl _)
+  apply ispec_checkedModify
+  rintro s _ frame ⟨e, he, hse⟩ hd hm hi hAuth
+  obtain ⟨rest, hrest, rfl⟩ := PartialCommMonoid.subheap_iff.mp hse
+  have hdParts := Fragment.disjoint_union_left.mp hd
+  have hme : Fragment.Matches s e :=
+    ((Fragment.matches_union _ _ _).mp ((Fragment.matches_union _ _ _).mp hm).1).1
+  have hsize := (Pointee.Sized.pos (T := T))
+  obtain ⟨c, a, hca, rfl, hc, ⟨bytes, encoded, hblock⟩⟩ := he
+  have hbptr : bptr = p.address := by
+    have hmca := (Fragment.matches_union _ _ _).mp hme
+    exact Bytes.bptr_eq_of_matches (by simpa using hsize) hc hblock hmca.1 hmca.2
+  subst hbptr
+  have hp' : Bytes.sep (Bytes.alloc (Pointee.repr (T := T)) p p.address 1 true)
+      (Bytes.readable (Pointee.repr (T := T)) p p.address value) (c ∪ a) :=
+    ⟨c, a, hca, rfl, hc, bytes, (Pointee.repr (T := T)).encode_decode _ _ encoded, hblock⟩
+  obtain ⟨blk, hl, _, _, _, hown, _, hdepth, hh⟩ := Bytes.whole_readable hsize hp' hme
+  have hEx : AllExclusive s p.provenance := by
+    intro blk' hl' i hi'
+    rw [hl] at hl'
+    cases hl'
+    have := List.all_eq_true.mp hdepth _ (List.getElem_mem hi')
+    simpa using this
+  have hcl : ((c ∪ a ∪ rest) ∪ frame)
+      (.cleanup p.provenance blk.repr.length blk.bptr true) := by
+    left; left
+    rw [hh, ← hown]
+    left; rfl
+  have authority := hAuth _ _ _ hcl hEx
+  have hdA : (c ∪ a).Disjoint (rest ∪ frame) :=
+    Fragment.disjoint_union_right.mpr ⟨hrest, hdParts.1⟩
+  have hmA : Fragment.Matches s ((c ∪ a) ∪ (rest ∪ frame)) := by
+    rwa [← Fragment.union_assoc]
+  obtain ⟨⟨_, s₁, hrun⟩, post⟩ := Bytes.returnView.spec (Pointee.repr (T := T)) p p.address value
+    true s hsize (fun _ => authority) (c ∪ a) (rest ∪ frame) hp' hdA hmA hi
+  have hrun' : Heap.returnOwned (Pointee.repr (T := T)) p 1 s = some s₁ := by simpa using hrun
+  have hs₁ : s₁ = s.retire p.provenance := Heap.returnOwned_retire hrun'
+  obtain ⟨a', _, hm₁, hi₁, ha'⟩ := post () s₁ (by simpa using hrun')
+  rw [ha', Fragment.empty_union] at hm₁
+  -- No other active view of the root: killing it preserves the invariant and the frame
+  obtain ⟨root, hr, _, _, hno⟩ := authority blk hl
+  have inactive := Heap.noAliases_retire_inactive hi p.provenance blk.root hno
+  rw [← hs₁] at inactive
+  have hiK := Heap.killRoot_Inv hi₁ blk.root inactive
+  have hrr : root.root = blk.root := by
+    have valid := hi.validBlock hl
+    unfold Heap.validBlock at valid
+    simp only [hr, Bool.and_eq_true, beq_iff_eq] at valid
+    tauto
+  have rootSelf : ∀ b, s₁.allocations blk.root = some b → b.root = blk.root := by
+    intro b hb
+    rw [hs₁] at hb
+    by_cases same : blk.root = p.provenance
+    · rw [same] at hb hr
+      simp only [Heap.retire, update, ↓reduceIte, hr, Option.map_some, Option.some.injEq] at hb
+      rw [← hb]
+      exact hrr
+    · simp only [Heap.retire, update, same, ↓reduceIte, hr, Option.some.injEq] at hb
+      rw [← hb]
+      exact hrr
+  have hdealloc : Heap.dealloc (Pointee.repr (T := T)) p 1 s = some (s₁.killRoot blk.root) := by
+    have hc : Heap.commit (s₁.killRoot blk.root) = some (s₁.killRoot blk.root) := by
+      simp [Heap.commit, hiK.2]
+    rw [← hc]
+    simp only [Heap.dealloc, hl, hrun', Option.bind_eq_bind, Option.bind_some]
+    rfl
+  refine ⟨⟨(), _, hdealloc⟩, fun x s' hx => ?_⟩
+  have hs' : s' = s₁.killRoot blk.root := Option.some.inj (hx.symm.trans hdealloc)
+  subst hs'
+  refine ⟨rest, hdParts.2, ?_, hiK, ?_, trivial⟩
+  · exact Bytes.matches_killRoot hm₁ rootSelf inactive
+  · intro base size bptr' hb hEx'
+    have hEx₁ := AllExclusive.of_killRoot hEx'
+    rw [hs₁] at hEx₁ ⊢
+    obtain ⟨hEx₀, hRet⟩ := retire_step base hEx₁
+    apply Bytes.RootReturn.killRoot
+    apply hRet
+    apply hAuth base size bptr' _ hEx₀
+    rcases hb with hb | hb
+    · exact Or.inl (Or.inr hb)
+    · exact Or.inr hb
+
+/-- `Box::from_raw`: reads the value, and deallocates the owned block. -/
 @[step]
 theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] [Pointee.Sized T] (p : MutRawPtr T)
     (value : T) :
@@ -1595,7 +1733,7 @@ theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] [Pointee.Sized T] (
   intro v
   rw [sep_assoc_eq, ispec_ipure]
   rintro rfl
-  apply ispec_bind (RawPtr.returnOwned.spec p v) (entails_of_eq (sep_emp_r_eq _).symm)
+  apply ispec_bind (RawPtr.dealloc.spec p v) (entails_of_eq (sep_emp_r_eq _).symm)
   intro _
   apply ispec_ok
   iframe
@@ -2005,7 +2143,7 @@ theorem Bytes.add.local_elem {T : Type} [Pointee T] (p : RawPtr T) (base : BaseP
     (values : Vector T count) (depth : Nat) (j : Nat) (i : Usize) (hcount : 0 < count)
     (hsize : 0 < (Pointee.repr (T := T)).size) (hle : j + i.val ≤ count) (P : Fragment → Prop)
     (view : ∀ h, P h → readableRange (Pointee.repr (T := T)) p base values depth h) :
-    Bytes.LocalOp P (State.offset (Pointee.repr (T := T)) (p.elem j) i.val)
+    Bytes.LocalOp P (State.liveOffset (Pointee.repr (T := T)) (p.elem j) i.val)
       (fun result h => result = p.elem (j + i.val) ∧ P h) := by
   intro h F s hP hd hm hi
   have keep := hP
@@ -2037,7 +2175,7 @@ theorem Bytes.add.local_elem {T : Type} [Pointee T] (p : RawPtr T) (base : BaseP
       (2 ^ UScalarTy.numBits .Usize : Nat) := by exact_mod_cast hfit
   let result : RawPtr T := ⟨(p.elem j).provenance,
     ⟨BitVec.ofNat _ ((p.elem j).address.val + i.val * (Pointee.repr (T := T)).size)⟩⟩
-  have hrun : Heap.offset (Pointee.repr (T := T)) (p.elem j) i.val s = some result := by
+  have hrun : Heap.liveOffset (Pointee.repr (T := T)) (p.elem j) i.val s = some result := by
     have hf : ((p.elem j).address.val : Int) + i.val * (Pointee.repr (T := T)).size <
         (2 : Int) ^ System.Platform.numBits := by
       simpa only [Nat.cast_pow, Nat.cast_ofNat, UScalarTy.Usize_numBits_eq] using hfit'
@@ -2045,7 +2183,7 @@ theorem Bytes.add.local_elem {T : Type} [Pointee T] (p : RawPtr T) (base : BaseP
         i.val * (Pointee.repr (T := T)).size).toNat =
         (p.elem j).address.val + i.val * (Pointee.repr (T := T)).size := by
       exact_mod_cast Int.toNat_natCast _
-    simp [Heap.offset, hl, hlive, hbase, hqlo, hstart, hlo', hhi', hf, target_nat, result]
+    simp [Heap.liveOffset, Heap.ptrLive, Heap.offset, hl, hlive, hbase, hqlo, hstart, hlo', hhi', hf, target_nat, result]
   refine ⟨⟨result, s, hrun, rfl⟩, ?_⟩
   rintro answer s' ⟨he, rfl⟩
   have he := Option.some.inj (he.symm.trans hrun)
@@ -2158,20 +2296,22 @@ theorem Heap.Inv.same_root_of_overlap {s : Heap} (hi : s.Inv)
       simp [different, hrb, ar, br, Heap.overlaps] at pair
       grind
 
-/-- The distance between a pointer into a retained view and the start of a live view at the same
-address, in the same allocation (after `offset_from_reexposed.spec` of
+/-- The distance between a pointer into a retained (possibly retired) view and the start of a live
+view at the same address, in the same allocation (after `offset_from_reexposed.spec` of
 fournet/wip-memory-model). -/
 theorem offset_from_reexposed {finish origin : RawPtr U8} {count : Nat} {s : Heap}
     {a b : Block} {Q : effectWP.Post Isize} (hi : s.Inv)
     (ha : s.allocations finish.provenance = some a)
     (hb : s.allocations origin.provenance = some b)
-    (la : s.allocationAlive a = true) (lb : s.allocationAlive b = true)
+    (la : s.allocationAlive a = true) (liveB : s.live b = true)
     (originBase : origin.address = b.bptr) (sameBase : a.bptr = b.bptr)
     (nonemptyA : 0 < a.repr.length) (nonemptyB : 0 < b.repr.length)
     (cursor : finish.address.val = a.bptr.val + count)
     (within : count ≤ a.repr.length) (fits : (count : Int) ≤ IScalar.cMax .Isize)
     (hQ : ∀ r : Isize, r.val = count → Q r s) :
     DWP effectWP (MutRawPtr.offset_from finish origin) Q s := by
+  have lb := Heap.allocationAlive_of_live s b liveB
+  have liveOrigin : s.ptrLive origin = true := by simp [Heap.ptrLive, hb, liveB]
   have overlap : a.bptr.val < b.bptr.val + b.repr.length ∧
       b.bptr.val < a.bptr.val + a.repr.length := by
     rw [sameBase]; omega
@@ -2194,7 +2334,8 @@ theorem offset_from_reexposed {finish origin : RawPtr U8} {count : Nat} {s : Hea
     have h3 : b.bptr.val ≤ origin.address.val := by rw [originBase]
     have h4 : origin.address.val ≤ b.bptr.val + b.repr.length := by rw [originBase]; omega
     have hdist : (finish.address.val : Int) - origin.address.val = count := distance
-    simp only [Heap.offsetFrom, Heap.distance, ha, hb, la, lb, root, hsize, h1, h2, h3, h4,
+    simp only [Heap.offsetFrom, liveOrigin, Bool.or_true, ite_true, Heap.distance, ha, hb, la, lb,
+      root, hsize, h1, h2, h3, h4,
       hdist, Option.bind_eq_bind, Option.bind_some, beq_self_eq_true, Bool.true_and,
       Nat.cast_one, Int.emod_one, Int.ediv_one, decide_true, zero_lt_one]
     simp [lower, fits, result, hdist, hsize]

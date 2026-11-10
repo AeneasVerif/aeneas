@@ -270,21 +270,16 @@ pub fn from_raw_parts_mut_over_array() -> u32 {
 // original both own it
 // ---------------------------------------------------------------------------
 
-/// A raw pointer which owns the allocation of a `Box`.
-pub struct Owner {
-    ptr: *mut u32,
-}
-
-/// Two owners of the allocation, which both free it. UB (the second
-/// `from_raw` makes a dangling `Box`)
+/// Two owners of the allocation, which both free it: `o` is a raw pointer which
+/// owns the allocation of a `Box`, and `ptr::read` copies it. UB (the second
+/// `from_raw` makes a dangling `Box`). The owner isn't wrapped in a structure,
+/// whose layout is unspecified.
 pub fn ptr_read_owner_double_free() -> u32 {
-    let mut o = Owner {
-        ptr: Box::into_raw(Box::new(1u32)),
-    };
+    let mut o: *mut u32 = Box::into_raw(Box::new(1u32));
     let p = ptr::from_mut(&mut o);
     let o2 = unsafe { ptr::read(p) };
-    let a = unsafe { *Box::from_raw(o2.ptr) };
-    let b = unsafe { *Box::from_raw(o.ptr) };
+    let a = unsafe { *Box::from_raw(o2) };
+    let b = unsafe { *Box::from_raw(o) };
     a + b
 }
 

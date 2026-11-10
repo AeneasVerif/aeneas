@@ -192,7 +192,7 @@ theorem DecimalBuffer.format.sl_spec (placement : Placement)
     rw [hfin, RawPtr.elem_address p k (by rw [hsz]; omega), habptr, ← p_post, hsz,
       Nat.mul_one]
   refine DWP.bind (offset_from_reexposed (count := k) hR₃.1 (by rw [hfin]; exact ha) hb haalive
-    (Heap.allocationAlive_of_live _ _ hblive) hbbptr.symm
+    hblive hbbptr.symm
     (by rw [habptr, hbbptr, hp1, sameAddress]) (by omega) (by omega) hfinaddr (by omega)
     (by scalar_tac)
     (Q := fun r s' => r.val = k ∧ s' = s₃) (fun r hr => ⟨hr, rfl⟩)) ?_

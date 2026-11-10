@@ -232,6 +232,21 @@ theorem returnOwned_eq {T : Type} {repr : Std.Repr T} {p : RawPtr T} {n : Nat} {
   · exact (Heap.commit_success _ _ h).1
   · contradiction
 
+theorem dealloc_eq {T : Type} {repr : Std.Repr T} {p : RawPtr T} {n : Nat} {s s' : Heap}
+    {u : Unit} (h : State.dealloc repr p n s u s') :
+    ∃ blk, s.allocations p.provenance = some blk ∧
+      s' = (s.retire p.provenance).killRoot blk.root := by
+  simp only [State.dealloc, Heap.dealloc] at h
+  cases hb : s.allocations p.provenance <;> simp only [hb, Option.bind_eq_bind, Option.bind_none,
+    Option.bind_some, reduceCtorEq] at h
+  next blk =>
+  cases hr : Heap.returnOwned repr p n s <;> simp only [hr, Option.bind_none, Option.bind_some,
+    reduceCtorEq] at h
+  next s₂ =>
+  have h₂ : s₂ = s.retire p.provenance := returnOwned_eq (u := ()) hr
+  subst h₂
+  exact ⟨blk, rfl, (Heap.commit_success _ _ h).1⟩
+
 theorem endSharedExposure_eq {T : Type} {repr : Std.Repr T} {p : RawPtr T} {vs : List T}
     {s s' : Heap} {u : Unit} (h : State.endSharedExposure repr p vs s u s') :
     s' = s.retire p.provenance := by
@@ -247,7 +262,7 @@ theorem read_eq {T : Type} {repr : Std.Repr T} {p : RawPtr T} {s s' : Heap} {v :
     (h : State.read repr p s v s') : s' = s := h.2
 
 theorem offset_eq {T : Type} {repr : Std.Repr T} {p q : RawPtr T} {n : Int} {s s' : Heap}
-    (h : State.offset repr p n s q s') : s' = s := h.2
+    (h : State.liveOffset repr p n s q s') : s' = s := h.2
 
 theorem write_eq {T : Type} {repr : Std.Repr T} {p : RawPtr T} {v : T} {s s' : Heap} {u : Unit}
     (h : State.write repr p v s u s') : ∃ bytes, s' = s.storeRepr p.provenance bytes := by
