@@ -73,7 +73,8 @@ Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `
 A `translation.json` written for one crate can be passed to `-external-names` (Lean
 backend only) when translating a crate which depends on it, so that the second crate's
 references to the first resolve to its Lean names instead of becoming axioms of its own.
-No conversion step is needed.
+No conversion step is needed. `tests/src/roundtrip-lib` and `tests/src/roundtrip-user` are
+a worked example.
 
 **`rust_pattern`** is the Rust name in the syntax of Aeneas's name matcher, which is *not*
 always the pattern form of `rust_name`: the latter is human-readable and stops being

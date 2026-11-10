@@ -1,0 +1,2 @@
+[!lean] skip
+[lean] aeneas-args=-emit-json -split-files -namespace roundtrip
