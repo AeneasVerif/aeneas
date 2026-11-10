@@ -35,7 +35,7 @@ inductive UScalarTy where
 | U32
 | U64
 | U128
-deriving BvEnumToBitVec
+deriving BvEnumToBitVec, Repr
 
 /-- Kinds of signed integers -/
 inductive IScalarTy where
@@ -45,7 +45,7 @@ inductive IScalarTy where
 | I32
 | I64
 | I128
-deriving BvEnumToBitVec
+deriving BvEnumToBitVec, Repr
 
 @[expose, implicit_reducible]
 def UScalarTy.numBits (ty : UScalarTy) : Nat :=
