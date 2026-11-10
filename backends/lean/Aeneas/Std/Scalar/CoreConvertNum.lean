@@ -112,6 +112,56 @@ namespace num -- core.convert.num
 @[expose] def FromI128I64.from (x : I64) : I128 := ⟨ x.bv.signExtend _ ⟩
 @[expose] def FromI128I128.from (x : I128) : I128 := ⟨ x.bv.signExtend _ ⟩
 
+/-! `From<bool>`: `step` gives the value of `usize::from(b)`, `i64::from(b)`, ... -/
+
+@[simp, scalar_tac_simps, step_pure FromUsizeBool.from b]
+theorem FromUsizeBool.from_val_eq (b : Bool) : (FromUsizeBool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromUsizeBool.from]
+
+@[simp, scalar_tac_simps, step_pure FromU8Bool.from b]
+theorem FromU8Bool.from_val_eq (b : Bool) : (FromU8Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromU8Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromU16Bool.from b]
+theorem FromU16Bool.from_val_eq (b : Bool) : (FromU16Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromU16Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromU32Bool.from b]
+theorem FromU32Bool.from_val_eq (b : Bool) : (FromU32Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromU32Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromU64Bool.from b]
+theorem FromU64Bool.from_val_eq (b : Bool) : (FromU64Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromU64Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromU128Bool.from b]
+theorem FromU128Bool.from_val_eq (b : Bool) : (FromU128Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromU128Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromIsizeBool.from b]
+theorem FromIsizeBool.from_val_eq (b : Bool) : (FromIsizeBool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromIsizeBool.from]
+
+@[simp, scalar_tac_simps, step_pure FromI8Bool.from b]
+theorem FromI8Bool.from_val_eq (b : Bool) : (FromI8Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromI8Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromI16Bool.from b]
+theorem FromI16Bool.from_val_eq (b : Bool) : (FromI16Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromI16Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromI32Bool.from b]
+theorem FromI32Bool.from_val_eq (b : Bool) : (FromI32Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromI32Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromI64Bool.from b]
+theorem FromI64Bool.from_val_eq (b : Bool) : (FromI64Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromI64Bool.from]
+
+@[simp, scalar_tac_simps, step_pure FromI128Bool.from b]
+theorem FromI128Bool.from_val_eq (b : Bool) : (FromI128Bool.from b).val = if b then 1 else 0 := by
+  cases b <;> first | rfl | simp [FromI128Bool.from]
+
 private theorem BitVec.setWidth_toNat_le (m : Nat) (x : BitVec n) (h : n ≤ m) :
   (x.setWidth m).toNat = x.toNat := by
   have : x.toNat < 2^n := by cases x; simp

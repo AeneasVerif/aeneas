@@ -55,7 +55,7 @@ let lean_builtin_types =
     mk_type "core::mem::maybe_uninit::MaybeUninit"
       "core.mem.maybe_uninit.MaybeUninit"
       ~kind:(KStruct [("value", Some "value")]);
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 813 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 863 *)
     mk_type "core::num::error::TryFromIntError" "core.num.error.TryFromIntError";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 138 *)
     mk_type "core::ops::control_flow::ControlFlow"
@@ -495,16 +495,16 @@ let lean_builtin_funs =
     mk_fun "core::cmp::max" "core.cmp.max";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 215 *)
     mk_fun "core::cmp::min" "core.cmp.min";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 825 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 875 *)
     mk_fun
       "core::convert::num::ptr_try_from_impls::{core::convert::TryFrom<u32, \
        usize, core::num::error::TryFromIntError>}::try_from"
       "core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 13 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 16 *)
     mk_fun "core::convert::num::{core::convert::From<i32, u8>}::from"
       "core.convert.num.FromI32U8.from"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 16 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 19 *)
     mk_fun "core::convert::num::{core::convert::From<i64, u8>}::from"
       "core.convert.num.FromI64U8.from"
       ~can_fail:false;
@@ -958,9 +958,9 @@ let lean_builtin_funs =
     mk_fun "core::mem::size_of" "core.mem.size_of";
     (* file: "Aeneas/Std/Core/Core.lean", line: 60 *)
     mk_fun "core::mem::swap" "core.mem.swap" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 704 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 754 *)
     mk_fun "core::num::{i128}::cast_unsigned" "core.num.I128.cast_unsigned";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 31 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 34 *)
     mk_fun "core::num::{i128}::unsigned_abs"
       "core.num.I128.unsigned_abs"
       ~can_fail:false;
@@ -970,9 +970,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 47 *)
     mk_fun "core::num::{i128}::wrapping_shr" "core.num.I128.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 686 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 736 *)
     mk_fun "core::num::{i16}::cast_unsigned" "core.num.I16.cast_unsigned";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 22 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 25 *)
     mk_fun "core::num::{i16}::unsigned_abs"
       "core.num.I16.unsigned_abs"
       ~can_fail:false;
@@ -982,9 +982,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 44 *)
     mk_fun "core::num::{i16}::wrapping_shr" "core.num.I16.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 692 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 742 *)
     mk_fun "core::num::{i32}::cast_unsigned" "core.num.I32.cast_unsigned";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 25 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 28 *)
     mk_fun "core::num::{i32}::unsigned_abs"
       "core.num.I32.unsigned_abs"
       ~can_fail:false;
@@ -994,9 +994,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 45 *)
     mk_fun "core::num::{i32}::wrapping_shr" "core.num.I32.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 698 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 748 *)
     mk_fun "core::num::{i64}::cast_unsigned" "core.num.I64.cast_unsigned";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 28 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 31 *)
     mk_fun "core::num::{i64}::unsigned_abs"
       "core.num.I64.unsigned_abs"
       ~can_fail:false;
@@ -1006,9 +1006,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 46 *)
     mk_fun "core::num::{i64}::wrapping_shr" "core.num.I64.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 680 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 730 *)
     mk_fun "core::num::{i8}::cast_unsigned" "core.num.I8.cast_unsigned";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 19 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 22 *)
     mk_fun "core::num::{i8}::unsigned_abs"
       "core.num.I8.unsigned_abs"
       ~can_fail:false;
@@ -1018,7 +1018,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 43 *)
     mk_fun "core::num::{i8}::wrapping_shr" "core.num.I8.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 710 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 760 *)
     mk_fun "core::num::{isize}::cast_unsigned" "core.num.Isize.cast_unsigned";
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 47 *)
     mk_fun "core::num::{isize}::wrapping_shl" "core.num.Isize.wrapping_shl"
@@ -1026,9 +1026,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 48 *)
     mk_fun "core::num::{isize}::wrapping_shr" "core.num.Isize.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 701 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 751 *)
     mk_fun "core::num::{u128}::cast_signed" "core.num.U128.cast_signed";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 794 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 844 *)
     mk_fun "core::num::{u128}::is_multiple_of" "core.num.U128.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 29 *)
     mk_fun "core::num::{u128}::is_power_of_two" "core.num.U128.is_power_of_two";
@@ -1038,13 +1038,13 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 41 *)
     mk_fun "core::num::{u128}::wrapping_shr" "core.num.U128.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 683 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 733 *)
     mk_fun "core::num::{u16}::cast_signed" "core.num.U16.cast_signed";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 785 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 835 *)
     mk_fun "core::num::{u16}::is_multiple_of" "core.num.U16.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 20 *)
     mk_fun "core::num::{u16}::is_power_of_two" "core.num.U16.is_power_of_two";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 34 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 37 *)
     mk_fun "core::num::{u16}::to_le" "core.num.U16.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 37 *)
     mk_fun "core::num::{u16}::wrapping_shl" "core.num.U16.wrapping_shl"
@@ -1052,15 +1052,15 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 38 *)
     mk_fun "core::num::{u16}::wrapping_shr" "core.num.U16.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 689 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 739 *)
     mk_fun "core::num::{u32}::cast_signed" "core.num.U32.cast_signed";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 788 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 838 *)
     mk_fun "core::num::{u32}::is_multiple_of" "core.num.U32.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 23 *)
     mk_fun "core::num::{u32}::is_power_of_two" "core.num.U32.is_power_of_two";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 40 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 43 *)
     mk_fun "core::num::{u32}::to_be" "core.num.U32.to_be" ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 37 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 40 *)
     mk_fun "core::num::{u32}::to_le" "core.num.U32.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 38 *)
     mk_fun "core::num::{u32}::wrapping_shl" "core.num.U32.wrapping_shl"
@@ -1068,15 +1068,15 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 39 *)
     mk_fun "core::num::{u32}::wrapping_shr" "core.num.U32.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 695 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 745 *)
     mk_fun "core::num::{u64}::cast_signed" "core.num.U64.cast_signed";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 791 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 841 *)
     mk_fun "core::num::{u64}::is_multiple_of" "core.num.U64.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 26 *)
     mk_fun "core::num::{u64}::is_power_of_two" "core.num.U64.is_power_of_two";
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 46 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 49 *)
     mk_fun "core::num::{u64}::to_be" "core.num.U64.to_be" ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 43 *)
+    (* file: "Aeneas/Std/Scalar/NumMisc.lean", line: 46 *)
     mk_fun "core::num::{u64}::to_le" "core.num.U64.to_le" ~can_fail:false;
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 39 *)
     mk_fun "core::num::{u64}::wrapping_shl" "core.num.U64.wrapping_shl"
@@ -1084,9 +1084,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 40 *)
     mk_fun "core::num::{u64}::wrapping_shr" "core.num.U64.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 677 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 727 *)
     mk_fun "core::num::{u8}::cast_signed" "core.num.U8.cast_signed";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 782 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 832 *)
     mk_fun "core::num::{u8}::is_multiple_of" "core.num.U8.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 17 *)
     mk_fun "core::num::{u8}::is_power_of_two" "core.num.U8.is_power_of_two";
@@ -1096,9 +1096,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 37 *)
     mk_fun "core::num::{u8}::wrapping_shr" "core.num.U8.wrapping_shr"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 707 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 757 *)
     mk_fun "core::num::{usize}::cast_signed" "core.num.Usize.cast_signed";
-    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 797 *)
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 847 *)
     mk_fun "core::num::{usize}::is_multiple_of" "core.num.Usize.is_multiple_of";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 32 *)
     mk_fun "core::num::{usize}::is_power_of_two"
@@ -1935,7 +1935,7 @@ let lean_builtin_trait_impls =
        alloc::vec::into_iter::IntoIter<@T, @A>>"
       "core.iter.traits.collect.IntoIteratorVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/RangeIter.lean", line: 564 *)
+    (* file: "Aeneas/Std/RangeIter.lean", line: 676 *)
     mk_trait_impl
       "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, \
        @A>"
@@ -1965,7 +1965,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"
       "core.iter.traits.iterator.IteratorRange";
-    (* file: "Aeneas/Std/RangeIter.lean", line: 575 *)
+    (* file: "Aeneas/Std/RangeIter.lean", line: 687 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, \
        @A>"

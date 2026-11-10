@@ -4,6 +4,7 @@ module
 public import Aeneas.Std.Core.Iter
 public import Aeneas.Std.Scalar
 public import Aeneas.Std.SliceIter
+public import Aeneas.Std.RangeContains
 public section
 
 namespace Aeneas.Std
@@ -83,6 +84,81 @@ theorem core.iter.range.IteratorRange.next_UScalar_spec {ty : UScalarTy}
   · simp only [h, ↓reduceIte]
     apply spec_mono
       (core.iter.range.IteratorRange.next_UScalar_none_spec h_lt range (by omega))
+    rintro ⟨opt, range'⟩ ⟨rfl, rfl⟩
+    simp [uncurry'_pair]
+
+-- Generic `IteratorRange.next` on the signed ranges
+
+/-- Generic `IteratorRange.next` on `Range (IScalar ty)`, some case (`start < end`): yields
+`some start` and advances by one. -/
+theorem core.iter.range.IteratorRange.next_IScalar_some_spec {ty : IScalarTy}
+    {cloneInst : core.clone.Clone (IScalar ty)}
+    {partialOrdInst : core.cmp.PartialOrd (IScalar ty) (IScalar ty)}
+    (h_clone : ∀ x : IScalar ty, cloneInst.clone (SharedBorrow.mk x) = ok x)
+    (h_lt : ∀ a b : IScalar ty,
+      partialOrdInst.lt (SharedBorrow.mk a) (SharedBorrow.mk b) = ok (decide (a.val < b.val)))
+    (range : MutBorrow (core.ops.range.Range (IScalar ty)))
+    (hlt : range.val.start.val < range.val.end.val) :
+    core.iter.range.IteratorRange.next
+        (core.iter.range.IScalarStep ty cloneInst partialOrdInst) range
+    ⦃ (opt : Option (IScalar ty)) (range' : core.ops.range.Range (IScalar ty)) =>
+      opt = some range.val.start ∧
+      range'.start.val = range.val.start.val + 1 ∧
+      range'.end = range.val.end ⦄ := by
+  simp only [core.iter.range.IteratorRange.next, core.iter.range.IScalarStep,
+    core.iter.range.IScalarStep.forward_checked, bind_ok,
+    h_lt, h_clone, hlt, decide_true, ↓reduceIte]
+  have hfwd : range.val.start.val + (1#usize).val ≤ IScalar.max ty := by
+    have := range.val.end.hmax; scalar_tac
+  simp only [hfwd, ↓reduceDIte, bind_ok, spec_ok]
+  refine ⟨rfl, ?_, rfl⟩
+  rw [IScalar.ofInt_val_eq]
+  simp
+
+/-- Generic `IteratorRange.next` on `Range (IScalar ty)`, none case (`start ≥ end`). -/
+theorem core.iter.range.IteratorRange.next_IScalar_none_spec {ty : IScalarTy}
+    {cloneInst : core.clone.Clone (IScalar ty)}
+    {partialOrdInst : core.cmp.PartialOrd (IScalar ty) (IScalar ty)}
+    (h_lt : ∀ a b : IScalar ty,
+      partialOrdInst.lt (SharedBorrow.mk a) (SharedBorrow.mk b) = ok (decide (a.val < b.val)))
+    (range : MutBorrow (core.ops.range.Range (IScalar ty)))
+    (hge : range.val.start.val ≥ range.val.end.val) :
+    core.iter.range.IteratorRange.next
+        (core.iter.range.IScalarStep ty cloneInst partialOrdInst) range
+    ⦃ (opt : Option (IScalar ty)) (range' : core.ops.range.Range (IScalar ty)) =>
+      opt = none ∧ range' = range.val ⦄ := by
+  simp only [core.iter.range.IteratorRange.next, core.iter.range.IScalarStep,
+    core.iter.range.IScalarStep.forward_checked, bind_ok, h_lt,
+    show ¬ (range.val.start.val < range.val.end.val) from by omega,
+    decide_false, Bool.false_eq_true, ↓reduceIte]
+  simp [spec_ok]
+
+/-- Generic merged `IteratorRange.next` on `Range (IScalar ty)`. -/
+theorem core.iter.range.IteratorRange.next_IScalar_spec {ty : IScalarTy}
+    {cloneInst : core.clone.Clone (IScalar ty)}
+    {partialOrdInst : core.cmp.PartialOrd (IScalar ty) (IScalar ty)}
+    (h_clone : ∀ x : IScalar ty, cloneInst.clone (SharedBorrow.mk x) = ok x)
+    (h_lt : ∀ a b : IScalar ty,
+      partialOrdInst.lt (SharedBorrow.mk a) (SharedBorrow.mk b) = ok (decide (a.val < b.val)))
+    (range : MutBorrow (core.ops.range.Range (IScalar ty))) :
+    core.iter.range.IteratorRange.next
+        (core.iter.range.IScalarStep ty cloneInst partialOrdInst) range
+    ⦃ (opt : Option (IScalar ty)) (range' : core.ops.range.Range (IScalar ty)) =>
+      (if range.val.start.val < range.val.end.val then
+         opt = some range.val.start ∧ range'.start.val = range.val.start.val + 1
+       else
+         opt = none ∧ range'.start = range.val.start) ∧
+      range'.end = range.val.end ⦄ := by
+  by_cases h : range.val.start.val < range.val.end.val
+  · simp only [h, ↓reduceIte]
+    apply spec_mono
+      (core.iter.range.IteratorRange.next_IScalar_some_spec h_clone h_lt range h)
+    rintro ⟨opt, range'⟩ ⟨h1, h2, h3⟩
+    simp only [uncurry'_pair]
+    exact ⟨⟨h1, h2⟩, h3⟩
+  · simp only [h, ↓reduceIte]
+    apply spec_mono
+      (core.iter.range.IteratorRange.next_IScalar_none_spec h_lt range (by omega))
     rintro ⟨opt, range'⟩ ⟨rfl, rfl⟩
     simp [uncurry'_pair]
 
@@ -279,6 +355,42 @@ theorem core.iter.range.IteratorRange.next_'S_spec
       range'.end = range.val.end ⦄ :=
   core.iter.range.IteratorRange.next_UScalar_spec
     (by simp) (by intros; rfl) range
+
+-- `IteratorRange.next` on the signed ranges (`for i in a..b` with `a b : isize`, ...), some case.
+iscalar
+theorem core.iter.range.IteratorRange.next_'S_some_spec
+    (range : MutBorrow (core.ops.range.Range «%S»))
+    (hlt : range.val.start.val < range.val.end.val) :
+    core.iter.range.IteratorRange.next core.iter.range.Step'S range
+    ⦃ (opt : Option «%S») (range' : core.ops.range.Range «%S») =>
+      opt = some range.val.start ∧
+      range'.start.val = range.val.start.val + 1 ∧
+      range'.end = range.val.end ⦄ :=
+  core.iter.range.IteratorRange.next_IScalar_some_spec (by simp) (by intros; rfl) range hlt
+
+-- `IteratorRange.next` on the signed ranges, none case.
+iscalar
+theorem core.iter.range.IteratorRange.next_'S_none_spec
+    (range : MutBorrow (core.ops.range.Range «%S»))
+    (hge : range.val.start.val ≥ range.val.end.val) :
+    core.iter.range.IteratorRange.next core.iter.range.Step'S range
+    ⦃ (opt : Option «%S») (range' : core.ops.range.Range «%S») =>
+      opt = none ∧ range' = range.val ⦄ :=
+  core.iter.range.IteratorRange.next_IScalar_none_spec (by intros; rfl) range hge
+
+-- Merged `@[step]` spec for `IteratorRange.next` on the signed ranges.
+iscalar
+@[step]
+theorem core.iter.range.IteratorRange.next_'S_spec
+    (range : MutBorrow (core.ops.range.Range «%S»)) :
+    core.iter.range.IteratorRange.next core.iter.range.Step'S range
+    ⦃ (opt : Option «%S») (range' : core.ops.range.Range «%S») =>
+      (if range.val.start.val < range.val.end.val then
+         opt = some range.val.start ∧ range'.start.val = range.val.start.val + 1
+       else
+         opt = none ∧ range'.start = range.val.start) ∧
+      range'.end = range.val.end ⦄ :=
+  core.iter.range.IteratorRange.next_IScalar_spec (by simp) (by intros; rfl) range
 
 -- Saturating `skipN`: start advances by `min(n, end - start)`.
 uscalar
@@ -585,5 +697,22 @@ impl_def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator
   take := core.iter.traits.iterator.Iterator.take.trait_default
     (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
 }
+
+-- ============================================================================
+-- `RangeInclusive::contains`
+-- ============================================================================
+
+-- `(a..=b).contains(&x)` (the end bound is excluded once the range is exhausted).
+scalar
+@[step]
+theorem core.ops.range.RangeInclusive.contains_'S_spec
+    (r : core.ops.range.RangeInclusive «%S») (x : «%S») :
+    core.ops.range.RangeInclusive.contains core.cmp.PartialOrd'S core.cmp.PartialOrd'S
+      core.cmp.PartialOrd'S (SharedBorrow.mk r) (SharedBorrow.mk x)
+    ⦃ b => b = decide (r.start.val ≤ x.val ∧
+      (if r.exhausted then x.val < r.«end».val else x.val ≤ r.«end».val)) ⦄ := by
+  unfold core.ops.range.RangeInclusive.contains
+  simp [core.cmp.impls.PartialOrd'S.le, core.cmp.impls.PartialOrd'S.lt]
+  split <;> (try split) <;> simp [spec_ok, *]
 
 end Aeneas.Std
