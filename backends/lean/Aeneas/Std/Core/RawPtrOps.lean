@@ -19,10 +19,11 @@ def RawPtr.ptr_cast {T : Type} (U : Type) (q : RawPtr T) : Result (RawPtr U) :=
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::cast"] RawPtr.ptr_cast
 
-/-- `<*mut T>::sub`, `<*const T>::sub`: `count` elements backwards, within the allocation. -/
+/-- `<*mut T>::sub`, `<*const T>::sub`: `count` elements backwards, within the allocation, from a
+pointer whose block is live (see `Heap.ptrLive`). -/
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::sub"]
 def RawPtr.sub [Pointee T] (q : RawPtr T) (count : Usize) : Result (RawPtr T) :=
-  Result.checkedModify (State.offset (Pointee.repr (T := T)) q (-(count.val : Int)))
+  Result.checkedModify (State.liveOffset (Pointee.repr (T := T)) q (-(count.val : Int)))
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::sub"] RawPtr.sub
 

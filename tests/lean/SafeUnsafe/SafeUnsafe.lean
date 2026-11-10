@@ -31,7 +31,8 @@ namespace safe_unsafe
 structure core.marker.PhantomData (T : Type _) where
 
 instance {T : Type _} : Pointee (core.marker.PhantomData T) :=
-  ⟨Repr.unit _ ⟨⟩ (fun _ => rfl)⟩
+  ⟨(Repr.unspecified (core.marker.PhantomData T)
+  (Repr.unit _ ⟨⟩ (fun _ => rfl))).1⟩
 
 /-- [core::ptr::mut_ptr::{*mut T}::as_mut]:
     Source: '/rustc/library/core/src/ptr/mut_ptr.rs', lines 588:4-588:61
@@ -366,31 +367,22 @@ def from_raw_parts_mut_over_array
   from_raw_parts_mut_back s2
   ok i.val
 
-/-- [safe_unsafe::Owner]
-    Source: 'tests/src/safe_unsafe.rs', lines 274:0-276:1
-    Visibility: public -/
-structure Owner where
-  ptr : MutRawPtr Std.U32
-
-instance : Pointee Owner := ⟨Repr.iso (Pointee.repr (T := MutRawPtr Std.U32))
-  (fun x => x.1) (fun p => ⟨p⟩) (fun _ => rfl)⟩
-
 /-- [safe_unsafe::ptr_read_owner_double_free]:
-    Source: 'tests/src/safe_unsafe.rs', lines 280:0-289:1
+    Source: 'tests/src/safe_unsafe.rs', lines 277:0-284:1
     Visibility: public -/
 def ptr_read_owner_double_free (placement : Placement) : Result Std.U32 := do
-  let p ← alloc.boxed.Box.into_raw (Box.mk 1#u32)
-  let (p1, from_mut_back) ←
-    core.ptr.from_mut (placement.addr 0) (MutBorrow.mk ({ ptr := p } : Owner))
-  let p2 := RawPtr.cast_const p1
-  let o2 ← RawPtr.read p2
-  let a ← alloc.boxed.Box.from_raw o2.ptr
-  let o ← from_mut_back
-  let b ← alloc.boxed.Box.from_raw o.ptr
+  let o ← alloc.boxed.Box.into_raw (Box.mk 1#u32)
+  let (p, from_mut_back) ←
+    core.ptr.from_mut (placement.addr 0) (MutBorrow.mk o)
+  let p1 := RawPtr.cast_const p
+  let o2 ← RawPtr.read p1
+  let a ← alloc.boxed.Box.from_raw o2
+  let o1 ← from_mut_back
+  let b ← alloc.boxed.Box.from_raw o1
   a.val + b.val
 
 /-- [safe_unsafe::ptr_read_copy]:
-    Source: 'tests/src/safe_unsafe.rs', lines 292:0-297:1
+    Source: 'tests/src/safe_unsafe.rs', lines 287:0-292:1
     Visibility: public -/
 def ptr_read_copy (placement : Placement) : Result Std.U32 := do
   let (p, from_mut_back) ←
@@ -401,7 +393,7 @@ def ptr_read_copy (placement : Placement) : Result Std.U32 := do
   x + y
 
 /-- [safe_unsafe::ptr_as_mut_write]:
-    Source: 'tests/src/safe_unsafe.rs', lines 304:0-311:1
+    Source: 'tests/src/safe_unsafe.rs', lines 299:0-306:1
     Visibility: public -/
 def ptr_as_mut_write (placement : Placement) : Result Std.U32 := do
   let (p, from_mut_back) ←
@@ -417,7 +409,7 @@ def ptr_as_mut_write (placement : Placement) : Result Std.U32 := do
     ok x
 
 /-- [safe_unsafe::ptr_as_mut_twice]:
-    Source: 'tests/src/safe_unsafe.rs', lines 317:0-327:1
+    Source: 'tests/src/safe_unsafe.rs', lines 312:0-322:1
     Visibility: public -/
 def ptr_as_mut_twice (placement : Placement) : Result Std.U32 := do
   let (p, from_mut_back) ←
@@ -441,7 +433,7 @@ def ptr_as_mut_twice (placement : Placement) : Result Std.U32 := do
       ok x
 
 /-- [safe_unsafe::reborrow_write_while_shared]:
-    Source: 'tests/src/safe_unsafe.rs', lines 334:0-340:1
+    Source: 'tests/src/safe_unsafe.rs', lines 329:0-335:1
     Visibility: public -/
 def reborrow_write_while_shared (placement : Placement) : Result Std.U32 := do
   let (p, from_mut_back) ←
@@ -453,7 +445,7 @@ def reborrow_write_while_shared (placement : Placement) : Result Std.U32 := do
   ok i.val
 
 /-- [safe_unsafe::reborrow_read_while_shared]:
-    Source: 'tests/src/safe_unsafe.rs', lines 343:0-349:1
+    Source: 'tests/src/safe_unsafe.rs', lines 338:0-344:1
     Visibility: public -/
 def reborrow_read_while_shared (placement : Placement) : Result Std.U32 := do
   let (p, from_mut_back) ←
@@ -466,7 +458,7 @@ def reborrow_read_while_shared (placement : Placement) : Result Std.U32 := do
   ok i1
 
 /-- [safe_unsafe::reborrow_then_write]:
-    Source: 'tests/src/safe_unsafe.rs', lines 352:0-358:1
+    Source: 'tests/src/safe_unsafe.rs', lines 347:0-353:1
     Visibility: public -/
 def reborrow_then_write (placement : Placement) : Result Std.U32 := do
   let (p, from_mut_back) ←
@@ -480,18 +472,19 @@ def reborrow_then_write (placement : Placement) : Result Std.U32 := do
   ok i2
 
 /-- [safe_unsafe::Handle]
-    Source: 'tests/src/safe_unsafe.rs', lines 365:0-368:1
+    Source: 'tests/src/safe_unsafe.rs', lines 360:0-363:1
     Visibility: public -/
 structure Handle where
   ptr : MutRawPtr Std.U32
   _borrow : core.marker.PhantomData (MutBorrow Std.U32)
 
-instance : Pointee Handle := ⟨Repr.iso (Repr.prod (Pointee.repr (T :=
-  MutRawPtr Std.U32)) (Pointee.repr (T := core.marker.PhantomData (MutBorrow
-  Std.U32)))) (fun x => (x.1, x.2)) (fun p => ⟨p.1, p.2⟩) (fun _ => rfl)⟩
+instance : Pointee Handle := ⟨(Repr.unspecified Handle (Repr.iso (Repr.prod
+  (Pointee.repr (T := MutRawPtr Std.U32)) (Pointee.repr (T :=
+  core.marker.PhantomData (MutBorrow Std.U32)))) (fun x => (x.1, x.2))
+  (fun p => ⟨p.1, p.2⟩) (fun _ => rfl))).1⟩
 
 /-- [safe_unsafe::{safe_unsafe::Handle<'a>}::new]:
-    Source: 'tests/src/safe_unsafe.rs', lines 371:4-376:5
+    Source: 'tests/src/safe_unsafe.rs', lines 366:4-371:5
     Visibility: public -/
 def Handle.new
   (placement : Placement) (x : MutBorrow Std.U32) :
@@ -502,14 +495,14 @@ def Handle.new
   ok ({ ptr := p, _borrow := core.marker.PhantomData.mk }, back)
 
 /-- [safe_unsafe::{safe_unsafe::Handle<'a>}::as_ptr]:
-    Source: 'tests/src/safe_unsafe.rs', lines 378:4-380:5
+    Source: 'tests/src/safe_unsafe.rs', lines 373:4-375:5
     Visibility: public -/
 def Handle.as_ptr
   (self : SharedBorrow Handle) : Result (MutRawPtr Std.U32) := do
   ok self.val.ptr
 
 /-- [safe_unsafe::handle_write]:
-    Source: 'tests/src/safe_unsafe.rs', lines 385:0-390:1
+    Source: 'tests/src/safe_unsafe.rs', lines 380:0-385:1
     Visibility: public -/
 def handle_write (placement : Placement) : Result Std.U32 := do
   let (h, new_back) ← Handle.new (placement.sub 0) (MutBorrow.mk 1#u32)

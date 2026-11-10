@@ -456,7 +456,7 @@ theorem rangeWith_offset.local {T V : Type} [Pointee T]
     (hsize : 0 < (Pointee.repr (T := T)).size) (hj : j ≤ count) (htc : (j : Int) + c = t)
     (htle : t ≤ count) (P : Fragment → Prop)
     (view : ∀ h, P h → rangeWith (Pointee.repr (T := T)) valid p base values depth h) :
-    LocalOp P (State.offset (Pointee.repr (T := T)) (p.elem j) c)
+    LocalOp P (State.liveOffset (Pointee.repr (T := T)) (p.elem j) c)
       (fun result h => result = p.elem t ∧ P h) := by
   intro h F s hP hd hm hi
   have keep := hP
@@ -503,8 +503,8 @@ theorem rangeWith_offset.local {T V : Type} [Pointee T]
     rw [target]; exact Int.toNat_natCast _
   let result : RawPtr T := ⟨(p.elem j).provenance,
     ⟨BitVec.ofNat _ (p.address.val + t * (Pointee.repr (T := T)).size)⟩⟩
-  have hrun : Heap.offset (Pointee.repr (T := T)) (p.elem j) c s = some result := by
-    simp [Heap.offset, hl, hlive, hbase, hqlo, hstart, hlo'', hhi', hf, target_nat, result]
+  have hrun : Heap.liveOffset (Pointee.repr (T := T)) (p.elem j) c s = some result := by
+    simp [Heap.liveOffset, Heap.ptrLive, Heap.offset, hl, hlive, hbase, hqlo, hstart, hlo'', hhi', hf, target_nat, result]
   refine ⟨⟨result, s, hrun, rfl⟩, ?_⟩
   rintro answer s' ⟨he, rfl⟩
   have he := Option.some.inj (he.symm.trans hrun)
@@ -939,7 +939,7 @@ theorem RawPtr.offset_elem.spec_rangeWith {T V : Type} [Pointee T] [Pointee.Size
     (hj : j ≤ values.length) (htc : (j : Int) + c = t) (ht : t ≤ values.length) :
     ispec (iexists fun bptr : BasePtr => upClose
         (Bytes.rangeWith (Pointee.repr (T := T)) valid p bptr (listVec values) depth))
-      (Result.checkedModify (State.offset (Pointee.repr (T := T)) (p.elem j) c))
+      (Result.checkedModify (State.liveOffset (Pointee.repr (T := T)) (p.elem j) c))
       (fun result => ⌜result = p.elem t⌝ ∗ iexists fun bptr : BasePtr => upClose
         (Bytes.rangeWith (Pointee.repr (T := T)) valid p bptr (listVec values) depth)) :=
   ispec_conseq (ispec_checked_local
