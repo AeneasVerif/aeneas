@@ -1,0 +1,398 @@
+{
+  "aeneas_version": "0d21a9ec-dirty",
+  "charon_version": "0.1.315",
+  "crate": "cross_crate_lib",
+  "import_prefix": "CrossCrateLib",
+  "lean_modules": true,
+  "functions": [
+    {
+      "def_id": 23,
+      "lean_name": "cross_crate_lib.Shape.double_area.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Shape::double_area",
+      "rust_pattern": "cross_crate_lib::Shape::double_area",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 10, "end_line": 12 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 24,
+      "lean_name": "cross_crate_lib.Shape.quad_area.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Shape::quad_area",
+      "rust_pattern": "cross_crate_lib::Shape::quad_area",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 15, "end_line": 17 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 25,
+      "lean_name": "cross_crate_lib.Shape.sides.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Shape::sides",
+      "rust_pattern": "cross_crate_lib::Shape::sides",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 20, "end_line": 22 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 26,
+      "lean_name": "cross_crate_lib.Shape.unused_default.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Shape::unused_default",
+      "rust_pattern": "cross_crate_lib::Shape::unused_default",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 25, "end_line": 27 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 19,
+      "lean_name": "cross_crate_lib.sum_double",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::sum_double",
+      "rust_pattern": "cross_crate_lib::sum_double",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 31, "end_line": 33 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 28,
+      "lean_name": "cross_crate_lib.Circle.Insts.Cross_crate_libShape.area",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::{impl cross_crate_lib::Shape for cross_crate_lib::Circle}::area",
+      "rust_pattern": "cross_crate_lib::{cross_crate_lib::Shape<cross_crate_lib::Circle>}::area",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 41, "end_line": 43 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 29,
+      "lean_name": "cross_crate_lib.Tagged.tag.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Tagged::tag",
+      "rust_pattern": "cross_crate_lib::Tagged::tag",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 52, "end_line": 54 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 30,
+      "lean_name": "cross_crate_lib.Counter.incr_twice.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Counter::incr_twice",
+      "rust_pattern": "cross_crate_lib::Counter::incr_twice",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 61, "end_line": 64 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 31,
+      "lean_name": "cross_crate_lib.Wrapper.Insts.Cross_crate_libNamed.id",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::{impl cross_crate_lib::Named for cross_crate_lib::Wrapper<T>}::id",
+      "rust_pattern": "cross_crate_lib::{cross_crate_lib::Named<cross_crate_lib::Wrapper<@T>>}::id",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 77, "end_line": 79 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 32,
+      "lean_name": "cross_crate_lib.Conv.conv_pair.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Conv::conv_pair",
+      "rust_pattern": "cross_crate_lib::Conv::conv_pair",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 88, "end_line": 90 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 20,
+      "lean_name": "cross_crate_lib.helper",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::helper",
+      "rust_pattern": "cross_crate_lib::helper",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 94, "end_line": 96 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 33,
+      "lean_name": "cross_crate_lib.Container.first_twice.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::Container::first_twice",
+      "rust_pattern": "cross_crate_lib::Container::first_twice",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 113, "end_line": 115 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 21,
+      "lean_name": "cross_crate_lib.bump",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::bump",
+      "rust_pattern": "cross_crate_lib::bump",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 126, "end_line": 128 },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    }
+  ],
+  "types": [
+    {
+      "def_id": 5,
+      "lean_name": "cross_crate_lib.Circle",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Circle",
+      "rust_pattern": "cross_crate_lib::Circle",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 36, "end_line": 38 },
+      "constructor": "cross_crate_lib.Circle.mk",
+      "fields": [ { "rust": "r", "lean": "r" } ]
+    },
+    {
+      "def_id": 6,
+      "lean_name": "cross_crate_lib.Wrapper",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Wrapper",
+      "rust_pattern": "cross_crate_lib::Wrapper",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 74, "end_line": 74 }
+    },
+    {
+      "def_id": 7,
+      "lean_name": "cross_crate_lib.Point",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Point",
+      "rust_pattern": "cross_crate_lib::Point",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 98, "end_line": 100 },
+      "constructor": "cross_crate_lib.Point.mk",
+      "fields": [ { "rust": "x", "lean": "x" } ]
+    },
+    {
+      "def_id": 8,
+      "lean_name": "cross_crate_lib.Dir",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Dir",
+      "rust_pattern": "cross_crate_lib::Dir",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 102, "end_line": 105 },
+      "variants": [
+        { "rust": "L", "lean": "cross_crate_lib.Dir.L" },
+        { "rust": "R", "lean": "cross_crate_lib.Dir.R" }
+      ]
+    },
+    {
+      "def_id": 9,
+      "lean_name": "cross_crate_lib.Msg",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Msg",
+      "rust_pattern": "cross_crate_lib::Msg",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 119, "end_line": 123 },
+      "variants": [
+        { "rust": "Quit", "lean": "cross_crate_lib.Msg.Quit" },
+        { "rust": "Write", "lean": "cross_crate_lib.Msg.Write" },
+        { "rust": "Move", "lean": "cross_crate_lib.Msg.Move" }
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "def_id": 6,
+      "lean_name": "cross_crate_lib.HasLen.TWICE.default",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::HasLen::TWICE",
+      "rust_pattern": "cross_crate_lib::HasLen::TWICE",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 70, "end_line": 70 },
+      "can_fail": true
+    }
+  ],
+  "trait_decls": [
+    {
+      "def_id": 4,
+      "lean_name": "cross_crate_lib.Shape",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Shape",
+      "rust_pattern": "cross_crate_lib::Shape",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 6, "end_line": 28 },
+      "constructor": "cross_crate_lib.Shape.mk",
+      "methods": [
+        { "rust": "area", "lean": "area" },
+        { "rust": "double_area", "lean": "double_area" },
+        { "rust": "quad_area", "lean": "quad_area" },
+        { "rust": "sides", "lean": "sides" },
+        { "rust": "unused_default", "lean": "unused_default" }
+      ]
+    },
+    {
+      "def_id": 5,
+      "lean_name": "cross_crate_lib.Named",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Named",
+      "rust_pattern": "cross_crate_lib::Named",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 47, "end_line": 49 },
+      "constructor": "cross_crate_lib.Named.mk",
+      "methods": [ { "rust": "id", "lean": "id" } ]
+    },
+    {
+      "def_id": 6,
+      "lean_name": "cross_crate_lib.Tagged",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Tagged",
+      "rust_pattern": "cross_crate_lib::Tagged",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 51, "end_line": 55 },
+      "constructor": "cross_crate_lib.Tagged.mk",
+      "parent_clauses": [ "NamedInst" ],
+      "methods": [ { "rust": "tag", "lean": "tag" } ]
+    },
+    {
+      "def_id": 7,
+      "lean_name": "cross_crate_lib.Counter",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Counter",
+      "rust_pattern": "cross_crate_lib::Counter",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 58, "end_line": 65 },
+      "constructor": "cross_crate_lib.Counter.mk",
+      "methods": [
+        { "rust": "incr", "lean": "incr" },
+        { "rust": "incr_twice", "lean": "incr_twice" }
+      ]
+    },
+    {
+      "def_id": 8,
+      "lean_name": "cross_crate_lib.HasLen",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::HasLen",
+      "rust_pattern": "cross_crate_lib::HasLen",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 68, "end_line": 71 },
+      "constructor": "cross_crate_lib.HasLen.mk",
+      "consts": [
+        { "rust": "N", "lean": "N" }, { "rust": "TWICE", "lean": "TWICE" }
+      ]
+    },
+    {
+      "def_id": 9,
+      "lean_name": "cross_crate_lib.Conv",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Conv",
+      "rust_pattern": "cross_crate_lib::Conv",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 85, "end_line": 91 },
+      "constructor": "cross_crate_lib.Conv.mk",
+      "methods": [
+        { "rust": "conv", "lean": "conv" },
+        { "rust": "conv_pair", "lean": "conv_pair" }
+      ]
+    },
+    {
+      "def_id": 10,
+      "lean_name": "cross_crate_lib.Container",
+      "lean_file": "Types.lean",
+      "rust_name": "cross_crate_lib::Container",
+      "rust_pattern": "cross_crate_lib::Container",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 108, "end_line": 116 },
+      "constructor": "cross_crate_lib.Container.mk",
+      "methods": [
+        { "rust": "first", "lean": "first" },
+        { "rust": "first_twice", "lean": "first_twice" }
+      ]
+    }
+  ],
+  "trait_impls": [
+    {
+      "def_id": 6,
+      "lean_name": "cross_crate_lib.Circle.Insts.Cross_crate_libShape",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::{impl cross_crate_lib::Shape for cross_crate_lib::Circle}",
+      "rust_pattern": "cross_crate_lib::Shape<cross_crate_lib::Circle>",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 40, "end_line": 44 },
+      "impl_trait_def_id": 4,
+      "impl_trait_rust_name": "cross_crate_lib::Shape",
+      "impl_trait_is_builtin": false
+    },
+    {
+      "def_id": 7,
+      "lean_name": "cross_crate_lib.Wrapper.Insts.Cross_crate_libNamed",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::{impl cross_crate_lib::Named for cross_crate_lib::Wrapper<T>}",
+      "rust_pattern": "cross_crate_lib::Named<cross_crate_lib::Wrapper<@Self>>",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 76, "end_line": 80 },
+      "impl_trait_def_id": 5,
+      "impl_trait_rust_name": "cross_crate_lib::Named",
+      "impl_trait_is_builtin": false
+    },
+    {
+      "def_id": 8,
+      "lean_name": "cross_crate_lib.Wrapper.Insts.Cross_crate_libTagged",
+      "lean_file": "Funs.lean",
+      "rust_name": "cross_crate_lib::{impl cross_crate_lib::Tagged for cross_crate_lib::Wrapper<T>}",
+      "rust_pattern": "cross_crate_lib::Tagged<cross_crate_lib::Wrapper<@Self>>",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 82, "end_line": 82 },
+      "impl_trait_def_id": 6,
+      "impl_trait_rust_name": "cross_crate_lib::Tagged",
+      "impl_trait_is_builtin": false
+    }
+  ]
+}

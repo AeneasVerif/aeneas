@@ -303,6 +303,8 @@ structure Config where
   prettyPrintedStep : Bool := true
   useCase : Bool := false
   useRename : Bool := true
+  /-- Are we generating a proof script (`step*?`)? -/
+  genScript : Bool := false
 
 inductive TaskOrDone α where
 | task (x : Task α)
@@ -348,6 +350,13 @@ meta def nameToBinderIdent (n : Name) : TSyntax `Lean.binderIdent :=
   if n.isInternalDetail
   then mkNode ``Lean.binderIdent #[mkHole mkNullNode]
   else mkNode ``Lean.binderIdent #[mkIdent n]
+
+/-- Add configuration items (e.g. `+inferPost`) to an optional configuration. -/
+meta def addConfigItems (cfg? : Option (TSyntax `Lean.Parser.Tactic.optConfig))
+    (items : TSyntax `Lean.Parser.Tactic.optConfig) : TSyntax `Lean.Parser.Tactic.optConfig :=
+  match cfg? with
+  | none => items
+  | some c => ⟨mkNode ``Lean.Parser.Tactic.optConfig #[mkNullNode (c.raw[0].getArgs ++ items.raw[0].getArgs)]⟩
 
 /-- Convert the script into syntax.
     This is a blocking operation: it waits for all the sub-components of the script to be generated.
@@ -652,6 +661,24 @@ where
           pure info'
       pure (info ++ info', none)
 
+  /-- Introduce the binders of a precondition (e.g. `∀ y, mid y → f y ⦃ post ⦄`), returning their
+      names for the script. -/
+  introBinders (goal : MVarId) : TacticM (MVarId × Array Name) := do
+    let (fvars, goal) ← goal.introNP (getIntrosSize (← goal.getType))
+    let names ← goal.withContext do fvars.mapM fun fvar => fvar.getUserName
+    return (goal, names)
+
+  /-- The script `case tag => intros names; tacs` proving a precondition. -/
+  caseScript (tag : Name) (introNames : Array Name) (tacs : Array Syntax.Tactic) :
+      TacticM Syntax.Tactic := do
+    let introStx : Array Syntax.Tactic ←
+      if introNames.isEmpty then pure #[]
+      else
+        let idents := introNames.map fun name => mkIdent (if name.isInternal then `_ else name)
+        pure #[← `(tactic| intros $idents*)]
+    let caseArgs := makeCaseArgs tag #[]
+    `(tactic| case $caseArgs => $(introStx ++ tacs)*)
+
   /-- Process preconditions produced by step in the case of higher order spec theorems.
       On those goals we attach the generated script under the associated `case` branch. -/
   processPreconditions (cfg : Config) (fuel : Option Nat) (ss : Step.StepState)
@@ -659,68 +686,119 @@ where
       TacticM (Array (MVarId × Step.OptTask (Option Expr)) × Info ×
         Array (TaskOrDone (Option Syntax.Tactic))) := do
     let sorryStx ← `(tactic|· sorry)
-    if cfg.stepConfig.inferPost then
-      let mut remaining : Array (MVarId × Step.OptTask (Option Expr)) := #[]
-      let mut extra : Info := {}
-      let mut scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := #[]
-      for (mvarId, proof) in preconditions do
-        match proof with
-        | .task y =>
-          -- Async proof in progress, keep as-is.
+    /- With `+inferPost`, we process all the preconditions which are specifications. Otherwise,
+       only those whose post-condition is unknown: we infer it (so the steps inside need, and their
+       script must give, `+inferPost`), and keep the result only if the precondition is proved -/
+    let explicitInferPost := cfg.stepConfig.inferPost
+    let innerCfg : Config ← do
+      if explicitInferPost then pure cfg
+      else
+        let inferPostStx ← `(Lean.Parser.Tactic.optConfig| +$(mkIdent `inferPost):ident)
+        pure { cfg with
+          stepConfig := { cfg.stepConfig with inferPost := true },
+          configSyntax := some (addConfigItems cfg.configSyntax inferPostStx) }
+    let mut remaining : Array (MVarId × Step.OptTask (Option Expr)) := #[]
+    let mut extra : Info := {}
+    let mut scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := #[]
+    for (mvarId, proof) in preconditions do
+      match proof with
+      | .task y =>
+        -- Async proof in progress, keep as-is.
+        remaining := remaining.push (mvarId, proof)
+        scriptEntries := scriptEntries.push
+          (TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none))
+      | .none =>
+        if ← mvarId.isAssigned then
+          continue
+        let precTy ← instantiateMVars (← mvarId.getType)
+        let process := match ← Step.getSpecUnderBinders? precTy with
+          | some (_, postUnknown) => explicitInferPost || postUnknown
+          | none => false
+        let saved ← saveState
+        let attempt : TacticM (Option (Info × Array Name)) := do
+          let (goal, introNames) ← introBinders mvarId
+          setGoals [goal]
+          let info ← traverseProgram innerCfg fuel ss
+          if explicitInferPost then return some (info, introNames)
+          let solved ← info.subgoals.allM fun (g, _) => g.isAssigned
+          let unassigned ← info.unassignedVars.anyM fun g => return !(← g.isAssigned)
+          let postInferred := !(← instantiateMVars precTy).hasExprMVar
+          if solved && !unassigned && postInferred then return some (info, introNames)
+          saved.restore
+          return none
+        match ← if process then commitIfNoEx attempt else pure none with
+        | some (subInfo, introNames) =>
+          let caseTac ← caseScript (← mvarId.getTag) introNames (← subInfo.script.toSyntax)
+          scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
+          extra := extra ++ { subInfo with script := .tacs #[] }
+        | none =>
           remaining := remaining.push (mvarId, proof)
-          scriptEntries := scriptEntries.push
-            (TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none))
-        | .none =>
-          if ← mvarId.isAssigned then
-            continue
-          -- Check if this precondition contains a spec goal
-          -- (possibly under ∀ binders, e.g., ∀ y, mid y → f y ⦃ post ⦄).
-          let precTy ← instantiateMVars (← mvarId.getType)
-          let rec stripForall (e : Expr) : Expr :=
-            match e.consumeMData with
-            | .forallE _ _ body _ => stripForall body
-            | e => e
-          let innerTy := stripForall precTy
-          if isSpec : (← observing? (Step.getSpecProgram innerTy)).isSome then
-            let tag ← mvarId.getTag
-            let (subInfo, introNames) ← commitIfNoEx do
-              setGoals [mvarId]
-              let size ← getIntrosSize <$> mvarId.getType
-              let (introFVars, mvarId) ← mvarId.introNP size
-              -- Collect the user names while the fvars are still in scope.
-              let introNames ← mvarId.withContext do
-                introFVars.mapM fun fvar => fvar.getUserName
-              setGoals [mvarId]
-              let info ← traverseProgram cfg fuel ss
-              pure (info, introNames)
-            let subStx ← subInfo.script.toSyntax
-            let introStx : Array Syntax.Tactic ←
-              if !introNames.isEmpty then
-                let idents := introNames.map fun name =>
-                  mkIdent (if name.isInternal then `_ else name)
-                pure #[← `(tactic| intros $idents*)]
-              else pure #[]
-            let allTacs := introStx ++ subStx
-            let caseArgs := makeCaseArgs tag #[]
-            let caseTac ← `(tactic| case $caseArgs => $allTacs*)
-            scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
-            extra := extra ++ { subInfo with script := .tacs #[] }
-          else
-            remaining := remaining.push (mvarId, proof)
-            scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
-      pure (remaining, extra, scriptEntries)
-    else
-      let scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
-        match p with
-        | .none => TaskOrDone.mk (some sorryStx)
-        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
-      pure (preconditions, {}, scriptEntries)
+          scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
+    pure (remaining, extra, scriptEntries)
+
+  /-- Generate the proof script of a precondition which is a specification, proved by stepping
+      through it (`Aeneas.Tactic.Step.SpecDischarge`): we prove a copy of it with `step*`, in a
+      sandbox, to get the script. The precondition must not contain meta-variables anymore (the
+      ghost variables are instantiated, and given explicitly in the script). -/
+  specPreconditionScript (cfg : Config) (fuel : Option Nat) (ss : Step.StepState)
+      (precondition : MVarId) : TacticM (Option Syntax.Tactic) := do
+    withTraceNode `Step (fun _ => pure m!"specPreconditionScript") do
+    let s ← saveState
+    try
+      precondition.withContext do
+        let ty ← instantiateMVars (← precondition.getType)
+        if ty.hasExprMVar then return none
+        let tag ← precondition.getTag
+        let (goal, introNames) ← introBinders (← mkFreshExprSyntheticOpaqueMVar ty tag).mvarId!
+        setGoals [goal]
+        /- Reduce the projections of the trait instances, as the discharge tactic does -/
+        let simpStx ← `(tactic| simp only)
+        let simped ← try evalTactic simpStx; pure true catch _ => pure false
+        let info ← traverseProgram cfg fuel ss
+        let tacs := (if simped then #[simpStx] else #[]) ++ (← info.script.toSyntax)
+        some <$> caseScript tag introNames tacs
+    finally
+      s.restore
+
+  /-- If the step proved preconditions which are specifications by stepping through them, return:
+      the theorem with its instantiated ghost variables as named arguments, the configuration with
+      `-specPreconditions` (so that replaying the script leaves those preconditions to the generated
+      `case`s), and the `case`s. Return `none` if the script can't be generated this way (e.g. a
+      ghost variable has no name), in which case the step is replayed with the discharge tactic. -/
+  specPreconditionsScript (cfg : Config) (fuel : Option Nat) (ss : Step.StepState)
+      (origGoal : MVarId) (thmStx : Syntax.Term) (instantiatedVars precs : Array MVarId) :
+      TacticM (Option (Syntax.Term × TSyntax `Lean.Parser.Tactic.optConfig × Array Syntax.Tactic)) := do
+    withTraceNode `Step (fun _ => pure m!"specPreconditionsScript") do
+    let some namedArgs ← origGoal.withContext do
+        let mut args : Array Syntax := #[]
+        for var in instantiatedVars do
+          let name ← var.getTag
+          let value ← instantiateMVars (.mvar var)
+          if name.isAnonymous || name.hasMacroScopes || name.isInternal || value.hasExprMVar then
+            return none
+          /- Print the binder types: they may not be inferable when the script is replayed -/
+          let valueStx ← withOptions (fun o => o.setBool `pp.funBinderTypes true) do
+            Lean.Meta.Tactic.TryThis.delabToRefinableSyntax value
+          args := args.push (← `(Lean.Parser.Term.namedArgument| ($(mkIdent name) := $valueStx)))
+        pure (some args)
+      | pure none
+    let thmStx : Syntax.Term :=
+      if namedArgs.isEmpty then thmStx
+      else ⟨mkNode ``Lean.Parser.Term.app #[thmStx, mkNullNode namedArgs]⟩
+    let negStx ← `(Lean.Parser.Tactic.optConfig| -$(mkIdent `specPreconditions):ident)
+    let configStx := addConfigItems cfg.configSyntax negStx
+    let mut cases := #[]
+    for precondition in precs do
+      let some caseStx ← specPreconditionScript cfg fuel ss precondition | return none
+      cases := cases.push caseStx
+    pure (some (thmStx, configStx, cases))
 
   onBind (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) : TacticM (Info × Option (MVarId × Step.StepState)) := do
     withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
+    let origGoal ← getMainGoal
     if let some res ← tryStep cfg names postsBasename ss then
-      let {usedTheorem, unassignedVars, preconditions, mainGoal } := res
+      let {usedTheorem, unassignedVars, preconditions, mainGoal, solvedSpecPreconditions, instantiatedVars } := res
       withTraceNode `Step (fun _ => pure m!"step succeeded") do
       match mainGoal with
       | none => trace[Step] "Main goal solved"
@@ -739,51 +817,58 @@ where
             | none => mkNode ``Lean.binderIdent #[mkIdent `_]
       trace[Step] "ids from introduced vars: {ids}"
       let mainGoal := mainGoal.map fun mainGoal => (mainGoal.goal, mainGoal.stepState)
+      /- Preconditions which are specifications, proved by stepping through them: the script gives
+         the ghost variables explicitly and proves those preconditions in `case`s (`step*?` only) -/
+      let thmStx ← usedTheorem.toSyntax
+      let specScript ←
+        if cfg.genScript && !solvedSpecPreconditions.isEmpty then
+          specPreconditionsScript cfg fuel ss origGoal thmStx instantiatedVars solvedSpecPreconditions
+        else pure none
+      let (thmStx, cfgScript, specCases) : Syntax.Term × Config × Array Syntax.Tactic :=
+        match specScript with
+        | some (thmStx, configStx, cases) => (thmStx, { cfg with configSyntax := some configStx }, cases)
+        | none => (thmStx, cfg, #[])
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedStep then
           -- TODO: how to factor this out?
           let config ←
-            match cfg.configSyntax with
+            match cfgScript.configSyntax with
             | none => `(Lean.Parser.Tactic.optConfig|)
             | some cfg => pure cfg
           match cfg.preconditionTac with
           | none =>
-            if let some cfg := cfg.configSyntax then
-              `(tactic| let* ⟨$ids,*⟩ ←[$cfg] $(←usedTheorem.toSyntax))
+            if let some cfg := cfgScript.configSyntax then
+              `(tactic| let* ⟨$ids,*⟩ ←[$cfg] $thmStx)
             else
-              `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax))
+              `(tactic| let* ⟨$ids,*⟩ ← $thmStx)
           | some tac =>
-            if let some cfg := cfg.configSyntax then
-              `(tactic| let* ⟨$ids,*⟩ ←[$cfg] $(←usedTheorem.toSyntax) by $(#[tac])*)
+            if let some cfg := cfgScript.configSyntax then
+              `(tactic| let* ⟨$ids,*⟩ ←[$cfg] $thmStx by $(#[tac])*)
             else
-              `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax) by $(#[tac])*)
+              `(tactic| let* ⟨$ids,*⟩ ← $thmStx by $(#[tac])*)
         else
           let config ←
-            match cfg.configSyntax with
+            match cfgScript.configSyntax with
             | none => `(Lean.Parser.Tactic.optConfig|)
             | some cfg => pure cfg
           if ids.isEmpty
           then
             match cfg.preconditionTac with
-            | none => `(tactic| step $config with $(←usedTheorem.toSyntax))
-            | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) by $(#[tac])*)
+            | none => `(tactic| step $config with $thmStx)
+            | some tac => `(tactic| step $config with $thmStx by $(#[tac])*)
           else
             match cfg.preconditionTac with
-            | none => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
-            | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
+            | none => `(tactic| step $config with $thmStx as ⟨$ids,*⟩)
+            | some tac => `(tactic| step $config with $thmStx as ⟨$ids,*⟩ by $(#[tac])*)
       let (preconditions, extraInfo, preconditionsScript) ←
         processPreconditions cfg fuel ss preconditions
 
       /- After recursive processing, filter out unassigned vars that got assigned
          (e.g., `?post` assigned by `inferPost` during recursive spec processing) -/
       let unassignedVars ←
-        if cfg.stepConfig.inferPost then
-          unassignedVars.filterM fun mvarId => do
-            pure !(← mvarId.isAssigned)
-        else
-          pure unassignedVars
-
+        unassignedVars.filterM fun mvarId => do
+          pure !(← mvarId.isAssigned)
       let sorryStx ← `(tactic|· sorry)
       let unassignedVarsScript : Array (TaskOrDone (Option Syntax.Tactic)) :=
         unassignedVars.map fun _ => TaskOrDone.mk (some sorryStx)
@@ -793,7 +878,8 @@ where
         pure (x, some y)
 
       let info : Info := {
-          script := .tacs (#[TaskOrDone.mk (some currTac)] ++ unassignedVarsScript ++ preconditionsScript),
+          script := .tacs (#[TaskOrDone.mk (some currTac)] ++ specCases.map (TaskOrDone.mk ∘ some) ++
+            unassignedVarsScript ++ preconditionsScript),
           unassignedVars,
           subgoals := preconditions ++ extraInfo.subgoals,
         }
@@ -893,7 +979,7 @@ meta def evalStepStarTac : Tactic := fun stx => do
     evalStepStar cfg fuel *> pure ()
   | `(tactic| step*? $args:«step*_args») =>
     let (cfg, fuel) ← parseArgs args
-    let info ← evalStepStar cfg fuel
+    let info ← evalStepStar { cfg with genScript := true } fuel
     let suggestion ← info.script.toSyntax
     let suggestion ← `(tacticSeq|$(suggestion)*)
     Aeneas.Utils.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)

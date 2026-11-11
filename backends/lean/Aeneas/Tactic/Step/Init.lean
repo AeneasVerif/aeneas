@@ -54,8 +54,15 @@ structure Config where
       that are not bound in the function call). This requires `assumTac` to
       be `true`. -/
   inferGhostVars : Bool := true
-  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress` -/
+  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress`, including
+      the main goal. (Without this option, `step*` still infers the unknown postconditions of the
+      preconditions which are specifications, e.g. the postcondition `post` of the closure in the
+      specification of `Option.map`, when it can prove those preconditions completely.) -/
   inferPost : Bool := false
+  /-- Prove the preconditions which are themselves specifications (for instance the specification
+      of a method of a trait instance) by stepping through them, instantiating their ghost
+      variables (see `Aeneas.Tactic.Step.SpecDischarge`). -/
+  specPreconditions : Bool := true
   /-- Use `scalar_tac` to discharge preconditions -/
   scalarTac : Bool := false
   /- Use `simp [*]` to discharge preconditions -/
@@ -102,7 +109,8 @@ structure Config where
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
-  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _, simpStar := _,
+  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, specPreconditions := _,
+        scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
         preprocessGrind := _,
@@ -110,6 +118,16 @@ def Config.toGrindConfig (cfg : Config) : Grind.Config :=
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats }
 
 declare_option_config_elab Config elabPartialConfig aeneas.step
+
+/-- Marks (as metadata on its proof) a precondition which is a specification, proved by stepping
+through it (`Aeneas.Tactic.Step.SpecDischarge`): `step*?` generates its proof script. -/
+meta def specDischargeKey : Name := `aeneas.specDischarge
+
+/-- Was the precondition `mvarId` proved by stepping through it (see `specDischargeKey`)? -/
+meta def isSpecDischarged (mvarId : MVarId) : MetaM Bool := do
+  match ← getExprMVarAssignment? mvarId with
+  | some (.mdata d _) => return d.getBool specDischargeKey
+  | _ => return false
 
 /-! # Step State (threaded through `step*`) -/
 

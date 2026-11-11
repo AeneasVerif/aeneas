@@ -1,0 +1,2 @@
+[!lean] skip
+[lean] aeneas-args=-split-files -emit-json

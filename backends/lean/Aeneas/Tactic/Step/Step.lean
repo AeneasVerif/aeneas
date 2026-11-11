@@ -176,6 +176,12 @@ structure Goals where
   preconditions : Array (MVarId × OptTask (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
+  /-- The preconditions which are specifications, proved by stepping through them
+      (see `specDischargeKey`) -/
+  solvedSpecPreconditions : Array MVarId := #[]
+  /-- The variables (ghost variables of the theorem) which got instantiated while solving the
+      preconditions -/
+  instantiatedVars : Array MVarId := #[]
 deriving Inhabited
 
 structure Stats extends Goals where
@@ -252,6 +258,15 @@ meta def getSpecProgram (ty : Expr) : MetaM Expr := do
 meta def getSpecPost (ty : Expr) : MetaM Expr := do
   let (info, args) ← getSpecInfoArgs ty
   return args[info.post_index]!
+
+/-- If `ty` is a specification statement, possibly under `∀` binders: its name, and whether its
+    post-condition is unknown (`?post`, possibly applied or under `fun`). -/
+meta def getSpecUnderBinders? (ty : Expr) : MetaM (Option (Name × Bool)) :=
+  forallTelescope ty fun _ body => do
+    let body ← whnfR body
+    let some post ← observing? (getSpecPost body) | return none
+    let head ← lambdaTelescope post fun _ b => return b.getAppFn
+    return some (body.getAppFn.constName!, head.isMVar)
 
 /- Analyze a goal comp
 
@@ -796,7 +811,10 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
+  let allPropGoals := newPropGoals
   let (stepState, newPropGoals) ← trySolvePreconditions info args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
+  let solvedSpecPreconditions ← allPropGoals.toArray.filterM fun mvar => isSpecDischarged mvar
+  let instantiatedVars ← newNonPropGoals.toArray.filterM fun mvar => mvar.isAssigned
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
@@ -821,7 +839,8 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   let mainGoal ← inferPostMainGoal args mainGoal
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal,
+          solvedSpecPreconditions, instantiatedVars })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -1063,6 +1082,9 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   (stepState : StepState := {})
   : TacticM Stats := do
   withTraceNode `Step (fun _ => pure m!"evalStep") do
+  /- The discharge tactic for preconditions which are specifications reads this option -/
+  withOptions (fun o => if config.specPreconditions then o
+    else o.setBool `aeneas.step.specPreconditions false) do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
   let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
@@ -1299,6 +1321,13 @@ theorem hashmap_insert_spec {k v : Type} [BEq k] [Hashable k]
 When encoutering ghost variables, `step` will try to instantiate them by looking
 for local assumptions which match the theorem assumptions, using heuristics to find
 the best instantiation when several are possible.
+
+**Preconditions which are specifications:**
+A precondition may itself be a specification, e.g. of a method of a trait instance:
+`(harea : ∀ x, f x ≤ U32.max → inst.area x ⦃ a => a.val = f x ⦄)`. `step` proves it by stepping
+through the concrete method, instantiating ghost variables such as `f`
+(`Aeneas.Tactic.Step.SpecDischarge`; disabled by `-specPreconditions`). `step*` also infers an
+unknown postcondition (`?post`) of such a precondition when it can prove the precondition.
 
 **Step\*:**
 When the user wants to make progress by several step, they can use the `step*` tactic,

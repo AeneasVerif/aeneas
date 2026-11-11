@@ -85,10 +85,15 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       let register_funs ctx fl = List.fold_left register_fun ctx fl in
       register_funs ctx funs
 
-(** Simply add the global name to the context. *)
+(** Simply add the global name to the context. A builtin global (in particular a
+    global of an external crate, see {!ExternManifest}) uses the name of its
+    model. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
     (def : global_decl) : extraction_ctx =
-  ctx_add_global_decl def ctx
+  match def.builtin_info with
+  | Some info ->
+      ctx_add def.item_meta.span (GlobalId def.def_id) info.extract_name ctx
+  | None -> ctx_add_global_decl def ctx
 
 (** The following function factorizes the extraction of ADT values.
 

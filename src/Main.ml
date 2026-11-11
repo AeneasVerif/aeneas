@@ -144,6 +144,13 @@ let () =
       ( "-emit-json",
         Arg.Set emit_json,
         " Emit a translation.json file alongside the Lean files (Lean only)" );
+      ( "-extern-crate",
+        Arg.String add_extern_crate,
+        " NAME=PATH: reuse the translation of the crate NAME, a dependency \
+         translated with -emit-json which wrote the manifest PATH (its \
+         translation.json): the items of NAME are mapped to their Lean \
+         definitions, and the generated files import the modules defining \
+         them. Can be repeated (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,
@@ -481,6 +488,9 @@ let () =
       "The -max-recdepth option is valid only for the Lean backend";
   if !emit_json && not (backend () = Lean) then
     fail_with_error "The -emit-json option is valid only for the Lean backend";
+  if !extern_crates <> [] && not (backend () = Lean) then
+    fail_with_error
+      "The -extern-crate option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";
@@ -548,6 +558,17 @@ let () =
               log#error "The HOL4 backend doesn't support the -use-fuel option";
               fail true))
   in
+
+  (* Load the manifests of the external crates: their entries are added to the
+     builtin tables, so this must happen before the tables are computed below. *)
+  List.iter
+    (fun (name, path) ->
+      try
+        ExternManifest.load
+          ~charon_version:Charon.CharonVersion.supported_charon_version name
+          path
+      with Failure msg -> fail_with_error msg)
+    !extern_crates;
 
   (* If running in parallel mode there can be racing conditions on the memoized
      elements. Precompute them so that it doesn't happen. *)

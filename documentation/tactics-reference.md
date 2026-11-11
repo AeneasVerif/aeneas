@@ -41,6 +41,15 @@ theorem my_func_spec (x : U32) (h : x.val < 100) :
   my_func x ⦃ r => r.val = x.val + 1 ⦄ := by ...
 ```
 
+**Preconditions which are specifications:** a theorem may assume a specification of a function
+argument or of a method of a trait instance, e.g.
+`(harea : ∀ x, f x ≤ U32.max → inst.area x ⦃ a => a.val = f x ⦄)`, where `f` is a ghost variable.
+`step` proves such a precondition by stepping through the concrete function, instantiating `f`.
+`step*` also infers an unknown postcondition (e.g. the closure's `post` in the specification of
+`Option.map`) when it can prove the precondition. `step*?` prints the instantiated ghost variables
+(`thm (f := fun x => ...)`) and proves those preconditions in `case`s; the flag
+`-specPreconditions` it adds makes `step` leave them to these `case`s.
+
 **The `step*?` workflow:**
 A very useful workflow: use `step*?` to automatically generate a complete, expanded proof script. Then review the generated script, automate individual proof obligations (e.g., by registering local lemmas for `agrind`), and progressively refold the script back into a compact `step*` call plus a small finishing script.
 

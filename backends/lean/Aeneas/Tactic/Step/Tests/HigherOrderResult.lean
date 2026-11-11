@@ -38,7 +38,6 @@ example (r : core.result.Result U32 Bool) (hr : ∀ x, r = .Ok x → x.val < U32
       (∀ e, r = .Err e → r' = .Err e) ⦄ := by
   unfold result_map
   step with core.result.Result.map.spec _ _ _ (post := fun (x y : U32) => y.val = x.val + 1)
-    by (intro x hx; have := hr x hx; step*)
   solve_by_elim
 
 end higher_order_result

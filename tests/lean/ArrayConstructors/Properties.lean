@@ -27,7 +27,7 @@ theorem identity_spec : identity ⦃ a => ∀ j < 5, a[j]!.val = j ⦄ := by
 theorem double_spec : double ⦃ a => ∀ j < 8, a[j]!.val = j * 2 ⦄ := by
   unfold double
   step with core.array.from_fn.spec_stateless_getElem! _ _ _
-    (fun j (v : Std.Usize) => v.val = j * 2) by (intro i hi; step*)
+    (fun j (v : Std.Usize) => v.val = j * 2)
   solve_by_elim
 
 /-- `from_fn(|i| i % 2 == 0)`, through the general spec, with the elements read as `a.val[j]`. -/
@@ -35,7 +35,7 @@ theorem evens_spec :
     evens ⦃ a => ∀ j (hj : j < a.val.length), a.val[j] = decide (j % 2 = 0) ⦄ := by
   unfold evens
   step with core.array.from_fn.spec _ _ _ (fun _ _ => True)
-    (fun j (b : Bool) => b = decide (j % 2 = 0)) by (intro i g _ _; step*)
+    (fun j (b : Bool) => b = decide (j % 2 = 0))
   solve_by_elim
 
 /-- A closure which owns a state, doubled at each call: before the call on index `i`, the state
@@ -57,7 +57,7 @@ theorem counter_spec : counter ⦃ a => ∀ j < 4, a[j]!.val = (j + 1) * 100 + j
   unfold counter
   step with core.array.from_fn.spec_getElem! _ _ _
     (fun i (g : counter.closure) => g.val = i)
-    (fun j (v : Std.U32) => v.val = (j + 1) * 100 + j) by (intro i g hi hg; step*)
+    (fun j (v : Std.U32) => v.val = (j + 1) * 100 + j)
   solve_by_elim
 
 /-- `from_fn` with a closure which doesn't change its state is also handled by `step*` alone,
@@ -65,6 +65,6 @@ theorem counter_spec : counter ⦃ a => ∀ j < 4, a[j]!.val = (j + 1) * 100 + j
     postcondition from the body of the closure. -/
 theorem double_spec' : double ⦃ a => ∀ j (hj : j < a.val.length), a.val[j].val = j * 2 ⦄ := by
   unfold double
-  step* +inferPost
+  step*
 
 end array_constructors

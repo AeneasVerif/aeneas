@@ -36,10 +36,12 @@ def squares.closure.call_once (c : squares.closure) (i : Usize) : Result U32 := 
 def squares : Result (Array U32 4#usize) :=
   core.array.from_fn 4#usize squares.closure.FnMut ()
 
+/- The precondition about the closure is itself a specification, which `step` proves by stepping
+through the closure (`Aeneas.Tactic.Step.SpecDischarge`). -/
 example : squares ⦃ a => ∀ j < 4, a[j]!.val = j * j ⦄ := by
   unfold squares
   step with core.array.from_fn.spec_stateless_getElem! _ _ _
-    (fun j (v : U32) => v.val = j * j) by (intro i hi; step*)
+    (fun j (v : U32) => v.val = j * j)
   solve_by_elim
 
 /-! ## A closure with a single call: `from_fn(|i| i + 1)`
@@ -103,7 +105,7 @@ def stateful : Result (Array U32 4#usize) :=
 example : stateful ⦃ a => ∀ j (hj : j < a.val.length), (a.val[j]).val = (j + 1) * 100 + j ⦄ := by
   unfold stateful
   step with core.array.from_fn.spec _ _ _ (fun i (g : stateful.closure) => g.val = i)
-    (fun j (v : U32) => v.val = (j + 1) * 100 + j) by (intro i g hi hg; step*)
+    (fun j (v : U32) => v.val = (j + 1) * 100 + j)
   solve_by_elim
 
 end array_from_fn

@@ -48,7 +48,6 @@ theorem cap_spec {N : Std.Usize} (x : Array Std.I32 N) (m : Std.I32) :
   step with core.slice.iter.IterMut.loop_updateBody.spec
     (fun e => if e > m then ok m else ok e) (fun _ x (y : Std.I32) => y = if x > m then m else x)
     (cap_loop.body m) iter iter_post1
-    by (intro j hj; split <;> simp_all)
   intro j hj
   have hn : iter.slice.length = N.val := by simp [Slice.length, iter_post]
   rw [iter_post2 back (by rw [back_post, hn]), back_post1 j (by rw [hn]; exact hj), iter_post]

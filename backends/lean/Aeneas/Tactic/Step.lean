@@ -5,3 +5,4 @@ public import Aeneas.Tactic.Step.StepArraySpec
 public import Aeneas.Tactic.Step.StepStar
 public import Aeneas.Tactic.Step.Deprecated
 public import Aeneas.Tactic.Step.DspecInduction
+public import Aeneas.Tactic.Step.SpecDischarge

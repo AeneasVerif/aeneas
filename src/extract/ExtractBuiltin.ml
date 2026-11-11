@@ -44,6 +44,8 @@ let builtin_globals () : Pure.builtin_global_info list =
        ];
      ]
     @ mk_lean_only lean_builtin_consts)
+  (* The globals of the external crates (option -extern-crate) *)
+  @ !ExternManifest.globals
 
 let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list
@@ -171,6 +173,8 @@ let builtin_types () : Pure.builtin_type_info list =
          };
        ])
   @ mk_lean_only lean_builtin_types
+  (* The types of the external crates (option -extern-crate) *)
+  @ !ExternManifest.types
 
 let mk_builtin_types_map () =
   NameMatcherMap.of_list
@@ -322,6 +326,8 @@ let builtin_trait_decls_info () =
       mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
     ]
   @ mk_lean_only lean_builtin_trait_decls
+  (* The traits of the external crates (option -extern-crate) *)
+  @ !ExternManifest.trait_decls
 
 let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list
@@ -492,6 +498,8 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
   @ List.map
       (fun ty -> fmt ("core::default::Default<" ^ ty ^ ">") ())
       all_int_names
+  (* The trait impls of the external crates (option -extern-crate) *)
+  @ !ExternManifest.trait_impls
 
 let mk_builtin_trait_impls_map () =
   let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
@@ -908,7 +916,9 @@ let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
             d.methods)
         trait_decls
     in
-    funs @ List.concat default_methods
+    (* The functions of the external crates (option -extern-crate), including
+       their default methods, are listed with their Lean names in the manifests *)
+    funs @ List.concat default_methods @ !ExternManifest.funs
   in
   mk_memoized mk
 
