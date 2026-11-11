@@ -1,15 +1,15 @@
 module
 public import Aeneas.NonPos.Tests.Test
-public import Aeneas.NonPos.Top
+public import Aeneas.NonPos.Tactic
 
 @[expose] public section
 /-!
 # The forms and the tactic, by example
 
-How `nonpos_cont` (section 6 of `Top.lean`) proves a body continuous, shown by proving the same
-goals by hand with the forms of section 5.  Each hand proof lists, in order, the forms the tactic
-applies; `nonpos_cont` then does the same goal in one call.  `Bla` is the structure of `Test.lean`
-over `Option`:
+How `nonpos_cont` (section 2 of `Tactic.lean`) proves a body continuous, shown by proving the same
+goals by hand with the forms of section 1 of `Tactic.lean`.  Each hand proof lists, in order, the
+forms the tactic applies; `nonpos_cont` then does the same goal in one call.  `Bla` is the structure
+of `Test.lean` over `Option`:
 ```
 nonpos_structure Bla (Self : Type) : Type 1 where
   to_num : Self → Option Int
@@ -150,7 +150,7 @@ example {O : Type} (o : O) : Cont (fun inst : Bla O => countdown inst o) := by n
 
 A proved continuity fact can be added to the lookup.  With `cont_helper` tagged, `helper inst o`
 matches it directly and is no longer unfolded; this is how a monad's own operations (`Result.vis`
-in `Result.lean`) and library functions join the forms without changing `Top.lean`. -/
+in `Result.lean`) and library functions join the forms without changing `Tactic.lean`. -/
 
 @[nonpos_continuous]
 theorem cont_helper {O : Type} (o : O) : Cont (fun inst : Bla O => helper inst o) := by nonpos_cont

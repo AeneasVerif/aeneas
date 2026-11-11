@@ -1,6 +1,6 @@
 module
 public import Aeneas.NonPos.Domain.ITree
-public import Aeneas.NonPos.Top
+public import Aeneas.NonPos.Tactic
 public import Aeneas.Std.Primitives
 
 @[expose] public section

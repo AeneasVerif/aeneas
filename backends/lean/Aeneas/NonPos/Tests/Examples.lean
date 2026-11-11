@@ -5,10 +5,10 @@ public import Aeneas.NonPos.Tests.Test
 /-!
 # What `nonpos_structure` generates, written out by hand
 
-Two examples, expanded exactly as the command of `Top.lean` (sections 4 and 8) would expand them
-(same definitions, same names, same shapes of terms), so that the output of the command can be read
-without running it.  The first has one structure with a data field; the second is the mutual pair
-`A`/`B` of `Test.lean`.  Both use `Option` as the monad.
+Two examples, expanded exactly as `nonpos_structure` would expand them: the definitions of section 4
+of `Top.lean`, and the lemmas of section 4 of `Tactic.lean` (same names, same shapes of terms), so
+that the output of the command can be read without running it.  The first has one structure with a
+data field; the second is the mutual pair `A`/`B` of `Test.lean`.  Both use `Option` as the monad.
 -/
 namespace NonPos.Examples
 open NonPos
@@ -67,11 +67,11 @@ def Example1.f (d : Example1) : Example1 → Option Nat :=
     Example1.f (Example1.mk to_nat f h) = f := by
   simp only [Example1.f, Example1.mk, Fix.unfold_fold]
 
--- No `Example1.botTotal` (section 8 of `Top.lean`): the plain field `to_nat : Nat` has no least
+-- No `Example1.botTotal` (section 4 of `Tactic.lean`): the plain field `to_nat : Nat` has no least
 -- element, so `⊥` is not total in `Example1`, which is not a `CCPO` (and cannot be defined by
 -- `partial_fixpoint`).
 
--- `mk` is continuous in its fields (section 8 of `Top.lean`): proved once here, and used by
+-- `mk` is continuous in its fields (section 4 of `Tactic.lean`): proved once here, and used by
 -- `nonpos_cont` on any `mk` whose fields vary, instead of going through the tuple of fields.
 theorem Example1.mk_cont {D : Type _} [Dom D] (to_nat : D → Nat) (f : D → Example1 → Option Nat)
     (h : ∀ d, Shape.cond (F := Example1.F Example1.I.Example1) (X := Fix Example1.F) ⟨to_nat d, f d, ⟨⟩⟩)
@@ -170,12 +170,12 @@ def B.fb {Self : Type} (d : B Self) : ∀ {O : Type} (AInst : A O), Self → O �
     @B.fb Self (B.mk fb h) = @fb := by
   simp only [B.fb, B.mk, Fix.unfold_fold]
 
--- `⊥` is total in `A` and in `B`: all their fields are methods (section 8 of `Top.lean`).  So both are
+-- `⊥` is total in `A` and in `B`: all their fields are methods (section 4 of `Tactic.lean`).  So both are
 -- `CCPO`s, and the instance search for it no longer goes through their fields.
 instance (priority := high) A.botTotal {Self : Type} : Fix.BotTotal A.F (A.I.A Self) := inferInstance
 instance (priority := high) B.botTotal {Self : Type} : Fix.BotTotal A.F (A.I.B Self) := inferInstance
 
--- `mk` of each structure is continuous in its fields (section 8 of `Top.lean`).
+-- `mk` of each structure is continuous in its fields (section 4 of `Tactic.lean`).
 theorem A.mk_cont {Self : Type} {D : Type _} [Dom D] (fa : D → ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
     (h : ∀ d, Shape.cond (F := A.F (A.I.A Self)) (X := Fix A.F) ⟨fa d, ⟨⟩⟩) (_ : Cont fa) :
     Cont (fun d => A.mk (fa d) (h d)) := by

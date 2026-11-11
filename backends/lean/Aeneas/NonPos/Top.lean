@@ -9,15 +9,13 @@ public import Aeneas.NonPos.Proofs
 This file is the whole trusted surface of the library.  It contains, and only contains:
 
 1. the *statements* that pin down the imported constants (`Dom`, `Cont`, `Shape`, `Fix`, ...);
-2. the `nonpos_structure` command, a thin wrapper around `Fix`, and the lemmas it proves about each
-   structure (with the tactic of 4, so that it does not have to derive them at each use);
-3. the statements of the continuity theorems, one per form of term;
-4. the `nonpos_cont` tactic, a thin wrapper around those theorems;
-5. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
-   so that it does not have to prove them again at each use.
+2. the `nonpos_structure` command, a thin wrapper around `Fix`;
+3. what the `nonpos_cont` tactic, which proves the condition of each structure, is expected to do
+   (section 5).
 
 Proofs live in `NonPos/Proofs.lean` and the definitions of the constants in `NonPos/Model/`;
-neither needs to be read.  Every theorem below is proved by a one-line reference to `Proofs`.
+neither needs to be read.  Every theorem below is proved by a one-line reference to `Proofs`.  The
+tactic is in `NonPos/Tactic.lean`, which does not need to be read either.
 -/
 
 namespace NonPos
@@ -207,7 +205,7 @@ structure:
 * `Bla.mk to_num add (h : Shape.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk`;
-* the lemma `Bla.mk_cont` and (when it holds) the instance `Bla.botTotal`, described in section 8.
+* then, through the hook of section 5, the lemmas of `NonPos/Tactic.lean` (section 4 there).
 
 The command never inspects the field types: `Shape (G.F k)` is found by instance search, which can
 only succeed through the instances of section 2, and the types of `mk` and the projections are the
@@ -328,447 +326,61 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
           @$projId $args* ($mkId $fieldNames* h) = @$f:ident := by
         simp only [$projId:ident, $mkId:ident, Fix.unfold_fold]))  -- `Example1.to_nat_mk`, `Example1.f_mk`, `A.fa_mk`, `B.fb_mk`
 
-/-! The command itself is registered in section 8, after the lemma of each structure, which needs
-the tactic of section 6. -/
 
-/-! ## 5. The forms
+/-! ## 5. Continuity, and the `nonpos_cont` tactic
 
-Everything the `nonpos_cont` tactic knows is one of the statements below, all of the shape
-`Cont (fun d => ‹form›)`.  `D` is the type of the varying dictionary (or tuple of dictionaries).
-The list `forms` after the theorems is what the tactic looks up by shape; `const`, `id`, `lam`,
-`app` and `app₂` have no shape to look up and are the tactic's own cases.  Continuity facts proved
-elsewhere (a monad's own operations, helper functions) are added to the same lookup with the
-`@[nonpos_continuous]` attribute, declared at the end of this section. -/
+The condition `Shape.cond` of a structure is a conjunction of `Cont` facts, one for each field that
+takes a dictionary of the group (`nonpos_cond_simp`, in `NonPos/Tactic.lean`, unfolds it into
+them).  Aeneas proves the condition of each `mk` it outputs with the tactic `nonpos_cont`, and the
+monotonicity obligation of each self-referential instance with
+`partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`.
 
+The tactic and the continuity theorems it applies are in `NonPos/Tactic.lean`, which is not part of
+the trusted surface: every proof it builds is checked by the kernel, so it cannot make a structure
+contain anything that does not satisfy the condition.  What it is expected to do, which is checked
+by its tests but not guaranteed by this file, is:
 
-section Cont
-variable {D : Type w} [Dom D]
+* **Completeness:** `nonpos_cont` proves `Cont f` for every function `f` that Aeneas outputs (that
+  is, the conditions above), in reasonable time.
+* **Lemmas:** a theorem `… → Cont (fun d => body)` tagged `@[nonpos_continuous]` is applied by
+  `nonpos_cont` to any goal of the shape of `body`, instead of proving it again from the definitions
+  in `body`.  Lemmas are tagged by `nonpos_continuity f` (which Aeneas outputs after each function
+  `f` taking a dictionary, and which proves the continuity of `f` in that dictionary), by the hook
+  below, and by hand (the operations of a monad).
 
-theorem Cont.const {B : Type w₁} [Dom B] (b : B) : Cont (fun _ : D => b) := Proofs.Cont.const b
-theorem Cont.id : Cont (fun d : D => d) := Proofs.Cont.id
-/-- Lambda: pointwise. -/
-theorem Cont.lam {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] {f : D → (t : T) → B t}
-    (h : ∀ t, Cont (fun d => f d t)) : Cont f := Proofs.Cont.lam h
-/-- Application to an argument not depending on `d` (a type, a value, a fixed dictionary, ...). -/
-theorem Cont.app {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] {f : D → (t : T) → B t}
-    (hf : Cont f) (t : T) : Cont (fun d => f d t) := Proofs.Cont.app hf t
-/-- Application to an argument depending on `d`: the function must satisfy the condition. -/
-theorem Cont.app₂ {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A → B} {a : D → A}
-    (hf : Cont f) (hc : ∀ d, Cont (f d)) (ha : Cont a) : Cont (fun d => f d (a d)) := Proofs.Cont.app₂ hf hc ha
-/-- Pairs: the field tuples of a structure, and what a mutual `partial_fixpoint` is packed into. -/
-theorem Cont.pair {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A} {g : D → B}
-    (hf : Cont f) (hg : Cont g) : Cont (fun d => (⟨f d, g d⟩ : A ×' B)) := Proofs.Cont.pair hf hg
-theorem Cont.fst {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A ×' B} (hf : Cont f) :
-    Cont (fun d => (f d).1) := Proofs.Cont.fst hf
-theorem Cont.snd {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A ×' B} (hf : Cont f) :
-    Cont (fun d => (f d).2) := Proofs.Cont.snd hf
-theorem Cont.ite {B : Type w₁} [Dom B] (c : Prop) [Decidable c] {t e : D → B}
-    (ht : Cont t) (he : Cont e) : Cont (fun d => if c then t d else e d) := Proofs.Cont.ite c ht he
-theorem Cont.dite {B : Type w₁} [Dom B] (c : Prop) [Decidable c] {t : c → D → B} {e : ¬c → D → B}
-    (ht : ∀ h, Cont (t h)) (he : ∀ h, Cont (e h)) : Cont (fun d => if h : c then t h d else e h d) :=
-  Proofs.Cont.dite c ht he
-/-- `pure`, `bind`: this is what a supported monad provides. -/
-theorem Cont.pure {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α : Type u} {a : D → α}
-    (ha : Cont (inst_1 := Dom.discrete α) a) : Cont (fun d => (pure (a d) : M α)) := Proofs.Cont.pure ha
-theorem Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u}
-    {m : D → M α} {k : D → α → M β}
-    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) := Proofs.Cont.bind hm hk
+The hook: after the definitions of a group, `nonpos_structure` runs `nonpos_structure_lemmas` on the
+same structures.  Here it does nothing; `NonPos/Tactic.lean` makes it prove lemmas about the
+structures (section 4 there), so that `nonpos_cont` does not derive them at each use.  It runs
+after every definition of the group is made, so it can only add facts about them: theorems, and
+instances of classes that are `Prop`s. -/
 
-variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
-/-- Projections out of a structure, and `mk` of fields depending on `d`. -/
-theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
-    Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d => Fix.unfold F (f d)) := Proofs.Cont.unfold F hf
-theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Shape.cond (f d))
-    (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) : Cont (fun d => Fix.fold F (f d) (h d)) :=
-  Proofs.Cont.fold F h hf
+syntax (name := nonposStructureLemmas) "nonpos_structure_lemmas " nonposStructureCore* : command
 
-/-! `Cont.fst` and `Cont.snd` for the field tuple of a structure, at the `Dom` that the shape of the
-tuple gives it (`Shape.dom`, as in `Cont.unfold`), so that a projection out of a dictionary is
-proved without comparing that `Dom` with the one instance search builds for the whole tuple. -/
-section ShapeForms
-variable {G : Fam.{pu, v} I → Type w₁} {H : Fam.{pu, v} I → Type w₂} [Shape G] [Shape H]
-  {X : Fam.{pu, v} I} [∀ k, Dom (X k)]
-theorem Cont.shape_fst {f : D → G X ×' H X} (hf : Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) f) :
-    Cont (inst_1 := Shape.dom G X) (fun d => (f d).1) :=
-  @Proofs.Cont.fst D _ _ _ (Shape.dom G X) (Shape.dom H X) f hf
-theorem Cont.shape_snd {f : D → G X ×' H X} (hf : Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) f) :
-    Cont (inst_1 := Shape.dom H X) (fun d => (f d).2) :=
-  @Proofs.Cont.snd D _ _ _ (Shape.dom G X) (Shape.dom H X) f hf
-end ShapeForms
+/-- The hook, empty here (see `NonPos/Tactic.lean`). -/
+@[command_elab nonposStructureLemmas] meta def elabNonposStructureLemmasNone : CommandElab := fun _ =>
+  pure ()
 
-/-- Fixed points: `partial_fixpoint` elaborates to `Lean.Order.fix`, for functions and for
-self-referential dictionaries alike. -/
-theorem Cont.fix {α : Type w₁} [Dom α] [Lean.Order.CCPO α] [FixCompat α] {f : D → α → α}
-    {hm : ∀ d, Lean.Order.monotone (f d)}
-    (hf : Cont (fun p : D ×' α => f p.1 p.2)) : Cont (fun d => Lean.Order.fix (f d) (hm d)) := Proofs.Cont.fix hf
-end Cont
+/-- Elaborate a group, then run the hook on it. -/
+meta def elabGroupAndLemmas (stxs : Array Syntax) : CommandElabM Unit := do
+  elabGroup (← stxs.mapM parseStruct)
+  elabCommand (mkNode ``nonposStructureLemmas #[mkAtom "nonpos_structure_lemmas ", mkNullNode (stxs.map (·[0]))])
 
-/-! `FixCompat α`: the `Dom` and `CCPO` structures on `α` agree.  Holds for `M α`, pointwise, and on
-products: exactly the types `partial_fixpoint` recurses through. -/
-instance {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) : FixCompat (M α) :=
-  FixCompat.monad α
-instance {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] [∀ t, Lean.Order.CCPO (B t)] [∀ t, FixCompat (B t)] :
-    FixCompat ((t : T) → B t) := FixCompat.pi
-instance {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [Lean.Order.CCPO A] [Lean.Order.CCPO B]
-    [FixCompat A] [FixCompat B] : FixCompat (A ×' B) := FixCompat.pprod
-instance {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)] (k : I) [Fix.BotTotal F k] :
-    FixCompat (Fix F k) := Fix.fixCompat F k
-
-/-- `partial_fixpoint`'s monotonicity obligation, from the condition: write a self-referential
-instance as `def inst : Bla Int := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`. -/
-theorem Cont.monotone {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [Lean.Order.CCPO A] [Lean.Order.CCPO B]
-    [FixCompat A] [FixCompat B] {f : A → B} (h : Cont f) : Lean.Order.monotone f := Proofs.Cont.monotone h
-
-/-- The forms the tactic looks up by the shape of the body. -/
-meta def forms : List Name :=
-  [``Cont.pair, ``Cont.fst, ``Cont.snd, ``Cont.ite, ``Cont.dite,
-   ``Cont.pure, ``Cont.bind, ``Cont.unfold, ``Cont.fold, ``Cont.fix]
-
-/-- Gets a DiscrTree key from a theorem name.
-Works for theormes that return `… → Cont (fun d => body)` -/
-meta def contKeys (declName : Name) : MetaM (Array DiscrTree.Key) := do
-  let (_, _, concl) ← forallMetaTelescopeReducing (← inferType (← mkConstWithLevelParams declName))
-  let_expr Cont D _ _ _ f := concl | throwError "{declName}: not a `Cont` statement"
-  DiscrTree.mkPath (f.beta #[← mkFreshExprMVar D])
-
-/-- The store of tagged theorems: a discrimination tree of their names, keyed by `contKeys`. -/
-meta initialize nonposContExt : SimpleScopedEnvExtension (Array DiscrTree.Key × Name) (DiscrTree Name) ←
-  registerSimpleScopedEnvExtension { addEntry := fun t (ks, n) => t.insertKeyValue ks n, initial := {} }
-
-/-- `@[nonpos_continuous]` on a theorem `… → Cont (fun d => body)` adds it to the store, keyed by the
-shape of `body`.  (It can be used in any file importing this one, but not in this file.) -/
-meta initialize registerBuiltinAttribute {
-  name := `nonpos_continuous
-  descr := "continuity theorem, applied by `nonpos_cont`"
-  add := fun decl _ kind => do nonposContExt.add (← MetaM.run' (contKeys decl), decl) kind }
-
-/-- Get continuity lemmas from `forms` and `@[nonpos_continuous]` tagged theorems. -/
-meta def getContTheorems : MetaM (DiscrTree Name) := do
-  forms.foldlM (init := nonposContExt.getState (← getEnv)) fun t n => return t.insertKeyValue (← contKeys n) n
-
-/-! ## 6. The tactic
-
-`nonpos_cont` on a goal `Cont (fun d => body)` looks up the forms and tagged theorems whose shape is
-that of `body` (`getContTheorems`) and applies the first that fits.  The forms without a
-shape to index are handled directly: a body not depending on `d` is `Cont.const`, a lambda is
-`Cont.lam`, and an application with no matching form is peeled by `Cont.app` (last argument not
-depending on `d`) or `Cont.app₂` (last argument depending on `d`; the function is then a projection
-of a dictionary, whose condition comes from `Fix.cond`, read along the projection's path).  A `match` on a scrutinee not depending on
-`d` is split by `cases`, and a remaining definition is unfolded (`delta`).  Around this, the loop
-introduces binders, turns a `Shape.cond` goal into its conjuncts with `nonpos_cond_simp`, and splits
-conjunctions. -/
-
-/-- Inputs an application of `Shape.cond`, and unfolds the functor and Shape instance arguments
-so they can be matched against. -/
-meta def normCond (e : Expr) : MetaM Expr := do
-  let e ← instantiateMVars e
-  let_expr Shape.cond I F inst X instX x := e | return e
-  let F' ← lambdaTelescope (← whnfR F) fun xs b => do mkLambdaFVars xs (← whnfR b)
-  return mkAppN (.const ``Shape.cond e.getAppFn.constLevels!) #[I, F', ← whnfR inst, X, instX, x]
-
-open Tactic in
-elab "nonpos_cond_norm" : tactic => withMainContext do
-  let mut g ← getMainGoal
-  g ← g.change (← normCond (← g.getType))
-  for d in ← getLCtx do
-    if !d.isImplementationDetail && (← instantiateMVars d.type).isAppOf ``Shape.cond then
-      g ← g.changeLocalDecl d.fvarId (← normCond d.type)
-  replaceMainGoal [g]
-
-/-- Simplify `Shape.cond` conditions into a conjunction of `Cont` facts, one for each dictionary
-binder, dropping the clauses that are `True`.  First `nonpos_cond_norm` rewrites every `Shape.cond`
-in the goal and hypotheses (by definitional unfolding, checked by `change`) so that its functor is a
-literal lambda and its instance is built from the pieces of section 2; then `simp` unfolds the `cond`
-of each piece. -/
-macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.const,
-      Shape.var, true_and, and_true, implies_true, forall_and] $[$loc]?))
-
-/-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
-arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
-condition `Fix.cond F e` has the nested shape of the tuple (a plain field's part is `True`), so it
-is read along the same path, then applied to the arguments (past a dictionary binder, its `.2`
-first), and its `.1` is the fact.  `none` if `fn'` is not of this form. -/
-meta def nonposProjCondProof? (fn' : Expr) : MetaM (Option Expr) := do
-  let isProj (e : Expr) := e.isAppOf ``PProd.fst || e.isAppOf ``PProd.snd
-  unless isProj fn' && fn'.getAppNumArgs ≥ 3 do return none
-  let args := fn'.getAppArgs.extract 3 fn'.getAppNumArgs  -- `t₁ … tₖ`
-  let mut e := fn'.getAppArgs[2]!
-  let mut path := #[fn'.isAppOf ``PProd.fst]  -- the projections, outermost first (`true` for `.1`)
-  while isProj e && e.getAppNumArgs == 3 do
-    path := path.push (e.isAppOf ``PProd.fst)
-    e := e.appArg!
-  unless e.isAppOfArity ``Fix.unfold 5 do return none
-  -- `.1` or `.2` of a proof of a conjunction (exposed by unfolding the `Shape` instances)
-  let part (pf : Expr) (left : Bool) : MetaM Expr := do
-    let_expr And a b := (← whnf (← inferType pf)) | throwError "not a conjunction"
-    return mkApp3 (mkConst (if left then ``And.left else ``And.right)) a b pf
-  try
-    let mut pf ← mkAppOptM ``Fix.cond (e.getAppArgs.map some)
-    for left in path.reverse do pf ← part pf left
-    for t in args do
-      pf ← if (← whnf (← inferType pf)).isForall then pure (mkApp pf t) else pure (mkApp (← part pf false) t)
-    return some (← part pf true)
-  catch _ => return none
-
-syntax "nonpos_cont" (num)? : tactic
-syntax "nonpos_cont_peel" : tactic
-
-/-- `#[G, H, iG, iH]` if the `Shape` instance `inst` unfolds to `Shape.prod G H` (with `iG`, `iH`). -/
-meta partial def shapeProdArgs? (inst : Expr) : MetaM (Option (Array Expr)) := do
-  let inst ← whnfCore inst
-  if inst.isAppOfArity ``Shape.prod 5 then return some (inst.getAppArgs.extract 1 5)
-  match ← unfoldDefinition? inst with
-  | some e => shapeProdArgs? e
-  | none => return none
-
-open Tactic in
-/-- A field of a varying dictionary, `fun d => (Fix.unfold F (g d)).2. … .1`: proved inside out, from
-`Cont.unfold` (at the `Dom` of the shape of the tuple) by `Cont.shape_snd` and `Cont.shape_fst`, with
-the parts read from the `Shape` instances, so that only the field's own `Dom` is
-compared with the goal's (comparing the `Dom` of the whole tuple with the one instance search
-builds would go through all the fields).  Leaves the goal `Cont g`.  `false` (and no change) if the
-goal is not of this form. -/
-meta def nonposShapeProj (goal : MVarId) (D iD f : Expr) : TacticM Bool := do
-  let .lam n dTy body bi := f | return false
-  let mut e := body
-  let mut path : Array Bool := #[]  -- the projections, outermost first (`true` for `.1`)
-  while e.isAppOfArity ``PProd.fst 3 || e.isAppOfArity ``PProd.snd 3 do
-    path := path.push (e.isAppOfArity ``PProd.fst 3)
-    e := e.appArg!
-  if path.isEmpty || !e.isAppOfArity ``Fix.unfold 5 then return false
-  let args := e.getAppArgs  -- `I F inst k (g d)`
-  let (F, inst, k, gd) := (args[1]!, args[2]!, args[3]!, args[4]!)
-  if F.hasLooseBVars || inst.hasLooseBVars || k.hasLooseBVars then return false
-  let s ← saveState
-  try
-    let gFun := Expr.lam n dTy gd bi
-    let hg ← mkFreshExprSyntheticOpaqueMVar (← mkAppOptM ``Cont #[D, none, iD, none, gFun])
-    let mut pf ← mkAppOptM ``Cont.unfold #[D, iD, none, F, inst, k, gFun, hg]
-    -- `pf : Cont (inst_1 := Shape.dom (F k) X) …`: the family `X` and its `Dom`s
-    let some iU := (← inferType pf).getAppArgs[3]? | throwError "unexpected"
-    let (X, iX) := (iU.getAppArgs[3]!, iU.getAppArgs[4]!)
-    let mut iP := mkApp inst k  -- the `Shape` instance of the current tuple
-    for isFst in path.reverse do
-      let some gh ← shapeProdArgs? iP | throwError "not a pair"
-      pf ← mkAppOptM (if isFst then ``Cont.shape_fst else ``Cont.shape_snd)
-        #[D, iD, none, gh[0]!, gh[1]!, gh[2]!, gh[3]!, X, iX, none, pf]
-      iP := if isFst then gh[2]! else gh[3]!
-    unless ← isDefEq (← goal.getType) (← inferType pf) do throwError "type mismatch"
-    goal.assign pf
-    replaceMainGoal [hg.mvarId!]
-    return true
-  catch _ =>
-    s.restore
-    return false
-
-open Tactic in
-/-- One step on a goal `Cont (fun d => body)`. -/
-meta partial def nonposContStep (tree : DiscrTree Name) : TacticM Unit := withMainContext do
-  let g ← getMainGoal
-  let ty ← instantiateMVars (← g.getType)
-  let_expr Cont D _ iD _ f := ty | throwError "nonpos_cont: not a `Cont` goal:{indentExpr ty}"
-  let f ← instantiateMVars f
-  let f ← if f.isLambda then pure f else etaExpand f
-  if ← nonposShapeProj g D iD f then return
-  let tac ← lambdaTelescope f fun ds body => do
-    let d := ds[0]!
-    let body := body.consumeMData.headBeta
-    let dep (e : Expr) := e.containsFVar d.fvarId!
-    if !dep body then return ← `(tactic| exact Cont.const _)
-    if ds.size > 1 || body.isLambda then return ← `(tactic| apply Cont.lam)
-    if body == d then return ← `(tactic| exact Cont.id)
-    if body.isLet then return ← `(tactic| dsimp only)
-    if let some info := Meta.isMatcherAppCore? (← getEnv) body then
-      let disc := body.getAppArgs[info.getFirstDiscrPos]!
-      if !dep disc then
-        if disc.isFVar then
-          return ← `(tactic| cases $(mkIdent (← disc.fvarId!.getUserName)):ident <;> dsimp only)
-        return ← `(tactic| (generalize $(← Term.exprToSyntax disc) = x; cases x <;> dsimp only))
-    -- the forms and tagged theorems with the shape of the body
-    let pattern := body.replaceFVar d (← mkFreshExprMVar (← inferType d))
-    let alts ← (← tree.getMatch pattern).mapM fun n => `(tacticSeq| apply $(mkIdent n):ident)
-    `(tactic| first $[| $alts]* | nonpos_cont_peel)
-  evalTactic tac
-
-open Tactic in
-/-- Peel the last argument of an application, or unfold its head. -/
-elab_rules : tactic
-  | `(tactic| nonpos_cont_peel) => withMainContext do
-    let g ← getMainGoal
-    let ty ← instantiateMVars (← g.getType)
-    let_expr Cont _ _ _ _ f := ty | throwError "nonpos_cont: not a `Cont` goal"
-    let env ← getEnv
-    let f ← instantiateMVars f
-    let f ← if f.isLambda then pure f else etaExpand f
-    let tac ← lambdaTelescope f fun ds body => do
-      let d := ds[0]!
-      let body := body.consumeMData.headBeta
-      let dep (e : Expr) := e.containsFVar d.fvarId!
-      let stx (e : Expr) : TacticM Term := do Term.exprToSyntax (← mkLambdaFVars #[d] e)
-      let isProj (e : Expr) := e.isAppOfArity ``Fix.unfold 5
-      let fn := body.getAppFn
-      let args := body.getAppArgs
-      let unfoldable := fn.constName?.bind fun c => if (env.find? c).any (·.hasValue) then some c else none
-      if args.isEmpty then throwError "nonpos_cont: no form matches {← ppExpr body}"
-      let a := args.back!
-      let fn' := mkAppN fn args.pop
-      if !dep a then
-        return ← `(tactic| apply Cont.app (f := $(← stx fn')) (t := $(← Term.exprToSyntax a)))
-      if let some u := fn'.find? isProj then
-        if a == d && !dep u then
-          if !dep fn' then
-            if let some pf ← nonposProjCondProof? fn' then return ← `(tactic| exact $(← Term.exprToSyntax pf))
-          throwError "nonpos_cont: continuity of {← ppExpr fn'} in its dictionary argument is not known"
-        return ← `(tactic| refine Cont.app₂ (f := $(← stx fn')) (a := $(← stx a)) ?_ (by intro _; nonpos_cont) ?_)
-      if let some c := unfoldable then return ← `(tactic| delta $(mkIdent c):ident)
-      if a == d then throwError "nonpos_cont: continuity of {← ppExpr fn'} is not known"
-      if !dep fn' then
-        return ← `(tactic| refine Cont.app₂ (f := $(← stx fn')) (a := $(← stx a)) ?_ (by intro _; nonpos_cont) ?_)
-      return ← `(tactic| apply Cont.app₂ (f := $(← stx fn')) (a := $(← stx a)))
-    evalTactic tac
-
-open Tactic in
-meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM Unit := do
-  let gs ← getUnsolvedGoals
-  let some g := gs[0]? | return
-  if fuel == 0 then throwError "nonpos_cont: no progress on{indentD (← g.withContext do Meta.ppGoal g)}"
-  setGoals [g]
-  let ty ← g.withContext do whnfR (← instantiateMVars (← g.getType))
-  if ty.isForall then evalTactic (← `(tactic| intro))
-  else if ty.isAppOf ``Shape.cond then evalTactic (← `(tactic| nonpos_cond_simp))
-  else if ty.isAppOf ``Cont then
-    try evalTactic (← `(tactic| assumption)) catch _ => nonposContStep tree
-  else if ty.isConstOf ``True then evalTactic (← `(tactic| trivial))
-  else if ty.isAppOf ``And then evalTactic (← `(tactic| constructor))
-  else throwError "nonpos_cont: unexpected goal{indentExpr ty}"
-  let gs' ← getUnsolvedGoals
-  setGoals (gs' ++ gs.drop 1)
-  nonposContLoop tree (fuel - 1)
-
-elab_rules : tactic
-  | `(tactic| nonpos_cont) => do nonposContLoop (← getContTheorems) 300
-  | `(tactic| nonpos_cont $n:num) => do nonposContLoop (← getContTheorems) n.getNat
-
-/-! ## 7. Continuity lemmas for functions
-
-For performance, `nonpos_continuity` proves continuity lemmas for a function.
-
-`nonpos_continuity f` proves, once, for each argument `x` of `f` whose type is one of the structures
-(a `Fix`):
-```
-∀ (the arguments of f before x), Cont (f (the arguments before x))
-```
-that is, "`f` is continuous in `x`", and tags it `@[nonpos_continuous]`.
--/
-
-/-- The statements `∀ (args before x), Cont (f args before)` for the arguments `x` of `f` whose
-type is a structure, with their names `f.cont_j` (`j` the index of `x`). -/
-meta def continuityStatements (f : Name) : MetaM (Array (Name × Expr)) := do
-  let info ← getConstInfo f
-  let lvls := info.levelParams.map fun _ => Level.zero
-  forallTelescope (info.type.instantiateLevelParams info.levelParams lvls) fun xs _ => do
-    let mut out := #[]
-    for j in [0:xs.size] do
-      unless (← whnfR (← inferType xs[j]!)).isAppOf ``Fix do continue
-      let before := xs.extract 0 j
-      let stmt ← mkForallFVars before (← mkAppM ``Cont #[mkAppN (Lean.mkConst f lvls) before])
-      out := out.push (f ++ Name.mkSimple s!"cont_{j}", stmt)
-    return out
-
-/-- Prove a statement with `nonpos_cont` and add it as a theorem. -/
-meta def proveContinuity (lemmaName : Name) (stmt : Expr) : TermElabM Unit := do
-  let mvar ← mkFreshExprMVar stmt
-  let goals ← Lean.Elab.Tactic.run mvar.mvarId! (nonposContLoop (← getContTheorems) 5000)
-  unless goals.isEmpty do throwError "goals remain"
-  addDecl (Declaration.thmDecl ⟨⟨lemmaName, [], stmt⟩, ← instantiateMVars mvar, [lemmaName]⟩)
-
-elab "nonpos_continuity " id:ident : command => do
-  let f ← liftCoreM <| realizeGlobalConstNoOverload id
-  let stmts ← try liftTermElabM <| continuityStatements f catch e => do
-    logWarning m!"nonpos_continuity: could not state the continuity theorems of {f} \
-      ({e.toMessageData}); nonpos_cont will unfold {f} instead"
-    pure #[]
-  for (lemmaName, stmt) in stmts do
-    try
-      liftTermElabM <| proveContinuity lemmaName stmt
-      elabCommand (← `(attribute [nonpos_continuous] $(mkIdent lemmaName)))
-    catch e =>
-      logWarning m!"nonpos_continuity: could not prove {lemmaName} ({e.toMessageData}); \
-        nonpos_cont will unfold {f} instead"
-
-/-! ## 8. The lemmas of each structure
-
-For performance, `nonpos_structure` also proves, once for each structure `Bla`, two facts that would
-otherwise be derived from its whole tuple of fields at each use:
-* `Bla.mk_cont`: `mk` is continuous in its fields.  From `Cont f₁`, ..., `Cont fₙ` it gives
-  `Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
-  `@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
-  left with one goal per field.
-* `Bla.botTotal`: `Fix.BotTotal` of the structure, as an instance, when instance search finds it at
-  every value of the parameters (it does not when the structure has a plain field of unpointed
-  type).  The `CCPO` instance of the structure, which `partial_fixpoint` and `Cont.monotone` look
-  for, then does not re-derive it field by field at each search.
--/
-
-/-- `Bla.mk_cont` and `Bla.botTotal` for each structure of a group made by `elabGroup`. -/
-meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
-  let g := ss[0]!.name
-  let fId := mkIdentFrom g (g.getId ++ `F)
-  for s in ss do
-    let impl ← implicitBinders s.params
-    let args := s.params.map (·.1)
-    let k ← `($(mkIdent (g.getId ++ `I ++ s.name.getId)) $args*)  -- `G.I.Bla x₁ ... xₙ`
-    -- `Bla.botTotal`: only if instance search finds `Fix.BotTotal` for every value of the parameters
-    let botTy ← if s.params.isEmpty then `(Fix.BotTotal $fId $k)
-      else `(∀ $(← explicitBinders s.params)*, Fix.BotTotal $fId $k)
-    let holds ← liftTermElabM do
-      try forallTelescope (← instantiateMVars (← Term.elabType botTy)) fun _ b => return (← synthInstance? b).isSome
-      catch _ => return false
-    if holds then
-      let botId := mkIdentFrom s.name (s.name.getId ++ `botTotal)
-      elabCommand (← `(instance (priority := high) $botId:ident $impl* : Fix.BotTotal $fId $k := inferInstance))
-    -- `Bla.mk_cont`
-    if s.fields.isEmpty then continue
-    let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)
-    let contId := mkIdentFrom s.name (s.name.getId ++ `mk_cont)
-    let fieldFns ← s.fields.mapM fun (f, τ) => `(bracketedBinder| ($f : D → $τ))
-    let fieldConts ← s.fields.mapM fun (f, _) => `(bracketedBinder| (_ : Cont $f))
-    let apps ← s.fields.mapM fun (f, _) => `($f d)
-    let tuple ← apps.foldrM (init := ← `(⟨⟩)) fun a acc => `(⟨$a, $acc⟩)
-    elabCommand (← `(theorem $contId $impl* {D : Type _} [Dom D] $fieldFns*
-        (h : ∀ d, Shape.cond (F := $fId $k) (X := Fix $fId) $tuple) $fieldConts* :
-        Cont (fun d => $mkId $apps* (h d)) := by nonpos_cont 5000))
-    elabCommand (← `(attribute [nonpos_continuous] $contId))
-
-@[command_elab nonposStructure] meta def elabNonposStructure : CommandElab := fun stx => do
-  let ss := #[← parseStruct stx]
-  elabGroup ss
-  elabGroupLemmas ss
+@[command_elab nonposStructure] meta def elabNonposStructure : CommandElab := fun stx =>
+  elabGroupAndLemmas #[stx]
 
 /-- `mutual nonpos_structure ... nonpos_structure ... end`. -/
 @[command_elab Lean.Parser.Command.«mutual»] meta def elabNonposMutual : CommandElab := fun stx => do
   let cmds := stx[1].getArgs
   unless cmds.size > 0 && cmds.all (·.isOfKind ``nonposStructure) do throwUnsupportedSyntax
-  let ss ← cmds.mapM parseStruct
-  elabGroup ss
-  elabGroupLemmas ss
+  elabGroupAndLemmas cmds
 
-/-! ## 9. Axioms
+/-! ## 6. Axioms
 
 Everything above, with its proofs and model, uses only the standard axioms (no `sorry`, no
 axiom of the library's own).  The build fails if this changes. -/
 
 /-- info: 'NonPos.Fix.unfold_fold' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Fix.unfold_fold
-/-- info: 'NonPos.Cont.fold' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Cont.fold
-/-- info: 'NonPos.Cont.fix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Cont.fix
-/-- info: 'NonPos.Cont.bind' depends on axioms: [Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Cont.bind
-/-- info: 'NonPos.Cont.monotone' does not depend on any axioms -/
-#guard_msgs in #print axioms Cont.monotone
 
 end
 end NonPos
