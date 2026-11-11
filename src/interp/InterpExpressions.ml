@@ -371,7 +371,7 @@ let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
   | Constant _ ->
       (* No need to reorganize the context *)
       (ctx, fun e -> e)
-  | Copy p ->
+  | Copy (p, _) | Read p ->
       (* Access the value *)
       let access = Read in
       (* Expand the symbolic values, if necessary *)
@@ -560,7 +560,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           [%craise] span
             ("Found unexpected constant: " ^ constant_expr_to_string ctx cv)
     end
-  | Copy p ->
+  | Copy (p, _) | Read p ->
       (* Access the value *)
       let access = Read in
       let _, v, path = read_place_check span access p ctx in

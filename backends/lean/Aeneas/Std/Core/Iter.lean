@@ -8,6 +8,7 @@ public import Aeneas.Std.Scalar.CloneCopy
 public import Aeneas.Std.Scalar.EqOrd
 public import Aeneas.Std.Scalar.CheckedOps
 public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Ops
 -- Generic models below bind values of different universes: they need the
 -- universe-heterogeneous `do` elaborator. Note that this changes the `do` of every module
 -- importing this one: their `do` blocks elaborate to `Std.bind` (simp with `bind_ok`, ...)
@@ -55,6 +56,12 @@ structure core.iter.adapters.take.Take (I : Type u) where
 @[rust_type "core::iter::adapters::rev::Rev"]
 structure core.iter.adapters.rev.Rev (T : Type u) where
   iter : T
+
+@[rust_type "core::iter::adapters::take_while::TakeWhile"]
+structure core.iter.adapters.take_while.TakeWhile (I : Type u) (P : Type v) where
+  iter : I
+  flag : Bool
+  predicate : P
 
 /-- `core::iter::adapters::zip::Zip` — the `a.zip(b)` adapter.
 
@@ -729,6 +736,20 @@ def core.iter.traits.iterator.Iterator.rev.trait_default
   Self → Result (core.iter.adapters.rev.Rev Self) :=
   core.iter.traits.iterator.Iterator.rev.default
 
+/-- `Iterator::take_while` default body: `TakeWhile { iter: self, flag: false, predicate }`. -/
+def core.iter.traits.iterator.Iterator.take_while.default
+  {Self P : Type _} :
+  Self → P → Result (core.iter.adapters.take_while.TakeWhile Self P) :=
+  fun self predicate => ok ⟨self, false, predicate⟩
+
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::take_while"]
+def core.iter.traits.iterator.Iterator.take_while.trait_default
+  {Self P Item : Type _}
+  (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
+  (_PredInst : core.ops.function.FnMut P Item Bool) :
+  Self → P → Result (core.iter.adapters.take_while.TakeWhile Self P) :=
+  core.iter.traits.iterator.Iterator.take_while.default
+
 /-! ## `@[step]` specs for the default-method constructors -/
 
 @[step]
@@ -791,6 +812,25 @@ theorem core.iter.traits.iterator.Iterator.rev.default.spec
   simp [WP.spec_ok]
 
 @[step]
+theorem core.iter.traits.iterator.Iterator.take_while.default.spec
+    {Self P : Type _} (self : Self) (predicate : P) :
+    core.iter.traits.iterator.Iterator.take_while.default self predicate
+    ⦃ t => t.iter = self ∧ t.flag = false ∧ t.predicate = predicate ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.take_while.default
+  simp [WP.spec_ok]
+
+@[step]
+theorem core.iter.traits.iterator.Iterator.take_while.trait_default.spec
+    {Self P Item : Type _}
+    (inst : core.iter.traits.iterator.Iterator Self Item)
+    (predInst : core.ops.function.FnMut P Item Bool)
+    (self : Self) (predicate : P) :
+    core.iter.traits.iterator.Iterator.take_while.trait_default inst predInst self predicate
+    ⦃ t => t.iter = self ∧ t.flag = false ∧ t.predicate = predicate ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.take_while.trait_default
+  exact core.iter.traits.iterator.Iterator.take_while.default.spec self predicate
+
+@[step]
 theorem core.iter.traits.iterator.Iterator.rev.trait_default.spec
     {Self Item0 Item1 : Type _}
     (inst : core.iter.traits.iterator.Iterator Self Item0)
@@ -825,6 +865,70 @@ theorem core.iter.traits.iterator.Iterator.zip.trait_default.spec
   unfold core.iter.traits.iterator.Iterator.zip.trait_default
   exact core.iter.traits.iterator.Iterator.zip.default.spec
     IntoIterInst.into_iter self other h_into
+
+/-- `Iterator::next` on `TakeWhile<I, P>`: yields until the predicate first fails,
+    then latches `flag` and yields nothing further. -/
+@[rust_fun
+  "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, @P>, @Clause0_Item>}::next"]
+def core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
+  {I P Item : Type _}
+  (IterInst : core.iter.traits.iterator.Iterator I Item)
+  (PredInst : core.ops.function.FnMut P Item Bool) :
+  core.iter.adapters.take_while.TakeWhile I P →
+    Result ((Option Item) × core.iter.adapters.take_while.TakeWhile I P) :=
+  fun self =>
+    if self.flag then ok (none, self)
+    else do
+      let (o, it) ← IterInst.next self.iter
+      match o with
+      | none => ok (none, ⟨it, self.flag, self.predicate⟩)
+      | some x => do
+        let (b, p) ← PredInst.call_mut self.predicate x
+        if b then ok (some x, ⟨it, false, p⟩)
+        else ok (none, ⟨it, true, p⟩)
+
+/-- A `TakeWhile` step over any iterator. The predicate postcondition describes its
+    returned boolean and updated state. It is required only for items allowed by
+    `nextPost`; the inner iterator may be a slice iterator, a reversed iterator, or
+    another `Iterator` implementation. -/
+@[step]
+theorem core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next.spec
+    {I P Item : Type _}
+    (IterInst : core.iter.traits.iterator.Iterator I Item)
+    (PredInst : core.ops.function.FnMut P Item Bool)
+    (tw : core.iter.adapters.take_while.TakeWhile I P)
+    (nextPost : Option Item × I → Prop)
+    (predPost : Item → Bool × P → Prop)
+    (hnext : ¬tw.flag → IterInst.next tw.iter ⦃ nextPost ⦄)
+    (hpred : ¬tw.flag → ∀ x it, nextPost (some x, it) →
+      PredInst.call_mut tw.predicate x ⦃ predPost x ⦄) :
+    core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
+      IterInst PredInst tw
+    ⦃ r => if tw.flag then r = (none, tw)
+           else ∃ o it, nextPost (o, it) ∧
+             match o with
+             | none => r = (none, ⟨it, false, tw.predicate⟩)
+             | some x => ∃ b p, predPost x (b, p) ∧
+                 r = (if b then some x else none, ⟨it, !b, p⟩) ⦄ := by
+  by_cases hf : tw.flag
+  · simp [core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next,
+      hf, WP.spec_ok]
+  · simp only [core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next,
+      hf, Bool.false_eq_true, ↓reduceIte]
+    apply WP.spec_bind (hnext hf)
+    intro ⟨o, it⟩ ho
+    cases o with
+    | none =>
+      simp [uncurry, WP.spec_ok]
+      exact ⟨none, it, ho, rfl⟩
+    | some x =>
+      apply WP.spec_bind (hpred hf x it ho)
+      intro ⟨b, p⟩ hbp
+      cases b
+      · simp [uncurry, WP.spec_ok]
+        exact ⟨some x, it, ho, hbp, rfl⟩
+      · simp [uncurry, WP.spec_ok]
+        exact ⟨some x, it, ho, hbp, rfl, rfl⟩
 
 /-- `Iterator::next` on `Rev<I>`: delegates to the inner `next_back`. -/
 @[rust_fun

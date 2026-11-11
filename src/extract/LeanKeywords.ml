@@ -12,6 +12,7 @@ let lean_keywords : string list =
     "add_aesop_rules";
     "add_decl_doc";
     "alias";
+    "allow_unused_tactic";
     "as";
     "assert!";
     "assert_not_exists";
@@ -53,6 +54,8 @@ let lean_keywords : string list =
     "declare_config_elab";
     "declare_config_elab_legacy";
     "declare_core_config_elab";
+    "declare_decidable_int_quantifiers";
+    "declare_decidable_uint_quantifiers";
     "declare_eval_bin";
     "declare_eval_bin_bitwise";
     "declare_eval_bin_bool_pred";
