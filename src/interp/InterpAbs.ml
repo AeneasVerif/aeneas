@@ -936,8 +936,9 @@ let merge_abstractions_merge_markers (span : Meta.span)
         [%sanity_check] span (complementary_markers pm0 pm1);
         Some (merge_funs.merge_amut_borrows id0 ty0 pm0 child0 ty1 pm1 child1)
     | ASharedBorrow (pm0, id0, sid0), ASharedBorrow (pm1, id1, sid1)
-      when id0 = id1 ->
-        [%sanity_check] span (complementary_markers pm0 pm1);
+      when id0 = id1 && complementary_markers pm0 pm1 ->
+        (* It is possible that the same shared borrow exists twice on one side. 
+           In this case, we do nothing here, but call `abs_simplify_duplicated_borrows` later. *)
         Some (merge_funs.merge_ashared_borrows id0 ty0 pm0 sid0 ty1 pm1 sid1)
     | _ ->
         (* Nothing to merge *)
@@ -2057,7 +2058,8 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
     { owned }
   in
 
-  (* Simplify the duplicated shared borrows - TODO: is this really necessary? *)
+  (* Simplify the duplicated shared borrows *)
+  (* This is not necessary, but might make the abstraction smaller and then the rest is faster. *)
   let abs0 = abs_simplify_duplicated_borrows span ctx abs0 in
   let abs1 = abs_simplify_duplicated_borrows span ctx abs1 in
 
@@ -2146,7 +2148,11 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
     }
   in
 
-  [%ltrace "resulting abs:\n" ^ abs_to_string span ctx abs];
+  (* Simplify the duplicated shared borrows. Later code relies on this deduplication. *)
+  (* In fact, test-1533-shared-join.rs will fail when this is not done. *)
+  let abs = abs_simplify_duplicated_borrows span ctx abs in
+
+  (* [%ltrace "resulting abs:\n" ^ abs_to_string span ctx abs]; *)
 
   (* Sanity check *)
   [%sanity_check] span (abs_is_destructured span true ctx abs);
