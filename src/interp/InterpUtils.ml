@@ -136,7 +136,15 @@ let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
 
 let mk_var (index : LocalId.id) (name : string option) (local_ty : ty)
     (span : Meta.span) : local =
-  { index; name; local_ty; span; drop_flag_for = None }
+  {
+    index;
+    name;
+    local_ty;
+    span;
+    is_mutable = true;
+    borrowck_constraints = [];
+    drop_flag_for = None;
+  }
 
 (** Small helper - TODO: move *)
 let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
@@ -554,7 +562,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     compute span-data, to find pretty names. *)
 let rvalue_get_place (rv : rvalue) : place option =
   match rv with
-  | Use ((Copy p | Move p), _) -> Some p
+  | Use ((Copy (p, _) | Read p | Move p), _) -> Some p
   | Use (Constant _, _) -> None
   | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _

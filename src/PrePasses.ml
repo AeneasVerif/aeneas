@@ -1409,6 +1409,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
               local_ty = TypesUtils.ty_erase_regions ty;
               name = None;
               span = f.item_meta.span;
+              is_mutable = true;
+              borrowck_constraints = [];
               drop_flag_for = None;
             }
           in
@@ -2199,6 +2201,8 @@ let anon_consts_to_calls (crate : crate) : crate =
               local_ty = TypesUtils.ty_erase_regions ty;
               name = None;
               span = f.item_meta.span;
+              is_mutable = true;
+              borrowck_constraints = [];
               drop_flag_for = None;
             }
           in
