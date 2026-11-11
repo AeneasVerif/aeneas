@@ -16,6 +16,10 @@ package «aeneas» where
 private def notCI : Bool := run_io
   return (← IO.getEnv "CI").isNone
 
+/-- A specification of parts of the Aeneas translation engine. -/
+lean_lib «AeneasSpec» where
+  globs := #[.andSubmodules `AeneasSpec]
+
 @[default_target] lean_lib «AeneasMeta» {
   -- Precompiling modules triggers issues in CI so we deactivate this.
   precompileModules := notCI
