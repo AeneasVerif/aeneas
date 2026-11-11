@@ -663,6 +663,8 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
+  (* TODO: run a heuristic at each step to end [alive_hint = Some Short]
+     abstractions early *)
   (* Evaluate the statement *)
   comp cc (eval_statement_raw config st ctx)
 
@@ -1229,12 +1231,22 @@ and eval_switch_with_join (config : config) (span : Meta.span)
       (* Output the joined context *)
       ([ (joined_ctx, Unit) ], cf)
     in
-    (* TODO: check if there even are abstractions that have the alive_hint before we do this *)
-    if config.keep_alive_hints then
+    let has_long_alive_hint =
+      List.exists
+        (fun ((ctx : eval_ctx), _) ->
+          List.exists
+            (function
+              | EAbs { alive_hint = Some Long; _ } -> true
+              | EAbs { alive_hint = Some (Regular | Short) | None; _ }
+              | EBinding _ | EFrame -> false)
+            ctx.env)
+        ctx_resl
+    in
+    if config.keep_alive_hints && has_long_alive_hint then
       try join_aux config
       with Errors.RFailure ->
         join_aux { config with keep_alive_hints = false }
-    else join_aux config
+    else join_aux { config with keep_alive_hints = false }
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (span : Meta.span) (call : call)

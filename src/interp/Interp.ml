@@ -681,6 +681,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
             in
             let ctx, cc_simpl =
               InterpBorrows.simplify_dummy_values_useless_abs config
+                ~keep_alive:(fun _ -> true)
                 ~filter_avalues:false span ctx
             in
             let ret_value, env =
@@ -766,6 +767,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
                       in
                       let ctx, cc_simpl =
                         InterpBorrows.simplify_dummy_values_useless_abs config
+                          ~keep_alive:(fun _ -> true)
                           ~filter_avalues:false span ctx
                       in
                       let cc = cc_comp cc_end cc_simpl in

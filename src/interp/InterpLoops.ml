@@ -559,7 +559,8 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
         in
         ([ (ctx, res) ], cf)
       in
-      (* TODO: check if there even are abstractions that have the alive_hint before we do this *)
+      (* TODO: check if there even are abstractions that have [alive_hint = Some Long]
+         (including inside the loop body) before running Pass 1 *)
       if config.keep_alive_hints then
         try eval_loop_sym config
         with Errors.RFailure ->

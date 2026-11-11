@@ -38,16 +38,36 @@ type fun_info = {
 type modules_funs_info = { infos : fun_info FunOrMethodId.Map.t }
 [@@deriving show]
 
-let parse_keep_alive (item_meta : Types.item_meta) : Values.alive_hint option =
-  let has_keep_alive =
-    List.exists
+let parse_keep_alive ?(emit_errors : bool = false) (item_meta : Types.item_meta)
+    : Values.alive_hint option =
+  let parse_arg (args : string option) : Values.alive_hint =
+    match Option.map String.trim args with
+    | None | Some "" | Some "long" -> Values.Long
+    | Some "regular" -> Values.Regular
+    | Some "short" -> Values.Short
+    | Some arg ->
+        if emit_errors then
+          [%save_error] item_meta.span
+            ("Invalid #[verify::keep_alive] argument `" ^ arg
+           ^ "`: expected `long`, `regular`, or `short`");
+        Values.Long
+  in
+  let hints =
+    List.filter_map
       (fun (attr : Meta.attribute) ->
         match attr with
-        | AttrUnknown { path; _ } -> path = "verify::keep_alive"
-        | _ -> false)
+        | AttrUnknown { path = "verify::keep_alive"; args } ->
+            Some (parse_arg args)
+        | _ -> None)
       item_meta.attr_info.attributes
   in
-  if has_keep_alive then Some Values.Long else None
+  match hints with
+  | [] -> None
+  | [ h ] -> Some h
+  | h :: _ ->
+      if emit_errors then
+        [%save_error] item_meta.span "Duplicate #[verify::keep_alive] attribute";
+      Some h
 
 let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
     fun_info option =
@@ -82,7 +102,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       (method_id : Types.TraitMethodId.id) (m : trait_method Types.binder) :
       unit =
     let item_meta = m.binder_value.item_meta in
-    if Option.is_some (parse_keep_alive item_meta) then
+    if Option.is_some (parse_keep_alive ~emit_errors:true item_meta) then
       [%save_error] item_meta.span
         "#[verify::keep_alive] is not allowed on trait methods";
     register_info
@@ -311,7 +331,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     List.iter
       (fun (f : fun_decl) ->
         let alive_hint =
-          match parse_keep_alive f.item_meta with
+          match parse_keep_alive ~emit_errors:true f.item_meta with
           | None -> None
           | Some _ as hint -> (
               match f.src with

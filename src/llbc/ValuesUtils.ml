@@ -661,20 +661,34 @@ let mk_let (span : Meta.span) (rid_set : region_set) (pat : tepat)
   let ty = e.ty in
   { value; ty }
 
+let alive_hint_to_string (h : alive_hint) : string =
+  match h with
+  | Long -> "Long"
+  | Regular -> "Regular"
+  | Short -> "Short"
+
+let max_alive_hint (h0 : alive_hint) (h1 : alive_hint) : alive_hint =
+  match (h0, h1) with
+  | Long, _ | _, Long -> Long
+  | Regular, _ | _, Regular -> Regular
+  | Short, Short -> Short
+
 (** Merge two optional [alive_hint] values when merging two abstractions:
     - if either is [None], use the other
     - if both are [Some] and equal, keep it
-    - if both are [Some] and different, emit a warning and return [Some Long]
-      (TODO). *)
+    - if both are [Some] and different, emit a warning and return the
+      longer-lived hint ([Long > Regular > Short]) (TODO). *)
 let merge_alive_hints (span : Meta.span option) (h0 : alive_hint option)
     (h1 : alive_hint option) : alive_hint option =
   match (h0, h1) with
   | None, h | h, None -> h
   | Some h0', Some h1' ->
       if h0' = h1' then h0
-      else (
-        (* TODO: properly handle merging conflicting alive hints (Long vs Short) *)
+      else
+        (* TODO: properly handle merging conflicting alive hints *)
+        let res = max_alive_hint h0' h1' in
         [%warn_opt_span] span
-          "Merging two region abstractions with conflicting alive hints (Long \
-           vs Short); defaulting to Long";
-        Some Long)
+          ("Merging two region abstractions with conflicting alive hints ("
+         ^ alive_hint_to_string h0' ^ " vs " ^ alive_hint_to_string h1'
+         ^ "); defaulting to " ^ alive_hint_to_string res);
+        Some res

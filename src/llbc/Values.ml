@@ -305,8 +305,14 @@ type abs_kind =
 [@@deriving show, eq, ord]
 
 (** Hint controlling whether a region abstraction without loans should be kept
-    alive, and if yes, for how long. *)
-type alive_hint = Long | Short [@@deriving show, eq, ord]
+    alive, and if yes, for how long:
+    - [Long]: kept alive as long as possible (across joins and loops); backward
+      functions are stateful.
+    - [Regular]: kept alive just beyond when the called function returns, but
+      ended early at joins and loops; backward functions are stateful.
+    - [Short]: like [Regular], with an additional step-level heuristic to end
+      abstractions early; backward functions are stateful. *)
+type alive_hint = Long | Regular | Short [@@deriving show, eq, ord]
 
 module AbsBVarId = OrdIdGen ()
 module AbsFVarId = OrdIdGen ()

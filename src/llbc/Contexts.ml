@@ -24,6 +24,8 @@ type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
   keep_alive_hints : bool;
+      (** Whether to keep [alive_hint = Some Long] abstractions alive across
+          joins and loops (Pass 1 of the 2-pass join/loop evaluation). *)
 }
 [@@deriving show]
 

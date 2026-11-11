@@ -179,4 +179,9 @@ val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
       abstractions which are specified by the set of abstraction ids (we do not
       end them, nor their loans). *)
 val simplify_dummy_values_useless_abs :
-  config -> ?snapshots:bool -> ?filter_avalues:bool -> Meta.span -> cm_fun
+  config ->
+  ?keep_alive:(alive_hint -> bool) ->
+  ?snapshots:bool ->
+  ?filter_avalues:bool ->
+  Meta.span ->
+  cm_fun
