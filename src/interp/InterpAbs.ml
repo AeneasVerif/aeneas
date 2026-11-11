@@ -2588,12 +2588,24 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbsId.Set.t)
      the joins as well as to check whether two environments are equivalent.
      We may want to make this algorithm more general in the future.
   *)
+  let erase_sids =
+    let visitor =
+      object
+        inherit [_] map_tavalue
+
+        method! visit_ASharedBorrow _ pm bid _ =
+          ASharedBorrow (pm, bid, SharedBorrowId.zero)
+      end
+    in
+    List.map (visitor#visit_tavalue ())
+  in
   let cmp abs0 abs1 =
     match (abs0, abs1) with
-    | EAbs abs0, EAbs abs1 -> compare_tavalue_list abs0.avalues abs1.avalues
+    | EAbs abs0, EAbs abs1 ->
+        compare_tavalue_list (erase_sids abs0.avalues) (erase_sids abs1.avalues)
     | _ -> [%internal_error] span
   in
-  let fresh_abs = List.sort cmp fresh_abs |> List.rev in
+  let fresh_abs = fresh_abs |> List.rev |> List.stable_sort cmp |> List.rev in
 
   (* Reconstruct the environment *)
   let env = fresh_abs @ env in
@@ -2609,8 +2621,9 @@ type proj_ctx = {
   inside_output : bool;  (** Are we inside an abstraction output expression? *)
 }
 
-let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
-    (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
+let project_context ?(keep_empty_aids : AbsId.Set.t = AbsId.Set.empty)
+    (span : Meta.span) (fixed_aids : AbsId.Set.t) (pm : proj_marker)
+    (ctx : eval_ctx) : eval_ctx =
   [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
   let project_left = pm = PLeft in
 
@@ -2781,7 +2794,22 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
         else
           let keep_value (e : tavalue) : bool = not (is_aignored e.value) in
           let avalues = List.filter keep_value abs.avalues in
-          if avalues = [] then None else Some (EAbs { abs with avalues })
+          if avalues <> [] then Some (EAbs { abs with avalues })
+          else if AbsId.Set.mem abs.abs_id keep_empty_aids then
+            (* Keep empty abstractions only when [add_borrows_seq] targets them
+               after projection, and reset any left-side continuation so we do
+               not retain dangling [Join]/[Loop] calls. *)
+            let cont =
+              if Option.is_some abs.cont then
+                Some
+                  {
+                    output = Some (mk_etuple ~borrow_proj:true []);
+                    input = Some (mk_etuple ~borrow_proj:false []);
+                  }
+              else None
+            in
+            Some (EAbs { abs with avalues = []; cont })
+          else None
     | EBinding _ | EFrame -> Some e
   in
   let env = List.filter_map update_binding ctx.env in

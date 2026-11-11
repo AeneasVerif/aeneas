@@ -160,6 +160,7 @@ val loop_join_origin_with_continue_ctxs :
   config ->
   Meta.span ->
   loop_id ->
+  AbsId.Set.t ->
   eval_ctx ->
   eval_ctx list ->
   (eval_ctx * eval_ctx list) * eval_ctx

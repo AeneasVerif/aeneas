@@ -349,7 +349,7 @@ def HashMap.get_mut_in_list_loop
       let back1 := fun o1 => let a := back o1
                              AList.Cons ckey cvalue a
       ok (o, back1)
-  | AList.Nil => ok (none, fun o => AList.Nil)
+  | AList.Nil => ok (none, fun (o : Option T) => AList.Nil)
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:

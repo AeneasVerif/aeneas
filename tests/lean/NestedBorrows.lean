@@ -228,7 +228,7 @@ def ListIterMut.next
   match o with
   | none =>
     let back'a :=
-      fun self1 o2 =>
+      fun self1 (o2 : Option T) =>
         let o3 := take_option_mut_back self1.current none
         ({ current := o3 } : ListIterMut T)
     ok (none, { current := o1 }, back'a)
@@ -236,7 +236,7 @@ def ListIterMut.next
     match l with
     | List.Nil =>
       let back'a :=
-        fun self1 o2 =>
+        fun self1 (o2 : Option T) =>
           let o3 := take_option_mut_back self1.current o
           ({ current := o3 } : ListIterMut T)
       ok (none, { current := o1 }, back'a)

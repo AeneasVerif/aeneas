@@ -26,7 +26,7 @@ namespace issue_1518_breaks
 def borrow_unit
   (x : (Std.I32 × Unit)) : Result (Unit × (Unit → (Std.I32 × Unit))) := do
   let (i, _) := x
-  let back := fun _ => (i, ())
+  let back := fun (_ : Unit) => (i, ())
   ok ((), back)
 
 /-- [issue_1518_breaks::loop_borrow_unit]: loop body 0:

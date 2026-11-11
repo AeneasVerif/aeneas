@@ -1115,6 +1115,15 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
     let ctx0_aids = env_get_abs_ids ctx0.env in
     [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
+    let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 joined_ctx in
+    let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
+    let joined_ctx =
+      InterpJoin.destructure_new_abs span fixed_aids joined_ctx
+    in
+    let joined_ctx =
+      InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true Join
+        fixed_aids fixed_dids joined_ctx
+    in
 
     (* We need to update the fresh abstraction continuations in the joined context,
        to reflect the fact that in the symbolic AST they should be introduced by

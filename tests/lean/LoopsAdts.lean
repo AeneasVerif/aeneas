@@ -74,7 +74,7 @@ def nth_mut_loop
       let back1 := fun o1 => let l := back o1
                              List.Cons x l
       ok (o, back1)
-  | List.Nil => ok (none, fun o => List.Nil)
+  | List.Nil => ok (none, fun (o : Option T) => List.Nil)
 partial_fixpoint
 
 /-- [loops_adts::nth_mut]:

@@ -58,7 +58,9 @@ val reduce_ctx :
   eval_ctx ->
   eval_ctx
 
-type borrow_or_proj = Borrow of borrow_id | Proj of region_set * symbolic_proj
+type borrow_or_proj =
+  | Borrow of borrow_id * ty
+  | Proj of region_set * symbolic_proj
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
@@ -89,7 +91,7 @@ val collapse_ctx :
   Meta.span ->
   ?sequence:(abs_id * abs_id * abs_id) list ref option ->
   ?shared_borrows_seq:
-    (abs_id * int * proj_marker * borrow_or_proj * ty) list ref option ->
+    (abs_id * int * proj_marker * borrow_or_proj) list ref option ->
   abs_kind ->
   recoverable:bool ->
   with_abs_conts:bool ->
@@ -125,7 +127,7 @@ val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
   (abs_id * abs_id * abs_id) list ->
   AbsId.Set.t ->
-  (abs_id * int * proj_marker * borrow_or_proj * ty) list ->
+  (abs_id * int * proj_marker * borrow_or_proj) list ->
   abs_kind ->
   with_abs_conts:bool ->
   eval_ctx ->

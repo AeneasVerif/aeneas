@@ -1022,7 +1022,7 @@ let destructure_new_abs (span : Meta.span) (old_abs_ids : AbsId.Set.t)
   let env =
     env_map_abs
       (fun abs ->
-        if is_fresh_abs_id abs.abs_id then
+        if abs.can_end && is_fresh_abs_id abs.abs_id then
           let abs =
             destructure_abs span abs.kind ~can_end:true
               ~destructure_shared_values:true ctx abs
@@ -1037,11 +1037,13 @@ let destructure_new_abs (span : Meta.span) (old_abs_ids : AbsId.Set.t)
   ctx
 
 let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (ctx0 : eval_ctx) (ctxl : eval_ctx list) :
-    (eval_ctx * eval_ctx list) * eval_ctx =
+    (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t) (ctx0 : eval_ctx)
+    (ctxl : eval_ctx list) : (eval_ctx * eval_ctx list) * eval_ctx =
   (* Simplify the contexts we want to join *)
   let simplify (ctx : eval_ctx) : eval_ctx =
-    let fixed_aids = compute_fixed_abs_ids ctx0 ctx in
+    let fixed_aids =
+      AbsId.Set.inter fixed_aids (compute_fixed_abs_ids ctx0 ctx)
+    in
     let fixed_dids = ctx_get_dummy_var_ids ctx0 in
     [%ldebug "- fixed_aids: " ^ AbsId.Set.to_string None fixed_aids];
 
@@ -1409,6 +1411,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     "- tgt_ctx after simplify_ended_shared_loans:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
+  (* Destructure the fresh abstractions before reducing/joining *)
+  let tgt_ctx = destructure_new_abs span fixed_aids tgt_ctx in
+
   (* Reduce the context - TODO: generalize the join so that we don't need to do this *)
   let tgt_ctx =
     reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_aids
@@ -1460,8 +1465,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      borrows to the right *)
   let add_borrows_seq =
     List.filter_map
-      (fun (abs_id, i, pm, bid, ty) ->
-        if pm = PRight then Some (abs_id, i, PNone, bid, ty) else None)
+      (fun (abs_id, i, pm, bid) ->
+        if pm = PRight then Some (abs_id, i, PNone, bid) else None)
       (List.rev !add_borrows_seq)
   in
   [%ltrace
@@ -1477,7 +1482,34 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Project the context to only preserve the right part, which corresponds to the
      target *)
-  let joined_ctx = project_context span fixed_aids PRight joined_ctx in
+  let joined_ctx =
+    let proj_ctx = project_context span fixed_aids PRight joined_ctx in
+    let present =
+      List.fold_left
+        (fun s (a0, a1, a2) ->
+          if AbsId.Set.mem a0 s || AbsId.Set.mem a1 s then AbsId.Set.add a2 s
+          else s)
+        (ctx_get_abs_ids proj_ctx) merge_seq
+    in
+    let missing_targets =
+      List.fold_left
+        (fun s (aid, _, _, _) ->
+          if AbsId.Set.mem aid present then s else AbsId.Set.add aid s)
+        AbsId.Set.empty add_borrows_seq
+    in
+    if AbsId.Set.is_empty missing_targets then proj_ctx
+    else
+      (* Only preserve pre-merge empty abstractions when no surviving PRight
+         leaf would materialize the [add_borrows_seq] target. *)
+      let keep_empty_aids =
+        List.fold_left
+          (fun s (a0, a1, a2) ->
+            if AbsId.Set.mem a2 s then AbsId.Set.add a0 (AbsId.Set.add a1 s)
+            else s)
+          missing_targets (List.rev merge_seq)
+      in
+      project_context ~keep_empty_aids span fixed_aids PRight joined_ctx
+  in
   let joined_symbolic_to_tgt_value =
     SymbolicValueId.Map.map (fun (_, x) -> x) join_info.symbolic_to_value
   in

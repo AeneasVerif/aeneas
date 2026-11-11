@@ -1248,15 +1248,24 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the lambda - note that there should always be at least one variable *)
   [%sanity_check] span (xl <> []);
   F.pp_print_string fmt "fun";
-  let with_type =
-    match backend () with
-    | Coq -> true
-    | _ -> false
+  let used = PureUtils.texpr_get_fvars e in
+  let rec pat_needs_type (p : tpat) : bool =
+    match p.pat with
+    | PIgnored -> true
+    | POpen (v, _) -> not (FVarId.Set.mem v.id used)
+    | PConstant _ | PBound _ -> false
+    | PAdt av -> List.exists pat_needs_type av.fields
   in
   let ctx =
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
+        let with_type =
+          match backend () with
+          | Coq -> true
+          | Lean -> pat_needs_type x
+          | _ -> false
+        in
         extract_tpat span ctx fmt ~is_let:true ~inside:true ~with_type x)
       ctx xl
   in

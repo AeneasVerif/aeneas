@@ -119,7 +119,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (* Join the context with the context at the loop entry *)
     update_fixed_ids ctxs;
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs config span loop_id ctx1 ctxs
+      loop_join_origin_with_continue_ctxs config span loop_id !fixed_ids.aids
+        ctx1 ctxs
     in
     ctx2
   in
