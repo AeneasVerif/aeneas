@@ -20,17 +20,26 @@ module BinderMap = Collections.MakeMap (OrderedBinder)
 
 type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 
+type liveness_info = {
+  live_before_stmt : LocalId.Set.t StatementId.Map.t;
+  live_after_block : LocalId.Set.t BlockId.Map.t;
+}
+
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
   keep_alive_hints : bool;
       (** Whether to keep [alive_hint = Some Long] abstractions alive across
           joins and loops (Pass 1 of the 2-pass join/loop evaluation). *)
+  liveness : (liveness_info option[@opaque]);
+      (** Precomputed local-variable liveness for ending
+          [alive_hint = Some Short] abstractions early. *)
 }
 [@@deriving show]
 
-let mk_config (mode : interpreter_mode) : config =
-  { mode; keep_alive_hints = true }
+let mk_config ?(liveness : liveness_info option = None)
+    (mode : interpreter_mode) : config =
+  { mode; keep_alive_hints = true; liveness }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;

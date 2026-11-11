@@ -663,8 +663,11 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
-  (* TODO: run a heuristic at each step to end [alive_hint = Some Short]
-     abstractions early *)
+  (* End any [alive_hint = Some Short] abstractions whose borrows are no longer
+     needed by any live local variable *)
+  let ctx, cc =
+    comp cc (InterpLiveness.end_short_abstractions_before_stmt config st ctx)
+  in
   (* Evaluate the statement *)
   comp cc (eval_statement_raw config st ctx)
 
@@ -706,7 +709,22 @@ and eval_block (config : config) (b : block) : stl_cm_fun =
     ^ "):\n"
     ^ block_to_string_with_tab ctx b
     ^ "\n"];
-  eval_statement_list config b.span b.statements ctx
+  let ctx_resl, cf_stmts = eval_statement_list config b.span b.statements ctx in
+  let ctx_res_cfl =
+    List.map
+      (fun (ctx, res) ->
+        match res with
+        | Unit ->
+            let ctx, cc =
+              InterpLiveness.end_short_abstractions_after_block config b ctx
+            in
+            ((ctx, Unit), cc)
+        | Panic | Break _ | Continue _ | Return -> ((ctx, res), fun e -> e))
+      ctx_resl
+  in
+  let ctx_resl, cfl = List.split ctx_res_cfl in
+  let cf_end el = List.map2 (fun cf e -> cf e) cfl el in
+  (ctx_resl, cc_comp cf_stmts cf_end)
 
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->

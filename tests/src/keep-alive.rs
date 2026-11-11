@@ -17,23 +17,25 @@ impl<T> Clone for Ptr<T> {
 }
 
 impl<T> Ptr<T> {
+    #[verify::keep_alive(short)]
     #[verify::opaque]
     pub fn as_shr<'a>(self) -> &'a T {
         unsafe { &*(self.data) }
     }
 
+    #[verify::keep_alive(short)]
     #[verify::opaque]
     pub fn as_mut<'a>(self) -> &'a mut T {
         unsafe { &mut *(self.data) }
     }
 
-    #[verify::keep_alive]
+    #[verify::keep_alive(long)]
     #[verify::opaque]
     pub fn from_mut<'a>(r: &'a mut T) -> Ptr<T> {
         Self { data: &raw mut *r }
     }
 
-    #[verify::keep_alive]
+    #[verify::keep_alive(long)]
     #[verify::opaque]
     pub fn from_shr<'a>(r: &'a T) -> Self {
         Self {
@@ -76,6 +78,18 @@ pub fn example() {
     let xref = ptr.as_mut();
     *xref += 1;
     assert_eq!(x, 43);
+}
+
+pub fn example_two_derefs() {
+    let mut x = 42;
+    let ptr = Ptr::from_mut(&mut x);
+    let r1 = ptr.as_mut();
+    *r1 += 1;
+    let s = ptr.as_shr();
+    let v = *s;
+    let r2 = ptr.as_mut();
+    *r2 = v + 10;
+    assert_eq!(x, 53);
 }
 
 pub fn example_join_real_input(cond: bool) {
@@ -370,19 +384,126 @@ pub fn use_regular_wrapper_shr(x: &u32) -> u32 {
     *ptr.as_shr()
 }
 
-// `Short`: behaves like `Regular` (stateful back fn, ended early at joins).
-pub fn short_straight_line_and_join(cond: bool) -> i32 {
+fn side_effect(v: i32) -> i32 {
+    v + 100
+}
+
+#[verify::keep_alive(regular)]
+pub fn reborrow_regular<'a>(x: &'a mut i32) -> &'a mut i32 {
+    x
+}
+
+#[verify::keep_alive(short)]
+pub fn reborrow_short<'a>(x: &'a mut i32) -> &'a mut i32 {
+    x
+}
+
+// Contrast `Regular` vs `Short` after last use of `r`:
+// - `Regular` keeps `r`'s abstraction alive across `side_effect(5)` until `x` is accessed.
+pub fn regular_waits_past_unrelated_call() -> i32 {
+    let mut x = 10;
+    let r = reborrow_regular(&mut x);
+    *r += 1;
+    let z = side_effect(5);
+    x + z
+}
+
+// - `Short` ends `reborrow_short` immediately after `*r += 1`, BEFORE `side_effect(5)`.
+pub fn short_ends_after_last_use() -> i32 {
+    let mut x = 10;
+    let r = reborrow_short(&mut x);
+    *r += 1;
+    let z = side_effect(5);
+    x + z
+}
+
+// Transitive reborrow: `r1` dies right after `id_mut(r1)`, but `r2` stays live across
+// `side_effect(1)`, so `reborrow_short` stays alive until after `*r2 += a`, ending
+// before `side_effect(2)`.
+pub fn short_chained_reborrow() -> i32 {
+    let mut x = 10;
+    let r1 = reborrow_short(&mut x);
+    let r2 = id_mut(r1);
+    let a = side_effect(1);
+    *r2 += a;
+    let b = side_effect(2);
+    x + b
+}
+
+// `let _ = *r;` (`PlaceMention(*r)`) counts as a live use, keeping `reborrow_short`
+// alive across `side_effect(1)` and ending it right before `side_effect(2)`.
+pub fn short_place_mention_extends_life() -> i32 {
+    let mut x = 10;
+    let r = reborrow_short(&mut x);
+    *r += 1;
+    let a = side_effect(1);
+    let _ = *r;
+    let b = side_effect(2);
+    x + a + b
+}
+
+#[verify::opaque]
+pub struct Guard<'a> {
+    data: &'a mut i32,
+}
+
+impl<'a> Guard<'a> {
+    #[verify::keep_alive(short)]
+    #[verify::opaque]
+    pub fn acquire(x: &'a mut i32) -> Guard<'a> {
+        Guard { data: x }
+    }
+
+    #[verify::opaque]
+    pub fn get_mut<'b>(&'b mut self) -> &'b mut i32 {
+        self.data
+    }
+}
+
+// Lifetime-carrying ADT (`Guard<'a>`): stays alive across `g.get_mut()` and `*r += 5`,
+// then releases immediately before `side_effect(1)`.
+pub fn short_guard_releases_early() -> i32 {
+    let mut x = 10;
+    let mut g = Guard::acquire(&mut x);
+    let r = g.get_mut();
+    *r += 5;
+    let y = side_effect(1);
+    x + y
+}
+
+// `Short` must not prematurely end an active `Long` abstraction (`Ptr::from_mut`)
+// that borrowed from `r`.
+pub fn short_does_not_kill_long() -> i32 {
+    let mut x = 10;
+    let r = reborrow_short(&mut x);
+    let ptr = Ptr::from_mut(r);
+    let rx = ptr.as_mut();
+    *rx += 3;
+    x
+}
+
+// Zero-loan `Short` call (`Ptr<T>` has no lifetime `'a`): ends immediately before the
+// next statement (`side_effect(1)`).
+pub fn short_zero_loan_ends_immediately() -> i32 {
     let mut x = 40;
-    let ptr = Ptr::from_mut_short(&mut x);
-    let r = ptr.as_mut();
-    *r += 2;
-    let bonus = if cond {
-        let _p = Ptr::from_mut_short(&mut x);
-        0
-    } else {
-        0
-    };
-    x + bonus
+    let _ptr = Ptr::from_mut_short(&mut x);
+    let y = side_effect(1);
+    x + y
+}
+
+// `Short` inside a loop: ends right after `*r += 1` (before `side_effect(1)`) on each iteration.
+pub fn short_in_loop(mut n: i32) -> i32 {
+    let mut x = 0;
+    loop {
+        if n <= 0 {
+            break;
+        }
+        let r = reborrow_short(&mut x);
+        *r += 1;
+        let _ = side_effect(1);
+        n -= 1;
+    }
+    x
 }
 
 #[cfg(test)]
@@ -390,6 +511,7 @@ mod test {
     #[test]
     fn test_raw_example() {
         super::example();
+        super::example_two_derefs();
     }
     #[test]
     fn test_example_join_real_input() {
@@ -467,7 +589,13 @@ mod test {
         assert_eq!(super::regular_loop_ends_early(3), 42);
         let u = 77u32;
         assert_eq!(super::use_regular_wrapper_shr(&u), 77);
-        assert_eq!(super::short_straight_line_and_join(true), 42);
-        assert_eq!(super::short_straight_line_and_join(false), 42);
+        assert_eq!(super::regular_waits_past_unrelated_call(), 116);
+        assert_eq!(super::short_ends_after_last_use(), 116);
+        assert_eq!(super::short_chained_reborrow(), 213);
+        assert_eq!(super::short_place_mention_extends_life(), 214);
+        assert_eq!(super::short_guard_releases_early(), 116);
+        assert_eq!(super::short_does_not_kill_long(), 13);
+        assert_eq!(super::short_zero_loan_ends_immediately(), 141);
+        assert_eq!(super::short_in_loop(4), 4);
     }
 }

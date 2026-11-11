@@ -50,68 +50,85 @@ def Ptr.Insts.CoreMarkerCopy (T : Type _) : core.marker.Copy (Ptr T) := {
 }
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::as_shr]:
-    Source: 'tests/src/keep-alive.rs', lines 21:4-23:5
+    Source: 'tests/src/keep-alive.rs', lines 22:4-24:5
     Visibility: public -/
-axiom Ptr.as_shr {T : Type _} : Ptr T → Result T
+axiom Ptr.as_shr {T : Type _} : Ptr T → Result (T × (Unit → Result Unit))
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::as_mut]:
-    Source: 'tests/src/keep-alive.rs', lines 26:4-28:5
+    Source: 'tests/src/keep-alive.rs', lines 28:4-30:5
     Visibility: public -/
-axiom Ptr.as_mut {T : Type _} : Ptr T → Result (T × (T → Unit))
+axiom Ptr.as_mut {T : Type _} : Ptr T → Result (T × (T → Result Unit))
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::from_mut]:
-    Source: 'tests/src/keep-alive.rs', lines 32:4-34:5
+    Source: 'tests/src/keep-alive.rs', lines 34:4-36:5
     Visibility: public -/
 axiom Ptr.from_mut {T : Type _} : T → Result ((Ptr T) × (Unit → Result T))
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::from_shr]:
-    Source: 'tests/src/keep-alive.rs', lines 38:4-42:5
+    Source: 'tests/src/keep-alive.rs', lines 40:4-44:5
     Visibility: public -/
 axiom Ptr.from_shr
   {T : Type _} : T → Result ((Ptr T) × (Unit → Result Unit))
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::from_mut_regular]:
-    Source: 'tests/src/keep-alive.rs', lines 46:4-48:5
+    Source: 'tests/src/keep-alive.rs', lines 48:4-50:5
     Visibility: public -/
 axiom Ptr.from_mut_regular
   {T : Type _} : T → Result ((Ptr T) × (Unit → Result T))
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::from_shr_regular]:
-    Source: 'tests/src/keep-alive.rs', lines 52:4-56:5
+    Source: 'tests/src/keep-alive.rs', lines 54:4-58:5
     Visibility: public -/
 axiom Ptr.from_shr_regular
   {T : Type _} : T → Result ((Ptr T) × (Unit → Result Unit))
 
 /-- [keep_alive::{keep_alive::Ptr<T>}::from_mut_short]:
-    Source: 'tests/src/keep-alive.rs', lines 60:4-62:5
+    Source: 'tests/src/keep-alive.rs', lines 62:4-64:5
     Visibility: public -/
 axiom Ptr.from_mut_short
   {T : Type _} : T → Result ((Ptr T) × (Unit → Result T))
 
 /-- [keep_alive::id_mut]:
-    Source: 'tests/src/keep-alive.rs', lines 65:0-67:1
+    Source: 'tests/src/keep-alive.rs', lines 67:0-69:1
     Visibility: public -/
 def id_mut {T : Type _} (x : T) : Result (T × (T → T)) := do
   ok (x, fun x1 => x1)
 
 /-- [keep_alive::freeze]:
-    Source: 'tests/src/keep-alive.rs', lines 69:0-71:1
+    Source: 'tests/src/keep-alive.rs', lines 71:0-73:1
     Visibility: public -/
 def freeze {T : Type _} (x : T) : Result (T × T) := do
   ok (x, x)
 
 /-- [keep_alive::example]:
-    Source: 'tests/src/keep-alive.rs', lines 73:0-79:1
+    Source: 'tests/src/keep-alive.rs', lines 75:0-81:1
     Visibility: public -/
 def «example» : Result Unit := do
   let (ptr, from_mut_back) ← Ptr.from_mut 42#i32
-  let (xref, _) ← Ptr.as_mut ptr
-  let _ ← xref + 1#i32
+  let (xref, as_mut_back) ← Ptr.as_mut ptr
+  let xref1 ← xref + 1#i32
+  as_mut_back xref1
   let x ← from_mut_back ()
   massert (x = 43#i32)
 
+/-- [keep_alive::example_two_derefs]:
+    Source: 'tests/src/keep-alive.rs', lines 83:0-93:1
+    Visibility: public -/
+def example_two_derefs : Result Unit := do
+  let (ptr, from_mut_back) ← Ptr.from_mut 42#i32
+  let (r1, as_mut_back) ← Ptr.as_mut ptr
+  let r11 ← r1 + 1#i32
+  as_mut_back r11
+  let (s, as_shr_back) ← Ptr.as_shr ptr
+  as_shr_back ()
+  let (_, as_mut_back1) ← Ptr.as_mut ptr
+  let r2 ← s + 10#i32
+  as_mut_back1 r2
+  let x ← from_mut_back ()
+  massert (x = 53#i32)
+
 /-- [keep_alive::example_join_real_input]:
-    Source: 'tests/src/keep-alive.rs', lines 81:0-92:1
+    Source: 'tests/src/keep-alive.rs', lines 95:0-106:1
     Visibility: public -/
 def example_join_real_input (cond : Bool) : Result Unit := do
   let (r, back) ←
@@ -137,7 +154,7 @@ def example_join_real_input (cond : Bool) : Result Unit := do
   massert (left_val = 43#i32)
 
 /-- [keep_alive::example_join_no_input_no_hint]:
-    Source: 'tests/src/keep-alive.rs', lines 94:0-105:1
+    Source: 'tests/src/keep-alive.rs', lines 108:0-119:1
     Visibility: public -/
 def example_join_no_input_no_hint (cond : Bool) : Result Unit := do
   let back ←
@@ -153,7 +170,7 @@ def example_join_no_input_no_hint (cond : Bool) : Result Unit := do
   massert (x = 42#i32)
 
 /-- [keep_alive::simple_loop_ptr_from_mut]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 111:4-118:5
+    Source: 'tests/src/keep-alive.rs', lines 125:4-132:5
     Visibility: public -/
 @[rust_loop_body]
 def simple_loop_ptr_from_mut_loop.body
@@ -170,7 +187,7 @@ def simple_loop_ptr_from_mut_loop.body
     ok (cont (n1, x2))
 
 /-- [keep_alive::simple_loop_ptr_from_mut]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 111:4-118:5
+    Source: 'tests/src/keep-alive.rs', lines 125:4-132:5
     Visibility: public -/
 @[rust_loop]
 def simple_loop_ptr_from_mut_loop
@@ -180,14 +197,14 @@ def simple_loop_ptr_from_mut_loop
     (n, x)
 
 /-- [keep_alive::simple_loop_ptr_from_mut]:
-    Source: 'tests/src/keep-alive.rs', lines 109:0-120:1
+    Source: 'tests/src/keep-alive.rs', lines 123:0-134:1
     Visibility: public -/
 def simple_loop_ptr_from_mut (n : Std.I32) : Result Std.I32 := do
   let back ← simple_loop_ptr_from_mut_loop n 42#i32
   back ()
 
 /-- [keep_alive::make_ptr_and_mut]:
-    Source: 'tests/src/keep-alive.rs', lines 123:0-125:1
+    Source: 'tests/src/keep-alive.rs', lines 137:0-139:1
     Visibility: public -/
 def make_ptr_and_mut
   (x : Std.I32) (y : Std.I32) :
@@ -201,7 +218,7 @@ def make_ptr_and_mut
   ok ((p, y), back)
 
 /-- [keep_alive::loop_explicit_move_mut]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 132:4-146:5
+    Source: 'tests/src/keep-alive.rs', lines 146:4-160:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_explicit_move_mut_loop.body
@@ -221,7 +238,7 @@ def loop_explicit_move_mut_loop.body
     ok (cont (n1, x2, y2))
 
 /-- [keep_alive::loop_explicit_move_mut]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 132:4-146:5
+    Source: 'tests/src/keep-alive.rs', lines 146:4-160:5
     Visibility: public -/
 @[rust_loop]
 def loop_explicit_move_mut_loop
@@ -233,7 +250,7 @@ def loop_explicit_move_mut_loop
     (n, x, y)
 
 /-- [keep_alive::loop_explicit_move_mut]:
-    Source: 'tests/src/keep-alive.rs', lines 129:0-148:1
+    Source: 'tests/src/keep-alive.rs', lines 143:0-162:1
     Visibility: public -/
 def loop_explicit_move_mut (n : Std.I32) : Result Std.I32 := do
   let back ← loop_explicit_move_mut_loop n 42#i32 10#i32
@@ -241,7 +258,7 @@ def loop_explicit_move_mut (n : Std.I32) : Result Std.I32 := do
   x + y
 
 /-- [keep_alive::loop_equiv_alive_hint]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 1:0-171:5
+    Source: 'tests/src/keep-alive.rs', lines 1:0-185:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_equiv_alive_hint_loop.body
@@ -268,7 +285,7 @@ def loop_equiv_alive_hint_loop.body
     else ok (cont (fun (_ : Unit) => back (), n1, 0#i32))
 
 /-- [keep_alive::loop_equiv_alive_hint]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 1:0-171:5
+    Source: 'tests/src/keep-alive.rs', lines 1:0-185:5
     Visibility: public -/
 @[rust_loop]
 def loop_equiv_alive_hint_loop
@@ -282,7 +299,7 @@ def loop_equiv_alive_hint_loop
     (back, n, s)
 
 /-- [keep_alive::loop_equiv_alive_hint]:
-    Source: 'tests/src/keep-alive.rs', lines 151:0-173:1
+    Source: 'tests/src/keep-alive.rs', lines 165:0-187:1
     Visibility: public -/
 def loop_equiv_alive_hint
   (n : Std.I32) (cond : Bool) (cond2 : Bool) : Result Std.I32 := do
@@ -295,7 +312,7 @@ def loop_equiv_alive_hint
   s1 + z
 
 /-- [keep_alive::join_mut_loan_vs_shared_loan]:
-    Source: 'tests/src/keep-alive.rs', lines 175:0-185:1
+    Source: 'tests/src/keep-alive.rs', lines 189:0-199:1
     Visibility: public -/
 def join_mut_loan_vs_shared_loan (cond : Bool) : Result Std.I32 := do
   let (x, r) ←
@@ -309,12 +326,12 @@ def join_mut_loan_vs_shared_loan (cond : Bool) : Result Std.I32 := do
   r + x
 
 /-- [keep_alive::drop_val]:
-    Source: 'tests/src/keep-alive.rs', lines 187:0-187:24 -/
+    Source: 'tests/src/keep-alive.rs', lines 201:0-201:24 -/
 def drop_val {T : Type _} (_x : T) : Result Unit := do
   ok ()
 
 /-- [keep_alive::join_mut_loan_vs_bottom]:
-    Source: 'tests/src/keep-alive.rs', lines 189:0-196:1
+    Source: 'tests/src/keep-alive.rs', lines 203:0-210:1
     Visibility: public -/
 def join_mut_loan_vs_bottom (cond : Bool) (b : Std.I32) : Result Std.I32 := do
   if cond
@@ -326,7 +343,7 @@ def join_mut_loan_vs_bottom (cond : Bool) (b : Std.I32) : Result Std.I32 := do
        ok 0#i32
 
 /-- [keep_alive::if_join_keep_alive]:
-    Source: 'tests/src/keep-alive.rs', lines 198:0-209:1
+    Source: 'tests/src/keep-alive.rs', lines 212:0-223:1
     Visibility: public -/
 def if_join_keep_alive (cond : Bool) : Result Std.I32 := do
   let (ptr, back, back1) ←
@@ -341,14 +358,15 @@ def if_join_keep_alive (cond : Bool) : Result Std.I32 := do
       let (ptr1, from_mut_back) ← Ptr.from_mut 10#i32
       ok (ptr1, fun (_ : Unit) => from_mut_back (),
         fun (_ : Unit) => ok 42#i32)
-  let (rx, _) ← Ptr.as_mut ptr
-  let _ ← rx + 1#i32
+  let (rx, as_mut_back) ← Ptr.as_mut ptr
+  let rx1 ← rx + 1#i32
+  as_mut_back rx1
   let x ← back1 ()
   let y ← back ()
   x + y
 
 /-- [keep_alive::loop_join_keep_alive]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 214:4-220:5
+    Source: 'tests/src/keep-alive.rs', lines 228:4-234:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_join_keep_alive_loop.body
@@ -365,7 +383,7 @@ def loop_join_keep_alive_loop.body
     ok (cont (fun (_ : Unit) => from_mut_back (), n1, ptr1))
 
 /-- [keep_alive::loop_join_keep_alive]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 214:4-220:5
+    Source: 'tests/src/keep-alive.rs', lines 228:4-234:5
     Visibility: public -/
 @[rust_loop]
 def loop_join_keep_alive_loop
@@ -377,18 +395,19 @@ def loop_join_keep_alive_loop
     (back, n, ptr)
 
 /-- [keep_alive::loop_join_keep_alive]:
-    Source: 'tests/src/keep-alive.rs', lines 211:0-224:1
+    Source: 'tests/src/keep-alive.rs', lines 225:0-238:1
     Visibility: public -/
 def loop_join_keep_alive (n : Std.I32) : Result Std.I32 := do
   let (ptr, from_mut_back) ← Ptr.from_mut 42#i32
   let (ptr1, back) ←
     loop_join_keep_alive_loop (fun (_ : Unit) => from_mut_back ()) n ptr
-  let (r, _) ← Ptr.as_mut ptr1
-  let _ ← r + 1#i32
+  let (r, as_mut_back) ← Ptr.as_mut ptr1
+  let r1 ← r + 1#i32
+  as_mut_back r1
   back ()
 
 /-- [keep_alive::loop_join_end_on_demand]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 228:4-236:5
+    Source: 'tests/src/keep-alive.rs', lines 242:4-250:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_join_end_on_demand_loop.body
@@ -408,7 +427,7 @@ def loop_join_end_on_demand_loop.body
     else ok (cont (fun (_ : Unit) => back (), n1))
 
 /-- [keep_alive::loop_join_end_on_demand]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 228:4-236:5
+    Source: 'tests/src/keep-alive.rs', lines 242:4-250:5
     Visibility: public -/
 @[rust_loop]
 def loop_join_end_on_demand_loop
@@ -420,7 +439,7 @@ def loop_join_end_on_demand_loop
     (back, n)
 
 /-- [keep_alive::loop_join_end_on_demand]:
-    Source: 'tests/src/keep-alive.rs', lines 226:0-238:1
+    Source: 'tests/src/keep-alive.rs', lines 240:0-252:1
     Visibility: public -/
 def loop_join_end_on_demand (n : Std.I32) (cond : Bool) : Result Std.I32 := do
   let back ←
@@ -428,7 +447,7 @@ def loop_join_end_on_demand (n : Std.I32) (cond : Bool) : Result Std.I32 := do
   back ()
 
 /-- [keep_alive::loop_shr]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 244:4-250:5
+    Source: 'tests/src/keep-alive.rs', lines 258:4-264:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_shr_loop.body
@@ -447,7 +466,7 @@ def loop_shr_loop.body
                                 back (), n1, ptr1))
 
 /-- [keep_alive::loop_shr]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 244:4-250:5
+    Source: 'tests/src/keep-alive.rs', lines 258:4-264:5
     Visibility: public -/
 @[rust_loop]
 def loop_shr_loop
@@ -460,26 +479,28 @@ def loop_shr_loop
     (back, n, ptr)
 
 /-- [keep_alive::loop_shr]:
-    Source: 'tests/src/keep-alive.rs', lines 242:0-252:1
+    Source: 'tests/src/keep-alive.rs', lines 256:0-266:1
     Visibility: public -/
 def loop_shr (n : Std.I32) (x : Std.U32) : Result Std.U32 := do
   let (ptr, from_shr_back) ← Ptr.from_shr x
   let (ptr1, back) ← loop_shr_loop (fun (_ : Unit) => ok ()) n x ptr
-  let i ← Ptr.as_shr ptr1
+  let (i, as_shr_back) ← Ptr.as_shr ptr1
+  as_shr_back ()
   from_shr_back ()
   back ()
   ok i
 
 /-- [keep_alive::read_via_shr_ptr]:
-    Source: 'tests/src/keep-alive.rs', lines 254:0-257:1 -/
+    Source: 'tests/src/keep-alive.rs', lines 268:0-271:1 -/
 def read_via_shr_ptr (x : Std.I32) : Result Std.I32 := do
   let (ptr, from_shr_back) ← Ptr.from_shr x
-  let i ← Ptr.as_shr ptr
+  let (i, as_shr_back) ← Ptr.as_shr ptr
+  as_shr_back ()
   from_shr_back ()
   ok i
 
 /-- [keep_alive::duplicate_calls_not_deduped]:
-    Source: 'tests/src/keep-alive.rs', lines 259:0-263:1
+    Source: 'tests/src/keep-alive.rs', lines 273:0-277:1
     Visibility: public -/
 def duplicate_calls_not_deduped (x : Std.I32) : Result Std.I32 := do
   let a ← read_via_shr_ptr x
@@ -487,13 +508,13 @@ def duplicate_calls_not_deduped (x : Std.I32) : Result Std.I32 := do
   a + b
 
 /-- [keep_alive::keep_mut_and_shared]:
-    Source: 'tests/src/keep-alive.rs', lines 266:0-266:59 -/
+    Source: 'tests/src/keep-alive.rs', lines 280:0-280:59 -/
 def keep_mut_and_shared
   (_m : Std.I32) (_s : Std.U32) : Result (Unit → Result Std.I32) := do
   ok (fun (_ : Unit) => ok _m)
 
 /-- [keep_alive::return_keep_alive_with_shared]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 1:0-291:5
+    Source: 'tests/src/keep-alive.rs', lines 1:0-305:5
     Visibility: public -/
 @[rust_loop_body]
 def return_keep_alive_with_shared_loop.body
@@ -514,7 +535,7 @@ def return_keep_alive_with_shared_loop.body
          ok (cont n1)
 
 /-- [keep_alive::return_keep_alive_with_shared]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 1:0-291:5
+    Source: 'tests/src/keep-alive.rs', lines 1:0-305:5
     Visibility: public -/
 @[rust_loop]
 def return_keep_alive_with_shared_loop
@@ -526,7 +547,7 @@ def return_keep_alive_with_shared_loop
     n
 
 /-- [keep_alive::return_keep_alive_with_shared]:
-    Source: 'tests/src/keep-alive.rs', lines 271:0-295:1
+    Source: 'tests/src/keep-alive.rs', lines 285:0-309:1
     Visibility: public -/
 def return_keep_alive_with_shared
   (a : Std.I32) (b : Std.I32) (b_out : Std.I32) (s : Std.U32) (n : Std.I32)
@@ -541,13 +562,13 @@ def return_keep_alive_with_shared
   ok (b_out, back2)
 
 /-- [keep_alive::keep_two_shr]:
-    Source: 'tests/src/keep-alive.rs', lines 298:0-298:50 -/
+    Source: 'tests/src/keep-alive.rs', lines 312:0-312:50 -/
 def keep_two_shr
   (_r1 : Std.I32) (_r2 : Std.U32) : Result (Unit → Result Unit) := do
   ok (fun (_ : Unit) => ok ())
 
 /-- [keep_alive::return_keep_alive_two_shared]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 1:0-320:5
+    Source: 'tests/src/keep-alive.rs', lines 1:0-334:5
     Visibility: public -/
 @[rust_loop_body]
 def return_keep_alive_two_shared_loop.body
@@ -568,7 +589,7 @@ def return_keep_alive_two_shared_loop.body
          ok (cont n1)
 
 /-- [keep_alive::return_keep_alive_two_shared]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 1:0-320:5
+    Source: 'tests/src/keep-alive.rs', lines 1:0-334:5
     Visibility: public -/
 @[rust_loop]
 def return_keep_alive_two_shared_loop
@@ -580,7 +601,7 @@ def return_keep_alive_two_shared_loop
     n
 
 /-- [keep_alive::return_keep_alive_two_shared]:
-    Source: 'tests/src/keep-alive.rs', lines 303:0-324:1
+    Source: 'tests/src/keep-alive.rs', lines 317:0-338:1
     Visibility: public -/
 def return_keep_alive_two_shared
   (a : Std.I32) (b_shr : Std.I32) (s : Std.U32) (n : Std.I32) (cond : Bool) :
@@ -592,16 +613,17 @@ def return_keep_alive_two_shared
   ok (b_shr, back2)
 
 /-- [keep_alive::regular_straight_line]:
-    Source: 'tests/src/keep-alive.rs', lines 327:0-333:1
+    Source: 'tests/src/keep-alive.rs', lines 341:0-347:1
     Visibility: public -/
 def regular_straight_line : Result Std.I32 := do
   let (ptr, from_mut_regular_back) ← Ptr.from_mut_regular 42#i32
-  let (r, _) ← Ptr.as_mut ptr
-  let _ ← r + 1#i32
+  let (r, as_mut_back) ← Ptr.as_mut ptr
+  let r1 ← r + 1#i32
+  as_mut_back r1
   from_mut_regular_back ()
 
 /-- [keep_alive::regular_if_join_ends_early]:
-    Source: 'tests/src/keep-alive.rs', lines 336:0-347:1
+    Source: 'tests/src/keep-alive.rs', lines 350:0-361:1
     Visibility: public -/
 def regular_if_join_ends_early (cond : Bool) : Result Std.I32 := do
   let (x, y, tag) ←
@@ -620,7 +642,7 @@ def regular_if_join_ends_early (cond : Bool) : Result Std.I32 := do
   i + y
 
 /-- [keep_alive::regular_loop_ends_early]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 352:4-358:5
+    Source: 'tests/src/keep-alive.rs', lines 366:4-372:5
     Visibility: public -/
 @[rust_loop_body]
 def regular_loop_ends_early_loop.body
@@ -636,7 +658,7 @@ def regular_loop_ends_early_loop.body
     ok (cont (n1, x1))
 
 /-- [keep_alive::regular_loop_ends_early]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 352:4-358:5
+    Source: 'tests/src/keep-alive.rs', lines 366:4-372:5
     Visibility: public -/
 @[rust_loop]
 def regular_loop_ends_early_loop
@@ -646,14 +668,14 @@ def regular_loop_ends_early_loop
     (n, x)
 
 /-- [keep_alive::regular_loop_ends_early]:
-    Source: 'tests/src/keep-alive.rs', lines 350:0-360:1
+    Source: 'tests/src/keep-alive.rs', lines 364:0-374:1
     Visibility: public -/
 @[reducible]
 def regular_loop_ends_early (n : Std.I32) : Result Std.I32 := do
   regular_loop_ends_early_loop n 42#i32
 
 /-- [keep_alive::regular_wrapper_shr]:
-    Source: 'tests/src/keep-alive.rs', lines 364:0-366:1
+    Source: 'tests/src/keep-alive.rs', lines 378:0-380:1
     Visibility: public -/
 def regular_wrapper_shr
   (x : Std.U32) : Result ((Ptr Std.U32) × (Unit → Result Unit)) := do
@@ -662,29 +684,161 @@ def regular_wrapper_shr
   ok (p, back)
 
 /-- [keep_alive::use_regular_wrapper_shr]:
-    Source: 'tests/src/keep-alive.rs', lines 368:0-371:1
+    Source: 'tests/src/keep-alive.rs', lines 382:0-385:1
     Visibility: public -/
 def use_regular_wrapper_shr (x : Std.U32) : Result Std.U32 := do
   let (ptr, regular_wrapper_shr_back) ← regular_wrapper_shr x
-  let i ← Ptr.as_shr ptr
+  let (i, as_shr_back) ← Ptr.as_shr ptr
+  as_shr_back ()
   regular_wrapper_shr_back ()
   ok i
 
-/-- [keep_alive::short_straight_line_and_join]:
-    Source: 'tests/src/keep-alive.rs', lines 374:0-386:1
+/-- [keep_alive::side_effect]:
+    Source: 'tests/src/keep-alive.rs', lines 387:0-389:1 -/
+def side_effect (v : Std.I32) : Result Std.I32 := do
+  v + 100#i32
+
+/-- [keep_alive::reborrow_regular]:
+    Source: 'tests/src/keep-alive.rs', lines 392:0-394:1
     Visibility: public -/
-def short_straight_line_and_join (cond : Bool) : Result Std.I32 := do
-  let (ptr, from_mut_short_back) ← Ptr.from_mut_short 40#i32
-  let (r, _) ← Ptr.as_mut ptr
-  let _ ← r + 2#i32
-  let x ←
-    if cond
-    then
-      do
-      let x1 ← from_mut_short_back ()
-      let (_, from_mut_short_back1) ← Ptr.from_mut_short x1
-      from_mut_short_back1 ()
-    else from_mut_short_back ()
-  x + 0#i32
+def reborrow_regular
+  (x : Std.I32) : Result (Std.I32 × (Std.I32 → Result Std.I32)) := do
+  ok (x, ok)
+
+/-- [keep_alive::reborrow_short]:
+    Source: 'tests/src/keep-alive.rs', lines 397:0-399:1
+    Visibility: public -/
+def reborrow_short
+  (x : Std.I32) : Result (Std.I32 × (Std.I32 → Result Std.I32)) := do
+  ok (x, ok)
+
+/-- [keep_alive::regular_waits_past_unrelated_call]:
+    Source: 'tests/src/keep-alive.rs', lines 403:0-409:1
+    Visibility: public -/
+def regular_waits_past_unrelated_call : Result Std.I32 := do
+  let (r, reborrow_regular_back) ← reborrow_regular 10#i32
+  let r1 ← r + 1#i32
+  let z ← side_effect 5#i32
+  let x ← reborrow_regular_back r1
+  x + z
+
+/-- [keep_alive::short_ends_after_last_use]:
+    Source: 'tests/src/keep-alive.rs', lines 412:0-418:1
+    Visibility: public -/
+def short_ends_after_last_use : Result Std.I32 := do
+  let (r, reborrow_short_back) ← reborrow_short 10#i32
+  let r1 ← r + 1#i32
+  let x ← reborrow_short_back r1
+  let z ← side_effect 5#i32
+  x + z
+
+/-- [keep_alive::short_chained_reborrow]:
+    Source: 'tests/src/keep-alive.rs', lines 423:0-431:1
+    Visibility: public -/
+def short_chained_reborrow : Result Std.I32 := do
+  let (r1, reborrow_short_back) ← reborrow_short 10#i32
+  let (r2, id_mut_back) ← id_mut r1
+  let a ← side_effect 1#i32
+  let r21 ← r2 + a
+  let r11 := id_mut_back r21
+  let x ← reborrow_short_back r11
+  let b ← side_effect 2#i32
+  x + b
+
+/-- [keep_alive::short_place_mention_extends_life]:
+    Source: 'tests/src/keep-alive.rs', lines 435:0-443:1
+    Visibility: public -/
+def short_place_mention_extends_life : Result Std.I32 := do
+  let (r, reborrow_short_back) ← reborrow_short 10#i32
+  let r1 ← r + 1#i32
+  let a ← side_effect 1#i32
+  let x ← reborrow_short_back r1
+  let b ← side_effect 2#i32
+  let i ← x + a
+  i + b
+
+/-- [keep_alive::Guard]
+    Source: 'tests/src/keep-alive.rs', lines 446:0-448:1
+    Visibility: public -/
+axiom Guard : Type
+
+/-- [keep_alive::{keep_alive::Guard<'a>}::acquire]:
+    Source: 'tests/src/keep-alive.rs', lines 453:4-455:5
+    Visibility: public -/
+axiom Guard.acquire : Std.I32 → Result (Guard × (Guard → Result Std.I32))
+
+/-- [keep_alive::{keep_alive::Guard<'a>}::get_mut]:
+    Source: 'tests/src/keep-alive.rs', lines 458:4-460:5
+    Visibility: public -/
+axiom Guard.get_mut
+  : Guard → Result (Std.I32 × (Std.I32 → Guard) × (Guard → Guard))
+
+/-- [keep_alive::short_guard_releases_early]:
+    Source: 'tests/src/keep-alive.rs', lines 465:0-472:1
+    Visibility: public -/
+def short_guard_releases_early : Result Std.I32 := do
+  let (g, acquire_back) ← Guard.acquire 10#i32
+  let (r, get_mut_back, get_mut_back1) ← Guard.get_mut g
+  let r1 ← r + 5#i32
+  let g1 := get_mut_back r1
+  let g2 := get_mut_back1 g1
+  let x ← acquire_back g2
+  let y ← side_effect 1#i32
+  x + y
+
+/-- [keep_alive::short_does_not_kill_long]:
+    Source: 'tests/src/keep-alive.rs', lines 476:0-483:1
+    Visibility: public -/
+def short_does_not_kill_long : Result Std.I32 := do
+  let (r, reborrow_short_back) ← reborrow_short 10#i32
+  let (ptr, from_mut_back) ← Ptr.from_mut r
+  let (rx, as_mut_back) ← Ptr.as_mut ptr
+  let rx1 ← rx + 3#i32
+  as_mut_back rx1
+  let r1 ← from_mut_back ()
+  reborrow_short_back r1
+
+/-- [keep_alive::short_zero_loan_ends_immediately]:
+    Source: 'tests/src/keep-alive.rs', lines 487:0-492:1
+    Visibility: public -/
+def short_zero_loan_ends_immediately : Result Std.I32 := do
+  let (_, from_mut_short_back) ← Ptr.from_mut_short 40#i32
+  let x ← from_mut_short_back ()
+  let y ← side_effect 1#i32
+  x + y
+
+/-- [keep_alive::short_in_loop]: loop body 0:
+    Source: 'tests/src/keep-alive.rs', lines 497:4-505:5
+    Visibility: public -/
+@[rust_loop_body]
+def short_in_loop_loop.body
+  (n : Std.I32) (x : Std.I32) :
+  Result (ControlFlow (Std.I32 × Std.I32) Std.I32)
+  := do
+  if n <= 0#i32
+  then ok (done x)
+  else
+    let (r, reborrow_short_back) ← reborrow_short x
+    let r1 ← r + 1#i32
+    let x1 ← reborrow_short_back r1
+    let _ ← side_effect 1#i32
+    let n1 ← n - 1#i32
+    ok (cont (n1, x1))
+
+/-- [keep_alive::short_in_loop]: loop 0:
+    Source: 'tests/src/keep-alive.rs', lines 497:4-505:5
+    Visibility: public -/
+@[rust_loop]
+def short_in_loop_loop (n : Std.I32) (x : Std.I32) : Result Std.I32 := do
+  loop
+    (fun (n1, x1) => short_in_loop_loop.body n1 x1)
+    (n, x)
+
+/-- [keep_alive::short_in_loop]:
+    Source: 'tests/src/keep-alive.rs', lines 495:0-507:1
+    Visibility: public -/
+@[reducible]
+def short_in_loop (n : Std.I32) : Result Std.I32 := do
+  short_in_loop_loop n 0#i32
 
 end keep_alive

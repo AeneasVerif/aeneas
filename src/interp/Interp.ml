@@ -630,7 +630,13 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   in
 
   (* Create the continuation to finish the evaluation *)
-  let config = mk_config SymbolicMode in
+  let liveness =
+    Option.map
+      (fun (body : LlbcAst.expr_body) ->
+        InterpLiveness.compute_liveness body.body)
+      (LlbcAstUtils.body_as_body fdef.body)
+  in
+  let config = mk_config ~liveness SymbolicMode in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
     [%ltrace

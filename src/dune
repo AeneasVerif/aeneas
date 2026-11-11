@@ -72,6 +72,7 @@
   Interp
   InterpJoin
   InterpJoinCore
+  InterpLiveness
   InterpLoopsFixedPoint
   InterpLoops
   InterpMatchCtxs
