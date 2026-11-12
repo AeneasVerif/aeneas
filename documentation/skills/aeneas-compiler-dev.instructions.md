@@ -88,9 +88,9 @@ When adding a new Rust test file in `tests/src/`:
 
 ## Adding a Model of the Rust Standard Library
 
-Follow `documentation/std-models.md`: the model linked to the Rust documentation, every
-documentation example as a `#[verify::test]`, `@[step]` specification theorems, and
-specifications of the examples proved by `unfold` and `step*`.
+Follow `documentation/std-models.md`: the model linked to the Rust documentation, each
+documentation example as a `pub fn` with a `#[verify::test]` asserting its results, `@[step]`
+specification theorems, and specifications of the examples proved by `unfold` and `step*`.
 
 ## Error Handling: Always Use PPX Macros
 
