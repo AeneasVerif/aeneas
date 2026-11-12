@@ -61,6 +61,11 @@
   ExtractName
   ExtractTypes
   FileGraph
+  FileLayout
+  FileLayoutByKind
+  FileLayoutByModule
+  FileLayoutRegistry
+  FileLayoutSingle
   FileMapping
   FilePlan
   FormatCompat

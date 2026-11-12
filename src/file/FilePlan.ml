@@ -1,6 +1,7 @@
 (** The placement plan for [-split-files]: which Lean files we write for each
-    strongly connected component of the file graph ({!FileGraph}). Used by the
-    emitter ({!Translate.extract_by_file}) and by [-dump-file-graph]. *)
+    strongly connected component of the file graph ({!FileGraph}). This is
+    internal to the per-module layout ({!FileLayoutByModule}), which turns the
+    placement into the files to write, and uses it for [-dump-file-graph]. *)
 
 open FileGraph
 

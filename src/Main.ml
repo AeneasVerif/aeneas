@@ -635,8 +635,15 @@ let () =
       (* Print the external definitions which are not listed in the builtin functions *)
       if !print_unknown_externals then (
         let open TranslateCore in
-        let { type_decls; fun_decls; global_decls; trait_decls; trait_impls; _ }
-            =
+        let ({
+               type_decls;
+               fun_decls;
+               global_decls;
+               trait_decls;
+               trait_impls;
+               _;
+             }
+              : Aeneas.LlbcAst.crate) =
           m
         in
         (* Filter the definitions *)
