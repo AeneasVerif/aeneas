@@ -14,7 +14,8 @@ and every proof built here is checked by the kernel.  This file contains:
 3. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
    so that it does not have to prove them again at each use;
 4. the lemmas proved for each structure of a `nonpos_structure` group (the hook
-   `nonpos_structure_lemmas` of `Top.lean`).
+   `nonpos_structure_lemmas` of `Top.lean`), lemmas used by the tactic; and the proofs of the
+   `simp` lemmas `Bla.f_mk` that `Top.lean` states (`nonpos_proj_mk`).
 -/
 
 namespace NonPos
@@ -157,13 +158,16 @@ conjunctions, and closes a goal by a hypothesis when one fits.
 
 For performance:
 * each step builds its proof term directly (`MVarId.apply`, `applyNamed`), not through tactic
-  syntax;
+  syntax; `Cont.lam`, `Bla.mk_cont` and `Bla.cond_intro` with their arguments read off the goal
+  (`applyWith?`), without unifying them with it;
 * the field tuple of a structure, and the projections out of it, are proved with the forms at the
   `Dom` of its shape (`nonposShapePair`, `nonposShapeProj`), and not compared with the `Dom` that
   instance search builds for the whole tuple;
 * a lambda that is a tagged theorem's shape up to eta is proved by that theorem in one step;
-* a condition is unfolded by `dsimp` (no proof term), so that its proof, which `partial_fixpoint`
-  copies into the definition, the functional and the `unsafe` definition, is small;
+* a condition is split into its conjuncts by `Bla.cond_intro` (section 4), or else unfolded by
+  `dsimp` (no proof term); and its proof is an auxiliary theorem (`nonposCondAux`), so that the
+  copies `partial_fixpoint` makes of it (in the definition, the functional, the `unsafe`
+  definition and the monotonicity goal) are small;
 * `assumption` only compares the goal with the hypotheses of the same head. -/
 
 /-- Inputs an application of `Shape.cond`, and unfolds the functor and Shape instance arguments
@@ -237,6 +241,39 @@ meta partial def shapeProdArgs? (inst : Expr) : MetaM (Option (Array Expr)) := d
   | some e => shapeProdArgs? e
   | none => return none
 
+/-- `#[A, B, iA, iB]` if the `Dom` instance `inst` is `instDomPProd A B iA iB` (up to unfolding). -/
+meta partial def pprodDomArgs? (inst : Expr) (fuel : Nat := 8) : MetaM (Option (Array Expr)) := do
+  let inst ← whnfCore inst
+  if inst.isAppOfArity ``instDomPProd 4 then return some inst.getAppArgs
+  if fuel == 0 then return none
+  match ← unfoldDefinition? inst with
+  | some e => pprodDomArgs? e (fuel - 1)
+  | none => return none
+
+/-- The projection `fun d => (Fix.unfold F (g d)).2. … .1` (with `path`, outermost first, `true` for
+`.1`) of structure `k`, from `Bla.unfold_cont` (section 4): `Cont.fst` and `Cont.snd`, with the parts
+of the instance `instDomPProd …` of the tuple.  The goal `Cont g`, or `none` (on any failure). -/
+meta def unfoldContChain? (goal : MVarId) (D iD : Expr) (n : Name) (dTy gd : Expr) (bi : BinderInfo)
+    (k : Expr) (path : Array Bool) : MetaM (Option MVarId) := do
+  let some ctor := k.getAppFn.constName? | return none
+  let lem := ctor.getPrefix.getPrefix.getPrefix ++ Name.mkSimple ctor.getString! ++ `unfold_cont
+  unless (← getEnv).contains lem do return none
+  try
+    let gFun := Expr.lam n dTy gd bi
+    let hg ← mkFreshExprSyntheticOpaqueMVar (← mkAppOptM ``Cont #[D, none, iD, none, gFun])
+    let mut pf ← mkAppOptM lem ((k.getAppArgs.map some) ++ #[some D, some iD, some gFun, some hg])
+    let some iT := (← inferType pf).getAppArgs[3]? | return none
+    let mut inst := iT
+    for isFst in path.reverse do
+      let some ab ← pprodDomArgs? inst | return none
+      pf ← mkAppOptM (if isFst then ``Cont.fst else ``Cont.snd)
+        #[D, iD, ab[0]!, ab[1]!, ab[2]!, ab[3]!, none, pf]
+      inst := if isFst then ab[2]! else ab[3]!
+    unless ← isDefEq (← goal.getType) (← inferType pf) do return none
+    goal.assign pf
+    return some hg.mvarId!
+  catch _ => return none
+
 open Tactic in
 /-- A field of a varying dictionary, `fun d => (Fix.unfold F (g d)).2. … .1`: proved inside out, from
 `Cont.unfold` (at the `Dom` of the shape of the tuple) by `Cont.shape_snd` and `Cont.shape_fst`, with
@@ -256,6 +293,10 @@ meta def nonposShapeProj (goal : MVarId) (D iD f : Expr) : TacticM Bool := do
   let (F, inst, k, gd) := (args[1]!, args[2]!, args[3]!, args[4]!)
   if F.hasLooseBVars || inst.hasLooseBVars || k.hasLooseBVars then return false
   let s ← saveState
+  -- with `Bla.unfold_cont`: the chain at the `Dom` that instance search builds for the tuple
+  if let some r ← unfoldContChain? goal D iD n dTy gd bi k path then
+    replaceMainGoal [r]; return true
+  s.restore
   try
     let gFun := Expr.lam n dTy gd bi
     let hg ← mkFreshExprSyntheticOpaqueMVar (← mkAppOptM ``Cont #[D, none, iD, none, gFun])
@@ -336,6 +377,85 @@ meta def nonposContPeel (g : MVarId) : TacticM (List MVarId) := g.withContext do
     if a == d then throwError "nonpos_cont: continuity of {← ppExpr fn'} is not known"
     applyNamed g ``Cont.app₂ #[(`f, ← lam fn'), (`a, ← lam a)]
 
+/-- `e` eta-reduced, through metadata and beta-redexes: `fun x => (fun y => g y) x` is `g`. -/
+meta partial def etaFull (e : Expr) : Expr :=
+  match e.consumeMData.headBeta with
+  | .lam n t b bi =>
+    match etaFull b with
+    | .app f (.bvar 0) => if f.hasLooseBVar 0 then .lam n t (.app f (.bvar 0)) bi else f.lowerLooseBVars 1 1
+    | b => .lam n t b bi
+  | .app f a => .app (etaFull f) a
+  | e => e
+
+/-- The head of a function `f`, up to eta: of its body if it is a lambda (a loose `bvar` if that is
+the bound variable), else of `f`. -/
+meta def funHead (f : Expr) : Expr :=
+  match etaFull f with
+  | .lam _ _ b _ => b.consumeMData.getAppFn
+  | f => f.getAppFn
+
+/-- Apply the theorem `n` to `g` with its arguments given in order (`some e`), or left as new goals
+(`none`, for its hypotheses), without unifying its arguments with the goal: only its
+conclusion is compared with the goal (which, built from the goal's own pieces, it equals).  The new
+goals, or `none` (and no change). -/
+meta def applyWith? (g : MVarId) (n : Name) (vals : Array (Option Expr)) : MetaM (Option (List MVarId)) := do
+  let s ← saveState
+  try
+    let c ← mkConstWithFreshMVarLevels n
+    let mut ty ← inferType c  -- not instantiated as we go (each step would walk the rest of the type)
+    let mut args := #[]
+    let mut goals := #[]
+    for gv in vals do
+      let .forallE _ d b _ := ty | s.restore; return none
+      let a ← match gv with
+        | some e => pure e
+        | none => do
+          let m ← mkFreshExprSyntheticOpaqueMVar (d.instantiateBetaRevRange 0 args.size args)
+          goals := goals.push m.mvarId!
+          pure m
+      args := args.push a
+      ty := b
+    if ty.isForall then s.restore; return none
+    -- substituted with beta-reduction where an argument lands in head position (`(fun x => …) a`),
+    -- as Lean instantiates binders: the conclusion is then the goal itself (with its metavariables
+    -- instantiated), which the comparison sees at once
+    unless ← isDefEq (ty.instantiateBetaRevRange 0 args.size args) (← instantiateMVars (← g.getType)) do
+      s.restore; return none
+    g.assign (mkAppN c args)
+    return some goals.toList
+  catch _ => s.restore; return none
+
+/-- The number of leading `∀`s of `e`. -/
+meta def forallArity : Expr → Nat
+  | .forallE _ _ b _ => forallArity b + 1
+  | _ => 0
+
+/-- `Cont.lam` on a goal `Cont f` at `instDomForall T B iB` (a function type), from the pieces of the
+goal. -/
+meta def lamDirect? (g : MVarId) : MetaM (Option (List MVarId)) := do
+  let ty ← instantiateMVars (← g.getType)
+  let_expr Cont D _ iD iB f := ty | return none
+  unless iB.isAppOfArity ``instDomForall 3 do return none
+  let a := iB.getAppArgs  -- `T B iB'`
+  applyWith? g ``Cont.lam #[D, iD, a[0]!, a[1]!, a[2]!, f, none]
+
+/-- `Bla.mk_cont` (the theorem `n`) on a goal `Cont (fun d => Bla.mk ps (f₁ d) … (fₙ d) (h d))`, from
+the pieces of the goal. -/
+meta def mkContDirect? (g : MVarId) (n : Name) : MetaM (Option (List MVarId)) := do
+  let ty ← instantiateMVars (← g.getType)
+  let_expr Cont D _ iD _ f := ty | return none
+  let .lam dn dt body bi := f | return none
+  let args := body.getAppArgs  -- `ps f₁ … fₙ h`, with `d` loose
+  let total := forallArity (← getConstInfo n).type
+  -- `mk_cont` takes `ps D iD f₁ … fₙ h` then `n` hypotheses: `total = |ps| + 2 + 2n + 1`
+  if total < args.size + 2 then return none
+  let nf := total - args.size - 2
+  let np := args.size - nf - 1
+  let lam (e : Expr) := Expr.lam dn dt e bi
+  let vals := (args.extract 0 np).map some ++ #[some D, some iD] ++
+    (args.extract np args.size).map (some ∘ lam) ++ Array.replicate nf none
+  applyWith? g n vals
+
 /-- What `nonposContStep` does on a goal. -/
 meta inductive ContAct where
   | thms (ns : Array Name)  -- the first of these theorems that applies, else `nonposContPeel`
@@ -347,6 +467,11 @@ meta def runContAct : ContAct → TacticM Unit
   | .thms ns => do
     let g ← getMainGoal
     for n in ns do
+      let direct ← do
+        if n == ``Cont.lam then lamDirect? g
+        else if n.getString! == "mk_cont" then mkContDirect? g n
+        else pure none
+      if let some gs := direct then replaceMainGoal gs; return
       if let some gs ← applyConst? g n then
         replaceMainGoal gs; return
     replaceMainGoal (← nonposContPeel g)
@@ -412,23 +537,6 @@ open Tactic in
 elab_rules : tactic
   | `(tactic| nonpos_cont_peel) => do replaceMainGoal (← nonposContPeel (← getMainGoal))
 
-/-- `e` eta-reduced, through metadata and beta-redexes: `fun x => (fun y => g y) x` is `g`. -/
-meta partial def etaFull (e : Expr) : Expr :=
-  match e.consumeMData.headBeta with
-  | .lam n t b bi =>
-    match etaFull b with
-    | .app f (.bvar 0) => if f.hasLooseBVar 0 then .lam n t (.app f (.bvar 0)) bi else f.lowerLooseBVars 1 1
-    | b => .lam n t b bi
-  | .app f a => .app (etaFull f) a
-  | e => e
-
-/-- The head of a function `f`, up to eta: of its body if it is a lambda (a loose `bvar` if that is
-the bound variable), else of `f`. -/
-meta def funHead (f : Expr) : Expr :=
-  match etaFull f with
-  | .lam _ _ b _ => b.consumeMData.getAppFn
-  | f => f.getAppFn
-
 /-- `assumption` on a goal `Cont f`, trying only the hypotheses `Cont g` where `g` has the head of `f`
 (`funHead`): with many hypotheses (`Bla.mk_cont` has one per field), comparing the goal with each is
 the cost. -/
@@ -442,6 +550,29 @@ meta def contAssumption (g : MVarId) (f : Expr) : MetaM Bool := g.withContext do
     if ← isDefEq t (← g.getType) then g.assign ld.toExpr; return true
   return false
 
+/-- On a goal `Shape.cond ⟨f₁, …, fₙ⟩` of structure `Bla` (its `F` is `G.F (G.I.Bla …)`), apply
+`Bla.cond_intro` (section 4): the new goals are the conjuncts of the condition.  `none` if there is
+no such lemma or it does not apply. -/
+meta def condIntro? (g : MVarId) (ty : Expr) : MetaM (Option (List MVarId)) := do
+  let_expr Shape.cond _ F _ _ _ _ := ty | return none
+  let some ctor := F.appArg!.getAppFn.constName? | return none
+  -- `ctor` is `ns.G.I.Bla`
+  let lem := ctor.getPrefix.getPrefix.getPrefix ++ Name.mkSimple ctor.getString! ++ `cond_intro
+  unless (← getEnv).contains lem do return none
+  let_expr Shape.cond _ _ _ _ _ x := ty | return none
+  -- the fields of the tuple `⟨f₁, …, fₙ, ⟨⟩⟩`
+  let mut fs := #[]
+  let mut x := x
+  while x.isAppOfArity ``PProd.mk 4 do
+    fs := fs.push x.appFn!.appArg!
+    x := x.appArg!
+  let ps := F.appArg!.getAppArgs
+  let nh := forallArity (← getConstInfo lem).type - ps.size - fs.size
+  if let some gs ← applyWith? g lem ((ps ++ fs).map some ++ Array.replicate nh none) then return some gs
+  -- otherwise by unification (then the conjuncts, with the fields substituted, beta-reduced)
+  let some gs ← applyConst? g lem | return none
+  gs.mapM fun m => do m.change (← Core.betaReduce (← instantiateMVars (← m.getType)))
+
 open Tactic in
 meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM Unit := do
   let gs ← getUnsolvedGoals
@@ -450,7 +581,10 @@ meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM U
   setGoals [g]
   let ty ← g.withContext do whnfR (← instantiateMVars (← g.getType))
   if ty.isForall then replaceMainGoal [(← g.intro1).2]
-  else if ty.isAppOf ``Shape.cond then evalTactic (← `(tactic| nonpos_cond_dsimp))
+  else if ty.isAppOf ``Shape.cond then
+    match ← condIntro? g ty with
+    | some gs => replaceMainGoal gs
+    | none => evalTactic (← `(tactic| nonpos_cond_dsimp))
   else if ty.isAppOf ``Cont then
     unless ← contAssumption g ty.appArg! do nonposContStep tree
   else if ty.isConstOf ``True then g.assign (mkConst ``True.intro)
@@ -460,9 +594,45 @@ meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM U
   setGoals (gs' ++ gs.drop 1)
   nonposContLoop tree (fuel - 1)
 
+open Tactic in
+/-- `nonposContLoop` on a goal `Shape.cond …` (the condition of a `mk`), with the proof packaged as an
+auxiliary theorem.  `partial_fixpoint` copies the condition of a self-referential definition: into
+the definition, its functional, its `unsafe` version, and the monotonicity goal (whose `mk` takes
+it).  Each copy is then that theorem applied to a few arguments, and the kernel checks the proof
+once.  A recursive call `r a₁ … aₙ` in the goal is first generalized to a variable `self` (the
+theorem is over `self`, and applied to `r a₁ … aₙ`): abstracted as a function, `r` would no longer
+be applied to its fixed parameters, which `partial_fixpoint` needs to see. -/
+meta def nonposCondAux (tree : DiscrTree Name) (fuel : Nat) : TacticM Unit := do
+  let g ← getMainGoal
+  g.withContext do
+  let ty ← instantiateMVars (← g.getType)
+  let lctx ← getLCtx
+  let isRec (e : Expr) := e.getAppFn.isFVar && (lctx.find? e.getAppFn.fvarId!).any (·.isAuxDecl)
+  let (self?, body) ← match ty.find? isRec with
+    | some r => pure (some r, ← kabstract ty r)
+    | none => pure (none, ty)
+  let selfTy ← match self? with
+    | some r => inferType r
+    | none => pure (mkConst ``Unit)
+  let pf ← withLocalDeclD `self selfTy fun self => do
+    let ty' := body.instantiate1 self
+    let m ← mkFreshExprSyntheticOpaqueMVar ty'
+    setGoals [m.mvarId!]
+    nonposContLoop tree fuel
+    mkLambdaFVars #[self] (← mkAuxTheorem ty' (← instantiateMVars m) (zetaDelta := true))
+  g.assign (pf.beta #[self?.getD (mkConst ``Unit.unit)])
+  setGoals []
+
+open Tactic in
+/-- `nonpos_cont` with fuel `fuel`: `nonposCondAux` on a condition, `nonposContLoop` otherwise. -/
+meta def nonposCont (fuel : Nat) : TacticM Unit := do
+  let tree ← getContTheorems
+  let ty ← whnfR (← instantiateMVars (← (← getMainGoal).getType))
+  if ty.isAppOf ``Shape.cond then nonposCondAux tree fuel else nonposContLoop tree fuel
+
 elab_rules : tactic
-  | `(tactic| nonpos_cont) => do nonposContLoop (← getContTheorems) 300
-  | `(tactic| nonpos_cont $n:num) => do nonposContLoop (← getContTheorems) n.getNat
+  | `(tactic| nonpos_cont) => nonposCont 300
+  | `(tactic| nonpos_cont $n:num) => nonposCont n.getNat
 
 /-! ## 3. Continuity lemmas for functions
 
@@ -513,9 +683,20 @@ elab "nonpos_continuity " id:ident : command => do
 
 /-! ## 4. The lemmas of each structure
 
-For performance, `nonpos_structure` also proves (through its hook `nonpos_structure_lemmas`, which
-`Top.lean` leaves empty and this section implements), once for each structure `Bla`, two facts that
-would otherwise be derived from its whole tuple of fields at each use:
+`nonpos_structure` also proves, through its hook `nonpos_structure_lemmas` (which `Top.lean` leaves
+empty and this section implements), once for each structure `Bla`, these facts.  (This section
+also implements `nonpos_proj_mk`, the tactic that proves the `simp` lemmas `Bla.f_mk` stated by
+`Top.lean`.)  Except for the
+first, they are for performance: each would otherwise be derived from the whole tuple of fields at
+each use.  The ones built as terms (rather than elaborated from syntax) are built so to avoid
+re-elaborating the tuple for each lemma, or a slow comparison by the elaborator of two `Dom`s which
+the kernel checks quickly.
+* `Bla.cond_intro`: the condition of `mk` from its conjuncts (`condIntroLemma`), so that
+  `nonpos_cont` does not unfold the condition of each `mk` (and the kernel does not check that
+  unfolding again and again).
+* `Bla.unfold_cont`: `Fix.unfold` is continuous at the `Dom` that instance search builds for the
+  tuple (`unfoldContLemma`), so that a projection out of a varying dictionary is proved by
+  `Cont.fst` and `Cont.snd` with the parts of that instance.
 * `Bla.mk_cont`: `mk` is continuous in its fields.  From `Cont f₁`, ..., `Cont fₙ` it gives
   `Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
   `@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
@@ -526,7 +707,114 @@ would otherwise be derived from its whole tuple of fields at each use:
   for, then does not re-derive it field by field at each search.
 -/
 
-/-- `Bla.mk_cont` and `Bla.botTotal` for each structure of a group made by `elabGroup`. -/
+/-- `Bla.unfold_cont : ∀ params {D} [Dom D] (g : D → Bla params), Cont g → Cont (fun d => Fix.unfold F (g d))`,
+at the `Dom` that instance search builds for the tuple of fields (`instDomPProd …`), rather than at
+the `Dom` of its shape as in `Cont.unfold`.  A projection out of a varying dictionary is then
+proved by `Cont.fst` and `Cont.snd` with the parts of that instance (`nonposShapeProj`).  The two
+`Dom`s are the same, which the kernel checks quickly; the proof is built as a term, so that the
+elaborator does not compare them (slowly). -/
+meta def unfoldContLemma (structName lemName : Name) : TermElabM Unit := do
+  let info ← getConstInfo structName
+  forallTelescope info.type fun ps _ => do
+    let e ← whnfR (mkAppN (mkConst structName (info.levelParams.map Level.param)) ps)
+    unless e.isAppOfArity ``Fix 4 do throwError "{structName} is not a structure of a group"
+    let a := e.getAppArgs  -- `I F inst k`
+    let u := Level.param `u_nonpos
+    withLocalDecl `D .implicit (.sort (.succ u)) fun D => do
+    withLocalDecl `iD .instImplicit (← mkAppM ``Dom #[D]) fun iD => do
+    withLocalDeclD `g (← mkArrow D e) fun g => do
+    withLocalDeclD `hg (← mkAppOptM ``Cont #[D, e, iD, none, g]) fun hg => do
+      let T := mkApp2 a[1]! a[3]! (mkApp2 (mkConst ``Fix (e.getAppFn.constLevels!)) a[0]! a[1]! |>.app a[2]!)
+      let instT ← synthInstance (← mkAppM ``Dom #[T])
+      let body ← withLocalDeclD `d D fun d => do
+        mkLambdaFVars #[d] (← mkAppOptM ``Fix.unfold #[a[0]!, a[1]!, a[2]!, a[3]!, mkApp g d])
+      let type ← mkForallFVars (ps ++ #[D, iD, g, hg]) (← mkAppOptM ``Cont #[D, T, iD, instT, body])
+      let value ← mkLambdaFVars (ps ++ #[D, iD, g, hg])
+        (← mkAppOptM ``Cont.unfold #[D, iD, a[0]!, a[1]!, a[2]!, a[3]!, g, hg])
+      let type ← instantiateMVars type
+      let value ← instantiateMVars value
+      let lps := (collectLevelParams (collectLevelParams {} type) value).params.toList
+      addDecl (Declaration.thmDecl { name := lemName, levelParams := lps, type, value })
+
+/-- `∀ x₁ … xₙ, True` (`n ≥ 0`). -/
+meta partial def isForallTrue (e : Expr) : Bool :=
+  if e.isForall then isForallTrue e.bindingBody! else e.isConstOf ``True
+
+/-- The proof `fun x₁ … xₙ => True.intro` of `∀ x₁ … xₙ, True`. -/
+meta partial def forallTrueProof (e : Expr) : Expr :=
+  if e.isForall then .lam e.bindingName! e.bindingDomain! (forallTrueProof e.bindingBody!) e.binderInfo
+  else mkConst ``True.intro
+
+/-- The conjuncts of a tree of `∧` that are not `∀ …, True`, left to right. -/
+meta partial def conjLeaves (e : Expr) (acc : Array Expr) : Array Expr :=
+  if e.isAppOfArity ``And 2 then conjLeaves e.appArg! (conjLeaves e.appFn!.appArg! acc)
+  else if isForallTrue e then acc else acc.push e
+
+/-- A proof of a tree of `∧`, from the proofs `hs` of its conjuncts that are not `∀ …, True` (from
+the `i`-th on); and the index of the next. -/
+meta partial def conjProof (hs : Array Expr) (e : Expr) (i : Nat) : Expr × Nat :=
+  if e.isAppOfArity ``And 2 then
+    let (p, i) := conjProof hs e.appFn!.appArg! i
+    let (q, i) := conjProof hs e.appArg! i
+    (mkApp4 (mkConst ``And.intro) e.appFn!.appArg! e.appArg! p q, i)
+  else if isForallTrue e then (forallTrueProof e, i)
+  else (hs[i]!, i + 1)
+
+/-- `Bla.cond_intro : ∀ params f₁ … fₙ, C₁ → … → Cₘ → Shape.cond ⟨f₁, …, fₙ⟩`, with `C₁ … Cₘ` the
+conjuncts that are not `True` in the condition unfolded by `nonpos_cond_dsimp`: proved once per
+structure, so that `nonpos_cont` does not unfold the condition (and the kernel does not check the
+unfolding) in each `mk`. -/
+meta def condIntroLemma (mkName lemName : Name) : TermElabM Unit := do
+  let info ← getConstInfo mkName
+  forallTelescope info.type fun xs _ => do
+    let (vs, h) := (xs.pop, xs.back!)
+    let hTy ← inferType h
+    withErasedFVars #[h.fvarId!] do
+    let g ← mkFreshExprSyntheticOpaqueMVar hTy
+    let gs ← Tactic.run g.mvarId! (Tactic.evalTactic (← `(tactic| nonpos_cond_dsimp)))
+    let [g'] := gs | throwError "unexpected goals"
+    let n ← instantiateMVars (← g'.getType)
+    let ls := conjLeaves n #[]
+    withLocalDeclsDND (ls.mapIdx fun i l => (Name.mkSimple s!"h{i}", l)) fun hs => do
+      g'.assign (conjProof hs n 0).1
+      let type ← instantiateMVars (← mkForallFVars (vs ++ hs) hTy)
+      let value ← instantiateMVars (← mkLambdaFVars (vs ++ hs) g)
+      addDecl (Declaration.thmDecl { name := lemName, levelParams := info.levelParams, type, value })
+
+open Tactic in
+/-- The proof of `Bla.f_mk : ∀ ps f₁ … fₙ h, Bla.f ps (Bla.mk ps f₁ … fₙ h) = fⱼ` (stated by `Top.lean`):
+`congrArg` of the `j`-th component of the tuple on `Fix.unfold_fold`, built as a term (no `simp`,
+which goes through the whole tuple). -/
+elab_rules : tactic
+  | `(tactic| nonpos_proj_mk) => do
+    let (_, g) ← (← getMainGoal).intros  -- (`Top.lean` gives the equation itself: nothing to introduce)
+    g.withContext do
+    let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | throwError "nonpos_proj_mk: not an equation"
+    -- `Bla.mk ps f₁ … fₙ h` is `Fix.fold F x h`, with `x = ⟨f₁, …, fₙ, ⟨⟩⟩`
+    let some fold ← unfoldDefinition? lhs.appArg! | throwError "nonpos_proj_mk: cannot unfold {lhs.appArg!}"
+    let fold := fold.headBeta
+    unless fold.isAppOfArity ``Fix.fold 6 do throwError "nonpos_proj_mk: unexpected {fold}"
+    let a := fold.getAppArgs  -- `I F inst k x h`
+    -- `Fix.unfold_fold F x h : Fix.unfold F (Fix.fold F x h) = x` (same universes as `Fix.fold`)
+    let uf := mkAppN (mkConst ``Fix.unfold_fold fold.getAppFn.constLevels!) a
+    -- `fun t => t.2. … .1`, the component of the field `rhs` (up to eta: a field with implicit
+    -- binders is `fun {…} => f` in the tuple), with the types of the components read from the
+    -- tuple `⟨f₁, ⟨f₂, …⟩⟩` (`PProd.mk α β a b`), so that nothing has to be inferred
+    let x := a[4]!
+    unless x.isAppOfArity ``PProd.mk 4 do throwError "nonpos_proj_mk: unexpected tuple {x}"
+    let get ← withLocalDeclD `t (mkApp2 (mkConst ``PProd x.getAppFn.constLevels!) x.appFn!.appFn!.appFn!.appArg! x.appFn!.appFn!.appArg!) fun t => do
+      let mut x := x
+      let mut e := t
+      while x.isAppOfArity ``PProd.mk 4 do
+        let (α, β, ls) := (x.appFn!.appFn!.appFn!.appArg!, x.appFn!.appFn!.appArg!, x.getAppFn.constLevels!)
+        if etaFull x.appFn!.appArg! == rhs then return ← mkLambdaFVars #[t] (mkApp3 (mkConst ``PProd.fst ls) α β e)
+        e := mkApp3 (mkConst ``PProd.snd ls) α β e
+        x := x.appArg!
+      throwError "nonpos_proj_mk: {rhs} is not a field of the tuple"
+    g.assign (← mkCongrArg get uf)
+    replaceMainGoal []
+
+/-- The lemmas of section 4 for each structure of a group made by `elabGroup`. -/
 meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
   let g := ss[0]!.name
   let fId := mkIdentFrom g (g.getId ++ `F)
@@ -534,15 +822,31 @@ meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
     let impl ← implicitBinders s.params
     let args := s.params.map (·.1)
     let k ← `($(mkIdent (g.getId ++ `I ++ s.name.getId)) $args*)  -- `G.I.Bla x₁ ... xₙ`
+    -- `Bla.cond_intro`, `Bla.unfold_cont`
+    unless s.fields.isEmpty do
+      let resolve (n : Name) := liftCoreM <| realizeGlobalConstNoOverload (mkIdentFrom s.name n)
+      let mkName ← resolve (s.name.getId ++ `mk)
+      let ns ← getCurrNamespace
+      try liftTermElabM (condIntroLemma mkName (ns ++ s.name.getId ++ `cond_intro))
+      catch e => logWarning m!"nonpos_structure: no `cond_intro` lemma for {s.name} ({e.toMessageData})"
+      try liftTermElabM (unfoldContLemma (← resolve s.name.getId) (ns ++ s.name.getId ++ `unfold_cont))
+      catch e => logWarning m!"nonpos_structure: no `unfold_cont` lemma for {s.name} ({e.toMessageData})"
     -- `Bla.botTotal`: only if instance search finds `Fix.BotTotal` for every value of the parameters
-    let botTy ← if s.params.isEmpty then `(Fix.BotTotal $fId $k)
-      else `(∀ $(← explicitBinders s.params)*, Fix.BotTotal $fId $k)
-    let holds ← liftTermElabM do
-      try forallTelescope (← instantiateMVars (← Term.elabType botTy)) fun _ b => return (← synthInstance? b).isSome
+    -- (declared with the instance found, rather than searched for again)
+    let botTy ← if s.params.isEmpty then `(Fix.BotTotal $fId $k) else `(∀ $impl*, Fix.BotTotal $fId $k)
+    let botName := (← getCurrNamespace) ++ s.name.getId ++ `botTotal
+    let found ← liftTermElabM do
+      try
+        let ty ← instantiateMVars (← Term.elabType botTy)
+        let some v ← forallTelescope ty fun xs b => do
+            let some i ← synthInstance? b | return none
+            return some (← instantiateMVars (← mkLambdaFVars xs i))
+          | return false
+        let lps := (collectLevelParams (collectLevelParams {} ty) v).params.toList
+        addDecl (Declaration.thmDecl { name := botName, levelParams := lps, type := ty, value := v })
+        return true
       catch _ => return false
-    if holds then
-      let botId := mkIdentFrom s.name (s.name.getId ++ `botTotal)
-      elabCommand (← `(instance (priority := high) $botId:ident $impl* : Fix.BotTotal $fId $k := inferInstance))
+    if found then elabCommand (← `(attribute [instance high] $(mkIdent botName)))
     -- `Bla.mk_cont`
     if s.fields.isEmpty then continue
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)

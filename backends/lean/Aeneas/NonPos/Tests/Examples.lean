@@ -5,9 +5,9 @@ public import Aeneas.NonPos.Tests.Test
 /-!
 # What `nonpos_structure` generates, written out by hand
 
-Two examples, expanded exactly as `nonpos_structure` would expand them: the definitions of section 4
-of `Top.lean`, and the lemmas of section 4 of `Tactic.lean` (same names, same shapes of terms), so
-that the output of the command can be read without running it.  The first has one structure with a
+Two examples, expanded exactly as `nonpos_structure` would expand them: the definitions and `simp`
+lemmas of section 4 of `Top.lean`, and the lemmas of section 4 of `Tactic.lean` (same names, same
+shapes of terms), so that the output of the command can be read without running it.  The first has one structure with a
 data field; the second is the mutual pair `A`/`B` of `Test.lean`.  Both use `Option` as the monad.
 -/
 namespace NonPos.Examples
@@ -52,7 +52,9 @@ abbrev Example1 : Type := Fix Example1.F .Example1
     (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
   Fix.fold Example1.F ⟨to_nat, f, ⟨⟩⟩ h
 
--- The projections, with the types as written, and their `simp` lemmas.
+-- The projections, with the types as written, and their `simp` lemmas (stated by section 4 of
+-- `Top.lean`; there proved by `nonpos_proj_mk`, of `Tactic.lean`: `congrArg` of the projection on
+-- `Fix.unfold_fold`).
 def Example1.to_nat (d : Example1) : Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold Example1.F d))
 @[simp] theorem Example1.to_nat_mk (to_nat : Nat) (f : Example1 → Option Nat)
@@ -80,6 +82,19 @@ theorem Example1.mk_cont {D : Type _} [Dom D] (to_nat : D → Nat) (f : D → Ex
   nonpos_cont 5000
 attribute [nonpos_continuous] Example1.mk_cont
 
+-- The condition of `mk` from its conjuncts (section 4 of `Tactic.lean`; there built from the
+-- condition unfolded by `nonpos_cond_dsimp`): `nonpos_cont` applies it to the condition of each `mk`,
+-- instead of unfolding the condition there.  The conjuncts that are `True` are left out.
+theorem Example1.cond_intro (to_nat : Nat) (f : Example1 → Option Nat) (h0 : Cont f) :
+    Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩ :=
+  ⟨trivial, ⟨h0, fun _ => trivial⟩, trivial⟩
+
+-- `Fix.unfold` is continuous at the `Dom` that instance search builds for the tuple of fields
+-- (section 4 of `Tactic.lean`), so that a projection out of a varying dictionary is proved by
+-- `Cont.fst`/`Cont.snd` with the parts of that instance.
+theorem Example1.unfold_cont {D : Type _} [Dom D] (g : D → Example1) (hg : Cont g) :
+    Cont (fun d => Fix.unfold Example1.F (g d)) := Cont.unfold Example1.F hg
+
 -- Using it: the condition is `Cont f`, which `nonpos_cont` proves.
 def ex1 : Example1 := Example1.mk 3 (fun d => d.f d >>= fun n => some (n + 1)) (by nonpos_cont)
 example : ex1.to_nat = 3 := by simp [ex1]
@@ -104,6 +119,8 @@ nonpos_structure Example2 : Type where
 #print Example2.f
 #print Example2.f_mk
 #check @Example2.mk_cont
+#check @Example2.cond_intro
+#check @Example2.unfold_cont
 -- (no `Example2.botTotal`, as for `Example1`)
 
 def ex2 : Example2 := Example2.mk 3 (fun d => d.f d >>= fun n => some (n + 1)) (by nonpos_cont)
