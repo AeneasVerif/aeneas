@@ -50,7 +50,7 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ ab, ab_post, ab_post1 ⟩ ← [ +inferPost ] callPair_spec
+  [apply]     let* ⟨ ab, ab_post, ab_post1 ⟩ ← callPair_spec
     case hf =>
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
@@ -64,7 +64,7 @@ trace:
 #guard_msgs in
 example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
     callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.val = x.val + 1 ∧ ab.2.val = y.val + 2 ⦄ := by
-  step*? +inferPost
+  step*?
   trace_state
 
 -- Calls f then g in sequence
@@ -84,7 +84,7 @@ theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] callFThenG_spec
+  [apply]     let* ⟨ y, y_post ⟩ ← callFThenG_spec
     case hf =>
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
@@ -99,7 +99,7 @@ trace:
 #guard_msgs in
 example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
     callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
-  step*? +inferPost
+  step*?
   trace_state
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
@@ -109,7 +109,7 @@ def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post, y_post1 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  [apply]     let* ⟨ y, y_post, y_post1 ⟩ ← Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
@@ -125,7 +125,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
     ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
     ⦄ := by
   unfold callSlicemapM
-  step*? +inferPost
+  step*?
   trace_state
 
 example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
@@ -134,7 +134,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
     ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
     ⦄ := by
   unfold callSlicemapM
-  let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  let* ⟨ y, y_post1, y_post2 ⟩ ← Slice.mapM_spec
   case hf =>
     intros i hi
     let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
@@ -149,12 +149,12 @@ def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post, y_post1 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  [apply]     let* ⟨ y, y_post, y_post1 ⟩ ← Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
-    let* ⟨ z, z_post, z_post1 ⟩ ← [ +inferPost ] Slice.mapM_spec
+    let* ⟨ z, z_post, z_post1 ⟩ ← Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
@@ -170,7 +170,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤
     ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
     ⦄ := by
   unfold callSlicemapMTwice
-  step*? +inferPost
+  step*?
   trace_state
 
 #guard_msgs in
@@ -180,12 +180,12 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤
     ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
     ⦄ := by
   unfold callSlicemapMTwice
-  let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  let* ⟨ y, y_post1, y_post2 ⟩ ← Slice.mapM_spec
   case hf =>
     intros i hi
     let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
     agrind (instances := 20) (ematch := 1)
-  let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  let* ⟨ z, z_post1, z_post2 ⟩ ← Slice.mapM_spec
   case hf =>
     intros i hi
     let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
