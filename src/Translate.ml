@@ -1284,6 +1284,9 @@ type extract_file_info = {
   crate_name : string;
   rust_module_name : string;
   module_name : string;
+  lean_module : string;
+      (** The Lean module which other files import to use the definitions of
+          this file (for a template, the module of its filled copy). *)
   custom_msg : string;
   custom_imports : string list;
   custom_includes : string list;
@@ -1300,7 +1303,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   FormatCompat.use_byte_width fmt;
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
-  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace
+  EmitJson.begin_file_if_enabled ~filename:fi.filename
+    ~lean_module:fi.lean_module ~namespace:fi.namespace
     ~in_namespace:fi.in_namespace;
 
   (* Print the headers.
@@ -1838,14 +1842,14 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
 
   (* Extract the file(s) *)
-  let module_root =
+  let import_prefix =
     match !Config.subdir with
     | None -> crate_name
     | Some subdir ->
         String.concat module_delimiter
           (List.filter (fun s -> s <> "") (String.split_on_char '/' subdir))
   in
-  let import_prefix = module_root ^ module_delimiter in
+  let import_prefix = import_prefix ^ module_delimiter in
   [%ltrace "import_prefix: " ^ import_prefix];
 
   (* File extension for the "regular" modules *)
@@ -1937,6 +1941,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              crate_name;
              rust_module_name = crate.name;
              module_name = opaque_module;
+             lean_module = opaque_imported_module;
              custom_msg;
              custom_imports = [];
              custom_includes = [];
@@ -1977,6 +1982,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          crate_name;
          rust_module_name = crate.name;
          module_name = types_module;
+         lean_module = types_module;
          custom_msg = ": type definitions";
          custom_imports = [];
          custom_includes = opaque_types_module;
@@ -2005,6 +2011,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             crate_name;
             rust_module_name = crate.name;
             module_name = template_clauses_module;
+            lean_module =
+              import_prefix ^ "Clauses" ^ module_delimiter ^ "Clauses";
             custom_msg = ": templates for the decreases clauses";
             custom_imports = [ types_module ];
             custom_includes = [];
@@ -2060,6 +2068,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              crate_name;
              rust_module_name = crate.name;
              module_name = opaque_module;
+             lean_module = opaque_imported_module;
              custom_msg;
              custom_imports = [];
              custom_includes = [ types_module ];
@@ -2100,6 +2109,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          crate_name;
          rust_module_name = crate.name;
          module_name = fun_module;
+         lean_module = fun_module;
          custom_msg = ": function definitions";
          custom_imports = [];
          custom_includes =
@@ -2133,6 +2143,11 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          crate_name;
          rust_module_name = crate.name;
          module_name = crate_name;
+         (* With [-subdir], the file is in the subfolder *)
+         lean_module =
+           (match !Config.subdir with
+           | None -> crate_name
+           | Some _ -> import_prefix ^ crate_name);
          custom_msg = "";
          custom_imports = [];
          custom_includes = [];
@@ -2142,7 +2157,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      extract_file gen_config ctx file_info);
 
   (* Emit translation.json. *)
-  EmitJson.write_if_enabled ~crate_name:crate.name ~import_prefix:module_root
+  EmitJson.write_if_enabled ~crate_name:crate.name
   |> Option.iter (fun path -> log#linfo (lazy ("Generated: " ^ path)));
 
   (* Generate the build file *)

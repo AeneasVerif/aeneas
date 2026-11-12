@@ -17,7 +17,6 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
   "aeneas_version": "abc1234",
   "charon_version": "xyz5678",
   "crate": "my_crate",
-  "import_prefix": "MyCrate",
   "lean_modules": true,
   "functions": [...],
   "types": [...],
@@ -28,10 +27,12 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 ```
 
 `aeneas_version` is absent with the option `-emit-json-no-version`, which makes the output
-reproducible (the tests use it). `import_prefix` is the prefix of the Lean modules: the file `Funs.lean` is the module
-`<import_prefix>.Funs`. `lean_modules` records whether the files use the Lean module system.
+reproducible (the tests use it). `lean_modules` records whether the files use the Lean module
+system.
 
-Every entry has a `rust_pattern`: its Rust name as a name-matcher pattern, which identifies the
+Every entry has a `lean_module`: the Lean module to import to use it (e.g. `MyCrate.Funs`; for a
+declaration in a `_Template` file, the module of the filled copy, e.g. `MyCrate.FunsExternal`).
+Every entry also has a `rust_pattern`: its Rust name as a name-matcher pattern, which identifies the
 item from another crate. For trait impls, it is the implemented trait with its arguments (for
 instance `my_crate::Shape<my_crate::Circle>`).
 
@@ -42,6 +43,7 @@ instance `my_crate::Shape<my_crate::Circle>`).
 | `def_id` | yes | `FunDeclId` (join key into `.llbc`) |
 | `lean_name` | yes | Full Lean name (`Namespace.Name`) |
 | `lean_file` | yes | The Lean file this is in, relative to translate.json |
+| `lean_module` | yes | The Lean module to import to use it |
 | `rust_name` | yes | Full Rust name |
 | `is_local` | yes | `true` if defined in the current crate, `false` if external |
 | `source` | yes | Rust source location: `{ "file": "...", "begin_line": N, "end_line": M }` |
@@ -61,7 +63,7 @@ instance `my_crate::Shape<my_crate::Circle>`).
 
 ### Type and global entries
 
-Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `rust_pattern`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively.
+Type and global entries carry `def_id`, `lean_name`, `lean_file`, `lean_module`, `rust_name`, `rust_pattern`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively.
 
 Type entries also carry the names needed to use the type from another crate:
 
@@ -73,7 +75,7 @@ Type entries also carry the names needed to use the type from another crate:
 
 ### Trait entries
 
-`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `rust_name`, `rust_pattern`, `is_local`, and `source`. Builtin traits are not included in the outputted json. They also carry the names of the structure:
+`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `lean_module`, `rust_name`, `rust_pattern`, `is_local`, and `source`. Builtin traits are not included in the outputted json. They also carry the names of the structure:
 
 | Field | Meaning |
 |---|---|
