@@ -18,54 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace issue_1043_iterator_methods
-
-/-- [core::iter::traits::iterator::Iterator::map]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 845:4-848:34
-    Name pattern: [core::iter::traits::iterator::Iterator::map]
-    Visibility: public -/
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
-axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
-  (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
-  Clause0_Item B) :
-  Self → F → Result (core.iter.adapters.map.Map Self F)
-
-/-- [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}::next]:
-    Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 106:4-106:35
-    Name pattern: [core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
-axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-  {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
-  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
-  Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
-  core.ops.function.FnMut F Clause0_Item B) :
-  core.iter.adapters.map.Map I F → Result ((Option B) ×
-    (core.iter.adapters.map.Map I F))
-
-/-- Trait implementation: [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}]
-    Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 99:0-101:27
-    Name pattern: [core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>] -/
-@[reducible, rust_trait_impl
-  "core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>"]
-impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
-  Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
-  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
-  Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
-  core.ops.function.FnMut F Clause0_Item B) :
-  core.iter.traits.iterator.Iterator (core.iter.adapters.map.Map I F) B := {
-  next := core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-    traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst
-  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
-    (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
-    traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst)
-}
 
 /-- [issue_1043_iterator_methods::indexed_squares::{closure}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
@@ -137,13 +90,13 @@ def indexed_squares
   := do
   let e ← coreitertraitsiteratorIteratorIU32Inst.enumerate iter
   let m ←
-    core.iter.traits.iterator.Iterator.map.default
+    core.iter.traits.iterator.Iterator.map.trait_default
       (core.iter.traits.iterator.IteratorEnumerate
       coreitertraitsiteratorIteratorIU32Inst)
       (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
       coreitertraitsiteratorIteratorIU32Inst) e ()
   core.iter.traits.iterator.Iterator.collect.default
-    (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
+    (core.iter.traits.iterator.IteratorMap
     (core.iter.traits.iterator.IteratorEnumerate
     coreitertraitsiteratorIteratorIU32Inst)
     (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
