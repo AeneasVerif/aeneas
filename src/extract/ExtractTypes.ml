@@ -26,6 +26,26 @@ let extract_str (_span : Meta.span) (fmt : F.formatter) ~(inside : bool)
   extract_pure_string fmt s;
   if inside then F.pp_print_string fmt ")"
 
+(** The body of a Lean character literal (without the quotes).
+
+    Lean's [Char] literals accept [\'], [\\], [\n], [\t], [\r], [\xHH] (two hex
+    digits) and [\uHHHH] (four hex digits); there is no escape for code points
+    above [U+FFFF], which are written as raw UTF-8. *)
+let lean_escape_char (c : Uchar.t) : string =
+  match Uchar.to_int c with
+  | 0x27 -> "\\'"
+  | 0x5c -> "\\\\"
+  | 0x0a -> "\\n"
+  | 0x09 -> "\\t"
+  | 0x0d -> "\\r"
+  | i when i >= 0x20 && i < 0x7f -> String.make 1 (Char.chr i)
+  | i when i < 0x80 -> Printf.sprintf "\\x%02x" i
+  | i when i <= 0xFFFF -> Printf.sprintf "\\u%04x" i
+  | _ ->
+      let b = Buffer.create 4 in
+      Buffer.add_utf_8_uchar b c;
+      Buffer.contents b
+
 (** Format a constant value.
 
     Inputs:
@@ -78,13 +98,16 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
         | Coq | FStar | Lean -> if b then "true" else "false"
       in
       F.pp_print_string fmt b
+  | VChar c when backend () = Lean ->
+      F.pp_print_string fmt ("'" ^ lean_escape_char c ^ "'")
   | VChar c when Uchar.is_char c -> (
       let c = Uchar.to_char c in
       match backend () with
       | HOL4 ->
           (* [#"a"] is a notation for [CHR 97] (97 is the ASCII code for 'a') *)
           F.pp_print_string fmt ("#\"" ^ String.make 1 c ^ "\"")
-      | FStar | Lean -> F.pp_print_string fmt ("'" ^ String.make 1 c ^ "'")
+      | FStar -> F.pp_print_string fmt ("'" ^ String.make 1 c ^ "'")
+      | Lean -> [%internal_error] span
       | Coq ->
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt "char_of_byte";
