@@ -628,6 +628,22 @@ def core.iter.adapters.flatten.Flatten.Insts.CoreIterTraitsIteratorIterator.next
   fun self => Aeneas.Std.loop
     (core.iter.adapters.flatten.Flatten.next.body IterI IntoIterInst IterU) self
 
+/-- `Flatten::fold`. The standard library folds the inner iterators one after the other; the
+    model is the default `fold` over `next`. -/
+@[rust_fun
+  "core::iter::adapters::flatten::{core::iter::traits::iterator::Iterator<core::iter::adapters::flatten::Flatten<@I, @Clause0_Item, @Clause2_Item, @U>, @Clause2_Item>}::fold"]
+def core.iter.adapters.flatten.Flatten.Insts.CoreIterTraitsIteratorIterator.fold
+  {I U Item0 Item1 Acc F : Type _}
+  (IterI : core.iter.traits.iterator.Iterator I Item0)
+  (IntoIterInst : core.iter.traits.collect.IntoIterator Item0 Item1 U)
+  (IterU : core.iter.traits.iterator.Iterator U Item1)
+  (FnMutInst : core.ops.function.FnMut F (Acc × Item1) Acc)
+  (self : core.iter.adapters.flatten.Flatten I Item0 Item1 U) (init : Acc) (f : F) :
+  Result Acc :=
+  core.iter.traits.iterator.Iterator.fold.default.loop
+    (core.iter.adapters.flatten.Flatten.Insts.CoreIterTraitsIteratorIterator.next
+      IterI IntoIterInst IterU) FnMutInst self init f
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::flatten::Flatten<@I, @Clause0_Item, @Clause2_Item, @U>, @Clause2_Item>"]
 impl_def core.iter.traits.iterator.IteratorFlatten {I U Item0 Item1 : Type _}
@@ -638,6 +654,9 @@ impl_def core.iter.traits.iterator.IteratorFlatten {I U Item0 Item1 : Type _}
       (core.iter.adapters.flatten.Flatten I Item0 Item1 U) Item1 := {
   next := core.iter.adapters.flatten.Flatten.Insts.CoreIterTraitsIteratorIterator.next
     IterI IntoIterInst IterU
+  fold := fun {_ _} FnMutInst =>
+    core.iter.adapters.flatten.Flatten.Insts.CoreIterTraitsIteratorIterator.fold
+      IterI IntoIterInst IterU FnMutInst
 }
 
 section FlattenSpecs
@@ -740,6 +759,17 @@ theorem Flatten.next.yields (us : List Item0) :
 end FlattenSpecs
 
 /-! ## Slice-iterator overrides -/
+
+/-- `vec::IntoIter::fold`. The standard library overrides the default with an equivalent
+    loop; the model is the default. -/
+@[rust_fun
+  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::fold"
+  (keepParams := [true, false, true, true])]
+def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.fold
+  {T B F : Type _} (FnMutInst : core.ops.function.FnMut F (B × T) B)
+  (it : alloc.vec.into_iter.IntoIter T) (init : B) (f : F) : Result B :=
+  core.iter.traits.iterator.Iterator.fold.default.loop
+    alloc.vec.into_iter.IteratorIntoIter.next FnMutInst it init f
 
 /-- `slice::Iter::position`. The standard library overrides the default with an equivalent
     loop; the model is the default. -/

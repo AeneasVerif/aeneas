@@ -76,8 +76,150 @@ def flatten_vecs : Result Unit := do
 /- Unit test for [iter_flatten::flatten_vecs] -/
 #guard (flatten_vecs).reducesTo ()
 
+/-- [iter_flatten::flatten_fold::{closure}]
+    Source: 'tests/src/iter_flatten.rs', lines 23:52-23:73 -/
+@[reducible]
+def flatten_fold.closure := Unit
+
+/-- [iter_flatten::flatten_fold::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_flatten::flatten_fold::{closure}}::call_mut]:
+    Source: 'tests/src/iter_flatten.rs', lines 23:52-23:73 -/
+def flatten_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
+  (c : flatten_fold.closure) (tupled_args : (Std.U32 × Std.U32)) :
+  Result (Std.U32 × flatten_fold.closure)
+  := do
+  let (acc, x) := tupled_args
+  let i ← acc * 10#u32
+  let i1 ← i + x
+  ok (i1, c)
+
+/-- [iter_flatten::flatten_fold::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_flatten::flatten_fold::{closure}}::call_once]:
+    Source: 'tests/src/iter_flatten.rs', lines 23:52-23:73 -/
+def flatten_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
+  (c : flatten_fold.closure) (p : (Std.U32 × Std.U32)) : Result Std.U32 := do
+  let (i, _) ←
+    flatten_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut c p
+  ok i
+
+/-- Trait implementation: [iter_flatten::flatten_fold::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_flatten::flatten_fold::{closure}}]
+    Source: 'tests/src/iter_flatten.rs', lines 23:52-23:73 -/
+@[reducible]
+def flatten_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
+  core.ops.function.FnOnce flatten_fold.closure (Std.U32 × Std.U32) Std.U32
+  := {
+  call_once :=
+    flatten_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
+}
+
+/-- Trait implementation: [iter_flatten::flatten_fold::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_flatten::flatten_fold::{closure}}]
+    Source: 'tests/src/iter_flatten.rs', lines 23:52-23:73 -/
+@[reducible]
+def flatten_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
+  core.ops.function.FnMut flatten_fold.closure (Std.U32 × Std.U32) Std.U32
+  := {
+  FnOnceInst := flatten_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32
+  call_mut :=
+    flatten_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
+}
+
+/-- [iter_flatten::flatten_fold]:
+    Source: 'tests/src/iter_flatten.rs', lines 19:0-25:1
+    Visibility: public -/
+def flatten_fold : Result Unit := do
+  let y ←
+    lift (Std.Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ] : Array
+      Std.U32 2#usize))
+  let ret := alloc.slice.Slice.into_vec y
+  let rows ←
+    alloc.vec.Vec.push (alloc.vec.Vec.new (alloc.vec.Vec Std.U32)) ret
+  let y1 ←
+    lift (Std.Array.to_slice (Array.make 1#usize [ 3#u32 ] : Array Std.U32
+      1#usize))
+  let ret1 := alloc.slice.Slice.into_vec y1
+  let rows1 ← alloc.vec.Vec.push rows ret1
+  let ii ← alloc.vec.IntoIteratorVec.into_iter rows1
+  let f ←
+    core.iter.traits.iterator.Iterator.flatten.trait_default
+      (core.iter.traits.iterator.IteratorVecIntoIter (alloc.vec.Vec Std.U32))
+      (core.iter.traits.collect.IntoIteratorVec Std.U32) ii
+  let sum ←
+    core.iter.adapters.flatten.Flatten.Insts.CoreIterTraitsIteratorIterator.fold
+      (core.iter.traits.iterator.IteratorVecIntoIter (alloc.vec.Vec Std.U32))
+      (core.iter.traits.collect.IntoIteratorVec Std.U32)
+      (core.iter.traits.iterator.IteratorVecIntoIter Std.U32)
+      flatten_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 f 0#u32 ()
+  massert (sum = 123#u32)
+
+/- Unit test for [iter_flatten::flatten_fold] -/
+#guard (flatten_fold).reducesTo ()
+
+/-- [iter_flatten::vec_into_iter_fold::{closure}]
+    Source: 'tests/src/iter_flatten.rs', lines 32:40-32:61 -/
+@[reducible]
+def vec_into_iter_fold.closure := Unit
+
+/-- [iter_flatten::vec_into_iter_fold::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_flatten::vec_into_iter_fold::{closure}}::call_mut]:
+    Source: 'tests/src/iter_flatten.rs', lines 32:40-32:61 -/
+def vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
+  (c : vec_into_iter_fold.closure) (tupled_args : (Std.U32 × Std.U32)) :
+  Result (Std.U32 × vec_into_iter_fold.closure)
+  := do
+  let (acc, x) := tupled_args
+  let i ← acc * 10#u32
+  let i1 ← i + x
+  ok (i1, c)
+
+/-- [iter_flatten::vec_into_iter_fold::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_flatten::vec_into_iter_fold::{closure}}::call_once]:
+    Source: 'tests/src/iter_flatten.rs', lines 32:40-32:61 -/
+def
+  vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
+  (c : vec_into_iter_fold.closure) (p : (Std.U32 × Std.U32)) :
+  Result Std.U32
+  := do
+  let (i, _) ←
+    vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
+      c p
+  ok i
+
+/-- Trait implementation: [iter_flatten::vec_into_iter_fold::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_flatten::vec_into_iter_fold::{closure}}]
+    Source: 'tests/src/iter_flatten.rs', lines 32:40-32:61 -/
+@[reducible]
+def vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
+  core.ops.function.FnOnce vec_into_iter_fold.closure (Std.U32 × Std.U32)
+  Std.U32 := {
+  call_once :=
+    vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
+}
+
+/-- Trait implementation: [iter_flatten::vec_into_iter_fold::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_flatten::vec_into_iter_fold::{closure}}]
+    Source: 'tests/src/iter_flatten.rs', lines 32:40-32:61 -/
+@[reducible]
+def vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
+  core.ops.function.FnMut vec_into_iter_fold.closure (Std.U32 × Std.U32)
+  Std.U32 := {
+  FnOnceInst :=
+    vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32
+  call_mut :=
+    vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
+}
+
+/-- [iter_flatten::vec_into_iter_fold]:
+    Source: 'tests/src/iter_flatten.rs', lines 28:0-34:1
+    Visibility: public -/
+def vec_into_iter_fold : Result Unit := do
+  let xs ← alloc.vec.Vec.push (alloc.vec.Vec.new Std.U32) 4#u32
+  let xs1 ← alloc.vec.Vec.push xs 5#u32
+  let ii ← alloc.vec.IntoIteratorVec.into_iter xs1
+  let sum ←
+    alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.fold
+      vec_into_iter_fold.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 ii
+      0#u32 ()
+  massert (sum = 45#u32)
+
+/- Unit test for [iter_flatten::vec_into_iter_fold] -/
+#guard (vec_into_iter_fold).reducesTo ()
+
 /-- [iter_flatten::flatten_empty]:
-    Source: 'tests/src/iter_flatten.rs', lines 19:0-23:1
+    Source: 'tests/src/iter_flatten.rs', lines 37:0-41:1
     Visibility: public -/
 def flatten_empty : Result Unit := do
   let ii ←
