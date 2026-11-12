@@ -41,6 +41,9 @@ type function_entry = {
   def_id : int;  (** Charon [FunDeclId] reified to a plain int. *)
   lean_name : string;  (** Fully-qualified Lean name. *)
   lean_file : string;  (** Path relative to this manifest's directory. *)
+  lean_module : string;
+      (** The Lean module to import to use the declaration (for a template, the
+          module of its filled copy). *)
   rust_name : string;  (** Fully-qualified Rust name (from [item_meta.name]). *)
   rust_pattern : string; [@default ""]
       (** The Rust name as a name-matcher pattern, used to identify the item
@@ -69,6 +72,7 @@ type type_entry = {
   def_id : int;
   lean_name : string;
   lean_file : string;
+  lean_module : string;
   rust_name : string;
   rust_pattern : string; [@default ""]
   is_local : bool;
@@ -87,6 +91,7 @@ type global_entry = {
   def_id : int;
   lean_name : string;
   lean_file : string;
+  lean_module : string;
   rust_name : string;
   rust_pattern : string; [@default ""]
   is_local : bool;
@@ -100,6 +105,7 @@ type trait_decl_entry = {
   def_id : int;
   lean_name : string;
   lean_file : string;
+  lean_module : string;
   rust_name : string;
   rust_pattern : string; [@default ""]
   is_local : bool;
@@ -121,6 +127,7 @@ type trait_impl_entry = {
   def_id : int;
   lean_name : string;
   lean_file : string;
+  lean_module : string;
   rust_name : string;
   rust_pattern : string; [@default ""]
       (** The implemented trait with its generic arguments, as a name-matcher
@@ -145,9 +152,6 @@ type envelope = {
       (** The version of charon that emitted the [.llbc] input. *)
   crate_name : string; [@key "crate"]
       (** Identifier of the source Rust crate. *)
-  import_prefix : string; [@default ""]
-      (** The prefix of the Lean modules: [lean_file] [Funs.lean] is the module
-          [<import_prefix>.Funs]. *)
   lean_modules : bool; [@default false]
       (** [true] if the files are Lean modules (option [-use-lean-modules]). *)
   functions : function_entry list;
@@ -220,31 +224,22 @@ let register (crate : string) (env : envelope) : unit =
           ("Could not parse the pattern '" ^ pattern ^ "' of " ^ rust_name
          ^ " in the manifest of crate " ^ crate)
   in
-  (* Import the module of [lean_file] (e.g. [Funs.lean] is [<import_prefix>.Funs]) *)
-  let import (lean_file : string) =
-    let path =
-      List.filter
-        (fun s -> s <> "")
-        (String.split_on_char '/' (Filename.remove_extension lean_file))
-    in
-    let m =
-      String.concat "." (List.filter (( <> ) "") (env.import_prefix :: path))
-    in
-    if not (List.mem m !imported_modules) then
-      imported_modules := !imported_modules @ [ m ]
+  let import (lean_module : string) =
+    if not (List.mem lean_module !imported_modules) then
+      imported_modules := !imported_modules @ [ lean_module ]
   in
   List.iter
     (fun (f : function_entry) ->
       (* Loop functions are only called by the function they belong to *)
       if f.loop = None then (
-        import f.lean_file;
+        import f.lean_module;
         funs :=
           (parse f.rust_name f.rust_pattern, fun_info f.lean_name f.can_fail)
           :: !funs))
     env.functions;
   List.iter
     (fun (t : type_entry) ->
-      import t.lean_file;
+      import t.lean_module;
       let body_info : Pure.builtin_type_body_info option =
         match (t.constructor, t.variants) with
         | Some cons, _ -> Some (Struct (cons, name_pairs t.fields))
@@ -273,7 +268,7 @@ let register (crate : string) (env : envelope) : unit =
     env.types;
   List.iter
     (fun (g : global_entry) ->
-      import g.lean_file;
+      import g.lean_module;
       (* The table of globals stores the pattern as a string: we only check it *)
       ignore (parse g.rust_name g.rust_pattern);
       globals :=
@@ -286,7 +281,7 @@ let register (crate : string) (env : envelope) : unit =
     env.globals;
   List.iter
     (fun (d : trait_decl_entry) ->
-      import d.lean_file;
+      import d.lean_module;
       trait_decls :=
         {
           Pure.rust_name = parse d.rust_name d.rust_pattern;
@@ -304,7 +299,7 @@ let register (crate : string) (env : envelope) : unit =
     env.trait_decls;
   List.iter
     (fun (i : trait_impl_entry) ->
-      import i.lean_file;
+      import i.lean_module;
       trait_impls :=
         ( parse i.rust_name i.rust_pattern,
           {

@@ -20,6 +20,7 @@ type state = {
   mutable trait_decl_entries : trait_decl_entry list;
   mutable trait_impl_entries : trait_impl_entry list;
   mutable current_lean_file : string;
+  mutable current_lean_module : string;
   mutable current_lean_namespace : string;
   mutable current_in_namespace : bool;
   mutable dest_dir : string;
@@ -33,6 +34,7 @@ let make_state () : state =
     trait_decl_entries = [];
     trait_impl_entries = [];
     current_lean_file = "";
+    current_lean_module = "";
     current_lean_namespace = "";
     current_in_namespace = true;
     dest_dir = "";
@@ -107,6 +109,7 @@ let function_entry_of_fun_decl (ctx : ExtractBase.extraction_ctx)
     def_id = Pure.FunDeclId.to_int def.def_id;
     lean_name;
     lean_file = state.current_lean_file;
+    lean_module = state.current_lean_module;
     rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
     rust_pattern = rust_pattern ctx span def.item_meta.name;
     is_local = def.item_meta.is_local;
@@ -161,6 +164,7 @@ let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
     lean_name =
       full_lean_name (ExtractBase.ctx_get_local_type span def.def_id ctx);
     lean_file = state.current_lean_file;
+    lean_module = state.current_lean_module;
     rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
     rust_pattern = rust_pattern ctx span def.item_meta.name;
     is_local = def.item_meta.is_local;
@@ -177,6 +181,7 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
     def_id = Pure.GlobalDeclId.to_int def.def_id;
     lean_name = full_lean_name (ExtractBase.ctx_get_global span def.def_id ctx);
     lean_file = state.current_lean_file;
+    lean_module = state.current_lean_module;
     rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
     rust_pattern = rust_pattern ctx span def.item_meta.name;
     is_local = def.item_meta.is_local;
@@ -192,6 +197,7 @@ let trait_decl_entry_of_trait_decl (ctx : ExtractBase.extraction_ctx)
     def_id = Pure.TraitDeclId.to_int id;
     lean_name = full_lean_name (ExtractBase.ctx_get_trait_decl span id ctx);
     lean_file = state.current_lean_file;
+    lean_module = state.current_lean_module;
     rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
     rust_pattern = rust_pattern ctx span def.item_meta.name;
     is_local = def.item_meta.is_local;
@@ -245,6 +251,7 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
     lean_name =
       full_lean_name (ExtractBase.ctx_get_trait_impl span def.def_id ctx);
     lean_file = state.current_lean_file;
+    lean_module = state.current_lean_module;
     rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
     rust_pattern;
     is_local = def.item_meta.is_local;
@@ -259,8 +266,8 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
 (* Pipeline hooks (no-ops when -emit-json is off)                           *)
 (* ------------------------------------------------------------------------ *)
 
-let begin_file_if_enabled ~(filename : string) ~(namespace : string)
-    ~(in_namespace : bool) : unit =
+let begin_file_if_enabled ~(filename : string) ~(lean_module : string)
+    ~(namespace : string) ~(in_namespace : bool) : unit =
   if !Config.emit_json then begin
     (* Record the Lean file relative to dest_dir. *)
     let basename = Filename.basename filename in
@@ -270,6 +277,7 @@ let begin_file_if_enabled ~(filename : string) ~(namespace : string)
       | Some subdir -> Filename.concat subdir basename
     in
     state.current_lean_file <- rel;
+    state.current_lean_module <- lean_module;
     state.current_lean_namespace <- namespace;
     state.current_in_namespace <- in_namespace
   end
@@ -315,8 +323,7 @@ let write (path : string) (env : envelope) : unit =
       Yojson.Safe.pretty_to_channel out (envelope_to_yojson env);
       output_char out '\n')
 
-let write_if_enabled ~(crate_name : string) ~(import_prefix : string) :
-    string option =
+let write_if_enabled ~(crate_name : string) : string option =
   if !Config.emit_json then begin
     let path = Filename.concat state.dest_dir "translation.json" in
     write path
@@ -326,7 +333,6 @@ let write_if_enabled ~(crate_name : string) ~(import_prefix : string) :
            else Some (Option.value GitVersion.commit ~default:"unknown"));
         charon_version = Charon.CharonVersion.supported_charon_version;
         crate_name;
-        import_prefix;
         lean_modules = !Config.use_lean_modules;
         functions = List.rev state.function_entries;
         types = List.rev state.type_entries;
