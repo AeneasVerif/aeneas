@@ -179,6 +179,9 @@ the user just needs to copy/paste those definitions and fill in the holes. Also 
 those attributes have quite a few options to tweak the behavior of the extraction: we
 invite the users to read their docstrings for more information.
 
+A model added to the Aeneas standard library comes with tests and specification theorems: see
+[documentation/std-models.md](documentation/std-models.md).
+
 ## Quick start for Nix users
 
 Assuming Nix is installed, with a support for Flakes (`*`):

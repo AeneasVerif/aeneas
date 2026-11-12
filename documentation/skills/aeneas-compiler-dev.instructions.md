@@ -86,6 +86,12 @@ When adding a new Rust test file in `tests/src/`:
 
 4. **Regenerate** with `gmake test-yourfile.rs`.
 
+## Adding a Model of the Rust Standard Library
+
+Follow `documentation/std-models.md`: the model linked to the Rust documentation, every
+documentation example as a `#[verify::test]`, `@[step]` specification theorems, and
+specifications of the examples proved by `unfold` and `step*`.
+
 ## Error Handling: Always Use PPX Macros
 
 Aeneas defines custom PPX macros for all error handling. These macros automatically

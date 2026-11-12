@@ -8,6 +8,7 @@ Aeneas translates Rust programs to into pure functional programs (primarily Lean
 - [Tactics Reference](tactics-reference.md) — All tactics with docstrings and examples
 - [Tips, Tricks & Pitfalls](tips-and-tricks.md) — Common pitfalls and how to avoid them
 - [Crypto Verification](crypto-verification.md) — Verifying cryptographic code
+- [Adding Standard Library Models](std-models.md) — Models of the Rust standard library, with their tests and specifications
 - [Glossary](glossary.md) — Aeneas-specific terms
 
 For AI agent instructions see the [skills/](skills/) folder.
