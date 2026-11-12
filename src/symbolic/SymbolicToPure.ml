@@ -343,9 +343,11 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       [%silent_unwrap_opt_span] span
         (TraitDeclId.Map.find_opt decl_id ctx.crate.trait_decls)
     in
-    match_name_with_generics_find_opt ctx trait_decl.item_meta.name
-      llbc_impl_trait.generics
-      (ExtractBuiltin.builtin_trait_impls_map ())
+    ExternManifest.filter_trait_impl_info
+      ~is_local:trait_impl.item_meta.is_local
+      (match_name_with_generics_find_opt ctx trait_decl.item_meta.name
+         llbc_impl_trait.generics
+         (ExtractBuiltin.builtin_trait_impls_map ()))
   in
   {
     def_id;

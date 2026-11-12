@@ -87,6 +87,7 @@
   LlbcOfJson
   Logging
   EmitJson
+  ExternManifest
   Meta
   NameMatcher
   Parallel

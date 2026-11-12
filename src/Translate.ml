@@ -1071,9 +1071,11 @@ let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
     let trait_impl =
       TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
     in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      trait_impl.impl_trait.generics
-      (builtin_trait_impls_map ())
+    ExternManifest.filter_trait_impl_info
+      ~is_local:trait_impl.item_meta.is_local
+      (match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
+         trait_impl.impl_trait.generics
+         (builtin_trait_impls_map ()))
   in
   Option.is_some builtin_info
 
@@ -1939,7 +1941,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              module_name = opaque_module;
              custom_msg;
              custom_imports = [];
-             custom_includes = [];
+             custom_includes = !ExternManifest.imported_modules;
              noncomputable = false;
            }
          in
@@ -1979,7 +1981,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          module_name = types_module;
          custom_msg = ": type definitions";
          custom_imports = [];
-         custom_includes = opaque_types_module;
+         custom_includes =
+           !ExternManifest.imported_modules @ opaque_types_module;
          noncomputable = false;
        }
      in
@@ -2135,7 +2138,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          module_name = crate_name;
          custom_msg = "";
          custom_imports = [];
-         custom_includes = [];
+         custom_includes = !ExternManifest.imported_modules;
          noncomputable = has_opaque && not !Config.all_computable;
        }
      in
