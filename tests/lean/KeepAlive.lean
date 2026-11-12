@@ -773,8 +773,51 @@ axiom Guard.acquire : Std.I32 → Result (Guard × (Guard → Result Std.I32))
 axiom Guard.get_mut
   : Guard → Result (Std.I32 × (Std.I32 → Guard) × (Guard → Guard))
 
+/-- [keep_alive::{keep_alive::Guard<'a>}::get_shr]:
+    Source: 'tests/src/keep-alive.rs', lines 463:4-465:5
+    Visibility: public -/
+axiom Guard.get_shr : Guard → Result Std.I32
+
+/-- [keep_alive::{keep_alive::Guard<'a>}::refresh_regular]:
+    Source: 'tests/src/keep-alive.rs', lines 469:4-471:5
+    Visibility: public -/
+axiom Guard.refresh_regular
+  : Guard → Result (Guard × (Guard → Result Guard))
+
+/-- [keep_alive::{keep_alive::Guard<'a>}::refresh_short]:
+    Source: 'tests/src/keep-alive.rs', lines 475:4-477:5
+    Visibility: public -/
+axiom Guard.refresh_short
+  : Guard → Result (Guard × (Guard → Result Guard))
+
+/-- [keep_alive::caller_takes_guard_regular]:
+    Source: 'tests/src/keep-alive.rs', lines 480:0-485:1
+    Visibility: public -/
+def caller_takes_guard_regular (g : Guard) : Result (Std.I32 × Guard) := do
+  let (g2, refresh_regular_back) ← Guard.refresh_regular g
+  let (r, get_mut_back, get_mut_back1) ← Guard.get_mut g2
+  let r1 ← r + 1#i32
+  let i ← side_effect 5#i32
+  let g21 := get_mut_back r1
+  let g22 := get_mut_back1 g21
+  let g1 ← refresh_regular_back g22
+  ok (i, g1)
+
+/-- [keep_alive::caller_takes_guard_short]:
+    Source: 'tests/src/keep-alive.rs', lines 487:0-492:1
+    Visibility: public -/
+def caller_takes_guard_short (g : Guard) : Result (Std.I32 × Guard) := do
+  let (g2, refresh_short_back) ← Guard.refresh_short g
+  let (r, get_mut_back, get_mut_back1) ← Guard.get_mut g2
+  let r1 ← r + 1#i32
+  let i ← side_effect 5#i32
+  let g21 := get_mut_back r1
+  let g22 := get_mut_back1 g21
+  let g1 ← refresh_short_back g22
+  ok (i, g1)
+
 /-- [keep_alive::short_guard_releases_early]:
-    Source: 'tests/src/keep-alive.rs', lines 465:0-472:1
+    Source: 'tests/src/keep-alive.rs', lines 496:0-503:1
     Visibility: public -/
 def short_guard_releases_early : Result Std.I32 := do
   let (g, acquire_back) ← Guard.acquire 10#i32
@@ -786,8 +829,95 @@ def short_guard_releases_early : Result Std.I32 := do
   let y ← side_effect 1#i32
   x + y
 
+/-- [keep_alive::short_guard_two_get_muts]:
+    Source: 'tests/src/keep-alive.rs', lines 507:0-517:1
+    Visibility: public -/
+def short_guard_two_get_muts : Result Std.I32 := do
+  let (g, acquire_back) ← Guard.acquire 10#i32
+  let (r1, get_mut_back, get_mut_back1) ← Guard.get_mut g
+  let r11 ← r1 + 5#i32
+  let a ← side_effect 1#i32
+  let g1 := get_mut_back r11
+  let (r2, get_mut_back2, get_mut_back3) ← Guard.get_mut g1
+  let r21 ← r2 + a
+  let g2 := get_mut_back2 r21
+  let g3 := get_mut_back3 g2
+  let g4 := get_mut_back1 g3
+  let x ← acquire_back g4
+  let b ← side_effect 2#i32
+  x + b
+
+/-- [keep_alive::short_temp_mut_borrow_of_live_ref]:
+    Source: 'tests/src/keep-alive.rs', lines 521:0-530:1
+    Visibility: public -/
+def short_temp_mut_borrow_of_live_ref : Result Std.I32 := do
+  let (r1, reborrow_short_back) ← reborrow_short 10#i32
+  let a ← side_effect 1#i32
+  let r2 ← r1 + a
+  let x ← reborrow_short_back r2
+  let b ← side_effect 2#i32
+  x + b
+
+/-- [keep_alive::reborrow_pair_shr]:
+    Source: 'tests/src/keep-alive.rs', lines 533:0-535:1
+    Visibility: public -/
+def reborrow_pair_shr
+  (x : (Std.I32 × Std.I32)) :
+  Result ((Std.I32 × Std.I32) × (Unit → Result Unit))
+  := do
+  let back := fun (_ : Unit) => ok ()
+  ok (x, back)
+
+/-- [keep_alive::short_sub_shared_reborrow]:
+    Source: 'tests/src/keep-alive.rs', lines 539:0-545:1
+    Visibility: public -/
+def short_sub_shared_reborrow : Result Std.I32 := do
+  let ((f0, _), reborrow_pair_shr_back) ← reborrow_pair_shr (10#i32, 20#i32)
+  let z ← side_effect 1#i32
+  reborrow_pair_shr_back ()
+  f0 + z
+
+/-- [keep_alive::short_nested_shared_proj]:
+    Source: 'tests/src/keep-alive.rs', lines 549:0-558:1
+    Visibility: public -/
+def short_nested_shared_proj : Result Std.I32 := do
+  let (s2, acquire_back) ← Guard.acquire 10#i32
+  let a ← side_effect 1#i32
+  let v ← Guard.get_shr s2
+  let x ← acquire_back s2
+  let b ← side_effect 2#i32
+  let i ← v + a
+  let i1 ← i + b
+  i1 + x
+
+/-- [keep_alive::Holder]
+    Source: 'tests/src/keep-alive.rs', lines 560:0-563:1
+    Visibility: public -/
+structure Holder where
+  data : Std.I32
+  tag : Std.I32
+
+/-- [keep_alive::make_holder]:
+    Source: 'tests/src/keep-alive.rs', lines 566:0-568:1
+    Visibility: public -/
+def make_holder
+  (x : Std.I32) : Result (Holder × (Holder → Result Std.I32)) := do
+  let back := fun h => ok h.data
+  ok ({ data := x, tag := 0#i32 }, back)
+
+/-- [keep_alive::short_subplace_field_write]:
+    Source: 'tests/src/keep-alive.rs', lines 573:0-580:1
+    Visibility: public -/
+def short_subplace_field_write : Result Std.I32 := do
+  let (h, make_holder_back) ← make_holder 10#i32
+  let i ← h.data + 5#i32
+  let _ ← side_effect 1#i32
+  let x ← make_holder_back { h with data := i }
+  let b ← side_effect 2#i32
+  x + b
+
 /-- [keep_alive::short_does_not_kill_long]:
-    Source: 'tests/src/keep-alive.rs', lines 476:0-483:1
+    Source: 'tests/src/keep-alive.rs', lines 584:0-591:1
     Visibility: public -/
 def short_does_not_kill_long : Result Std.I32 := do
   let (r, reborrow_short_back) ← reborrow_short 10#i32
@@ -799,7 +929,7 @@ def short_does_not_kill_long : Result Std.I32 := do
   reborrow_short_back r1
 
 /-- [keep_alive::short_zero_loan_ends_immediately]:
-    Source: 'tests/src/keep-alive.rs', lines 487:0-492:1
+    Source: 'tests/src/keep-alive.rs', lines 595:0-600:1
     Visibility: public -/
 def short_zero_loan_ends_immediately : Result Std.I32 := do
   let (_, from_mut_short_back) ← Ptr.from_mut_short 40#i32
@@ -808,7 +938,7 @@ def short_zero_loan_ends_immediately : Result Std.I32 := do
   x + y
 
 /-- [keep_alive::short_in_loop]: loop body 0:
-    Source: 'tests/src/keep-alive.rs', lines 497:4-505:5
+    Source: 'tests/src/keep-alive.rs', lines 605:4-613:5
     Visibility: public -/
 @[rust_loop_body]
 def short_in_loop_loop.body
@@ -826,7 +956,7 @@ def short_in_loop_loop.body
     ok (cont (n1, x1))
 
 /-- [keep_alive::short_in_loop]: loop 0:
-    Source: 'tests/src/keep-alive.rs', lines 497:4-505:5
+    Source: 'tests/src/keep-alive.rs', lines 605:4-613:5
     Visibility: public -/
 @[rust_loop]
 def short_in_loop_loop (n : Std.I32) (x : Std.I32) : Result Std.I32 := do
@@ -835,7 +965,7 @@ def short_in_loop_loop (n : Std.I32) (x : Std.I32) : Result Std.I32 := do
     (n, x)
 
 /-- [keep_alive::short_in_loop]:
-    Source: 'tests/src/keep-alive.rs', lines 495:0-507:1
+    Source: 'tests/src/keep-alive.rs', lines 603:0-615:1
     Visibility: public -/
 @[reducible]
 def short_in_loop (n : Std.I32) : Result Std.I32 := do

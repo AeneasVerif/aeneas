@@ -458,6 +458,37 @@ impl<'a> Guard<'a> {
     pub fn get_mut<'b>(&'b mut self) -> &'b mut i32 {
         self.data
     }
+
+    #[verify::opaque]
+    pub fn get_shr<'b>(&'b self) -> &'b i32 {
+        self.data
+    }
+
+    #[verify::keep_alive(regular)]
+    #[verify::opaque]
+    pub fn refresh_regular(self) -> Guard<'a> {
+        self
+    }
+
+    #[verify::keep_alive(short)]
+    #[verify::opaque]
+    pub fn refresh_short(self) -> Guard<'a> {
+        self
+    }
+}
+
+pub fn caller_takes_guard_regular<'a>(g: Guard<'a>) -> i32 {
+    let mut g2 = g.refresh_regular();
+    let r = g2.get_mut();
+    *r += 1;
+    side_effect(5)
+}
+
+pub fn caller_takes_guard_short<'a>(g: Guard<'a>) -> i32 {
+    let mut g2 = g.refresh_short();
+    let r = g2.get_mut();
+    *r += 1;
+    side_effect(5)
 }
 
 // Lifetime-carrying ADT (`Guard<'a>`): stays alive across `g.get_mut()` and `*r += 5`,
@@ -469,6 +500,83 @@ pub fn short_guard_releases_early() -> i32 {
     *r += 5;
     let y = side_effect(1);
     x + y
+}
+
+// Regression (P1-1a): live `g` temporarily holds `VMutLoan` while borrowed by `get_mut`;
+// `Guard::acquire` must stay alive for the second `g.get_mut()`, then end before `side_effect(2)`.
+pub fn short_guard_two_get_muts() -> i32 {
+    let mut x = 10;
+    let mut g = Guard::acquire(&mut x);
+    let r1 = g.get_mut();
+    *r1 += 5;
+    let a = side_effect(1);
+    let r2 = g.get_mut();
+    *r2 += a;
+    let b = side_effect(2);
+    x + b
+}
+
+// Regression (P1-1b): live `r2` temporarily holds `VMutLoan` inside dead `_rr2 = &mut r2`;
+// `reborrow_short` must stay alive until `*r2 += a`, then end before `side_effect(2)`.
+pub fn short_temp_mut_borrow_of_live_ref() -> i32 {
+    let mut x = 10;
+    let r1 = reborrow_short(&mut x);
+    let mut r2 = &mut *r1;
+    let _rr2 = &mut r2;
+    let a = side_effect(1);
+    *r2 += a;
+    let b = side_effect(2);
+    x + b
+}
+
+#[verify::keep_alive(short)]
+pub fn reborrow_pair_shr<'a>(x: &'a (i32, i32)) -> &'a (i32, i32) {
+    x
+}
+
+// Regression (P1-2): concrete `VSharedLoan` inside `ASharedLoan` created by sub-borrowing
+// `&((*p).0)` must keep `reborrow_pair_shr` alive until `*f0` is read.
+pub fn short_sub_shared_reborrow() -> i32 {
+    let x = (10, 20);
+    let p = reborrow_pair_shr(&x);
+    let f0 = &((*p).0);
+    let z = side_effect(1);
+    *f0 + z
+}
+
+// Regression (P1-3): nested `VSharedLoan`s inside dead `pair` / `s1` while inner `s2` is live
+// must keep `Guard::acquire` alive across `side_effect(1)`, then release before `side_effect(2)`.
+pub fn short_nested_shared_proj() -> i32 {
+    let mut x = 10;
+    let pair = (Guard::acquire(&mut x), 0);
+    let s1 = &pair;
+    let s2 = &((*s1).0);
+    let a = side_effect(1);
+    let v = *s2.get_shr();
+    let b = side_effect(2);
+    v + a + b + x
+}
+
+pub struct Holder<'a> {
+    pub data: &'a mut i32,
+    pub tag: i32,
+}
+
+#[verify::keep_alive(short)]
+pub fn make_holder<'a>(x: &'a mut i32) -> Holder<'a> {
+    Holder { data: x, tag: 0 }
+}
+
+// Regression (P1-5): non-deref field write `h.tag = ...` counts as a use of `h` under NLL,
+// keeping `make_holder` alive across `side_effect(1)` and ending it before `side_effect(2)`.
+#[allow(unused_assignments)]
+pub fn short_subplace_field_write() -> i32 {
+    let mut x = 10;
+    let mut h = make_holder(&mut x);
+    *h.data += 5;
+    h.tag = side_effect(1);
+    let b = side_effect(2);
+    x + b
 }
 
 // `Short` must not prematurely end an active `Long` abstraction (`Ptr::from_mut`)
@@ -594,6 +702,22 @@ mod test {
         assert_eq!(super::short_chained_reborrow(), 213);
         assert_eq!(super::short_place_mention_extends_life(), 214);
         assert_eq!(super::short_guard_releases_early(), 116);
+        let mut gx = 10;
+        assert_eq!(
+            super::caller_takes_guard_regular(super::Guard::acquire(&mut gx)),
+            105
+        );
+        assert_eq!(gx, 11);
+        assert_eq!(
+            super::caller_takes_guard_short(super::Guard::acquire(&mut gx)),
+            105
+        );
+        assert_eq!(gx, 12);
+        assert_eq!(super::short_guard_two_get_muts(), 218);
+        assert_eq!(super::short_temp_mut_borrow_of_live_ref(), 213);
+        assert_eq!(super::short_sub_shared_reborrow(), 111);
+        assert_eq!(super::short_nested_shared_proj(), 223);
+        assert_eq!(super::short_subplace_field_write(), 117);
         assert_eq!(super::short_does_not_kill_long(), 13);
         assert_eq!(super::short_zero_loan_ends_immediately(), 141);
         assert_eq!(super::short_in_loop(4), 4);

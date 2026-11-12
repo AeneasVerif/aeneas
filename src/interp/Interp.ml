@@ -739,45 +739,62 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
                   in
                   let rec end_alive_abs_with_no_loans (ctx : eval_ctx) :
                       eval_ctx * (SA.expr -> SA.expr) =
-                    let no_loans_abs =
-                      List.filter_map
-                        (function
-                          | EAbs abs ->
-                              if
-                                Option.is_some abs.alive_hint
-                                && AbsId.Set.for_all
-                                     (fun pid ->
-                                       Option.is_none
-                                         (ctx_lookup_abs_opt ctx pid))
-                                     abs.parents
-                                && Option.is_none
-                                     (InterpBorrowsCore
-                                      .get_first_non_ignored_aloan_in_abs span
-                                        abs 0 (-1))
-                                && abs_is_endable ctx abs
-                              then Some abs.abs_id
-                              else None
-                          | EBinding _ | EFrame -> None)
-                        ctx.env
-                    in
-                    if no_loans_abs = [] then (ctx, fun e -> e)
+                    if not (has_alive_abs ctx.env) then (ctx, fun e -> e)
                     else
+                      let can_end_now (abs : abs) : bool =
+                        AbsId.Set.for_all
+                          (fun pid ->
+                            Option.is_none (ctx_lookup_abs_opt ctx pid))
+                          abs.parents
+                        && Option.is_none
+                             (InterpBorrowsCore
+                              .get_first_non_ignored_aloan_in_abs span abs 0
+                                (-1))
+                        && abs_is_endable ctx abs
+                      in
+                      let alive_no_loans =
+                        List.filter_map
+                          (function
+                            | EAbs abs
+                              when Option.is_some abs.alive_hint
+                                   && can_end_now abs -> Some abs.abs_id
+                            | EAbs _ | EBinding _ | EFrame -> None)
+                          ctx.env
+                      in
                       let no_loans_abs =
-                        AbsIdWithLevelSet.of_list
-                          (List.map
-                             (fun abs_id -> { abs_id; level = 0 })
-                             no_loans_abs)
+                        if alive_no_loans <> [] then alive_no_loans
+                        else
+                          let frozen_abs = ctx_get_frozen_abs_set ctx in
+                          List.filter_map
+                            (function
+                              | EAbs abs
+                                when Option.is_none abs.alive_hint
+                                     && can_end_now abs
+                                     && not
+                                          (InterpLiveness
+                                           .abs_borrows_loans_in_frozen span ctx
+                                             frozen_abs abs) -> Some abs.abs_id
+                              | EAbs _ | EBinding _ | EFrame -> None)
+                            ctx.env
                       in
-                      let ctx, cc_end =
-                        InterpBorrows.end_abs_set config span no_loans_abs ctx
-                      in
-                      let ctx, cc_simpl =
-                        InterpBorrows.simplify_dummy_values_useless_abs config
-                          ~keep_alive:(fun _ -> true)
-                          ~filter_avalues:false span ctx
-                      in
-                      let cc = cc_comp cc_end cc_simpl in
-                      comp cc (end_alive_abs_with_no_loans ctx)
+                      if no_loans_abs = [] then (ctx, fun e -> e)
+                      else
+                        let no_loans_abs =
+                          AbsIdWithLevelSet.of_list
+                            (List.map
+                               (fun abs_id -> { abs_id; level = 0 })
+                               no_loans_abs)
+                        in
+                        let ctx, cc_end =
+                          InterpBorrows.end_abs_set config span no_loans_abs ctx
+                        in
+                        let ctx, cc_simpl =
+                          InterpBorrows.simplify_dummy_values_useless_abs config
+                            ~keep_alive:(fun _ -> true)
+                            ~filter_avalues:false span ctx
+                        in
+                        let cc = cc_comp cc_end cc_simpl in
+                        comp cc (end_alive_abs_with_no_loans ctx)
                   in
                   let ctx, cc_end_alive = end_alive_abs_with_no_loans ctx in
                   let ret_value, env =

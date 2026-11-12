@@ -33,25 +33,17 @@ and add_place_reads (p : place) (acc : LocalId.Set.t) : LocalId.Set.t =
   | PlaceProjection (sub_p, pe) ->
       add_proj_elem_reads pe (add_place_reads sub_p acc)
 
-(** When writing to a projected place (e.g. [*r = ...] or [x.f = ...]):
-    - index/offset operands along the projection path are always read;
-    - if the projection path contains a [Deref], everything beneath that [Deref]
-      is read to compute the target address;
-    - if there is no [Deref] (e.g. [x.0 = ...]), the root local [x] is neither
-      killed (sibling fields stay intact) nor read. *)
-let rec add_subplace_write_reads (p : place) (acc : LocalId.Set.t) :
-    LocalId.Set.t =
-  match p.kind with
-  | PlaceLocal _ | PlaceGlobal _ -> acc
-  | PlaceProjection (sub_p, Deref) -> add_place_reads sub_p acc
-  | PlaceProjection (sub_p, pe) ->
-      add_subplace_write_reads sub_p (add_proj_elem_reads pe acc)
-
+(** When writing to a place:
+    - a direct write to [PlaceLocal x] kills [x];
+    - any projected write (e.g. [*r = ...] or [x.f = ...]) does not kill the
+      root local (sibling fields stay intact) and counts as a read/use of [p]
+      (matching Rust NLL and ensuring backward functions do not see a stale
+      pre-mutation [x]). *)
 let apply_place_write (p : place) (live_after : LocalId.Set.t) : LocalId.Set.t =
   match p.kind with
   | PlaceLocal x -> LocalId.Set.remove x live_after
   | PlaceGlobal _ -> live_after
-  | PlaceProjection _ -> add_subplace_write_reads p live_after
+  | PlaceProjection _ -> add_place_reads p live_after
 
 let add_rvalue_reads (rv : rvalue) (acc : LocalId.Set.t) : LocalId.Set.t =
   match rv with
@@ -115,7 +107,7 @@ let compute_liveness (root_block : block) : liveness_info =
       | Assign (p, rv) ->
           let live = apply_place_write p live_after in
           add_rvalue_reads rv live
-      | SetDiscriminant (p, _) -> add_subplace_write_reads p live_after
+      | SetDiscriminant (p, _) -> add_place_reads p live_after
       | StorageLive x | StorageDead x -> LocalId.Set.remove x live_after
       | PlaceMention p -> add_place_reads p live_after
       | Borrowck bck -> (
@@ -198,24 +190,6 @@ let compute_liveness (root_block : block) : liveness_info =
 (** {1 Soundness Check & Early Ending for [alive_hint = Some Short]} *)
 
 exception Blocked
-
-let value_has_ended_regions (ended_regions : RegionId.Set.t) (v : tvalue) : bool
-    =
-  if RegionId.Set.is_empty ended_regions then false
-  else
-    let visitor =
-      object
-        inherit [_] iter_tvalue
-
-        method! visit_symbolic_value _ sv =
-          if symbolic_value_has_ended_regions ended_regions sv then
-            raise Utils.Found
-      end
-    in
-    try
-      visitor#visit_tvalue () v;
-      false
-    with Utils.Found -> true
 
 let collect_loans_in_value (v : tvalue) : BorrowId.id list =
   let loans = ref [] in
@@ -311,15 +285,64 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
     | BVar var -> LocalId.Set.mem var.index live_locals
     | BDummy _ -> false
   in
+  (* Precompute all borrows, symbolic values, and free regions logically held
+     by [live_locals], chasing [VMutLoan bid] to the borrow currently holding
+     that local's value ([VMutBorrow] or [AMutBorrow]). *)
+  let live_bids = ref BorrowId.Set.empty in
+  let live_svs = ref SymbolicValueId.Set.empty in
+  let live_rids = ref RegionId.Set.empty in
+  let visited_mut_loans = ref BorrowId.Set.empty in
+  let add_ty_free_regions (ty : ty) : unit =
+    let visitor =
+      object
+        inherit [_] iter_ty
+
+        method! visit_RVar _ region =
+          match region with
+          | Free rid -> live_rids := RegionId.Set.add rid !live_rids
+          | Bound _ -> ()
+      end
+    in
+    visitor#visit_ty () ty
+  in
+  let rec collect_live_tvalue (v : tvalue) : unit =
+    match v.value with
+    | VLiteral _ | VBottom -> ()
+    | VSymbolic sv ->
+        live_svs := SymbolicValueId.Set.add sv.sv_id !live_svs;
+        add_ty_free_regions sv.sv_ty
+    | VAdt adt -> List.iter collect_live_tvalue adt.fields
+    | VLoan (VSharedLoan (_, sv)) -> collect_live_tvalue sv
+    | VLoan (VMutLoan bid) ->
+        if not (BorrowId.Set.mem bid !visited_mut_loans) then (
+          visited_mut_loans := BorrowId.Set.add bid !visited_mut_loans;
+          match lookup_borrow_opt span ek_all (UMut bid) ctx with
+          | Some (Concrete (VMutBorrow (_, bv))) -> collect_live_tvalue bv
+          | Some (Abstract (AMutBorrow (_, _, av))) -> add_ty_free_regions av.ty
+          | Some
+              ( Concrete (VSharedBorrow _ | VReservedMutBorrow _)
+              | Abstract
+                  ( ASharedBorrow _
+                  | AIgnoredMutBorrow _
+                  | AEndedMutBorrow _
+                  | AEndedSharedBorrow
+                  | AEndedIgnoredMutBorrow _
+                  | AProjSharedBorrow _ ) )
+          | None -> ())
+    | VBorrow (VSharedBorrow (bid, _) | VReservedMutBorrow (bid, _)) ->
+        live_bids := BorrowId.Set.add bid !live_bids
+    | VBorrow (VMutBorrow (bid, bv)) ->
+        live_bids := BorrowId.Set.add bid !live_bids;
+        collect_live_tvalue bv
+  in
+  List.iter
+    (function
+      | EBinding (binder, v) when is_live_binder binder -> collect_live_tvalue v
+      | EBinding _ | EAbs _ | EFrame -> ())
+    ctx.env;
+
   let visited_abs = ref AbsId.Set.empty in
   let visited_loans = ref BorrowId.Set.empty in
-
-  let update_outer (outer : BorrowId.id option) (bid : BorrowId.id) :
-      BorrowId.id option =
-    match outer with
-    | Some _ -> outer
-    | None -> Some bid
-  in
 
   let rec require_end_abs (aid : AbsId.id) : unit =
     if AbsId.Set.mem aid !visited_abs then ()
@@ -337,19 +360,12 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
             raise Blocked;
           visited_abs := AbsId.Set.add aid !visited_abs;
 
-          (* Check that no live local holds a symbolic value mentioning a region
-             owned by [abs]. *)
+          (* Check that no live local logically holds a region owned by [abs]. *)
           let owned_rids =
             TypesUtils.region_set_get_region_ids abs.regions.owned
           in
-          if not (RegionId.Set.is_empty owned_rids) then
-            List.iter
-              (function
-                | EBinding (binder, v)
-                  when is_live_binder binder
-                       && value_has_ended_regions owned_rids v -> raise Blocked
-                | EBinding _ | EAbs _ | EFrame -> ())
-              ctx.env;
+          if not (RegionId.Set.disjoint owned_rids !live_rids) then
+            raise Blocked;
 
           (* Parent abstractions must end first. *)
           AbsId.Set.iter require_end_abs abs.parents;
@@ -360,6 +376,11 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
           let visitor =
             object
               inherit [_] iter_abs as super
+
+              method! visit_loan_content env lc =
+                (match lc with
+                | VMutLoan bid | VSharedLoan (bid, _) -> loans := bid :: !loans);
+                super#visit_loan_content env lc
 
               method! visit_aloan_content env lc =
                 (match lc with
@@ -386,6 +407,7 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
           List.iter require_end_loan !loans;
           List.iter (require_end_proj_loans abs.regions.owned) !proj_loans
   and require_end_loan (lid : BorrowId.id) : unit =
+    if BorrowId.Set.mem lid !live_bids then raise Blocked;
     if BorrowId.Set.mem lid !visited_loans then ()
     else
       match ctx_lookup_loan_opt span ek_all lid ctx with
@@ -397,27 +419,25 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
           visited_loans := BorrowId.Set.add lid !visited_loans;
 
           let rec check_concrete_value ~(in_live_bvar : bool)
-              (outer : BorrowId.id option) (v : tvalue) : unit =
+              (outers : BorrowId.id list) (v : tvalue) : unit =
             match v.value with
             | VLiteral _ | VBottom | VSymbolic _ -> ()
             | VAdt adt ->
-                List.iter (check_concrete_value ~in_live_bvar outer) adt.fields
+                List.iter (check_concrete_value ~in_live_bvar outers) adt.fields
             | VLoan (VMutLoan _) -> ()
             | VLoan (VSharedLoan (bid', sv)) ->
-                check_concrete_value ~in_live_bvar (update_outer outer bid') sv
+                check_concrete_value ~in_live_bvar (bid' :: outers) sv
             | VBorrow (VSharedBorrow (bid', _) | VReservedMutBorrow (bid', _))
               ->
                 if bid' = lid then
                   if in_live_bvar then raise Blocked
-                  else Option.iter require_end_loan outer
+                  else List.iter require_end_loan outers
             | VBorrow (VMutBorrow (bid', bv)) ->
                 if bid' = lid then (
                   if in_live_bvar then raise Blocked;
-                  Option.iter require_end_loan outer;
+                  List.iter require_end_loan outers;
                   List.iter require_end_loan (collect_loans_in_value bv))
-                else
-                  check_concrete_value ~in_live_bvar (update_outer outer bid')
-                    bv
+                else check_concrete_value ~in_live_bvar (bid' :: outers) bv
           in
 
           let check_abs (abs : abs) : unit =
@@ -428,10 +448,10 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
                 method! visit_aloan_content in_abs lc =
                   match lc with
                   | ASharedLoan (_, sl_bid, sv, child) ->
-                      check_concrete_value ~in_live_bvar:false (Some sl_bid) sv;
+                      check_concrete_value ~in_live_bvar:false [ sl_bid ] sv;
                       self#visit_tavalue in_abs child
                   | AEndedSharedLoan (sv, child) ->
-                      check_concrete_value ~in_live_bvar:false None sv;
+                      check_concrete_value ~in_live_bvar:false [] sv;
                       self#visit_tavalue in_abs child
                   | AMutLoan _
                   | AEndedMutLoan _
@@ -472,28 +492,30 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
           List.iter
             (function
               | EBinding (binder, v) ->
-                  check_concrete_value ~in_live_bvar:(is_live_binder binder)
-                    None v
+                  check_concrete_value ~in_live_bvar:(is_live_binder binder) []
+                    v
               | EAbs abs -> check_abs abs
               | EFrame -> ())
             ctx.env
   and require_end_proj_loans (regions : RegionSet.t) (proj : symbolic_proj) :
       unit =
-    let rec check_concrete_sv ~(in_live_bvar : bool)
-        (outer : BorrowId.id option) (v : tvalue) : unit =
+    if SymbolicValueId.Set.mem proj.sv_id !live_svs then raise Blocked;
+    let rec check_concrete_sv ~(in_live_bvar : bool) (outers : BorrowId.id list)
+        (v : tvalue) : unit =
       match v.value with
       | VLiteral _ | VBottom -> ()
       | VSymbolic sv ->
           if sv.sv_id = proj.sv_id then
             if in_live_bvar then raise Blocked
-            else Option.iter require_end_loan outer
-      | VAdt adt -> List.iter (check_concrete_sv ~in_live_bvar outer) adt.fields
+            else List.iter require_end_loan outers
+      | VAdt adt ->
+          List.iter (check_concrete_sv ~in_live_bvar outers) adt.fields
       | VLoan (VMutLoan _) -> ()
       | VLoan (VSharedLoan (bid', sv)) ->
-          check_concrete_sv ~in_live_bvar (update_outer outer bid') sv
+          check_concrete_sv ~in_live_bvar (bid' :: outers) sv
       | VBorrow (VSharedBorrow _ | VReservedMutBorrow _) -> ()
       | VBorrow (VMutBorrow (bid', bv)) ->
-          check_concrete_sv ~in_live_bvar (update_outer outer bid') bv
+          check_concrete_sv ~in_live_bvar (bid' :: outers) bv
     in
     let check_abs_shared_sv (abs : abs) : unit =
       let visitor =
@@ -503,10 +525,10 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
           method! visit_aloan_content env lc =
             match lc with
             | ASharedLoan (_, sl_bid, sv, child) ->
-                check_concrete_sv ~in_live_bvar:false (Some sl_bid) sv;
+                check_concrete_sv ~in_live_bvar:false [ sl_bid ] sv;
                 self#visit_tavalue env child
             | AEndedSharedLoan (sv, child) ->
-                check_concrete_sv ~in_live_bvar:false None sv;
+                check_concrete_sv ~in_live_bvar:false [] sv;
                 self#visit_tavalue env child
             | AMutLoan _
             | AEndedMutLoan _
@@ -520,7 +542,7 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
     List.iter
       (function
         | EBinding (binder, v) ->
-            check_concrete_sv ~in_live_bvar:(is_live_binder binder) None v
+            check_concrete_sv ~in_live_bvar:(is_live_binder binder) [] v
         | EAbs abs -> check_abs_shared_sv abs
         | EFrame -> ())
       ctx.env;

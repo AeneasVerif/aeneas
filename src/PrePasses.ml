@@ -1244,19 +1244,24 @@ let filter_type_aliases (crate : crate) : crate =
            (Option.get crate.declarations));
   }
 
-(** Refresh the statement ids to make sure they are unique *)
+(** Refresh the statement and block ids to make sure they are unique *)
 let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
     | StructuredBody body ->
-        let _, gen_id = StatementId.fresh_stateful_generator () in
+        let _, gen_stmt_id = StatementId.fresh_stateful_generator () in
+        let _, gen_block_id = BlockId.fresh_stateful_generator () in
 
-        (* Visit the rvalue *)
+        (* Visit the statements and blocks *)
         let visitor =
           object
-            inherit [_] map_statement
-            method! visit_statement_id _ _ = gen_id ()
+            inherit [_] map_statement as super
+            method! visit_statement_id _ _ = gen_stmt_id ()
+
+            method! visit_block env block =
+              let block = super#visit_block env block in
+              { block with block_id = gen_block_id () }
           end
         in
 

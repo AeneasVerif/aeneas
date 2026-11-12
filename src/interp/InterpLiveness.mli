@@ -1,6 +1,12 @@
+open Values
 open LlbcAst
 open Contexts
 open Cps
+
+(** Check whether ending [abs] would directly give back a mutable borrow or
+    symbolic borrow projector into a frozen abstraction ([frozen_abs]). *)
+val abs_borrows_loans_in_frozen :
+  Meta.span -> eval_ctx -> AbsId.Set.t -> abs -> bool
 
 (** Compute backward local-variable liveness for every statement and block exit
     in a function body. *)
