@@ -9,8 +9,8 @@ about `A` applies to `B`.
 
 ## Usage
 
-1. Translate `A` with `-emit-json`, which writes the *manifest* `translation.json` next to the
-   generated files (see [emit-json.md](emit-json.md)):
+1. Translate `A` with `-emit-json`, which writes the *manifest* `translation.json` in the `-dest`
+   directory (see [emit-json.md](emit-json.md)):
    ```
    charon cargo --preset=aeneas                    # in A's directory
    aeneas a.llbc -backend lean -split-files -emit-json -dest lean/A
@@ -60,7 +60,7 @@ pub fn square_double(s: &Square) -> u32 { s.double_area() }
 applied to `B`'s own instance:
 
 ```lean
-public import A.Funs   -- the modules of A defining the items B uses
+public import A.Funs   -- the modules of A recorded in its manifest
 
 impl_def Square.Insts.AShape : a.Shape Square := {
   area := Square.Insts.AShape.area
@@ -86,7 +86,10 @@ so `B`'s proofs are `unfold f; step*` (see `tests/lean/CrossCrate{Lib,User}/Prop
 The manifest records, for each item of `A`, its Rust name as a name-matcher pattern and its Lean
 name, plus what is needed to use it from another crate: the constructor, field and variant names
 of types; the constructor and the field names (parent clauses, constants, types, methods) of
-traits; and the key identifying each trait impl (the implemented trait with its arguments).
+traits; the key identifying each trait impl (the implemented trait with its arguments); and the
+Lean module to import to use each item (`lean_module`). For the items `A` leaves opaque, that is the
+module of the user's filled copy of the template (e.g. `A.FunsExternal`), which `B` then imports
+like `A`'s own files do.
 
 `-extern-crate` loads the manifest (`src/ExternManifest.ml`) and adds its entries to the tables
 which map the items of the standard library to the Aeneas Lean library
@@ -105,5 +108,7 @@ default methods calling methods provided by `B` (directly, chained, or not using
 argument), overriding defaults, generic functions of `A` called with `B`'s instances, `A`'s own
 instances, parent traits, `&mut self` defaults, associated constants with defaults, `A`'s generic
 impls at `B`'s types, generic traits, associated types, `B`'s traits implemented for `A`'s types,
-`A`'s structs and enums (with and without data), and `A`'s functions taking `&mut`. The
-`Makefile` translates `cross_crate_lib` before `cross_crate_user`.
+`A`'s structs and enums (with and without data), `A`'s functions taking `&mut`, and an opaque
+function of `A`, modelled in its filled `FunsExternal.lean`. `A` is translated with `-subdir`, so
+that the manifest records file paths in a subfolder. The `Makefile` translates `cross_crate_lib`
+before `cross_crate_user`.
