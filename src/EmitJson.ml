@@ -111,7 +111,7 @@ type envelope = {
 (* Mutable accumulator state                                                *)
 (*                                                                          *)
 (* Lifecycle: [init_if_enabled] at the start of [extract_translated_crate], *)
-(* [begin_file_if_enabled] at the top of every [extract_file],              *)
+(* [begin_file_if_enabled] at the top of every definitions file,            *)
 (* [record_*_if_enabled] called from the export-* hooks,                    *)
 (* [write_if_enabled] once at the end.                                      *)
 (* ------------------------------------------------------------------------ *)
