@@ -34,7 +34,7 @@ theorem core.result.Result.map_Err
     ok (core.result.Result.Err error : core.result.Result U E) := rfl
 
 /-- `core::result::Result::map` on `Ok value`: the result is `Ok` of the closure's result. `post` is
-the postcondition of the closure, which `step` can infer with `+inferPost`. -/
+the postcondition of the closure, which `step*` infers by stepping through the closure. -/
 @[step]
 theorem core.result.Result.map.spec_Ok {T E U F : Type _}
     (fnOnce : core.ops.function.FnOnce F T U) (value : T) (f : F) {post : T → U → Prop}
