@@ -1,5 +1,5 @@
 //! The library crate of the cross-crate translation tests. It is translated with `-emit-json`:
-//! the manifest `translation.json` records its items, with what another crate needs to use them.
+//! the manifest `translation.json` records its items.
 
 /// A trait whose default methods call the methods that the implementing crate provides.
 pub trait Shape {
