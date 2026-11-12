@@ -1392,16 +1392,10 @@ and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
             (* Raise an exception *)
             if check_level level then raise (FoundABorrowContent bc)
         | AProjSharedBorrow asb ->
-            (* Raise an exception only if the asb contains borrows *)
-            if
-              check_level level
-              && List.exists
-                   (fun x ->
-                     match x with
-                     | AsbBorrow _ -> true
-                     | _ -> false)
-                   asb
-            then raise (FoundABorrowContent bc)
+            (* Raise an exception if the asb is not empty: it contains borrows
+               to end, or reborrow projectors to forget (see below) *)
+            if check_level level && asb <> [] then
+              raise (FoundABorrowContent bc)
             else ()
         | AEndedMutBorrow _
         | AIgnoredMutBorrow _
@@ -1486,16 +1480,27 @@ and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
                   | AsbProjReborrows _ -> None)
                 asb
             in
-            (* There should be at least one borrow identifier in the set, which we
-               can use to identify the whole set *)
-            let repr_bid = List.hd bids in
-            (* Replace the shared borrow with Bottom *)
-            let ctx =
-              update_aborrow span ek_all (UShared repr_bid)
-                (ABorrow AEndedSharedBorrow) None ctx
-            in
-            (* Continue *)
-            ctx
+            (match bids with
+            | repr_bid :: _ ->
+                (* The first borrow identifier identifies the whole set:
+                   replace the shared borrow with Bottom *)
+                update_aborrow span ek_all (UShared repr_bid)
+                  (ABorrow AEndedSharedBorrow) None ctx
+            | [] ->
+                (* Only reborrow projectors: they own nothing to give back,
+                   but once this level is ended they must not stay in the
+                   context, where they would look like live borrows over a
+                   symbolic value whose loans may end afterwards. We empty the
+                   set (the set is identified physically: it has no borrow
+                   identifier). *)
+                let forget =
+                  object
+                    inherit [_] map_eval_ctx
+                    method! visit_AProjSharedBorrow _ asb' =
+                      AProjSharedBorrow (if asb' == asb then [] else asb')
+                  end
+                in
+                forget#visit_eval_ctx () ctx)
         | AEndedMutBorrow _
         | AIgnoredMutBorrow _
         | AEndedIgnoredMutBorrow _
