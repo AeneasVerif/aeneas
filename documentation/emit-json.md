@@ -10,6 +10,9 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 
 `translation.json` is written to the top-level output directory passed via `-dest`. 
 
+The manifest is also what lets another crate reuse this translation: see
+[multi-crate-translation.md](multi-crate-translation.md) (option `-extern-crate`).
+
 ## Schema
 
 ```json
