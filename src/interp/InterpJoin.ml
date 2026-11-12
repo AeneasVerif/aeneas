@@ -106,7 +106,75 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
 
     (* Prepare the shared value *)
     let nsv =
-      mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
+      let n0 = List.length !sid_subst in
+      let nsv =
+        mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
+      in
+      (* The static region is not refreshed: the symbolic values we have just
+         duplicated may contain static borrows (possibly hidden in ADTs, see
+         {!TypesUtils.adt_has_hidden_static}), whose loans are provided only
+         for the original symbolic values. For each duplicated symbolic value
+         we thus introduce an abstraction owning the static region which
+         reborrows the static part of the original value (this is what
+         {!reborrow_symbolic_borrows} does for the symbolic borrows). *)
+      let duplicated =
+        List.filteri (fun i _ -> i < List.length !sid_subst - n0) !sid_subst
+      in
+      List.iter
+        (fun ((nid, (osv : symbolic_value)) : _ * symbolic_value) ->
+          if
+            ty_has_regions_in_set ctx.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              osv.sv_ty
+          then
+            let proj_ty = osv.sv_ty in
+            let borrow : tavalue =
+              let proj =
+                AProjBorrows
+                  { proj = { sv_id = osv.sv_id; proj_ty }; loans = [] }
+              in
+              { value = ASymbolic (PNone, proj); ty = proj_ty }
+            in
+            let loan : tavalue =
+              let proj =
+                AProjLoans
+                  {
+                    proj = { sv_id = nid; proj_ty };
+                    consumed = [];
+                    borrows = [];
+                  }
+              in
+              { value = ASymbolic (PNone, proj); ty = proj_ty }
+            in
+            let kind : abs_kind =
+              match loop_id with
+              | Some loop_id -> Loop loop_id
+              | None -> WithCont
+            in
+            let cont : abs_cont option =
+              if with_abs_conts then
+                Some
+                  {
+                    output = Some (mk_etuple ~borrow_proj:true []);
+                    input = Some (mk_etuple ~borrow_proj:false []);
+                  }
+              else None
+            in
+            let static_abs =
+              {
+                abs_id = ctx.fresh_abs_id ();
+                kind;
+                can_end = true;
+                parents = AbsId.Set.empty;
+                ended_subabs = AbsLevelSet.empty;
+                regions = { owned = RegionSet.singleton RStatic };
+                avalues = [ borrow; loan ];
+                cont;
+              }
+            in
+            fresh_absl := static_abs :: !fresh_absl)
+        duplicated;
+      nsv
     in
 
     (* Introduce the new abstraction for the shared values.
