@@ -1838,14 +1838,14 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
 
   (* Extract the file(s) *)
-  let import_prefix =
+  let module_root =
     match !Config.subdir with
     | None -> crate_name
     | Some subdir ->
         String.concat module_delimiter
           (List.filter (fun s -> s <> "") (String.split_on_char '/' subdir))
   in
-  let import_prefix = import_prefix ^ module_delimiter in
+  let import_prefix = module_root ^ module_delimiter in
   [%ltrace "import_prefix: " ^ import_prefix];
 
   (* File extension for the "regular" modules *)
@@ -2142,7 +2142,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      extract_file gen_config ctx file_info);
 
   (* Emit translation.json. *)
-  EmitJson.write_if_enabled ~crate_name:crate.name
+  EmitJson.write_if_enabled ~crate_name:crate.name ~import_prefix:module_root
   |> Option.iter (fun path -> log#linfo (lazy ("Generated: " ^ path)));
 
   (* Generate the build file *)

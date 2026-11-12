@@ -17,6 +17,8 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
   "aeneas_version": "abc1234",
   "charon_version": "xyz5678",
   "crate": "my_crate",
+  "import_prefix": "MyCrate",
+  "lean_modules": true,
   "functions": [...],
   "types": [...],
   "globals": [...],
@@ -24,6 +26,14 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
   "trait_impls": [...]
 }
 ```
+
+`aeneas_version` is absent with the option `-emit-json-no-version`, which makes the output
+reproducible (the tests use it). `import_prefix` is the prefix of the Lean modules: the file `Funs.lean` is the module
+`<import_prefix>.Funs`. `lean_modules` records whether the files use the Lean module system.
+
+Every entry has a `rust_pattern`: its Rust name as a name-matcher pattern, which identifies the
+item from another crate. For trait impls, it is the implemented trait with its arguments (for
+instance `my_crate::Shape<my_crate::Circle>`).
 
 ### Function entries
 
@@ -51,11 +61,30 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 
 ### Type and global entries
 
-Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively. 
+Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `rust_pattern`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively.
+
+Type entries also carry the names needed to use the type from another crate:
+
+| Field | Meaning |
+|---|---|
+| `constructor` | Structures: full Lean name of the constructor. Absent for enumerations and tuple structures. |
+| `fields` | Structures: `{ "rust": ..., "lean": ... }` for each field. |
+| `variants` | Enumerations: `{ "rust": ..., "lean": ... }` for each variant, with the full Lean name. |
 
 ### Trait entries
 
-`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`. Builtin traits are not included in the outputted json.
+`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `rust_name`, `rust_pattern`, `is_local`, and `source`. Builtin traits are not included in the outputted json. They also carry the names of the structure:
+
+| Field | Meaning |
+|---|---|
+| `constructor` | Full Lean name of the structure's constructor. |
+| `parent_clauses` | Field name of each parent clause, in order. |
+| `consts` | `{ "rust": ..., "lean": ... }` field name of each associated constant. |
+| `types` | `{ "rust": ..., "lean": ... }` field name of each associated type. |
+| `methods` | `{ "rust": ..., "lean": ... }` field name of each method. |
+
+The default methods are function entries (and default constants are global entries) whose
+`rust_pattern` is the path of the method in the trait, e.g. `my_crate::Shape::double_area`.
 
 `trait_impls` entries carry the same standard fields (`def_id` is a `TraitImplId`) plus a link to the trait they implement:
 

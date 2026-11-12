@@ -9,5 +9,6 @@ Aeneas translates Rust programs to into pure functional programs (primarily Lean
 - [Tips, Tricks & Pitfalls](tips-and-tricks.md) — Common pitfalls and how to avoid them
 - [Crypto Verification](crypto-verification.md) — Verifying cryptographic code
 - [Glossary](glossary.md) — Aeneas-specific terms
+- [`translation.json`](emit-json.md) — The manifest written by `-emit-json`
 
 For AI agent instructions see the [skills/](skills/) folder.
