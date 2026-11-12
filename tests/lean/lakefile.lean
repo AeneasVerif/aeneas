@@ -75,7 +75,6 @@ package «tests» {}
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
-@[default_target] lean_lib KeepAlive
 @[default_target] lean_lib LeanKeywords
 @[default_target] lean_lib LeanKeywordsClash
 @[default_target] lean_lib ListBorrows
@@ -107,6 +106,7 @@ package «tests» {}
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib Slices
+@[default_target] lean_lib StatefulLifetime
 @[default_target] lean_lib Static
 @[default_target] lean_lib StaticSharedBorrowBugs
 @[default_target] lean_lib StepBy

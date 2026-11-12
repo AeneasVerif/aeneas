@@ -2366,8 +2366,8 @@ let eliminate_ended_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx
    However we ignore the "fixed" abstractions.
 *)
 let rec simplify_dummy_values_useless_abs_aux (config : config)
-    ~(keep_alive : alive_hint -> bool) ~(snapshots : bool) (span : Meta.span)
-    ~(changed : bool ref) : cm_fun =
+    ~(keep_stateful_lifetime : stateful_lifetime -> bool) ~(snapshots : bool)
+    (span : Meta.span) ~(changed : bool ref) : cm_fun =
  fun ctx ->
   let simplify_abs = true in
   let simplify_borrows = true in
@@ -2553,13 +2553,15 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                removing the abstraction from the context because we are allowed
                not to keep track of it).
             *)
-            let should_keep_alive =
-              match abs.alive_hint with
+            let should_keep_stateful_lifetime =
+              match abs.stateful_lifetime with
               | None -> false
-              | Some h -> keep_alive h && abs_has_borrows_or_loans ctx abs
+              | Some h ->
+                  keep_stateful_lifetime h && abs_has_borrows_or_loans ctx abs
             in
             if
-              abs_is_endable ctx abs && (not should_keep_alive)
+              abs_is_endable ctx abs
+              && (not should_keep_stateful_lifetime)
               && not (abs_mut_borrows_loans_in_fixed span ctx frozen_abs abs)
             then raise (FoundAbsId abs.abs_id)
             else EAbs abs :: explore_env ctx env
@@ -2576,8 +2578,8 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
     | b :: env -> b :: explore_env ctx env
   in
   let rec_call =
-    simplify_dummy_values_useless_abs_aux config ~keep_alive span ~snapshots
-      ~changed
+    simplify_dummy_values_useless_abs_aux config ~keep_stateful_lifetime span
+      ~snapshots ~changed
   in
   try
     (* Explore the environment.
@@ -2603,11 +2605,11 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
       rec_call ctx
 
 let simplify_dummy_values_useless_abs (config : config)
-    ?(keep_alive : alive_hint -> bool =
+    ?(keep_stateful_lifetime : stateful_lifetime -> bool =
       fun h ->
         match h with
-        | Long -> config.keep_alive_hints
-        | Regular | Short -> false) ?(snapshots : bool = true)
+        | Long -> config.keep_stateful_lifetimes
+        | Default | Short -> false) ?(snapshots : bool = true)
     ?(filter_avalues : bool = true) (span : Meta.span) : cm_fun =
  fun ctx0 ->
   [%ldebug eval_ctx_to_string ctx0];
@@ -2615,8 +2617,8 @@ let simplify_dummy_values_useless_abs (config : config)
   let rec simplify ctx0 =
     let changed = ref false in
     let ctx, cc =
-      simplify_dummy_values_useless_abs_aux config ~keep_alive span ~snapshots
-        ~changed ctx0
+      simplify_dummy_values_useless_abs_aux config ~keep_stateful_lifetime span
+        ~snapshots ~changed ctx0
     in
     Invariants.check_invariants span ctx;
     if not !changed then (

@@ -30,7 +30,8 @@ type fun_info = {
   *)
   is_rec : bool;
       (* [true] if the function is recursive (or in a mutually recursive group) *)
-  alive_hint : Values.alive_hint option;
+  has_stateful_lifetime_attr : bool;
+  stateful_lifetime_regions : Values.stateful_lifetime Types.RegionId.Map.t;
 }
 [@@deriving show]
 
@@ -38,36 +39,213 @@ type fun_info = {
 type modules_funs_info = { infos : fun_info FunOrMethodId.Map.t }
 [@@deriving show]
 
-let parse_keep_alive ?(emit_errors : bool = false) (item_meta : Types.item_meta)
-    : Values.alive_hint option =
-  let parse_arg (args : string option) : Values.alive_hint =
-    match Option.map String.trim args with
-    | None | Some "" | Some "long" -> Values.Long
-    | Some "regular" -> Values.Regular
-    | Some "short" -> Values.Short
-    | Some arg ->
+type stateful_lifetime_spec = {
+  lifetime : string option;
+  mode : Values.stateful_lifetime;
+}
+
+let has_raw_stateful_lifetime_attr (item_meta : Types.item_meta) : bool =
+  List.exists
+    (fun (attr : Meta.attribute) ->
+      match attr with
+      | AttrUnknown { path = "verify::stateful_lifetime"; _ } -> true
+      | _ -> false)
+    item_meta.attr_info.attributes
+
+let is_valid_lifetime_ident (s : string) : bool =
+  let len = String.length s in
+  if len < 2 || s.[0] <> '\'' then false
+  else
+    let is_ident_start = function
+      | 'a' .. 'z' | 'A' .. 'Z' | '_' -> true
+      | _ -> false
+    in
+    let is_ident_cont = function
+      | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true
+      | _ -> false
+    in
+    is_ident_start s.[1]
+    &&
+    let ok = ref true in
+    for i = 2 to len - 1 do
+      if not (is_ident_cont s.[i]) then ok := false
+    done;
+    !ok
+
+let parse_stateful_lifetime_specs ?(emit_errors : bool = false)
+    (item_meta : Types.item_meta) : stateful_lifetime_spec list =
+  let parse_mode (raw_mode : string) : Values.stateful_lifetime option =
+    match raw_mode with
+    | "long" -> Some Values.Long
+    | "default" -> Some Values.Default
+    | "short" -> Some Values.Short
+    | _ ->
         if emit_errors then
           [%save_error] item_meta.span
-            ("Invalid #[verify::keep_alive] argument `" ^ arg
-           ^ "`: expected `long`, `regular`, or `short`");
-        Values.Long
+            ("Invalid #[verify::stateful_lifetime] mode `" ^ raw_mode
+           ^ "`: expected `long`, `default`, or `short`");
+        None
   in
-  let hints =
-    List.filter_map
-      (fun (attr : Meta.attribute) ->
-        match attr with
-        | AttrUnknown { path = "verify::keep_alive"; args } ->
-            Some (parse_arg args)
-        | _ -> None)
-      item_meta.attr_info.attributes
-  in
-  match hints with
-  | [] -> None
-  | [ h ] -> Some h
-  | h :: _ ->
+  let validate_lifetime_tok (lt_tok : string) : string option =
+    if lt_tok = "'static" then (
       if emit_errors then
-        [%save_error] item_meta.span "Duplicate #[verify::keep_alive] attribute";
-      Some h
+        [%save_error] item_meta.span
+          "`'static` cannot be marked #[verify::stateful_lifetime]";
+      None)
+    else if lt_tok = "'_" then (
+      if emit_errors then
+        [%save_error] item_meta.span
+          "Anonymous lifetime `'_` cannot be named in \
+           #[verify::stateful_lifetime]; name the lifetime explicitly or omit \
+           it to apply to all lifetimes";
+      None)
+    else if not (is_valid_lifetime_ident lt_tok) then (
+      if emit_errors then
+        [%save_error] item_meta.span
+          ("Invalid lifetime `" ^ lt_tok ^ "` in #[verify::stateful_lifetime]");
+      None)
+    else Some lt_tok
+  in
+  let parse_arg (args : string option) : stateful_lifetime_spec option =
+    match Option.map String.trim args with
+    | None | Some "" -> Some { lifetime = None; mode = Values.Default }
+    | Some raw -> (
+        let parts = List.map String.trim (String.split_on_char ',' raw) in
+        let parts =
+          match List.rev parts with
+          | "" :: (_ :: _ as rev_rest) -> List.rev rev_rest
+          | _ -> parts
+        in
+        match parts with
+        | [ tok ] when String.length tok > 0 && tok.[0] = '\'' ->
+            Option.map
+              (fun lt -> { lifetime = Some lt; mode = Values.Default })
+              (validate_lifetime_tok tok)
+        | [ tok ] ->
+            Option.map (fun mode -> { lifetime = None; mode }) (parse_mode tok)
+        | [ lt_tok; mode_tok ] -> (
+            if String.length lt_tok = 0 || lt_tok.[0] <> '\'' then (
+              if emit_errors then
+                [%save_error] item_meta.span
+                  ("Invalid #[verify::stateful_lifetime(" ^ raw
+                 ^ ")]: expected a lifetime such as `'a` as the first argument"
+                  );
+              None)
+            else
+              match (validate_lifetime_tok lt_tok, parse_mode mode_tok) with
+              | Some lt, Some mode -> Some { lifetime = Some lt; mode }
+              | _ -> None)
+        | _ ->
+            if emit_errors then
+              [%save_error] item_meta.span
+                ("Invalid #[verify::stateful_lifetime(" ^ raw
+               ^ ")]: expected `#[verify::stateful_lifetime]`, \
+                  `#[verify::stateful_lifetime(mode)]`, \
+                  `#[verify::stateful_lifetime('a)]`, or \
+                  `#[verify::stateful_lifetime('a, mode)]`");
+            None)
+  in
+  List.filter_map
+    (fun (attr : Meta.attribute) ->
+      match attr with
+      | AttrUnknown { path = "verify::stateful_lifetime"; args } ->
+          parse_arg args
+      | _ -> None)
+    item_meta.attr_info.attributes
+
+let resolve_stateful_lifetimes (f : fun_decl) :
+    bool * Values.stateful_lifetime Types.RegionId.Map.t =
+  let has_attr = has_raw_stateful_lifetime_attr f.item_meta in
+  if not has_attr then (false, Types.RegionId.Map.empty)
+  else
+    let specs = parse_stateful_lifetime_specs ~emit_errors:true f.item_meta in
+    match f.src with
+    | TraitDefaultFun _ | TraitImplFun _ ->
+        [%save_error] f.item_meta.span
+          "#[verify::stateful_lifetime] is not allowed on trait methods";
+        (false, Types.RegionId.Map.empty)
+    | _ ->
+        let wildcard = ref None in
+        let named = ref Collections.StringMap.empty in
+        List.iter
+          (fun (spec : stateful_lifetime_spec) ->
+            match spec.lifetime with
+            | None ->
+                if Option.is_some !wildcard then
+                  [%save_error] f.item_meta.span
+                    "Duplicate #[verify::stateful_lifetime] attribute for all \
+                     lifetimes"
+                else wildcard := Some spec.mode
+            | Some lt_name ->
+                if Collections.StringMap.mem lt_name !named then
+                  [%save_error] f.item_meta.span
+                    ("Duplicate #[verify::stateful_lifetime] attribute for \
+                      lifetime `" ^ lt_name ^ "`")
+                else (
+                  if
+                    not
+                      (List.exists
+                         (fun (rp : Types.region_param) ->
+                           rp.name = Some lt_name)
+                         f.generics.regions)
+                  then
+                    [%save_error] f.item_meta.span
+                      ("Unknown lifetime `" ^ lt_name
+                     ^ "` in #[verify::stateful_lifetime]");
+                  named := Collections.StringMap.add lt_name spec.mode !named))
+          specs;
+        if Option.is_some !wildcard && f.generics.regions = [] then
+          [%save_error] f.item_meta.span
+            "#[verify::stateful_lifetime] requires at least one lifetime in \
+             the function signature";
+        let region_map =
+          List.fold_left
+            (fun m (rp : Types.region_param) ->
+              let mode_opt =
+                match rp.name with
+                | Some name -> (
+                    match Collections.StringMap.find_opt name !named with
+                    | Some _ as mode -> mode
+                    | None -> !wildcard)
+                | None -> !wildcard
+              in
+              match mode_opt with
+              | Some mode -> Types.RegionId.Map.add rp.index mode m
+              | None -> m)
+            Types.RegionId.Map.empty f.generics.regions
+        in
+        (true, region_map)
+
+let has_stateful_lifetime (info : fun_info) : bool =
+  info.has_stateful_lifetime_attr
+  || not (Types.RegionId.Map.is_empty info.stateful_lifetime_regions)
+
+let rg_stateful_lifetime (span : Meta.span option)
+    ?(decl_region_map : decl_region_map option = None) (info : fun_info)
+    (rg : Types.region_group) : Values.stateful_lifetime option =
+  if Types.RegionId.Map.is_empty info.stateful_lifetime_regions then None
+  else
+    let merge_decl_rid acc decl_rid =
+      ValuesUtils.merge_stateful_lifetimes span acc
+        (Types.RegionId.Map.find_opt decl_rid info.stateful_lifetime_regions)
+    in
+    let merge_decl_rids acc decl_rids =
+      Types.RegionId.Set.fold
+        (fun rid acc -> merge_decl_rid acc rid)
+        decl_rids acc
+    in
+    List.fold_left
+      (fun acc (r : Types.region) ->
+        match (decl_region_map, r) with
+        | None, RVar (Free rid) -> merge_decl_rid acc rid
+        | None, (RStatic | RVar (Bound _) | RErased | RBody _ | RLub _) -> acc
+        | Some m, RVar (Free rid) -> (
+            match Types.RegionId.Map.find_opt rid m.free_regions with
+            | Some decl_rids -> merge_decl_rids acc decl_rids
+            | None -> acc)
+        | Some m, RStatic -> merge_decl_rids acc m.static_regions
+        | Some _, (RVar (Bound _) | RErased | RBody _ | RLub _) -> acc)
+      None rg.regions
 
 let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
     fun_info option =
@@ -102,9 +280,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       (method_id : Types.TraitMethodId.id) (m : trait_method Types.binder) :
       unit =
     let item_meta = m.binder_value.item_meta in
-    if Option.is_some (parse_keep_alive ~emit_errors:true item_meta) then
+    if has_raw_stateful_lifetime_attr item_meta then
       [%save_error] item_meta.span
-        "#[verify::keep_alive] is not allowed on trait methods";
+        "#[verify::stateful_lifetime] is not allowed on trait methods";
     register_info
       (FunOrMethodId.Method (trait_decl_id, method_id))
       {
@@ -112,7 +290,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
         stateful = false;
         can_diverge = false;
         is_rec = false;
-        alive_hint = None;
+        has_stateful_lifetime_attr = false;
+        stateful_lifetime_regions = Types.RegionId.Map.empty;
       }
   in
 
@@ -228,10 +407,10 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 | Fun fid -> (
                     match FunDeclId.Map.find_opt fid funs_map with
                     | Some fdecl
-                      when Option.is_some (parse_keep_alive fdecl.item_meta) ->
+                      when has_raw_stateful_lifetime_attr fdecl.item_meta ->
                         [%save_error] env
                           "Cannot take a function pointer to a function marked \
-                           #[verify::keep_alive]"
+                           #[verify::stateful_lifetime]"
                     | _ -> ())
                 | TraitMethod _ -> ())
             | _ -> ());
@@ -313,7 +492,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       stateful = !stateful;
       can_diverge = !can_diverge;
       is_rec = !is_rec;
-      alive_hint = None;
+      has_stateful_lifetime_attr = false;
+      stateful_lifetime_regions = Types.RegionId.Map.empty;
     }
   in
 
@@ -330,18 +510,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let info = analyze_fun_decls fun_ids funs in
     List.iter
       (fun (f : fun_decl) ->
-        let alive_hint =
-          match parse_keep_alive ~emit_errors:true f.item_meta with
-          | None -> None
-          | Some _ as hint -> (
-              match f.src with
-              | TraitDefaultFun _ | TraitImplFun _ ->
-                  [%save_error] f.item_meta.span
-                    "#[verify::keep_alive] is not allowed on trait methods";
-                  None
-              | _ -> hint)
+        let has_stateful_lifetime_attr, stateful_lifetime_regions =
+          resolve_stateful_lifetimes f
         in
-        let info = { info with alive_hint } in
+        let info =
+          { info with has_stateful_lifetime_attr; stateful_lifetime_regions }
+        in
         register_fun_decl_info f.def_id info)
       funs
   in

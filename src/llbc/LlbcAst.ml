@@ -35,12 +35,23 @@ type bound_fun_sig = Charon.TypesUtils.bound_fun_sig
 type abs_region_group = (region, AbsId.id) g_region_group [@@deriving show]
 type abs_region_groups = abs_region_group list [@@deriving show]
 
+type decl_region_map = {
+  free_regions : RegionId.Set.t RegionId.Map.t;
+  static_regions : RegionId.Set.t;
+}
+[@@deriving show]
+
 (** A function signature, after instantiation *)
 type inst_fun_sig = {
   regions_hierarchy : region_groups;
       (** **WARNING**: the region ids in those groups should have been
           substituted with fresh regions. *)
   abs_regions_hierarchy : abs_region_groups;
+  decl_region_map : decl_region_map option;
+      (** When [Some map], maps instantiated regions in [regions_hierarchy] back
+          to the original declaration [RegionId.id]s in [generics.regions]. When
+          [None], the [RegionId.id]s in [regions_hierarchy] are already
+          declaration [RegionId.id]s. *)
   trait_type_constraints : trait_type_constraint region_binder list;
   inputs : rty list;
   output : rty;

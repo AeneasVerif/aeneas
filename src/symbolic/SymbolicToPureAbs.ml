@@ -215,7 +215,7 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
   in
 
   let inputs =
-    if Option.is_some abs.alive_hint && inputs = [] then [ mk_unit_ty ]
+    if Option.is_some abs.stateful_lifetime && inputs = [] then [ mk_unit_ty ]
     else inputs
   in
 
@@ -241,7 +241,8 @@ let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
   else
     let output = mk_simpl_tuple_ty outputs in
     let output =
-      if Option.is_some abs.alive_hint then mk_result_ty output else output
+      if Option.is_some abs.stateful_lifetime then mk_result_ty output
+      else output
     in
     Some (mk_arrows inputs output)
 
@@ -1082,7 +1083,8 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     einput_to_texpr ctx ectx abs.regions.owned bound_inputs fvar_to_texpr
       abs_level input
   in
-  [%sanity_check] span ((not is_effectful) || Option.is_some abs.alive_hint);
+  [%sanity_check] span
+    ((not is_effectful) || Option.is_some abs.stateful_lifetime);
   let ctx, bound_outputs, pat =
     eoutput_to_pat ctx fvar_to_texpr abs.regions.owned abs_level output
   in
@@ -1094,7 +1096,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
   in
 
   let ctx, inputs =
-    if Option.is_some abs.alive_hint && inputs = [] then
+    if Option.is_some abs.stateful_lifetime && inputs = [] then
       let ctx, dummy = fresh_var None mk_unit_ty ctx in
       (ctx, [ dummy ])
     else (ctx, inputs)
@@ -1105,7 +1107,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     (* Put everything together *)
     let output_e = mk_simpl_tuple_texpr span outputs in
     let output_e =
-      if is_effectful || Option.is_some abs.alive_hint then
+      if is_effectful || Option.is_some abs.stateful_lifetime then
         mk_result_ok_texpr span output_e
       else output_e
     in
@@ -1287,7 +1289,8 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     einput_to_texpr ctx ectx abs.regions.owned empty_bound_borrows_loans
       fvar_to_texpr abs_level input
   in
-  [%sanity_check] span ((not is_effectful) || Option.is_some abs.alive_hint);
+  [%sanity_check] span
+    ((not is_effectful) || Option.is_some abs.stateful_lifetime);
   let ctx, pat =
     tevalue_to_given_back abs.regions.owned abs_level None output ctx
   in

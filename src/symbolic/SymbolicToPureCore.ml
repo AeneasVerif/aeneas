@@ -525,12 +525,12 @@ let mk_closed_checked_let file line ctx is_effectful pat bound next =
   [%cassert] ctx.span
     ((not is_effectful) || (ctx_get_effect_info ctx).is_effectful)
     "Cannot bind an effectful expression inside a pure backward function; mark \
-     the enclosing function #[verify::keep_alive]";
+     the enclosing function #[verify::stateful_lifetime]";
   mk_closed_checked_let file line ctx.span is_effectful pat bound next
 
 let mk_closed_checked_lets file line ctx is_effectful pat_bounds next =
   [%cassert] ctx.span
     ((not is_effectful) || (ctx_get_effect_info ctx).is_effectful)
     "Cannot bind an effectful expression inside a pure backward function; mark \
-     the enclosing function #[verify::keep_alive]";
+     the enclosing function #[verify::stateful_lifetime]";
   mk_closed_checked_lets file line ctx.span is_effectful pat_bounds next

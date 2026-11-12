@@ -227,7 +227,7 @@ let push_value_to_static_shared_loan (span : Meta.span) (ctx : eval_ctx)
       abs_id = ctx.fresh_abs_id ();
       kind = Static;
       can_end = true;
-      alive_hint = None;
+      stateful_lifetime = None;
       parents = AbsId.Set.empty;
       regions = { owned = RegionSet.singleton RStatic };
       ended_subabs = AbsLevelSet.empty;
@@ -332,7 +332,7 @@ let push_static_loans_proj_for_symbolic_value (span : Meta.span)
         abs_id = ctx.fresh_abs_id ();
         kind = Static;
         can_end = true;
-        alive_hint = None;
+        stateful_lifetime = None;
         parents = AbsId.Set.empty;
         regions = { owned = static_regions };
         ended_subabs = AbsLevelSet.empty;
@@ -1016,6 +1016,31 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
     end
   in
   let generic_args = visitor#visit_generic_args () generic_args in
+  let decl_region_map =
+    List.fold_left2
+      (fun (m : decl_region_map) (rp : region_param) (r : region) ->
+        match r with
+        | RVar (Free nrid) ->
+            let prev =
+              Option.value ~default:RegionId.Set.empty
+                (RegionId.Map.find_opt nrid m.free_regions)
+            in
+            {
+              m with
+              free_regions =
+                RegionId.Map.add nrid
+                  (RegionId.Set.add rp.index prev)
+                  m.free_regions;
+            }
+        | RStatic ->
+            {
+              m with
+              static_regions = RegionId.Set.add rp.index m.static_regions;
+            }
+        | RVar (Bound _) | RErased | RBody _ | RLub _ -> m)
+      { free_regions = RegionId.Map.empty; static_regions = RegionId.Set.empty }
+      sg.item_binder_params.regions generic_args.regions
+  in
   let tr_self = visitor#visit_trait_ref_kind () tr_self in
   let fresh_regions = List.rev !fresh_regions in
 
@@ -1094,7 +1119,9 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
   (* The region group of the static region may contain region variables which
      outlive the static region (e.g., ['a : 'static]): we merge those regions
      with the static region, by substituting them with 'static. *)
-  let regions_hierarchy, (trait_type_constraints, inputs, output) =
+  let ( regions_hierarchy,
+        decl_region_map,
+        (trait_type_constraints, inputs, output) ) =
     let static_rids =
       List.fold_left
         (fun rids (rg : region_group) ->
@@ -1105,8 +1132,22 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
         RegionId.Set.empty regions_hierarchy
     in
     if RegionId.Set.is_empty static_rids then
-      (regions_hierarchy, (trait_type_constraints, inputs, output))
+      ( regions_hierarchy,
+        decl_region_map,
+        (trait_type_constraints, inputs, output) )
     else
+      let decl_region_map =
+        RegionId.Set.fold
+          (fun rid (m : decl_region_map) ->
+            match RegionId.Map.find_opt rid m.free_regions with
+            | Some decl_rids ->
+                {
+                  m with
+                  static_regions = RegionId.Set.union decl_rids m.static_regions;
+                }
+            | None -> m)
+          static_rids decl_region_map
+      in
       let regions_hierarchy =
         List.map
           (fun (rg : region_group) ->
@@ -1132,7 +1173,9 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
       in
       let inputs = List.map (visitor#visit_ty ()) inputs in
       let output = visitor#visit_ty () output in
-      (regions_hierarchy, (trait_type_constraints, inputs, output))
+      ( regions_hierarchy,
+        decl_region_map,
+        (trait_type_constraints, inputs, output) )
   in
 
   (* Compute the instantiated function signature *)
@@ -1160,6 +1203,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
   {
     regions_hierarchy;
     abs_regions_hierarchy;
+    decl_region_map = Some decl_region_map;
     trait_type_constraints;
     inputs;
     output;

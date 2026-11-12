@@ -44,7 +44,7 @@ val create_push_abstractions_from_abs_region_groups :
   (RegionGroupId.id -> abs_kind) ->
   abs_region_group list ->
   (RegionGroupId.id -> bool) ->
-  ?alive_hint:(RegionGroupId.id -> alive_hint option) ->
+  ?stateful_lifetime:(RegionGroupId.id -> stateful_lifetime option) ->
   (region_group_id -> abs -> eval_ctx -> tavalue list * abs_cont option) ->
   eval_ctx ->
   eval_ctx

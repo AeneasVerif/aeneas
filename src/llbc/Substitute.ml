@@ -112,11 +112,26 @@ let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
          trait_type_constraint_substitute subst)
       generics.trait_type_constraints
   in
+  let decl_region_map =
+    let free_regions =
+      List.fold_left
+        (fun m (rp : region_param) ->
+          let nrid = r_id_subst rp.index in
+          let prev =
+            Option.value ~default:RegionId.Set.empty
+              (RegionId.Map.find_opt nrid m)
+          in
+          RegionId.Map.add nrid (RegionId.Set.add rp.index prev) m)
+        RegionId.Map.empty generics.regions
+    in
+    Some { free_regions; static_regions = RegionId.Set.empty }
+  in
   {
     inputs;
     output;
     regions_hierarchy;
     abs_regions_hierarchy;
+    decl_region_map;
     trait_type_constraints;
   }
 

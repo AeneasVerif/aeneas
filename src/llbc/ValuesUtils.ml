@@ -661,34 +661,40 @@ let mk_let (span : Meta.span) (rid_set : region_set) (pat : tepat)
   let ty = e.ty in
   { value; ty }
 
-let alive_hint_to_string (h : alive_hint) : string =
+let stateful_lifetime_to_string (h : stateful_lifetime) : string =
   match h with
   | Long -> "Long"
-  | Regular -> "Regular"
+  | Default -> "Default"
   | Short -> "Short"
 
-let max_alive_hint (h0 : alive_hint) (h1 : alive_hint) : alive_hint =
+let max_stateful_lifetime (h0 : stateful_lifetime) (h1 : stateful_lifetime) :
+    stateful_lifetime =
   match (h0, h1) with
   | Long, _ | _, Long -> Long
-  | Regular, _ | _, Regular -> Regular
+  | Default, _ | _, Default -> Default
   | Short, Short -> Short
 
-(** Merge two optional [alive_hint] values when merging two abstractions:
+(** Merge two optional [stateful_lifetime] values when merging two abstractions:
     - if either is [None], use the other
     - if both are [Some] and equal, keep it
     - if both are [Some] and different, emit a warning and return the
-      longer-lived hint ([Long > Regular > Short]) (TODO). *)
-let merge_alive_hints (span : Meta.span option) (h0 : alive_hint option)
-    (h1 : alive_hint option) : alive_hint option =
+      longer-lived mode ([Long > Default > Short]) (TODO). *)
+let merge_stateful_lifetimes (span : Meta.span option)
+    (h0 : stateful_lifetime option) (h1 : stateful_lifetime option) :
+    stateful_lifetime option =
   match (h0, h1) with
   | None, h | h, None -> h
   | Some h0', Some h1' ->
       if h0' = h1' then h0
       else
-        (* TODO: properly handle merging conflicting alive hints *)
-        let res = max_alive_hint h0' h1' in
+        (* TODO: properly handle merging conflicting stateful_lifetime modes *)
+        let res = max_stateful_lifetime h0' h1' in
         [%warn_opt_span] span
-          ("Merging two region abstractions with conflicting alive hints ("
-         ^ alive_hint_to_string h0' ^ " vs " ^ alive_hint_to_string h1'
-         ^ "); defaulting to " ^ alive_hint_to_string res);
+          ("Merging two region abstractions with conflicting stateful_lifetime \
+            modes ("
+          ^ stateful_lifetime_to_string h0'
+          ^ " vs "
+          ^ stateful_lifetime_to_string h1'
+          ^ "); defaulting to "
+          ^ stateful_lifetime_to_string res);
         Some res

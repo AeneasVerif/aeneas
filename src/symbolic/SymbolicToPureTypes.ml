@@ -725,9 +725,7 @@ and compute_raw_fun_effect_info (span : Meta.span option)
           (lookup_pure_fn_ptr_info fun_infos fun_id)
       in
       {
-        is_effectful =
-          (info.can_fail && gid = None)
-          || (Option.is_some gid && Option.is_some info.alive_hint);
+        is_effectful = info.can_fail && gid = None;
         can_diverge = info.can_diverge;
         is_rec = info.is_rec && gid = None;
       }
@@ -934,18 +932,24 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   let compute_back_info_for_group (rg : T.region_group) :
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
-    let back_effect_info =
-      compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
-    in
-    let alive_hint =
+    let stateful_lifetime =
       match lookup_pure_fn_ptr_info fun_infos fun_id with
-      | Some info -> info.alive_hint
+      | Some info ->
+          FunsAnalysis.rg_stateful_lifetime span
+            ~decl_region_map:sg.decl_region_map info rg
       | None -> None
+    in
+    let back_effect_info =
+      let base = compute_raw_fun_effect_info span fun_infos fun_id (Some gid) in
+      {
+        base with
+        is_effectful = base.is_effectful || Option.is_some stateful_lifetime;
+      }
     in
     let inputs = translate_back_inputs_for_gid gid in
     let outputs = compute_back_outputs_for_gid gid in
     let inputs =
-      if Option.is_some alive_hint && inputs = [] then
+      if Option.is_some stateful_lifetime && inputs = [] then
         [ (0, [ (None, mk_unit_ty) ]) ]
       else inputs
     in
@@ -1041,6 +1045,7 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     {
       regions_hierarchy;
       abs_regions_hierarchy;
+      decl_region_map = None;
       trait_type_constraints = [];
       inputs;
       output;

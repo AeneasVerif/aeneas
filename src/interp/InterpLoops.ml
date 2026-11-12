@@ -94,7 +94,7 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
      context with the target context *)
   let ctx, cf_prepare =
     prepare_match_ctx_with_target config span (Loop loop_id)
-      ~recoverable:config.keep_alive_hints fp_ctx ctx
+      ~recoverable:config.keep_stateful_lifetimes fp_ctx ctx
   in
 
   (* Actually match *)
@@ -115,8 +115,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
       (match_ctx_with_target config span WithCont fixed_aids fixed_dids
-         fp_input_abs fp_input_svalues ~recoverable:config.keep_alive_hints
-         fp_ctx ctx)
+         fp_input_abs fp_input_svalues
+         ~recoverable:config.keep_stateful_lifetimes fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
@@ -328,7 +328,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
           match_ctx_with_target config span WithCont fixed_aids fixed_dids
             fp_input_abs fp_input_svalues fp_ctx
-            ~recoverable:config.keep_alive_hints ctx
+            ~recoverable:config.keep_stateful_lifetimes ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in
         let input_abs = reorder_input_abs input_abs fp_input_abs in
@@ -559,10 +559,10 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
         in
         ([ (ctx, res) ], cf)
       in
-      (* TODO: check if there even are abstractions that have [alive_hint = Some Long]
+      (* TODO: check if there even are abstractions that have [stateful_lifetime = Some Long]
          (including inside the loop body) before running Pass 1 *)
-      if config.keep_alive_hints then
+      if config.keep_stateful_lifetimes then
         try eval_loop_sym config
         with Errors.RFailure ->
-          eval_loop_sym { config with keep_alive_hints = false }
+          eval_loop_sym { config with keep_stateful_lifetimes = false }
       else eval_loop_sym config

@@ -28,18 +28,18 @@ type liveness_info = {
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
-  keep_alive_hints : bool;
-      (** Whether to keep [alive_hint = Some Long] abstractions alive across
-          joins and loops (Pass 1 of the 2-pass join/loop evaluation). *)
+  keep_stateful_lifetimes : bool;
+      (** Whether to keep [stateful_lifetime = Some Long] abstractions alive
+          across joins and loops (Pass 1 of the 2-pass join/loop evaluation). *)
   liveness : (liveness_info option[@opaque]);
       (** Precomputed local-variable liveness for ending
-          [alive_hint = Some Short] abstractions early. *)
+          [stateful_lifetime = Some Short] abstractions early. *)
 }
 [@@deriving show]
 
 let mk_config ?(liveness : liveness_info option = None)
     (mode : interpreter_mode) : config =
-  { mode; keep_alive_hints = true; liveness }
+  { mode; keep_stateful_lifetimes = true; liveness }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;

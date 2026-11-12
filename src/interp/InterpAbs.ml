@@ -72,7 +72,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           abs_id = ctx.fresh_abs_id ();
           kind = abs_kind;
           can_end;
-          alive_hint = None;
+          stateful_lifetime = None;
           parents = AbsId.Set.empty;
           regions = { owned = RegionSet.singleton r };
           ended_subabs = AbsLevelSet.empty;
@@ -2136,15 +2136,16 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
 
   (* Create the new abstraction *)
   let abs_id = ctx.fresh_abs_id () in
-  let alive_hint =
-    merge_alive_hints (Some span) abs0.alive_hint abs1.alive_hint
+  let stateful_lifetime =
+    merge_stateful_lifetimes (Some span) abs0.stateful_lifetime
+      abs1.stateful_lifetime
   in
   let abs =
     {
       abs_id;
       kind = abs_kind;
       can_end;
-      alive_hint;
+      stateful_lifetime;
       parents;
       ended_subabs;
       regions;

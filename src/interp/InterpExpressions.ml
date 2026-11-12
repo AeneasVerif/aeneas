@@ -298,7 +298,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                   abs_id = ctx.fresh_abs_id ();
                   kind = CopySymbolicValue;
                   can_end = true;
-                  alive_hint = None;
+                  stateful_lifetime = None;
                   parents = AbsId.Set.empty;
                   regions = { owned };
                   ended_subabs = AbsLevelSet.empty;
@@ -547,17 +547,17 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           in
           (cv, ctx, cc_comp cc cf)
       | CFnDef ptr ->
-          let has_keep_alive =
+          let has_stateful_lifetime =
             match
               FunsAnalysis.lookup_fn_ptr_info ctx.fun_ctx.fun_infos ptr.kind
             with
-            | Some info -> Option.is_some info.alive_hint
+            | Some info -> FunsAnalysis.has_stateful_lifetime info
             | None -> false
           in
-          if has_keep_alive then
+          if has_stateful_lifetime then
             Errors.craise_silent __FILE__ __LINE__ span
               "Cannot take a function pointer to a function marked \
-               #[verify::keep_alive]";
+               #[verify::stateful_lifetime]";
           let sv = mk_fresh_symbolic_tvalue span ctx cv.ty in
           let cf e =
             SymbolicAst.IntroSymbolic
@@ -929,7 +929,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
               abs_id;
               kind = CopySymbolicValue;
               can_end = true;
-              alive_hint = None;
+              stateful_lifetime = None;
               parents = AbsId.Set.empty;
               regions = { owned = RegionSet.singleton (RVar (Free rid)) };
               ended_subabs = AbsLevelSet.empty;

@@ -187,7 +187,7 @@ let compute_liveness (root_block : block) : liveness_info =
   let _ = eval_block ~record:true [] root_block LocalId.Set.empty in
   { live_before_stmt = !stmt_map; live_after_block = !block_map }
 
-(** {1 Soundness Check & Early Ending for [alive_hint = Some Short]} *)
+(** {1 Soundness Check & Early Ending for [stateful_lifetime = Some Short]} *)
 
 exception Blocked
 
@@ -274,7 +274,7 @@ let abs_borrows_loans_in_frozen (span : Meta.span) (ctx : eval_ctx)
 
 (** Return [true] iff calling [end_abs] on [target_abs_id] right now: 1. only
     ends endable abstractions (and does not prematurely end any active [Long] or
-    [Regular] abstraction or mutate any frozen abstraction), and 2. does not
+    [Default] abstraction or mutate any frozen abstraction), and 2. does not
     invalidate any borrow or region inside any live local variable
     ([live_locals]). *)
 let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
@@ -352,10 +352,10 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
       | Some abs ->
           if not (abs_is_endable ctx abs) then raise Blocked;
           (if aid <> target_abs_id then
-             match abs.alive_hint with
-             | Some (Long | Regular) when abs_has_borrows_or_loans ctx abs ->
+             match abs.stateful_lifetime with
+             | Some (Long | Default) when abs_has_borrows_or_loans ctx abs ->
                  raise Blocked
-             | Some (Long | Regular | Short) | None -> ());
+             | Some (Long | Default | Short) | None -> ());
           if abs_borrows_loans_in_frozen span ctx frozen_abs abs then
             raise Blocked;
           visited_abs := AbsId.Set.add aid !visited_abs;
@@ -562,8 +562,8 @@ let can_end_abs_for_short (span : Meta.span) (live_locals : LocalId.Set.t)
 let env_has_short_abs (env : env) : bool =
   List.exists
     (function
-      | EAbs { alive_hint = Some Short; _ } -> true
-      | EAbs { alive_hint = Some (Long | Regular) | None; _ }
+      | EAbs { stateful_lifetime = Some Short; _ } -> true
+      | EAbs { stateful_lifetime = Some (Long | Default) | None; _ }
       | EBinding _ | EFrame -> false)
     env
 
@@ -585,7 +585,7 @@ let end_short_abstractions (config : config) (span : Meta.span)
       let next_short =
         List.find_map
           (function
-            | EAbs ({ alive_hint = Some Short; _ } as abs)
+            | EAbs ({ stateful_lifetime = Some Short; _ } as abs)
               when can_end_abs_for_short span live_locals frozen_abs ctx
                      abs.abs_id -> Some abs.abs_id
             | EAbs _ | EBinding _ | EFrame -> None)

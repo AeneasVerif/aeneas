@@ -383,7 +383,8 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
 let create_empty_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    (alive_hint : RegionGroupId.id -> alive_hint option) : abs list =
+    (stateful_lifetime : RegionGroupId.id -> stateful_lifetime option) :
+    abs list =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that {!abs_to_ancestors_regions} [abs_id]
    * returns the union of:
@@ -417,7 +418,7 @@ let create_empty_abstractions_from_abs_region_groups
       abs_id;
       kind = kind rg_id;
       can_end;
-      alive_hint = alive_hint rg_id;
+      stateful_lifetime = stateful_lifetime rg_id;
       parents;
       regions;
       ended_subabs = AbsLevelSet.empty;
@@ -434,14 +435,15 @@ let create_empty_abstractions_from_abs_region_groups
 let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    ?(alive_hint : RegionGroupId.id -> alive_hint option = fun _ -> None)
+    ?(stateful_lifetime : RegionGroupId.id -> stateful_lifetime option =
+      fun _ -> None)
     (compute_abs_avalues :
       region_group_id -> abs -> eval_ctx -> tavalue list * abs_cont option)
     (ctx : eval_ctx) : eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups kind rgl region_can_end
-      alive_hint
+      stateful_lifetime
   in
   let rg_ids = RegionGroupId.mapi (fun rg_id _ -> rg_id) rgl in
 
@@ -663,7 +665,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
-  (* End any [alive_hint = Some Short] abstractions whose borrows are no longer
+  (* End any [stateful_lifetime = Some Short] abstractions whose borrows are no longer
      needed by any live local variable *)
   let ctx, cc =
     comp cc (InterpLiveness.end_short_abstractions_before_stmt config st ctx)
@@ -1114,7 +1116,9 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     ([ (ctx, Unit) ], cf)
   else
     let join_aux config =
-      let recoverable = config.keep_alive_hints || !Config.recover_joins in
+      let recoverable =
+        config.keep_stateful_lifetimes || !Config.recover_joins
+      in
       (* We need to join the contexts *)
       [%ldebug
         "About to join contexts after an [if then else]." ^ "\n- initial ctx:\n"
@@ -1249,22 +1253,22 @@ and eval_switch_with_join (config : config) (span : Meta.span)
       (* Output the joined context *)
       ([ (joined_ctx, Unit) ], cf)
     in
-    let has_long_alive_hint =
+    let has_long_stateful_lifetime =
       List.exists
         (fun ((ctx : eval_ctx), _) ->
           List.exists
             (function
-              | EAbs { alive_hint = Some Long; _ } -> true
-              | EAbs { alive_hint = Some (Regular | Short) | None; _ }
+              | EAbs { stateful_lifetime = Some Long; _ } -> true
+              | EAbs { stateful_lifetime = Some (Default | Short) | None; _ }
               | EBinding _ | EFrame -> false)
             ctx.env)
         ctx_resl
     in
-    if config.keep_alive_hints && has_long_alive_hint then
+    if config.keep_stateful_lifetimes && has_long_stateful_lifetime then
       try join_aux config
       with Errors.RFailure ->
-        join_aux { config with keep_alive_hints = false }
-    else join_aux { config with keep_alive_hints = false }
+        join_aux { config with keep_stateful_lifetimes = false }
+    else join_aux { config with keep_stateful_lifetimes = false }
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (span : Meta.span) (call : call)
@@ -1530,16 +1534,18 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   in
   (* Actually initialize and insert the abstractions *)
   let region_can_end _ = true in
-  let alive_hint =
+  let stateful_lifetime (rg_id : RegionGroupId.id) =
     match FunsAnalysis.lookup_fn_ptr_info ctx.fun_ctx.fun_infos fid with
-    | Some fun_info -> fun_info.alive_hint
+    | Some fun_info ->
+        let rg = RegionGroupId.nth inst_sg.regions_hierarchy rg_id in
+        FunsAnalysis.rg_stateful_lifetime (Some span)
+          ~decl_region_map:inst_sg.decl_region_map fun_info rg
     | None -> None
   in
-  let alive_hint _ = alive_hint in
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> FunCall (call_id, rg_id))
-      inst_sg.abs_regions_hierarchy region_can_end ~alive_hint
+      inst_sg.abs_regions_hierarchy region_can_end ~stateful_lifetime
       compute_abs_avalues ctx
   in
   (* Synthesize the symbolic AST *)
@@ -1565,9 +1571,10 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
         (fun abs_id ->
           (* Lookup the abstraction *)
           let abs = ctx_lookup_abs ctx abs_id in
-          (* Check if the keep-alive hint is set. *)
+          (* Check if the stateful-lifetime mode is set. *)
           (not
-             (Option.is_some abs.alive_hint && abs_has_borrows_or_loans ctx abs))
+             (Option.is_some abs.stateful_lifetime
+             && abs_has_borrows_or_loans ctx abs))
           (* Check if it has parents *)
           && AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)

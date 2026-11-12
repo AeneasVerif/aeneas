@@ -180,7 +180,7 @@ val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
       end them, nor their loans). *)
 val simplify_dummy_values_useless_abs :
   config ->
-  ?keep_alive:(alive_hint -> bool) ->
+  ?keep_stateful_lifetime:(stateful_lifetime -> bool) ->
   ?snapshots:bool ->
   ?filter_avalues:bool ->
   Meta.span ->

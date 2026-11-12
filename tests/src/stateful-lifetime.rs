@@ -1,5 +1,5 @@
 //@ [!lean] skip
-//! Tests for `#[verify::keep_alive]` on raw-pointer constructors, joins,
+//! Tests for `#[verify::stateful_lifetime]` on raw-pointer constructors, joins,
 //! loops, shared borrows, duplicate calls, and caller return lifetimes.
 #![feature(register_tool)]
 #![register_tool(verify)]
@@ -17,25 +17,25 @@ impl<T> Clone for Ptr<T> {
 }
 
 impl<T> Ptr<T> {
-    #[verify::keep_alive(short)]
+    #[verify::stateful_lifetime(short)]
     #[verify::opaque]
     pub fn as_shr<'a>(self) -> &'a T {
         unsafe { &*(self.data) }
     }
 
-    #[verify::keep_alive(short)]
+    #[verify::stateful_lifetime(short)]
     #[verify::opaque]
     pub fn as_mut<'a>(self) -> &'a mut T {
         unsafe { &mut *(self.data) }
     }
 
-    #[verify::keep_alive(long)]
+    #[verify::stateful_lifetime(long)]
     #[verify::opaque]
     pub fn from_mut<'a>(r: &'a mut T) -> Ptr<T> {
         Self { data: &raw mut *r }
     }
 
-    #[verify::keep_alive(long)]
+    #[verify::stateful_lifetime(long)]
     #[verify::opaque]
     pub fn from_shr<'a>(r: &'a T) -> Self {
         Self {
@@ -43,13 +43,13 @@ impl<T> Ptr<T> {
         }
     }
 
-    #[verify::keep_alive(regular)]
+    #[verify::stateful_lifetime(default)]
     #[verify::opaque]
     pub fn from_mut_regular<'a>(r: &'a mut T) -> Ptr<T> {
         Self { data: &raw mut *r }
     }
 
-    #[verify::keep_alive(regular)]
+    #[verify::stateful_lifetime('a)]
     #[verify::opaque]
     pub fn from_shr_regular<'a>(r: &'a T) -> Self {
         Self {
@@ -57,7 +57,7 @@ impl<T> Ptr<T> {
         }
     }
 
-    #[verify::keep_alive(short)]
+    #[verify::stateful_lifetime('a, short)]
     #[verify::opaque]
     pub fn from_mut_short<'a>(r: &'a mut T) -> Ptr<T> {
         Self { data: &raw mut *r }
@@ -133,7 +133,7 @@ pub fn simple_loop_ptr_from_mut(mut n: i32) -> i32 {
     x
 }
 
-#[verify::keep_alive]
+#[verify::stateful_lifetime('a, long)]
 pub fn make_ptr_and_mut<'a>(x: &'a mut i32, y: &'a mut i32) -> (Ptr<i32>, &'a mut i32) {
     (Ptr::from_mut(x), y)
 }
@@ -161,8 +161,8 @@ pub fn loop_explicit_move_mut(mut n: i32) -> i32 {
     x + y
 }
 
-// Verifies `equiv_ctxs` / `match_abstractions` distinguishes `alive_hint`.
-pub fn loop_equiv_alive_hint(mut n: i32, cond: bool, cond2: bool) -> i32 {
+// Verifies `equiv_ctxs` / `match_abstractions` distinguishes `stateful_lifetime`.
+pub fn loop_equiv_stateful_lifetime(mut n: i32, cond: bool, cond2: bool) -> i32 {
     let mut z = 0;
     let y = 0;
     let ry = &y;
@@ -209,7 +209,7 @@ pub fn join_mut_loan_vs_bottom(cond: bool, mut b: Box<i32>) -> i32 {
     0
 }
 
-pub fn if_join_keep_alive(cond: bool) -> i32 {
+pub fn if_join_stateful_lifetime(cond: bool) -> i32 {
     let mut x = 42;
     let mut y = 10;
     let ptr = if cond {
@@ -222,7 +222,7 @@ pub fn if_join_keep_alive(cond: bool) -> i32 {
     x + y
 }
 
-pub fn loop_join_keep_alive(mut n: i32) -> i32 {
+pub fn loop_join_stateful_lifetime(mut n: i32) -> i32 {
     let mut x = 42;
     let mut ptr = Ptr::from_mut(&mut x);
     loop {
@@ -251,7 +251,7 @@ pub fn loop_join_end_on_demand(mut n: i32, cond: bool) -> i32 {
     x
 }
 
-// Shared-borrow `#[verify::keep_alive]` inside a loop: must converge on Pass 1
+// Shared-borrow `#[verify::stateful_lifetime]` inside a loop: must converge on Pass 1
 // so `from_shr_back ()` runs after `ptr.as_shr()`.
 pub fn loop_shr<'a>(mut n: i32, x: &'a u32) -> u32 {
     let mut ptr = Ptr::from_shr(x);
@@ -276,13 +276,13 @@ pub fn duplicate_calls_not_deduped(x: &i32) -> i32 {
     a + b
 }
 
-#[verify::keep_alive]
+#[verify::stateful_lifetime('c, long)]
 fn keep_mut_and_shared<'c>(_m: &'c mut i32, _s: &'c u32) {}
 
-// Local `a = 20;` must end only `a`'s keep-alive abstraction while caller
+// Local `a = 20;` must end only `a`'s stateful-lifetime abstraction while caller
 // borrow `b: &'a mut i32` stays active and flows into `'a`'s backward function.
-#[verify::keep_alive]
-pub fn return_keep_alive_with_shared<'a>(
+#[verify::stateful_lifetime]
+pub fn return_stateful_lifetime_with_shared<'a>(
     mut a: i32,
     b: &'a mut i32,
     b_out: &'a mut i32,
@@ -308,13 +308,13 @@ pub fn return_keep_alive_with_shared<'a>(
     b_out
 }
 
-#[verify::keep_alive]
+#[verify::stateful_lifetime('c, long)]
 fn keep_two_shr<'c>(_r1: &'c i32, _r2: &'c u32) {}
 
 // Distinct non-`'static` shared-borrow sets `{&a, s}` and `{b_shr, s}` must not
-// merge, so `b_shr`'s keep-alive borrow flows into `'a`'s backward function.
-#[verify::keep_alive]
-pub fn return_keep_alive_two_shared<'a>(
+// merge, so `b_shr`'s stateful-lifetime borrow flows into `'a`'s backward function.
+#[verify::stateful_lifetime]
+pub fn return_stateful_lifetime_two_shared<'a>(
     mut a: i32,
     b_shr: &'a i32,
     s: &'a u32,
@@ -373,8 +373,8 @@ pub fn regular_loop_ends_early(mut n: i32) -> i32 {
     x
 }
 
-// `Regular` wrapper: inner `Regular` borrow flows into the wrapper's backward fn.
-#[verify::keep_alive(regular)]
+// `Default` wrapper: inner `Default` borrow flows into the wrapper's backward fn.
+#[verify::stateful_lifetime('a)]
 pub fn regular_wrapper_shr<'a>(x: &'a u32) -> Ptr<u32> {
     Ptr::from_shr_regular(x)
 }
@@ -388,12 +388,12 @@ fn side_effect(v: i32) -> i32 {
     v + 100
 }
 
-#[verify::keep_alive(regular)]
+#[verify::stateful_lifetime]
 pub fn reborrow_regular<'a>(x: &'a mut i32) -> &'a mut i32 {
     x
 }
 
-#[verify::keep_alive(short)]
+#[verify::stateful_lifetime('a, short)]
 pub fn reborrow_short<'a>(x: &'a mut i32) -> &'a mut i32 {
     x
 }
@@ -448,7 +448,7 @@ pub struct Guard<'a> {
 }
 
 impl<'a> Guard<'a> {
-    #[verify::keep_alive(short)]
+    #[verify::stateful_lifetime(short)]
     #[verify::opaque]
     pub fn acquire(x: &'a mut i32) -> Guard<'a> {
         Guard { data: x }
@@ -464,13 +464,13 @@ impl<'a> Guard<'a> {
         self.data
     }
 
-    #[verify::keep_alive(regular)]
+    #[verify::stateful_lifetime('a)]
     #[verify::opaque]
     pub fn refresh_regular(self) -> Guard<'a> {
         self
     }
 
-    #[verify::keep_alive(short)]
+    #[verify::stateful_lifetime('a, short)]
     #[verify::opaque]
     pub fn refresh_short(self) -> Guard<'a> {
         self
@@ -529,7 +529,7 @@ pub fn short_temp_mut_borrow_of_live_ref() -> i32 {
     x + b
 }
 
-#[verify::keep_alive(short)]
+#[verify::stateful_lifetime(short)]
 pub fn reborrow_pair_shr<'a>(x: &'a (i32, i32)) -> &'a (i32, i32) {
     x
 }
@@ -562,7 +562,7 @@ pub struct Holder<'a> {
     pub tag: i32,
 }
 
-#[verify::keep_alive(short)]
+#[verify::stateful_lifetime(short)]
 pub fn make_holder<'a>(x: &'a mut i32) -> Holder<'a> {
     Holder { data: x, tag: 0 }
 }
@@ -614,6 +614,102 @@ pub fn short_in_loop(mut n: i32) -> i32 {
     x
 }
 
+#[verify::stateful_lifetime('a, short)]
+pub fn two_lifetimes_only_a_short<'a, 'b>(
+    x: &'a mut i32,
+    y: &'b mut i32,
+) -> (&'a mut i32, &'b mut i32) {
+    (x, y)
+}
+
+// `'a` has an effectful `Short` backward function (ends before `side_effect(1)`),
+// whereas `'b` has a pure backward function.
+pub fn caller_two_lifetimes_only_a_short() -> i32 {
+    let mut x = 10;
+    let mut y = 20;
+    let (rx, ry) = two_lifetimes_only_a_short(&mut x, &mut y);
+    *rx += 1;
+    let s = side_effect(1);
+    *ry += s;
+    x + y
+}
+
+#[verify::stateful_lifetime('a)]
+pub fn two_lifetimes_a_default<'a, 'b>(x: &'a mut i32, y: &'b i32) -> &'a mut i32 {
+    *x += *y;
+    x
+}
+
+// `('a)` defaults to `Default` (stays alive across `side_effect(2)` until `x` is read),
+// while `'b` is pure and ends immediately at the call.
+pub fn caller_two_lifetimes_a_default() -> i32 {
+    let mut x = 10;
+    let y = 5;
+    let rx = two_lifetimes_a_default(&mut x, &y);
+    *rx += 3;
+    let z = side_effect(2);
+    x + y + z
+}
+
+#[verify::stateful_lifetime('a, short)]
+#[verify::stateful_lifetime('b, default)]
+pub fn two_lifetimes_repeated<'a, 'b>(
+    x: &'a mut i32,
+    y: &'b mut i32,
+) -> (&'a mut i32, &'b mut i32) {
+    (reborrow_short(x), reborrow_regular(y))
+}
+
+// Repeated per-lifetime attributes: `'a` (`Short`) ends right after `*rx += 1`
+// before `side_effect(1)`, while `'b` (`Default`) stays alive across `side_effect(1)`.
+pub fn caller_two_lifetimes_repeated() -> i32 {
+    let mut x = 10;
+    let mut y = 20;
+    let (rx, ry) = two_lifetimes_repeated(&mut x, &mut y);
+    *rx += 1;
+    *ry += 2;
+    let s = side_effect(1);
+    x + y + s
+}
+
+#[verify::stateful_lifetime]
+#[verify::stateful_lifetime('a, short)]
+pub fn two_lifetimes_wildcard_and_override<'a, 'b>(
+    x: &'a mut i32,
+    y: &'b mut i32,
+) -> (&'a mut i32, &'b mut i32) {
+    (x, y)
+}
+
+// Bare `#[verify::stateful_lifetime]` gives `'b` `Default`, while `('a, short)`
+// overrides `'a` to `Short`.
+pub fn caller_two_lifetimes_wildcard_and_override() -> i32 {
+    let mut x = 10;
+    let mut y = 20;
+    let (rx, ry) = two_lifetimes_wildcard_and_override(&mut x, &mut y);
+    *rx += 1;
+    *ry += 2;
+    let s = side_effect(1);
+    x + y + s
+}
+
+#[verify::stateful_lifetime(short)]
+pub fn generic_ty_not_marked_stateful<'a, T>(x: &'a mut i32, extra: T) -> (&'a mut i32, T) {
+    (x, extra)
+}
+
+// Calling `generic_ty_not_marked_stateful` with `T = &i32` introduces a synthetic
+// region group for `T`, which must remain pure (even under wildcard `short`) while
+// `'a` is `Short`.
+pub fn caller_generic_ty_not_marked_stateful() -> i32 {
+    let mut x = 10;
+    let y = 20;
+    let (rx, ry) = generic_ty_not_marked_stateful(&mut x, &y);
+    *rx += 1;
+    let s = side_effect(1);
+    x + *ry + s
+}
+
 #[cfg(test)]
 mod test {
     #[test]
@@ -640,8 +736,8 @@ mod test {
         assert_eq!(super::loop_explicit_move_mut(5), 68);
     }
     #[test]
-    fn test_loop_equiv_alive_hint() {
-        assert_eq!(super::loop_equiv_alive_hint(2, false, false), 0);
+    fn test_loop_equiv_stateful_lifetime() {
+        assert_eq!(super::loop_equiv_stateful_lifetime(2, false, false), 0);
     }
     #[test]
     fn test_join_mut_loan_vs_shared_loan() {
@@ -654,13 +750,13 @@ mod test {
         assert_eq!(super::join_mut_loan_vs_bottom(false, Box::new(42)), 0);
     }
     #[test]
-    fn test_if_join_keep_alive() {
-        assert_eq!(super::if_join_keep_alive(true), 53);
-        assert_eq!(super::if_join_keep_alive(false), 53);
+    fn test_if_join_stateful_lifetime() {
+        assert_eq!(super::if_join_stateful_lifetime(true), 53);
+        assert_eq!(super::if_join_stateful_lifetime(false), 53);
     }
     #[test]
-    fn test_loop_join_keep_alive() {
-        assert_eq!(super::loop_join_keep_alive(5), 43);
+    fn test_loop_join_stateful_lifetime() {
+        assert_eq!(super::loop_join_stateful_lifetime(5), 43);
     }
     #[test]
     fn test_loop_join_end_on_demand() {
@@ -679,14 +775,14 @@ mod test {
         assert_eq!(super::duplicate_calls_not_deduped(&x), 42);
     }
     #[test]
-    fn test_return_keep_alive() {
+    fn test_return_stateful_lifetime() {
         let mut b = 10;
         let mut b_out = 7;
         let s = 5u32;
-        let r = super::return_keep_alive_with_shared(1, &mut b, &mut b_out, &s, 2, false);
+        let r = super::return_stateful_lifetime_with_shared(1, &mut b, &mut b_out, &s, 2, false);
         assert_eq!(*r, 7);
         let b_shr = 12;
-        let r2 = super::return_keep_alive_two_shared(1, &b_shr, &s, 2, false);
+        let r2 = super::return_stateful_lifetime_two_shared(1, &b_shr, &s, 2, false);
         assert_eq!(*r2, 12);
     }
     #[test]
@@ -721,5 +817,10 @@ mod test {
         assert_eq!(super::short_does_not_kill_long(), 13);
         assert_eq!(super::short_zero_loan_ends_immediately(), 141);
         assert_eq!(super::short_in_loop(4), 4);
+        assert_eq!(super::caller_two_lifetimes_only_a_short(), 132);
+        assert_eq!(super::caller_two_lifetimes_a_default(), 125);
+        assert_eq!(super::caller_two_lifetimes_repeated(), 134);
+        assert_eq!(super::caller_two_lifetimes_wildcard_and_override(), 134);
+        assert_eq!(super::caller_generic_ty_not_marked_stateful(), 132);
     }
 }

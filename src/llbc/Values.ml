@@ -304,15 +304,15 @@ type abs_kind =
           computational content. *)
 [@@deriving show, eq, ord]
 
-(** Hint controlling whether a region abstraction without loans should be kept
-    alive, and if yes, for how long:
+(** Policy for a stateful-lifetime region abstraction
+    ([#[verify::stateful_lifetime]]):
     - [Long]: kept alive as long as possible (across joins and loops); backward
       functions are stateful.
-    - [Regular]: kept alive just beyond when the called function returns, but
+    - [Default]: kept alive just beyond when the called function returns, but
       ended early at joins and loops; backward functions are stateful.
-    - [Short]: like [Regular], with an additional step-level heuristic to end
-      abstractions early; backward functions are stateful. *)
-type alive_hint = Long | Regular | Short [@@deriving show, eq, ord]
+    - [Short]: like [Default], with an additional step-level liveness pass to
+      end abstractions early; backward functions are stateful. *)
+type stateful_lifetime = Long | Default | Short [@@deriving show, eq, ord]
 
 module AbsBVarId = OrdIdGen ()
 module AbsFVarId = OrdIdGen ()
@@ -405,7 +405,10 @@ class ['self] iter_env_base =
     method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
     method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
-    method visit_alive_hint : 'env -> alive_hint -> unit = fun _ _ -> ()
+
+    method visit_stateful_lifetime : 'env -> stateful_lifetime -> unit =
+      fun _ _ -> ()
+
     method visit_abs_level_set : 'env -> abs_level_set -> unit = fun _ _ -> ()
   end
 
@@ -470,7 +473,10 @@ class ['self] map_env_base =
       fun _ x -> x
 
     method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
-    method visit_alive_hint : 'env -> alive_hint -> alive_hint = fun _ x -> x
+
+    method visit_stateful_lifetime :
+        'env -> stateful_lifetime -> stateful_lifetime =
+      fun _ x -> x
 
     method visit_abs_level_set : 'env -> abs_level_set -> abs_level_set =
       fun _ x -> x
@@ -1539,7 +1545,7 @@ and abs = {
           backward function for 'a, we have to make sure we don't need to end
           the return region for 'b (if it is the case, it means the function
           doesn't borrow check). *)
-  alive_hint : alive_hint option;
+  stateful_lifetime : stateful_lifetime option;
   parents : abs_id_set;  (** The parent abstractions *)
   regions : abs_regions;
       (** TODO: actually we also (only?) need to put the regions at the level of

@@ -867,7 +867,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             borrows, ended mutable loans, etc.), otherwise merging ties a
             longer-lived mutable borrow (or its given-back continuation) to a
             shorter-lived loan.
-         2. For non-['static] abstractions (e.g. [#[verify::keep_alive]]),
+         2. For non-['static] abstractions (e.g. [#[verify::stateful_lifetime]]),
             both abstractions must hold the exact same set of borrows so that
             ending one borrow never prematurely ends a longer-lived borrow in
             the other abstraction. *)
@@ -917,7 +917,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
                       let abs1 = ctx_lookup_abs ctx.ctx aid1 in
                       if
                         abs_owns_static abs0 = abs_owns_static abs1
-                        && abs0.alive_hint = abs1.alive_hint
+                        && abs0.stateful_lifetime = abs1.stateful_lifetime
                         && (abs_owns_static abs0
                            || MarkedBorrowId.Set.equal
                                 (AbsId.Map.find aid0
@@ -1574,7 +1574,7 @@ let add_shared_borrows (span : Meta.span)
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list) (static_aids : AbsId.Set.t)
-    (alive_hints : alive_hint AbsId.Map.t)
+    (stateful_lifetimes : stateful_lifetime AbsId.Map.t)
     (shared_borrows_seq : (abs_id * int * proj_marker * borrow_or_proj) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx0 : eval_ctx) :
     eval_ctx =
@@ -1652,17 +1652,18 @@ let collapse_ctx_following_sequence (span : Meta.span)
                  ctx := InterpAbs.ctx_promote_abs_to_static span !ctx nabs'
              | _ -> ())
          | None -> ());
-      match AbsId.Map.find_opt nabs alive_hints with
+      match AbsId.Map.find_opt nabs stateful_lifetimes with
       | Some hint -> (
           match AbsId.Map.find_opt nabs !nabs_map with
           | Some nabs' -> (
               match ctx_lookup_abs_opt !ctx nabs' with
               | Some abs ->
-                  let alive_hint =
-                    merge_alive_hints (Some span) abs.alive_hint (Some hint)
+                  let stateful_lifetime =
+                    merge_stateful_lifetimes (Some span) abs.stateful_lifetime
+                      (Some hint)
                   in
-                  if alive_hint <> abs.alive_hint then
-                    let abs = { abs with alive_hint } in
+                  if stateful_lifetime <> abs.stateful_lifetime then
+                    let abs = { abs with stateful_lifetime } in
                     ctx := fst (ctx_subst_abs span !ctx nabs' abs)
               | None -> ())
           | None -> ())
@@ -1691,11 +1692,11 @@ let collapse_ctx_following_sequence (span : Meta.span)
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list) (static_aids : AbsId.Set.t)
-    (alive_hints : alive_hint AbsId.Map.t)
+    (stateful_lifetimes : stateful_lifetime AbsId.Map.t)
     (shared_borrows_seq : (abs_id * int * proj_marker * borrow_or_proj) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
     eval_ctx =
   try
     collapse_ctx_following_sequence span ~with_abs_conts sequence static_aids
-      alive_hints shared_borrows_seq fresh_abs_kind ctx
+      stateful_lifetimes shared_borrows_seq fresh_abs_kind ctx
   with ValueMatchFailure _ -> [%internal_error] span
