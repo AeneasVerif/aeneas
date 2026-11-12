@@ -686,7 +686,8 @@ elab "nonpos_continuity " id:ident : command => do
 `nonpos_structure` also proves, through its hook `nonpos_structure_lemmas` (which `Top.lean` leaves
 empty and this section implements), once for each structure `Bla`, these facts.  (This section
 also implements `nonpos_proj_mk`, the tactic that proves the `simp` lemmas `Bla.f_mk` stated by
-`Top.lean`.)  Except for the
+`Top.lean`, from a lemma `Bla.mk_unfold : Fix.unfold F (Bla.mk f₁ … fₙ h) = ⟨f₁, …, fₙ⟩` that it
+proves once per structure.)  Except for the
 first, they are for performance: each would otherwise be derived from the whole tuple of fields at
 each use.  The ones built as terms (rather than elaborated from syntax) are built so to avoid
 re-elaborating the tuple for each lemma, or a slow comparison by the elaborator of two `Dom`s which
@@ -795,8 +796,21 @@ elab_rules : tactic
     let fold := fold.headBeta
     unless fold.isAppOfArity ``Fix.fold 6 do throwError "nonpos_proj_mk: unexpected {fold}"
     let a := fold.getAppArgs  -- `I F inst k x h`
-    -- `Fix.unfold_fold F x h : Fix.unfold F (Fix.fold F x h) = x` (same universes as `Fix.fold`)
-    let uf := mkAppN (mkConst ``Fix.unfold_fold fold.getAppFn.constLevels!) a
+    -- `Bla.mk_unfold : ∀ ps f₁ … fₙ h, Fix.unfold F (Bla.mk ps f₁ … fₙ h) = ⟨f₁, …, fₙ, ⟨⟩⟩`, proved
+    -- (by `Fix.unfold_fold`) at the first of these lemmas: the kernel checks that the tuple has its
+    -- type once per structure, and not once per lemma
+    let mkApp := lhs.appArg!
+    let some mkName := mkApp.getAppFn.constName? | throwError "nonpos_proj_mk: unexpected {mkApp}"
+    let xs := mkApp.getAppArgs
+    let lem := mkName.getPrefix ++ `mk_unfold
+    let lvls := mkApp.getAppFn.constLevels!
+    unless (← getEnv).contains lem do
+      let info ← getConstInfo mkName
+      let unfold := mkAppN (mkConst ``Fix.unfold fold.getAppFn.constLevels!) (a.extract 0 4 |>.push mkApp)
+      let type ← instantiateMVars (← mkForallFVars xs (← mkEq unfold a[4]!))
+      let value ← instantiateMVars (← mkLambdaFVars xs (mkAppN (mkConst ``Fix.unfold_fold fold.getAppFn.constLevels!) a))
+      addDecl (Declaration.thmDecl { name := lem, levelParams := info.levelParams, type, value })
+    let uf := mkAppN (mkConst lem lvls) xs
     -- `fun t => t.2. … .1`, the component of the field `rhs` (up to eta: a field with implicit
     -- binders is `fun {…} => f` in the tuple), with the types of the components read from the
     -- tuple `⟨f₁, ⟨f₂, …⟩⟩` (`PProd.mk α β a b`), so that nothing has to be inferred
