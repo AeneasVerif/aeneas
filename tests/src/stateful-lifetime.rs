@@ -17,6 +17,13 @@ impl<T> Clone for Ptr<T> {
 }
 
 impl<T> Ptr<T> {
+    #[verify::opaque]
+    pub fn cast<U>(self) -> Ptr<U> {
+        Ptr {
+            data: self.data as *mut U,
+        }
+    }
+
     #[verify::stateful_lifetime(short)]
     #[verify::opaque]
     pub fn as_shr<'a>(self) -> &'a T {
@@ -822,5 +829,95 @@ mod test {
         assert_eq!(super::caller_two_lifetimes_repeated(), 134);
         assert_eq!(super::caller_two_lifetimes_wildcard_and_override(), 134);
         assert_eq!(super::caller_generic_ty_not_marked_stateful(), 132);
+        assert_eq!(super::forward_return_lifo(), 0);
+        super::use_projection();
     }
+}
+
+#[repr(C)]
+pub struct Wrapper {
+    pub data: i32,
+}
+
+#[verify::stateful_lifetime]
+pub fn project(f: &mut Wrapper) -> &mut i32 {
+    let f_ptr = Ptr::from_mut(f);
+    let data_ptr = f_ptr.cast::<i32>();
+    data_ptr.as_mut()
+}
+
+// Even when the output-lending borrow (`as_mut`) is created BEFORE the
+// input-borrowing borrow (`from_mut`) in the forward body, the backward
+// function ends `SynthRet` + `as_mut` before `SynthInput` + `from_mut`.
+#[verify::stateful_lifetime]
+pub fn project_reversed<'a>(data_ptr: Ptr<i32>, f: &'a mut Wrapper) -> &'a mut i32 {
+    let out = data_ptr.as_mut();
+    let _f_ptr = Ptr::from_mut(f);
+    out
+}
+
+// Two independent stateful lifetimes, each with its own `Long` (`from_mut`) and
+// `Short` (`as_mut`) pair.
+#[verify::stateful_lifetime]
+pub fn project_both<'a, 'b>(
+    f1: &'a mut Wrapper,
+    f2: &'b mut Wrapper,
+) -> (&'a mut i32, &'b mut i32) {
+    let p1 = Ptr::from_mut(f1);
+    let p2 = Ptr::from_mut(f2);
+    (p1.cast::<i32>().as_mut(), p2.cast::<i32>().as_mut())
+}
+
+// Two independent shared stateful lifetimes (`ASharedBorrow` / `ASharedLoan`).
+#[verify::stateful_lifetime]
+pub fn project_shr_both<'a, 'b>(f1: &'a Wrapper, f2: &'b Wrapper) -> (&'a i32, &'b i32) {
+    let p1 = Ptr::from_shr(&f1.data);
+    let p2 = Ptr::from_shr(&f2.data);
+    (p1.as_shr(), p2.as_shr())
+}
+
+// Indirect borrows through pure helper `id_mut` on both inputs and outputs
+// across two independent stateful lifetimes.
+#[verify::stateful_lifetime]
+pub fn project_via_helper_both<'a, 'b>(
+    f1: &'a mut Wrapper,
+    f2: &'b mut Wrapper,
+) -> (&'a mut i32, &'b mut i32) {
+    let p1 = Ptr::from_mut(id_mut(f1));
+    let p2 = Ptr::from_mut(id_mut(f2));
+    (
+        id_mut(p1.cast::<i32>().as_mut()),
+        id_mut(p2.cast::<i32>().as_mut()),
+    )
+}
+
+// Forward `Return` ends zero-loan `Long` abstractions in LIFO order (`_py`
+// before `_px`).
+pub fn forward_return_lifo() -> i32 {
+    let mut x = 10;
+    let mut y = 20;
+    let _px = Ptr::from_mut(&mut x);
+    let _py = Ptr::from_mut(&mut y);
+    0
+}
+
+pub fn use_projection() {
+    let mut wrap = Wrapper { data: 42 };
+    *project(&mut wrap) += 25;
+    assert_eq!(wrap.data, 67);
+
+    let mut w1 = Wrapper { data: 10 };
+    let mut w2 = Wrapper { data: 20 };
+    let (r1, r2) = project_both(&mut w1, &mut w2);
+    *r1 += 1;
+    *r2 += 2;
+    assert_eq!(w1.data + w2.data, 33);
+
+    let (s1, s2) = project_shr_both(&w1, &w2);
+    assert_eq!(*s1 + *s2, 33);
+
+    let (h1, h2) = project_via_helper_both(&mut w1, &mut w2);
+    *h1 += 3;
+    *h2 += 4;
+    assert_eq!(w1.data + w2.data, 40);
 }

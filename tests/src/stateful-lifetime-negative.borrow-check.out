@@ -1,0 +1,36 @@
+[[91mError[39m] Dependent #[verify::stateful_lifetime] lifetimes where one backward function would also end another lifetime's stateful region abstraction are not supported yet
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 47:0-54:1
+Compiler source: interp/Interp.ml, line 894
+[[93mWarn[39m ] Could not borrow-check the body of function 'stateful_lifetime_negative::dependent_stateful_lifetimes because of previous error
+Name pattern: 'stateful_lifetime_negative::dependent_stateful_lifetimes'
+Definition span: 'tests/src/stateful-lifetime-negative.rs', lines 47:0-54:1
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 47:0-54:1
+Compiler source: interp/Interp.ml, line 949
+
+[[91mError[39m] Cannot determine which #[verify::stateful_lifetime] backward function should end an active stateful region abstraction (the function has multiple stateful lifetimes, and the abstraction is not tied to any of them)
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 59:0-65:1
+Compiler source: interp/Interp.ml, line 908
+[[93mWarn[39m ] Could not borrow-check the body of function 'stateful_lifetime_negative::unattached_with_two_stateful_lifetimes because of previous error
+Name pattern: 'stateful_lifetime_negative::unattached_with_two_stateful_lifetimes'
+Definition span: 'tests/src/stateful-lifetime-negative.rs', lines 59:0-65:1
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 59:0-65:1
+Compiler source: interp/Interp.ml, line 949
+
+[[91mError[39m] This function returns while a #[verify::stateful_lifetime] region abstraction is still active (so its backward function would need to end it); mark this function #[verify::stateful_lifetime] as well
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 69:0-71:1
+Compiler source: interp/Interp.ml, line 855
+[[93mWarn[39m ] Could not borrow-check the body of function 'stateful_lifetime_negative::missing_stateful_lifetime_attr because of previous error
+Name pattern: 'stateful_lifetime_negative::missing_stateful_lifetime_attr'
+Definition span: 'tests/src/stateful-lifetime-negative.rs', lines 69:0-71:1
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 69:0-71:1
+Compiler source: interp/Interp.ml, line 949
+
+[[91mError[39m] A non-stateful-lifetime backward function cannot end an active #[verify::stateful_lifetime] region abstraction
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 76:0-82:1
+Compiler source: interp/Interp.ml, line 613
+[[93mWarn[39m ] Could not borrow-check the body of function 'stateful_lifetime_negative::non_stateful_rg_ending_stateful_abs because of previous error
+Name pattern: 'stateful_lifetime_negative::non_stateful_rg_ending_stateful_abs'
+Definition span: 'tests/src/stateful-lifetime-negative.rs', lines 76:0-82:1
+Source: 'tests/src/stateful-lifetime-negative.rs', lines 76:0-82:1
+Compiler source: interp/Interp.ml, line 949
+

@@ -425,14 +425,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     RegionsHierarchy.list_ancestor_region_groups inst_sg.regions_hierarchy
       back_id
   in
-  let parent_input_abs_ids =
-    RegionGroupId.mapi
-      (fun rg_id rg ->
-        if RegionGroupId.Set.mem rg_id parent_rgs then Some rg.id else None)
-      inst_sg.abs_regions_hierarchy
-  in
-  let parent_input_abs_ids =
-    List.filter_map (fun x -> x) parent_input_abs_ids
+  let target_abs_ids_of h =
+    List.filter_map
+      (fun x -> x)
+      (RegionGroupId.mapi
+         (fun rg_id (rg : abs_region_group) ->
+           if RegionGroupId.Set.mem rg_id parent_rgs then Some rg.id else None)
+         h)
+    @ [ (RegionGroupId.nth h back_id).id ]
   in
   (* Are we synthesizing the backward function of the static region group? *)
   let is_static_rg =
@@ -536,7 +536,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   [%ltrace "ending input abstraction: " ^ AbsId.to_string current_abs_id];
 
-  let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
+  let target_abs_ids = target_abs_ids_of inst_sg.abs_regions_hierarchy in
+  let target_ret_abs_ids =
+    target_abs_ids_of ret_inst_sg.abs_regions_hierarchy
+  in
 
   (* Set the abstractions as endable. If we are synthesizing the backward
      function for the static region, we allow ending all the input
@@ -561,11 +564,30 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   let alive_before = stateful_lifetime_abs_ids_in_env ctx.env in
 
+  (* For a stateful lifetime, end [SynthRet] and simplify first so output-lending
+     abstractions whose loans just ended (e.g. [Ptr::as_mut]/[Ptr::as_shr]) end
+     in LIFO order before [SynthInput] ends input-borrowing ones (e.g.
+     [Ptr::from_mut]/[Ptr::from_shr]). *)
+  let ctx, cc_ret =
+    if is_stateful_lifetime_rg then
+      let ctx, cc_ret =
+        fold_left_apply_continuation
+          (fun id ctx -> end_abs config span id 0 ctx)
+          target_ret_abs_ids ctx
+      in
+      comp cc_ret
+        (InterpBorrows.simplify_dummy_values_useless_abs config
+           ~keep_stateful_lifetime:(fun _ -> true)
+           ~filter_avalues:false span ctx)
+    else (ctx, fun e -> e)
+  in
+
   (* Actually end them *)
   let ctx, cc =
-    fold_left_apply_continuation
-      (fun id ctx -> end_abs config span id 0 ctx)
-      target_abs_ids ctx
+    comp cc_ret
+      (fold_left_apply_continuation
+         (fun id ctx -> end_abs config span id 0 ctx)
+         target_abs_ids ctx)
   in
   (* Handle any remaining #[verify::stateful_lifetime] abstractions:
      - If this region group carries #[verify::stateful_lifetime], end any remaining
@@ -761,6 +783,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
                       env = EBinding (BVar ret_binder, ret_value) :: ctx.env;
                     }
                   in
+                  (* End zero-loan stateful abstractions in LIFO ([ctx.env])
+                     order (and any zero-loan pure abstractions blocking them). *)
                   let rec end_stateful_lifetime_abs_with_no_loans
                       (ctx : eval_ctx) : eval_ctx * (SA.expr -> SA.expr) =
                     if not (has_stateful_lifetime_abs ctx.env) then
@@ -802,24 +826,20 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
                               | EAbs _ | EBinding _ | EFrame -> None)
                             ctx.env
                       in
-                      if no_loans_abs = [] then (ctx, fun e -> e)
-                      else
-                        let no_loans_abs =
-                          AbsIdWithLevelSet.of_list
-                            (List.map
-                               (fun abs_id -> { abs_id; level = 0 })
-                               no_loans_abs)
-                        in
-                        let ctx, cc_end =
-                          InterpBorrows.end_abs_set config span no_loans_abs ctx
-                        in
-                        let ctx, cc_simpl =
-                          InterpBorrows.simplify_dummy_values_useless_abs config
-                            ~keep_stateful_lifetime:(fun _ -> true)
-                            ~filter_avalues:false span ctx
-                        in
-                        let cc = cc_comp cc_end cc_simpl in
-                        comp cc (end_stateful_lifetime_abs_with_no_loans ctx)
+                      match no_loans_abs with
+                      | [] -> (ctx, fun e -> e)
+                      | abs_id :: _ ->
+                          let ctx, cc_end =
+                            InterpBorrows.end_abs config span abs_id 0 ctx
+                          in
+                          let ctx, cc_simpl =
+                            InterpBorrows.simplify_dummy_values_useless_abs
+                              config
+                              ~keep_stateful_lifetime:(fun _ -> true)
+                              ~filter_avalues:false span ctx
+                          in
+                          let cc = cc_comp cc_end cc_simpl in
+                          comp cc (end_stateful_lifetime_abs_with_no_loans ctx)
                   in
                   let ctx, cc_end_stateful =
                     end_stateful_lifetime_abs_with_no_loans ctx
@@ -856,7 +876,9 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
            abstractions to consume the return value, then end all the
            abstractions up to the one in which we are interested.
         *)
-        let end_unattached_stateful = List.length stateful_lifetime_rgs = 1 in
+        (* Every active stateful abstraction must be ended by *exactly one*
+           stateful backward function (and zero non-stateful ones). *)
+        let end_unattached_stateful = List.length regions_hierarchy = 1 in
         let ended_by_stateful_rgs = ref AbsId.Set.empty in
         let finish_back_eval back_id =
           let is_stateful_lifetime_rg =
@@ -867,9 +889,14 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
               fdef inst_sg back_id ~is_stateful_lifetime_rg
               ~end_unattached_stateful ret_value ctx
           in
-          if is_stateful_lifetime_rg then
+          if is_stateful_lifetime_rg then (
+            if not (AbsId.Set.disjoint !ended_by_stateful_rgs ended_alive) then
+              [%craise] span
+                "Dependent #[verify::stateful_lifetime] lifetimes where one \
+                 backward function would also end another lifetime's stateful \
+                 region abstraction are not supported yet";
             ended_by_stateful_rgs :=
-              AbsId.Set.union !ended_by_stateful_rgs ended_alive;
+              AbsId.Set.union !ended_by_stateful_rgs ended_alive);
           back_expr
         in
         let back_el =
