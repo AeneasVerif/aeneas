@@ -125,3 +125,8 @@ pub enum Msg {
 pub fn bump(c: &mut Circle) {
     c.r += 1;
 }
+
+/// A function made opaque (Charon option `--opaque`): its model is written by hand (case E17).
+pub fn checksum(x: u32) -> u32 {
+    x % 251
+}

@@ -306,4 +306,10 @@ def grow (c : cross_crate_lib.Circle) : Result cross_crate_lib.Circle := do
   let c1 ← cross_crate_lib.bump c
   cross_crate_lib.bump c1
 
+/-- [cross_crate_user::square_checksum]:
+    Source: 'src/lib.rs', lines 178:0-180:1
+    Visibility: public -/
+def square_checksum (s : Square) : Result Std.U32 := do
+  checksum s.side
+
 end cross_crate_user

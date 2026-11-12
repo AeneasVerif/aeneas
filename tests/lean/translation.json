@@ -4,9 +4,24 @@
   "lean_modules": true,
   "functions": [
     {
-      "def_id": 23,
+      "def_id": 22,
+      "lean_name": "checksum",
+      "lean_file": "CrossCrateLib/FunsExternal_Template.lean",
+      "lean_module": "CrossCrateLib.FunsExternal",
+      "rust_name": "cross_crate_lib::checksum",
+      "rust_pattern": "cross_crate_lib::checksum",
+      "is_local": true,
+      "source": { "file": "src/lib.rs", "begin_line": 130, "end_line": 132 },
+      "is_opaque": true,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 24,
       "lean_name": "cross_crate_lib.Shape.double_area.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Shape::double_area",
       "rust_pattern": "cross_crate_lib::Shape::double_area",
@@ -19,9 +34,9 @@
       "reducible": false
     },
     {
-      "def_id": 24,
+      "def_id": 25,
       "lean_name": "cross_crate_lib.Shape.quad_area.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Shape::quad_area",
       "rust_pattern": "cross_crate_lib::Shape::quad_area",
@@ -34,9 +49,9 @@
       "reducible": false
     },
     {
-      "def_id": 25,
+      "def_id": 26,
       "lean_name": "cross_crate_lib.Shape.sides.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Shape::sides",
       "rust_pattern": "cross_crate_lib::Shape::sides",
@@ -49,9 +64,9 @@
       "reducible": false
     },
     {
-      "def_id": 26,
+      "def_id": 27,
       "lean_name": "cross_crate_lib.Shape.unused_default.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Shape::unused_default",
       "rust_pattern": "cross_crate_lib::Shape::unused_default",
@@ -66,7 +81,7 @@
     {
       "def_id": 19,
       "lean_name": "cross_crate_lib.sum_double",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::sum_double",
       "rust_pattern": "cross_crate_lib::sum_double",
@@ -79,9 +94,9 @@
       "reducible": false
     },
     {
-      "def_id": 28,
+      "def_id": 29,
       "lean_name": "cross_crate_lib.Circle.Insts.Cross_crate_libShape.area",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::{impl cross_crate_lib::Shape for cross_crate_lib::Circle}::area",
       "rust_pattern": "cross_crate_lib::{cross_crate_lib::Shape<cross_crate_lib::Circle>}::area",
@@ -94,9 +109,9 @@
       "reducible": false
     },
     {
-      "def_id": 29,
+      "def_id": 30,
       "lean_name": "cross_crate_lib.Tagged.tag.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Tagged::tag",
       "rust_pattern": "cross_crate_lib::Tagged::tag",
@@ -109,9 +124,9 @@
       "reducible": false
     },
     {
-      "def_id": 30,
+      "def_id": 31,
       "lean_name": "cross_crate_lib.Counter.incr_twice.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Counter::incr_twice",
       "rust_pattern": "cross_crate_lib::Counter::incr_twice",
@@ -124,9 +139,9 @@
       "reducible": false
     },
     {
-      "def_id": 31,
+      "def_id": 32,
       "lean_name": "cross_crate_lib.Wrapper.Insts.Cross_crate_libNamed.id",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::{impl cross_crate_lib::Named for cross_crate_lib::Wrapper<T>}::id",
       "rust_pattern": "cross_crate_lib::{cross_crate_lib::Named<cross_crate_lib::Wrapper<@T>>}::id",
@@ -139,9 +154,9 @@
       "reducible": false
     },
     {
-      "def_id": 32,
+      "def_id": 33,
       "lean_name": "cross_crate_lib.Conv.conv_pair.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Conv::conv_pair",
       "rust_pattern": "cross_crate_lib::Conv::conv_pair",
@@ -156,7 +171,7 @@
     {
       "def_id": 20,
       "lean_name": "cross_crate_lib.helper",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::helper",
       "rust_pattern": "cross_crate_lib::helper",
@@ -169,9 +184,9 @@
       "reducible": false
     },
     {
-      "def_id": 33,
+      "def_id": 34,
       "lean_name": "cross_crate_lib.Container.first_twice.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::Container::first_twice",
       "rust_pattern": "cross_crate_lib::Container::first_twice",
@@ -186,7 +201,7 @@
     {
       "def_id": 21,
       "lean_name": "cross_crate_lib.bump",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::bump",
       "rust_pattern": "cross_crate_lib::bump",
@@ -203,7 +218,7 @@
     {
       "def_id": 5,
       "lean_name": "cross_crate_lib.Circle",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Circle",
       "rust_pattern": "cross_crate_lib::Circle",
@@ -215,7 +230,7 @@
     {
       "def_id": 6,
       "lean_name": "cross_crate_lib.Wrapper",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Wrapper",
       "rust_pattern": "cross_crate_lib::Wrapper",
@@ -225,7 +240,7 @@
     {
       "def_id": 7,
       "lean_name": "cross_crate_lib.Point",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Point",
       "rust_pattern": "cross_crate_lib::Point",
@@ -237,7 +252,7 @@
     {
       "def_id": 8,
       "lean_name": "cross_crate_lib.Dir",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Dir",
       "rust_pattern": "cross_crate_lib::Dir",
@@ -251,7 +266,7 @@
     {
       "def_id": 9,
       "lean_name": "cross_crate_lib.Msg",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Msg",
       "rust_pattern": "cross_crate_lib::Msg",
@@ -268,7 +283,7 @@
     {
       "def_id": 6,
       "lean_name": "cross_crate_lib.HasLen.TWICE.default",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::HasLen::TWICE",
       "rust_pattern": "cross_crate_lib::HasLen::TWICE",
@@ -281,7 +296,7 @@
     {
       "def_id": 4,
       "lean_name": "cross_crate_lib.Shape",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Shape",
       "rust_pattern": "cross_crate_lib::Shape",
@@ -299,7 +314,7 @@
     {
       "def_id": 5,
       "lean_name": "cross_crate_lib.Named",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Named",
       "rust_pattern": "cross_crate_lib::Named",
@@ -311,7 +326,7 @@
     {
       "def_id": 6,
       "lean_name": "cross_crate_lib.Tagged",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Tagged",
       "rust_pattern": "cross_crate_lib::Tagged",
@@ -324,7 +339,7 @@
     {
       "def_id": 7,
       "lean_name": "cross_crate_lib.Counter",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Counter",
       "rust_pattern": "cross_crate_lib::Counter",
@@ -339,7 +354,7 @@
     {
       "def_id": 8,
       "lean_name": "cross_crate_lib.HasLen",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::HasLen",
       "rust_pattern": "cross_crate_lib::HasLen",
@@ -353,7 +368,7 @@
     {
       "def_id": 9,
       "lean_name": "cross_crate_lib.Conv",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Conv",
       "rust_pattern": "cross_crate_lib::Conv",
@@ -368,7 +383,7 @@
     {
       "def_id": 10,
       "lean_name": "cross_crate_lib.Container",
-      "lean_file": "Types.lean",
+      "lean_file": "CrossCrateLib/Types.lean",
       "lean_module": "CrossCrateLib.Types",
       "rust_name": "cross_crate_lib::Container",
       "rust_pattern": "cross_crate_lib::Container",
@@ -385,7 +400,7 @@
     {
       "def_id": 6,
       "lean_name": "cross_crate_lib.Circle.Insts.Cross_crate_libShape",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::{impl cross_crate_lib::Shape for cross_crate_lib::Circle}",
       "rust_pattern": "cross_crate_lib::Shape<cross_crate_lib::Circle>",
@@ -398,7 +413,7 @@
     {
       "def_id": 7,
       "lean_name": "cross_crate_lib.Wrapper.Insts.Cross_crate_libNamed",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::{impl cross_crate_lib::Named for cross_crate_lib::Wrapper<T>}",
       "rust_pattern": "cross_crate_lib::Named<cross_crate_lib::Wrapper<@Self>>",
@@ -411,7 +426,7 @@
     {
       "def_id": 8,
       "lean_name": "cross_crate_lib.Wrapper.Insts.Cross_crate_libTagged",
-      "lean_file": "Funs.lean",
+      "lean_file": "CrossCrateLib/Funs.lean",
       "lean_module": "CrossCrateLib.Funs",
       "rust_name": "cross_crate_lib::{impl cross_crate_lib::Tagged for cross_crate_lib::Wrapper<T>}",
       "rust_pattern": "cross_crate_lib::Tagged<cross_crate_lib::Wrapper<@Self>>",

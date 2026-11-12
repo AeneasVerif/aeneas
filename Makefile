@@ -186,7 +186,7 @@ test-%: build-dev
 	echo "# Test $* done"
 
 # `cross_crate_user` reuses the translation of `cross_crate_lib` (option `-extern-crate`), and reads
-# the manifest `tests/lean/CrossCrateLib/translation.json` written by its test.
+# the manifest `tests/lean/translation.json` written by its test.
 test-cross_crate_user: test-cross_crate_lib
 
 # Run the Rust unit tests (for test files with #[cfg(test)] modules).

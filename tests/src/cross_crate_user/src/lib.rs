@@ -2,7 +2,7 @@
 //! items of `cross_crate_lib`. Its translation imports the translation of `cross_crate_lib`.
 
 use cross_crate_lib::{
-    bump, helper, sum_double, Circle, Container, Conv, Counter, Dir, HasLen, Msg, Named, Point,
+    bump, checksum, helper, sum_double, Circle, Container, Conv, Counter, Dir, HasLen, Msg, Named, Point,
     Shape, Tagged, Wrapper,
 };
 
@@ -174,6 +174,11 @@ pub fn grow(c: &mut Circle) {
     bump(c);
 }
 
+/// E17: the library's opaque function.
+pub fn square_checksum(s: &Square) -> u32 {
+    checksum(s.side)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,5 +234,6 @@ mod tests {
         assert_eq!(circle_describe(&Circle { r: 2 }), 12);
         assert_eq!(point_shift(Point { x: 1 }).x, 2);
         assert!(matches!(flip(Dir::L), Dir::R));
+        assert_eq!(square_checksum(&Square { side: 300 }), 49);
     }
 }

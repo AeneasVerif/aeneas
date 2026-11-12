@@ -2,6 +2,7 @@
 -- [cross_crate_user]: type definitions
 module
 public import Aeneas
+public import CrossCrateLib.FunsExternal
 public import CrossCrateLib.Funs
 public import CrossCrateLib.Types
 @[expose] public section
