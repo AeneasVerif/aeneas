@@ -32,6 +32,46 @@ example (a : U32) (h : a.val + 1 ≤ U32.max) :
   step*? +inferPost
   trace_state
 
+/- Without `+inferPost`, `step*` infers `post` too, keeping it only if it proves `hf`: only the
+steps inside need `+inferPost`. -/
+/--
+info: Try this:
+
+  [apply]     let* ⟨ y, y_post ⟩ ← applyF_spec
+    case hf =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
+    agrind
+-/
+#guard_msgs in
+example (a : U32) (h : a.val + 1 ≤ U32.max) :
+    applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
+  step*?
+
+example (a : U32) (h : a.val + 1 ≤ U32.max) :
+    applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
+  let* ⟨ y, y_post ⟩ ← applyF_spec
+  case hf =>
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind
+  agrind
+
+/- `hf` can't be fully proved (`step` can't see the bound in `Small`): without `+inferPost`, it is
+left untouched; with it, only the overflow is left. -/
+def Small (x : U32) : Prop := x.val < 10
+
+example (a : U32) (h : Small a) :
+    applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
+  step*
+  case post => exact fun y => y.val = a.val + 1
+  case hf => unfold Small at h; step*
+  agrind
+
+example (a : U32) (h : Small a) :
+    applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
+  step* +inferPost
+  case hmax => unfold Small at h; scalar_tac
+
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
 def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
   let a ← f xy.1
