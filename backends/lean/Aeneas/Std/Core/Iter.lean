@@ -116,6 +116,17 @@ def core.iter.traits.iterator.Iterator.fold.default.loop
   Aeneas.Std.loop (core.iter.traits.iterator.Iterator.fold.default.body next FnMutInst)
     (self, acc, f)
 
+@[rust_type "core::iter::adapters::map::Map"]
+structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
+  iter : I
+  f : F
+
+/-- `Iterator::map` default body: `Map::new(self, f)`. -/
+def core.iter.traits.iterator.Iterator.map.default
+  {Self F : Type _} :
+  Self → F → Result (core.iter.adapters.map.Map Self F) :=
+  fun self f => ok ⟨self, f⟩
+
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _)
   where
@@ -127,6 +138,9 @@ structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _
     Self → Acc → F → Result Acc :=
       fun FnMutInst self acc f =>
         core.iter.traits.iterator.Iterator.fold.default.loop next FnMutInst self acc f
+  map : ∀ {B F : Type}, core.ops.function.FnMut F Self_Item B →
+    Self → F → Result (core.iter.adapters.map.Map Self F) :=
+      fun _ => core.iter.traits.iterator.Iterator.map.default
   -- TODO: adding more fields like rev leads to a circularity.
   -- As an approximation we could only require these methods to implement a smaller version of
   -- `Iterator` with, e.g., only the `next` method. Most implementations should satisfy this
@@ -1127,11 +1141,6 @@ def core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_b
     else
       let n ← StepInst.cloneInst.clone self.end
       ok (some n, ⟨self.start, self.«end», true⟩)
-
-@[rust_type "core::iter::adapters::map::Map"]
-structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
-  iter : I
-  f : F
 
 /-- A `fold` model that consumes items through `next` can use a loop invariant,
     a decreasing measure, and a `WP` spec for one iteration of the body. -/

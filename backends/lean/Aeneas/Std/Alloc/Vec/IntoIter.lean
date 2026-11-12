@@ -50,7 +50,7 @@ def core.iter.traits.collect.IntoIteratorVec (T : Type _) :
 }
 
 /-- Iterate and collect elements into a list -/
-def alloc.vec.FromIteratorVec.iterToList
+@[expose] def alloc.vec.FromIteratorVec.iterToList
     {T : Type _} {IntoIter : Type _}
     (iterInst : core.iter.traits.iterator.Iterator IntoIter T)
     (iter : IntoIter) (acc : List T) : Result (List T) := do

@@ -16,3 +16,4 @@ public import Aeneas.Std.StringIter
 public import Aeneas.Std.Target
 public import Aeneas.Data.Tuples
 public import Aeneas.Std.RangeIter
+public import Aeneas.Std.IterMethods
