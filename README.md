@@ -179,6 +179,18 @@ the user just needs to copy/paste those definitions and fill in the holes. Also 
 those attributes have quite a few options to tweak the behavior of the extraction: we
 invite the users to read their docstrings for more information.
 
+The option `-no-builtin-models` disables those models: the items of the standard library are then
+translated like the items of any other crate, as opaque declarations, unless an external crate
+provides them (`-extern-crate`, below). The primitives (scalars, arrays, slices, `Box`, `Result`...)
+are not affected.
+
+## Translating Crates Which Depend on Each Other
+
+If a crate depends on another crate which was already translated with `-emit-json`, its
+translation can reuse the dependency's translation instead of re-declaring its definitions, with
+the option `-extern-crate NAME=PATH`, where `PATH` is the dependency's `translation.json`. See
+[documentation/multi-crate-translation.md](documentation/multi-crate-translation.md).
+
 ## Quick start for Nix users
 
 Assuming Nix is installed, with a support for Flakes (`*`):

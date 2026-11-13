@@ -31,6 +31,8 @@ package «tests» {}
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib ConstShadow
+@[default_target] lean_lib CrossCrateLib
+@[default_target] lean_lib CrossCrateUser
 @[default_target] lean_lib Curve25519
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
@@ -42,6 +44,7 @@ package «tests» {}
 @[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib EmitJson
 @[default_target] lean_lib FnPtrGeneric
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib GenericUnitOutput
@@ -117,6 +120,7 @@ package «tests» {}
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib TargetFeatures
 @[default_target] lean_lib Traits
+@[default_target] lean_lib TraitSpecs
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib UintDivOps
 @[default_target] lean_lib Vec

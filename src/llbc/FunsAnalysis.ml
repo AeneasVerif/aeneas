@@ -106,8 +106,17 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in
-      NameMatcherMap.find_opt name_matcher_ctx f.item_meta.name
-        (builtin_fun_effects_map ())
+      match
+        NameMatcherMap.find_opt name_matcher_ctx f.item_meta.name
+          (builtin_fun_effects_map ())
+      with
+      | Some info -> Some info
+      | None when f.item_meta.diagnostic_item = Some "box_new" ->
+          (* [Box] is a primitive, and so is [Box::new] (the translation of
+             its calls relies on it), even without its model
+             ([-no-builtin-models]) *)
+          Some { can_fail = false }
+      | None -> None
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be

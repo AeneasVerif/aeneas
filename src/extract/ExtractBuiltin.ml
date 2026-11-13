@@ -45,12 +45,16 @@ let builtin_globals () : Pure.builtin_global_info list =
      ]
     @ mk_lean_only lean_builtin_consts)
 
+(** The entries of a table of models, or none with [-no-builtin-models] *)
+let models (entries : unit -> 'a list) : 'a list =
+  if !Config.no_builtin_models then [] else entries ()
+
 let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list
     (List.map
        (fun (info : Pure.builtin_global_info) ->
          (parse_pattern info.rust_name, info))
-       (builtin_globals ()))
+       (models builtin_globals))
 
 let builtin_globals_map = mk_memoized mk_builtin_globals_map
 
@@ -176,7 +180,7 @@ let mk_builtin_types_map () =
   NameMatcherMap.of_list
     (List.map
        (fun (info : Pure.builtin_type_info) -> (info.rust_name, info))
-       (builtin_types ()))
+       (models builtin_types))
 
 let builtin_types_map = mk_memoized mk_builtin_types_map
 
@@ -327,7 +331,7 @@ let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list
     (List.map
        (fun (info : Pure.builtin_trait_decl_info) -> (info.rust_name, info))
-       (builtin_trait_decls_info ()))
+       (models builtin_trait_decls_info))
 
 let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
 
@@ -494,7 +498,7 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       all_int_names
 
 let mk_builtin_trait_impls_map () =
-  let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
+  let m = NameMatcherMap.of_list (models builtin_trait_impls_info) in
   [%ltrace NameMatcherMap.to_string (fun _ -> "...") m];
   m
 
@@ -882,8 +886,8 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
 let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
   (* We need to take into account the default trait methods *)
   let mk () =
-    let funs = mk_builtin_funs () in
-    let trait_decls = builtin_trait_decls_info () in
+    let funs = models mk_builtin_funs in
+    let trait_decls = models builtin_trait_decls_info in
     let default_methods =
       List.map
         (fun (d : Pure.builtin_trait_decl_info) ->

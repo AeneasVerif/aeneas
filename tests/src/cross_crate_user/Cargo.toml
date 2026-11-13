@@ -1,0 +1,10 @@
+[package]
+name = "cross_crate_user"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cross_crate_user"
+
+[dependencies]
+cross_crate_lib = { path = "../cross_crate_lib" }

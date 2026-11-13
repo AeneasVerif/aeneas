@@ -749,9 +749,63 @@ and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     parameters).
 
     We need to do this preemptively, beforce extracting any definition, because
-    of recursive definitions. *)
-let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
-    extraction_ctx =
+    of recursive definitions.
+
+    This is the case of a type of an external crate: we use the names recorded
+    in its manifest (see {!ExtractExternal}). *)
+let extract_external_type_decl_register_names (ctx : extraction_ctx)
+    (def : type_decl) (entry : Manifest.type_entry) : extraction_ctx =
+  let span = def.item_meta.span in
+  let find_pair = ExtractExternal.find_pair span ctx def.item_meta.name in
+  let ctx = ctx_add span (TypeId (TAdtId def.def_id)) entry.lean_name ctx in
+  if
+    TypesUtils.type_decl_from_decl_id_is_tuple_struct
+      ctx.trans_ctx.type_ctx.type_infos def.def_id
+  then ctx
+  else
+    match def.kind with
+    | Struct fields ->
+        let field_names =
+          FieldId.mapi
+            (fun fid (field : field) ->
+              let rust = Option.value field.field_name ~default:"" in
+              (fid, find_pair "field" entry.fields rust))
+            fields
+        in
+        let ctx =
+          List.fold_left
+            (fun ctx (fid, name) ->
+              ctx_add span (FieldId (TAdtId def.def_id, fid)) name ctx)
+            ctx field_names
+        in
+        let ctx =
+          match backend () with
+          | Lean ->
+              ctx_add_adt_projector_names entry.lean_name
+                (List.map snd field_names) ctx
+          | _ -> ctx
+        in
+        let cons_name =
+          [%unwrap_with_span] span entry.constructor
+            ("The manifest of the external crate gives no constructor for "
+            ^ name_to_string ctx def.item_meta.name)
+        in
+        ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
+    | Enum variants ->
+        List.fold_left
+          (fun ctx (vid, (variant : variant)) ->
+            ctx_add span
+              (VariantId (TAdtId def.def_id, vid))
+              (find_pair "variant" entry.variants variant.variant_name)
+              ctx)
+          ctx
+          (VariantId.mapi (fun vid v -> (vid, v)) variants)
+    | Opaque -> ctx
+
+(** Same as {!extract_external_type_decl_register_names}, for the other types.
+*)
+let extract_local_type_decl_register_names (ctx : extraction_ctx)
+    (def : type_decl) : extraction_ctx =
   let span = def.item_meta.span in
   (* Register the filtering information, if the type has builtin information *)
   let ctx =
@@ -903,6 +957,14 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   in
   (* Return *)
   ctx
+
+(** Compute the names for all the top-level identifiers used in a type
+    definition (see {!extract_external_type_decl_register_names}). *)
+let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
+    extraction_ctx =
+  match ExtractExternal.type_entry ctx def with
+  | Some entry -> extract_external_type_decl_register_names ctx def entry
+  | None -> extract_local_type_decl_register_names ctx def
 
 (** Print the variants *)
 let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)

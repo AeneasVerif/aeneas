@@ -231,6 +231,35 @@ let lean_gen_lakefile = ref false
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
 
+(** Don't record the version of Aeneas in translation.json, so that it doesn't
+    change from one build to the next (e.g. for test outputs). *)
+let emit_json_no_version = ref false
+
+(** Don't use the models of the standard library (the tables of
+    {!ExtractBuiltin}): its items are then translated like the items of any
+    other crate, as opaque declarations, unless an external crate provides them
+    (option [-extern-crate]). The primitives (scalars, arrays, slices, [Box],
+    [Result]...) are not affected. *)
+let no_builtin_models = ref false
+
+(** Only for Lean: crates already translated by Aeneas, given as pairs (crate
+    name, path of the [translation.json] written with [-emit-json]). Their items
+    are mapped to the Lean definitions of their translation instead of being
+    re-declared (option [-extern-crate NAME=PATH]). *)
+let extern_crates : (string * string) list ref = ref []
+
+let add_extern_crate (arg : string) : unit =
+  match String.index_opt arg '=' with
+  | Some i when i > 0 && i < String.length arg - 1 ->
+      let name = String.sub arg 0 i in
+      let path = String.sub arg (i + 1) (String.length arg - i - 1) in
+      extern_crates := !extern_crates @ [ (name, path) ]
+  | _ ->
+      raise
+        (Arg.Bad
+           ("-extern-crate expects an argument of the form NAME=PATH, got: "
+          ^ arg))
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic. *)

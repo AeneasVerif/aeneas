@@ -24,7 +24,7 @@ def incr (x : Option U32) : Result (Option U32) :=
 example (x : Option U32) (h : ∀ v, x = some v → v.val + 1 ≤ U32.max) :
   incr x ⦃ y => ∀ v, x = some v → ∃ w, y = some w ∧ w.val = v.val + 1 ⦄ := by
   unfold incr
-  step* +inferPost
+  step*
 
 /- `x.is_some_and(|v| v + 1 > 3)` -/
 @[reducible] def big.closure := Unit
@@ -43,14 +43,14 @@ def big (x : Option U32) : Result Bool :=
 example (x : Option U32) (h : ∀ v, x = some v → v.val + 1 ≤ U32.max) :
   big x ⦃ b => b = true ↔ ∃ v, x = some v ∧ v.val + 1 > 3 ⦄ := by
   unfold big
-  let* ⟨ b, b_post ⟩ ← [ +inferPost ] core.option.Option.is_some_and.spec
+  let* ⟨ b, b_post ⟩ ← core.option.Option.is_some_and.spec
   case hf =>
     intros value _
     let* ⟨ w, w_post ⟩ ← [ +inferPost ] U32.add_spec
     exact ⟨‹_›, w, w_post, rfl⟩
   cases x <;> agrind
 
-/- `x.is_some_and(|v| v > 3)`: the closure has no step, so its postcondition is given -/
+/- `x.is_some_and(|v| v > 3)`: no step to infer `post` from, so it is given -/
 @[reducible] def gt3.closure := Unit
 
 @[step_simps]
@@ -67,9 +67,6 @@ example (x : Option U32) :
   unfold gt3
   let* ⟨ b, b_post ⟩ ← core.option.Option.is_some_and.spec
     (post := fun v b => b = decide (v > 3#u32))
-  case hf =>
-    intros value _
-    step*
   cases x <;> agrind
 
 /- `b.then(|| c + 1)`, with a closure capturing `c` -/
@@ -87,7 +84,7 @@ def succ (b : Bool) (c : U32) : Result (Option U32) :=
 example (b : Bool) (c : U32) (h : c.val + 1 ≤ U32.max) :
   succ b c ⦃ y => if b then ∃ w, y = some w ∧ w.val = c.val + 1 else y = none ⦄ := by
   unfold succ
-  step* +inferPost
+  step*
   cases b <;> agrind
 
 end higher_order_option

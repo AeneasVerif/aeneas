@@ -54,8 +54,12 @@ structure Config where
       that are not bound in the function call). This requires `assumTac` to
       be `true`. -/
   inferGhostVars : Bool := true
-  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress` -/
+  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress`, including
+      the main goal. (`step*` infers those of the preconditions anyway, when it proves them.) -/
   inferPost : Bool := false
+  /-- Prove the preconditions which are specifications by stepping through them
+      (`Aeneas.Tactic.Step.SpecPreconditions`). -/
+  specPreconditions : Bool := true
   /-- Use `scalar_tac` to discharge preconditions -/
   scalarTac : Bool := false
   /- Use `simp [*]` to discharge preconditions -/
@@ -102,7 +106,8 @@ structure Config where
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
-  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _, simpStar := _,
+  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, specPreconditions := _,
+        scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
         preprocessGrind := _,
@@ -110,6 +115,15 @@ def Config.toGrindConfig (cfg : Config) : Grind.Config :=
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats }
 
 declare_option_config_elab Config elabPartialConfig aeneas.step
+
+/-- Metadata marking the proof of a precondition proved by `SpecPreconditions` (for `step*?`). -/
+meta def specPreconditionKey : Name := `aeneas.specPrecondition
+
+/-- Was `mvarId` proved by `SpecPreconditions` (see `specPreconditionKey`)? -/
+meta def isSpecPreconditionProof (mvarId : MVarId) : MetaM Bool := do
+  match ← getExprMVarAssignment? mvarId with
+  | some (.mdata d _) => return d.getBool specPreconditionKey
+  | _ => return false
 
 /-! # Step State (threaded through `step*`) -/
 

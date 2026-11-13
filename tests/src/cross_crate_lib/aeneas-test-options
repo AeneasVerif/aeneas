@@ -1,0 +1,4 @@
+[!lean] skip
+charon-args=--opaque cross_crate_lib::checksum
+[lean] subdir=
+[lean] aeneas-args=-split-files -subdir CrossCrateLib -emit-json -emit-json-no-version

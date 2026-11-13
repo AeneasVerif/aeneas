@@ -39,12 +39,12 @@ def squares : Result (Array U32 4#usize) :=
 example : squares ⦃ a => ∀ j < 4, a[j]!.val = j * j ⦄ := by
   unfold squares
   step with core.array.from_fn.spec_stateless_getElem! _ _ _
-    (fun j (v : U32) => v.val = j * j) by (intro i hi; step*)
+    (fun j (v : U32) => v.val = j * j)
   solve_by_elim
 
 /-! ## A closure with a single call: `from_fn(|i| i + 1)`
 
-`step* +inferPost` uses the `@[step]` theorem `core.array.from_fn.spec_stateless` and infers the
+`step*` uses the `@[step]` theorem `core.array.from_fn.spec_stateless` and infers the
 postcondition from the body of the closure. -/
 
 @[reducible] def succs.closure := Unit
@@ -70,7 +70,7 @@ def succs : Result (Array Usize 4#usize) :=
 
 example : succs ⦃ a => ∀ j (hj : j < a.val.length), (a.val[j]).val = j + 1 ⦄ := by
   unfold succs
-  step* +inferPost
+  step*
 
 /-! ## A closure which updates its state: a counter `c`, with
 `from_fn(|i| { c += 1; c * 100 + i })` -/
@@ -103,7 +103,7 @@ def stateful : Result (Array U32 4#usize) :=
 example : stateful ⦃ a => ∀ j (hj : j < a.val.length), (a.val[j]).val = (j + 1) * 100 + j ⦄ := by
   unfold stateful
   step with core.array.from_fn.spec _ _ _ (fun i (g : stateful.closure) => g.val = i)
-    (fun j (v : U32) => v.val = (j + 1) * 100 + j) by (intro i g hi hg; step*)
+    (fun j (v : U32) => v.val = (j + 1) * 100 + j)
   solve_by_elim
 
 end array_from_fn

@@ -646,6 +646,21 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
     LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
       ctx.trans_ctx.type_ctx.to_extract ctx.trans_ctx.fun_ctx.to_extract
   in
+  (* The items of the external crates are not extracted *)
+  let types =
+    List.filter
+      (fun (d : type_decl) ->
+        not (ExtractExternal.is_type ctx d.item_meta.name))
+      types
+  in
+  let funs =
+    List.filter
+      (fun (d : fun_decl) ->
+        not
+          (ExtractExternal.is_fun ctx d.item_meta.name
+          || ExtractExternal.is_global ctx d.item_meta.name))
+      funs
+  in
   [%ldebug
     "- opaque types:\n"
     ^ String.concat "\n\n"
@@ -737,7 +752,8 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     let types_map = builtin_types_map () in
     List.map
       (fun (def : Pure.type_decl) ->
-        match_name_find_opt ctx.trans_ctx def.item_meta.name types_map <> None)
+        match_name_find_opt ctx.trans_ctx def.item_meta.name types_map <> None
+        || ExtractExternal.is_type ctx def.item_meta.name)
       defs
   in
 
@@ -951,7 +967,8 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     List.map
       (fun (trans : pure_fun_translation) ->
         match_name_find_opt ctx.trans_ctx trans.f.item_meta.name funs_map
-        <> None)
+        <> None
+        || ExtractExternal.is_fun ctx trans.f.item_meta.name)
       pure_ls
   in
 
@@ -1014,6 +1031,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     match_name_find_opt ctx.trans_ctx global.item_meta.name
       (builtin_globals_map ())
     <> None
+    || ExtractExternal.is_global ctx global.item_meta.name
   in
 
   (* We ignore the anonymous constants (i.e., the promoted constants): the
@@ -1056,6 +1074,7 @@ let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
   Option.is_some
     (match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
        (builtin_trait_decls_map ()))
+  || ExtractExternal.is_trait_decl ctx trait_decl.item_meta.name
 
 let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
   let trait_impl =
@@ -1076,6 +1095,7 @@ let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
       (builtin_trait_impls_map ())
   in
   Option.is_some builtin_info
+  || ExtractExternal.is_trait_impl ctx trait_impl.item_meta.name
 
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
@@ -1284,6 +1304,9 @@ type extract_file_info = {
   crate_name : string;
   rust_module_name : string;
   module_name : string;
+  lean_module : string;
+      (** The Lean module which other files import to use the definitions of
+          this file (for a template, the module of its filled copy). *)
   custom_msg : string;
   custom_imports : string list;
   custom_includes : string list;
@@ -1300,7 +1323,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   FormatCompat.use_byte_width fmt;
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
-  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace
+  EmitJson.begin_file_if_enabled ~filename:fi.filename
+    ~lean_module:fi.lean_module ~namespace:fi.namespace
     ~in_namespace:fi.in_namespace;
 
   (* Print the headers.
@@ -1937,8 +1961,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              crate_name;
              rust_module_name = crate.name;
              module_name = opaque_module;
+             lean_module = opaque_imported_module;
              custom_msg;
-             custom_imports = [];
+             custom_imports = ExternManifest.imported_modules ();
              custom_includes = [];
              noncomputable = false;
            }
@@ -1977,8 +2002,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          crate_name;
          rust_module_name = crate.name;
          module_name = types_module;
+         lean_module = types_module;
          custom_msg = ": type definitions";
-         custom_imports = [];
+         custom_imports = ExternManifest.imported_modules ();
          custom_includes = opaque_types_module;
          noncomputable = false;
        }
@@ -2005,6 +2031,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             crate_name;
             rust_module_name = crate.name;
             module_name = template_clauses_module;
+            lean_module =
+              import_prefix ^ "Clauses" ^ module_delimiter ^ "Clauses";
             custom_msg = ": templates for the decreases clauses";
             custom_imports = [ types_module ];
             custom_includes = [];
@@ -2060,6 +2088,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              crate_name;
              rust_module_name = crate.name;
              module_name = opaque_module;
+             lean_module = opaque_imported_module;
              custom_msg;
              custom_imports = [];
              custom_includes = [ types_module ];
@@ -2100,6 +2129,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          crate_name;
          rust_module_name = crate.name;
          module_name = fun_module;
+         lean_module = fun_module;
          custom_msg = ": function definitions";
          custom_imports = [];
          custom_includes =
@@ -2133,8 +2163,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          crate_name;
          rust_module_name = crate.name;
          module_name = crate_name;
+         (* With [-subdir], the file is in the subfolder *)
+         lean_module =
+           (match !Config.subdir with
+           | None -> crate_name
+           | Some _ -> import_prefix ^ crate_name);
          custom_msg = "";
-         custom_imports = [];
+         custom_imports = ExternManifest.imported_modules ();
          custom_includes = [];
          noncomputable = has_opaque && not !Config.all_computable;
        }

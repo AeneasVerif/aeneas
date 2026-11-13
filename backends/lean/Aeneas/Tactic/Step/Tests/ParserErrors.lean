@@ -99,7 +99,7 @@ argument has type
 but is expected to have type
   ℕ
 in the application
-  Step.Config.mk false true true false false false true true true
+  Step.Config.mk false true true false true false false true true true
 -/
 #guard_msgs in
 example : True := by
