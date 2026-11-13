@@ -25,7 +25,7 @@ let texpr_to_string (ctx : extraction_ctx) =
 
 (** Compute the names for all the pure functions generated from a rust function.
 *)
-let extract_fun_decl_register_names (ctx : extraction_ctx)
+let extract_local_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
   (* Use the builtin names if necessary *)
@@ -85,14 +85,27 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       let register_funs ctx fl = List.fold_left register_fun ctx fl in
       register_funs ctx funs
 
-(** Simply add the global name to the context. A builtin global (in particular a
-    global of an external crate, see {!ExternManifest}) uses the name of its
-    model. *)
+(** Compute the names for all the pure functions generated from a rust function
+    (see {!extract_local_fun_decl_register_names}). A function of an external
+    crate uses the name of its translation, and its loops are not extracted (see
+    {!ExtractExternal}). *)
+let extract_fun_decl_register_names (ctx : extraction_ctx)
+    (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
+    extraction_ctx =
+  match ExtractExternal.fun_entry ctx def.f with
+  | Some entry ->
+      let f = def.f in
+      let fun_id = (Pure.FunId f.def_id, f.loop_id) in
+      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) entry.lean_name ctx
+  | None -> extract_local_fun_decl_register_names ctx has_decreases_clause def
+
+(** Simply add the global name to the context. A global of an external crate
+    uses the name of its translation (see {!ExtractExternal}). *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
     (def : global_decl) : extraction_ctx =
-  match def.builtin_info with
-  | Some info ->
-      ctx_add def.item_meta.span (GlobalId def.def_id) info.extract_name ctx
+  match ExtractExternal.global_entry ctx def with
+  | Some entry ->
+      ctx_add def.item_meta.span (GlobalId def.def_id) entry.lean_name ctx
   | None -> ctx_add_global_decl def ctx
 
 (** The following function factorizes the extraction of ADT values.
@@ -2905,7 +2918,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     ctx method_names
 
 (** Similar to {!extract_type_decl_register_names} *)
-let extract_trait_decl_register_names (ctx : extraction_ctx)
+let extract_local_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
   let ctx, trait_name =
     let trait_name, trait_constructor =
@@ -2941,6 +2954,66 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     extract_trait_decl_method_names ctx trait_decl trait_name builtin_info
   in
   ctx
+
+(** Register the names of a trait declaration of an external crate: the names
+    recorded in its manifest (see {!ExtractExternal}). *)
+let extract_external_trait_decl_register_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl) (entry : Manifest.trait_decl_entry) :
+    extraction_ctx =
+  let span = trait_decl.item_meta.span in
+  let id = trait_decl.def_id in
+  let find_pair =
+    ExtractExternal.find_pair span ctx trait_decl.item_meta.name
+  in
+  let ctx = ctx_add span (TraitDeclId id) entry.lean_name ctx in
+  let ctx = ctx_add span (TraitDeclConstructorId id) entry.constructor ctx in
+  [%cassert] span
+    (List.length trait_decl.parent_clauses = List.length entry.parent_clauses)
+    ("The manifest of the external crate gives "
+    ^ string_of_int (List.length entry.parent_clauses)
+    ^ " parent clauses for "
+    ^ name_to_string ctx trait_decl.item_meta.name
+    ^ ", which has "
+    ^ string_of_int (List.length trait_decl.parent_clauses));
+  let ctx =
+    List.fold_left2
+      (fun ctx (c : trait_param) name ->
+        ctx_add span (TraitParentClauseId (id, c.clause_id)) name ctx)
+      ctx trait_decl.parent_clauses entry.parent_clauses
+  in
+  let ctx =
+    List.fold_left
+      (fun ctx (cid, rust, _) ->
+        ctx_add span
+          (TraitConstId (id, cid))
+          (find_pair "constant" entry.consts rust)
+          ctx)
+      ctx trait_decl.consts
+  in
+  let ctx =
+    List.fold_left
+      (fun ctx (tid, rust) ->
+        ctx_add span
+          (TraitTypeId (id, tid))
+          (find_pair "associated type" entry.types rust)
+          ctx)
+      ctx trait_decl.types
+  in
+  List.fold_left
+    (fun ctx (m : trait_method) ->
+      ctx_add span
+        (TraitMethodId (id, m.method_id))
+        (find_pair "method" entry.methods m.item_name)
+        ctx)
+    ctx trait_decl.methods
+
+(** Similar to {!extract_type_decl_register_names} *)
+let extract_trait_decl_register_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl) : extraction_ctx =
+  match ExtractExternal.trait_decl_entry ctx trait_decl with
+  | Some entry ->
+      extract_external_trait_decl_register_names ctx trait_decl entry
+  | None -> extract_local_trait_decl_register_names ctx trait_decl
 
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
@@ -2984,6 +3057,12 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     match builtin_info with
     | None -> ctx_compute_trait_impl_name ctx trait_impl
     | Some info -> info.extract_name
+  in
+  (* An impl of an external crate uses the name of its translation *)
+  let name =
+    match ExtractExternal.trait_impl_entry ctx trait_impl with
+    | Some entry -> entry.lean_name
+    | None -> name
   in
   ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
 

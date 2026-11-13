@@ -148,6 +148,13 @@ let () =
         Arg.Set emit_json_no_version,
         " Don't record the version of Aeneas in translation.json (for \
          reproducible outputs)" );
+      ( "-no-builtin-models",
+        Arg.Set no_builtin_models,
+        " Don't use the models of the standard library: its items are \
+         translated like the items of any other crate, as opaque declarations, \
+         unless an external crate provides them (option -extern-crate). The \
+         primitives (scalars, arrays, slices, Box, Result...) are not affected"
+      );
       ( "-extern-crate",
         Arg.String add_extern_crate,
         " NAME=PATH: reuse the translation of the crate NAME, a dependency \
@@ -565,8 +572,7 @@ let () =
               fail true))
   in
 
-  (* Load the manifests of the external crates: their entries are added to the
-     builtin tables, so this must happen before the tables are computed below. *)
+  (* Load the manifests of the external crates (used by the writer) *)
   List.iter
     (fun (name, path) ->
       try

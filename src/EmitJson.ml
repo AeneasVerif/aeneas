@@ -2,7 +2,7 @@
     translation to the Rust code. *)
 
 (* The types of the entries are defined in [ExternManifest], which also reads manifests. *)
-open ExternManifest
+open Manifest
 
 (* ------------------------------------------------------------------------ *)
 (* Mutable accumulator state                                                *)
@@ -259,7 +259,9 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
     impl_trait_def_id = Pure.TraitDeclId.to_int impl_trait_id;
     impl_trait_rust_name =
       ExtractBase.name_to_string ctx impl_trait_decl.item_meta.name;
-    impl_trait_is_builtin = Option.is_some impl_trait_decl.builtin_info;
+    impl_trait_is_builtin =
+      Option.is_some impl_trait_decl.builtin_info
+      || ExtractExternal.is_trait_decl ctx impl_trait_decl.item_meta.name;
   }
 
 (* ------------------------------------------------------------------------ *)

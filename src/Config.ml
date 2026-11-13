@@ -235,6 +235,13 @@ let emit_json = ref false
     change from one build to the next (e.g. for test outputs). *)
 let emit_json_no_version = ref false
 
+(** Don't use the models of the standard library (the tables of
+    {!ExtractBuiltin}): its items are then translated like the items of any
+    other crate, as opaque declarations, unless an external crate provides them
+    (option [-extern-crate]). The primitives (scalars, arrays, slices, [Box],
+    [Result]...) are not affected. *)
+let no_builtin_models = ref false
+
 (** Only for Lean: crates already translated by Aeneas, given as pairs (crate
     name, path of the [translation.json] written with [-emit-json]). Their items
     are mapped to the Lean definitions of their translation instead of being

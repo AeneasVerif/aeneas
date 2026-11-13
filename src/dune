@@ -58,6 +58,7 @@
   ExtractBuiltinCore
   ExtractBuiltinLean
   ExtractErrors
+  ExtractExternal
   ExtractName
   ExtractTypes
   FormatCompat
@@ -88,6 +89,7 @@
   Logging
   EmitJson
   ExternManifest
+  Manifest
   Meta
   NameMatcher
   Parallel

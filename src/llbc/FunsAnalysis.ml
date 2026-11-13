@@ -106,8 +106,17 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in
-      NameMatcherMap.find_opt name_matcher_ctx f.item_meta.name
-        (builtin_fun_effects_map ())
+      match
+        NameMatcherMap.find_opt name_matcher_ctx f.item_meta.name
+          (builtin_fun_effects_map ())
+      with
+      | Some info -> Some info
+      | None when f.item_meta.diagnostic_item = Some "box_new" ->
+          (* [Box] is a primitive, and so is [Box::new] (the translation of
+             its calls relies on it), even without its model
+             ([-no-builtin-models]) *)
+          Some { can_fail = false }
+      | None -> None
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
@@ -208,15 +217,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
-      match (builtin_info, f.body) with
-      | Some { can_fail }, _ ->
-          (* The function is mapped to an existing definition (of a backend
-             library, or of an external crate, see {!ExternManifest}): its
-             effects are the ones of that definition, even if we have its body
-             (e.g. the body of an external crate, included with [--include]). *)
-          obj#may_fail can_fail
-      | None, StructuredBody body -> obj#visit_block body.body.span body.body
-      | None, TargetDispatchBody targets ->
+      match f.body with
+      | StructuredBody body -> obj#visit_block body.body.span body.body
+      | TargetDispatchBody targets ->
           (* get_target can fail, and so can each target function *)
           obj#may_fail true;
           (* Also propagate effects from the target implementations *)
@@ -224,7 +227,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             (fun ((_target_name : string), (fdr : Types.fun_decl_ref)) ->
               obj#visit_fid f.item_meta.span fdr.id)
             targets
-      | None, _ -> obj#may_fail true
+      | _ ->
+          let info_can_fail =
+            match builtin_info with
+            | None -> true
+            | Some { can_fail } -> can_fail
+          in
+          obj#may_fail info_can_fail
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that

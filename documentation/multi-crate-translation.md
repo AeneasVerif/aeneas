@@ -83,19 +83,21 @@ so `B`'s proofs are `unfold f; step*` (see `tests/lean/CrossCrate{Lib,User}/Prop
 
 ## How it works
 
-The manifest records, for each item of `A`, its Rust name as a name-matcher pattern and its Lean
-name, plus what is needed to use it from another crate: the constructor, field and variant names
-of types; the constructor and the field names (parent clauses, constants, types, methods) of
-traits; the key identifying each trait impl (the implemented trait with its arguments); and the
-Lean module to import to use each item (`lean_module`). For the items `A` leaves opaque, that is the
-module of the user's filled copy of the template (e.g. `A.FunsExternal`), which `B` then imports
-like `A`'s own files do.
+The manifest records, for each item of `A`, its Rust name and its Lean name, plus what is needed
+to use it from another crate: the constructor, field and variant names of types; the constructor
+and the field names (parent clauses, constants, types, methods) of traits; and the Lean module to
+import to use each item (`lean_module`). For the items `A` leaves opaque, that is the module of the
+user's filled copy of the template (e.g. `A.FunsExternal`), which `B` then imports like `A`'s own
+files do.
 
-`-extern-crate` loads the manifest (`src/ExternManifest.ml`) and adds its entries to the tables
-which map the items of the standard library to the Aeneas Lean library
-(`src/extract/ExtractBuiltin.ml`). So `A`'s items are handled exactly like the standard
-library's: they are renamed, not re-declared, and not axiomatized. The impls listed in a manifest
-are never used for the local impls of `B`, even when their patterns match.
+`-extern-crate` loads the manifest (`src/ExternManifest.ml`). Only the writer uses it
+(`src/extract/ExtractExternal.ml`): an item of `B`'s crate whose Rust name is listed in the
+manifest is named after `A`'s Lean definition and is not emitted. The translation of `B` is
+unchanged: `A`'s items go through it as ordinary items of another crate. Matching by the exact Rust
+name is enough, since `A`'s items reach `B` under the same names (Charon resolves each use of a
+trait to an impl, which has its own name). An item listed twice, in manifests or both in a
+manifest and among the models of the standard library, is an error: to provide items of the
+standard library through manifests, disable its models with `-no-builtin-models`.
 
 The manifest is checked when it is loaded: it must be the manifest of the crate named on the
 command line, written from the output of the same version of Charon, and with the same Lean module

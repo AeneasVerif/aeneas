@@ -97,6 +97,6 @@ The default methods are function entries (and default constants are global entri
 |---|---|
 | `impl_trait_def_id` | `TraitDeclId` of the implemented trait. |
 | `impl_trait_rust_name` | Full Rust path of the implemented trait. |
-| `impl_trait_is_builtin` | `true` when the implemented trait is builtin. |
+| `impl_trait_is_builtin` | `true` when the implemented trait is builtin, or belongs to an external crate (`-extern-crate`). |
 
-**Note:** `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for builtin traits. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
+**Note:** `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for builtin traits or the traits of external crates. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
