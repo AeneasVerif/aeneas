@@ -79,6 +79,44 @@ theorem core.option.Option.map.spec {T U F : Type _}
     intro mapped h
     simp [h]
 
+/-- Pure model of `Option::map_or`: `default` on `none`, and the result of `fnOnce` on the payload
+    of `some`. -/
+@[expose, rust_fun "core::option::{core::option::Option<@T>}::map_or"]
+def core.option.Option.map_or
+  {T U F : Type _} (fnOnce : core.ops.function.FnOnce F T U)
+  (x : Option T) (default : U) (f : F) :
+  Result U :=
+  match x with
+  | some value => fnOnce.call_once f value
+  | none => ok default
+
+@[simp]
+theorem core.option.Option.map_or_some
+  {T U F : Type _} (fnOnce : core.ops.function.FnOnce F T U) (value : T) (default : U) (f : F) :
+  core.option.Option.map_or fnOnce (some value) default f = fnOnce.call_once f value := rfl
+
+@[simp]
+theorem core.option.Option.map_or_none
+  {T U F : Type _} (fnOnce : core.ops.function.FnOnce F T U) (default : U) (f : F) :
+  core.option.Option.map_or fnOnce (none : Option T) default f = ok default := rfl
+
+/-- Step spec for `Option::map_or`: `post` is the postcondition of the closure, which `step` can
+    infer with `+inferPost`. -/
+@[step]
+theorem core.option.Option.map_or.spec {T U F : Type _}
+  (fnOnce : core.ops.function.FnOnce F T U) (x : Option T) (default : U) (f : F)
+  {post : T → U → Prop}
+  (hf : ∀ value, x = some value → fnOnce.call_once f value ⦃ post value ⦄) :
+  core.option.Option.map_or fnOnce x default f ⦃ y =>
+    match x with
+    | none => y = default
+    | some value => post value y ⦄ := by
+  cases x with
+  | none => simp [core.option.Option.map_or]
+  | some value =>
+    simp only [core.option.Option.map_or]
+    exact hf value rfl
+
 /-- Pure model of `Option::is_some_and`: `false` on `none`, and the result of
     `fnOnce` on the payload of `some`. -/
 @[expose, rust_fun "core::option::{core::option::Option<@T>}::is_some_and"]
