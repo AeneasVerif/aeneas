@@ -80,3 +80,36 @@ pub fn non_stateful_rg_ending_stateful_abs<'a, 'b>(
     let py = Ptr::from_mut(y);
     (x, py.as_mut())
 }
+
+pub fn id_mut<'a, T>(x: &'a mut T) -> &'a mut T {
+    x
+}
+
+// 5. Outliving stateful lifetimes (`'a: 'b`) where `'b` only has a pure borrow
+//    (`id_mut(y)`), which would still force `'a`'s backward function to end `'b`.
+#[verify::stateful_lifetime]
+pub fn outlives_with_pure_borrow_in_b<'a: 'b, 'b>(
+    x: &'a mut i32,
+    y: &'b mut i32,
+) -> (&'a mut i32, &'b mut i32) {
+    let px = Ptr::from_mut(x);
+    (px.as_mut(), id_mut(y))
+}
+
+// 6. Marking only `'a` as `#[verify::stateful_lifetime]` while returning a
+//    stateful output borrow (`as_mut`) in an independent non-stateful lifetime `'b`.
+#[verify::stateful_lifetime('a)]
+pub fn output_stateful_borrow_in_non_stateful_lifetime<'a, 'b>(
+    x: &'a mut i32,
+    _w: &'b i32,
+) -> &'b mut i32 {
+    let px = Ptr::from_mut(x);
+    px.as_mut()
+}
+
+// 7. Same with `'a: 'b` outlives clause (`coerce_only_a`).
+#[verify::stateful_lifetime('a)]
+pub fn coerce_only_a<'a: 'b, 'b>(x: &'a mut i32) -> &'b mut i32 {
+    let px = Ptr::from_mut(x);
+    px.as_mut()
+}

@@ -425,14 +425,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     RegionsHierarchy.list_ancestor_region_groups inst_sg.regions_hierarchy
       back_id
   in
-  let target_abs_ids_of h =
-    List.filter_map
-      (fun x -> x)
-      (RegionGroupId.mapi
-         (fun rg_id (rg : abs_region_group) ->
-           if RegionGroupId.Set.mem rg_id parent_rgs then Some rg.id else None)
-         h)
-    @ [ (RegionGroupId.nth h back_id).id ]
+  let parent_input_abs_ids =
+    RegionGroupId.mapi
+      (fun rg_id (rg : abs_region_group) ->
+        if RegionGroupId.Set.mem rg_id parent_rgs then Some rg.id else None)
+      inst_sg.abs_regions_hierarchy
+  in
+  let parent_input_abs_ids =
+    List.filter_map (fun x -> x) parent_input_abs_ids
   in
   (* Are we synthesizing the backward function of the static region group? *)
   let is_static_rg =
@@ -536,10 +536,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   [%ltrace "ending input abstraction: " ^ AbsId.to_string current_abs_id];
 
-  let target_abs_ids = target_abs_ids_of inst_sg.abs_regions_hierarchy in
-  let target_ret_abs_ids =
-    target_abs_ids_of ret_inst_sg.abs_regions_hierarchy
-  in
+  (* We need to end the parent abstractions first, so we put them at the
+     beginning of the list of abstractions to end *)
+  let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 
   (* Set the abstractions as endable. If we are synthesizing the backward
      function for the static region, we allow ending all the input
@@ -570,11 +569,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      [Ptr::from_mut]/[Ptr::from_shr]). *)
   let ctx, cc_ret =
     if is_stateful_lifetime_rg then
-      let ctx, cc_ret =
-        fold_left_apply_continuation
-          (fun id ctx -> end_abs config span id 0 ctx)
-          target_ret_abs_ids ctx
+      let current_ret_abs_id =
+        (RegionGroupId.nth ret_inst_sg.abs_regions_hierarchy back_id).id
       in
+      let ctx, cc_ret = end_abs config span current_ret_abs_id 0 ctx in
       comp cc_ret
         (InterpBorrows.simplify_dummy_values_useless_abs config
            ~keep_stateful_lifetime:(fun _ -> true)
@@ -758,7 +756,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
              forward function (raising an error if any still remain active).
            - One ([ _sl_gid ]): let remaining stateful-lifetime abstractions stay
              active past forward return so they flow into that backward function
-             (including unattached ones such as borrowing `'static`).
+             (including unattached ones such as borrowing `'static` when the
+             signature has a single lifetime).
            - Multiple (_ :: _ :: _): let remaining stateful-lifetime abstractions
              flow into their corresponding stateful backward functions, checking
              that every active stateful abstraction is ended by at least one of
@@ -890,7 +889,14 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
               ~end_unattached_stateful ret_value ctx
           in
           if is_stateful_lifetime_rg then (
-            if not (AbsId.Set.disjoint !ended_by_stateful_rgs ended_alive) then
+            let ancestors =
+              RegionsHierarchy.list_ancestor_region_groups regions_hierarchy
+                back_id
+            in
+            if
+              (not (RegionGroupId.Set.is_empty ancestors))
+              || not (AbsId.Set.disjoint !ended_by_stateful_rgs ended_alive)
+            then
               [%craise] span
                 "Dependent #[verify::stateful_lifetime] lifetimes where one \
                  backward function would also end another lifetime's stateful \
@@ -908,8 +914,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
           [%craise] span
             "Cannot determine which #[verify::stateful_lifetime] backward \
              function should end an active stateful region abstraction (the \
-             function has multiple stateful lifetimes, and the abstraction is \
-             not tied to any of them)";
+             function has multiple lifetimes, and the abstraction is not tied \
+             to any stateful lifetime)";
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
         cc_pop
