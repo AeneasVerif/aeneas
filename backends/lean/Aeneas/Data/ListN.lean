@@ -70,6 +70,25 @@ theorem ListN.to_from_inverse {α n} {l : ListN α n}
 theorem ListN.toList_inj {α n} (l1 l2 : ListN α n) (h : l1.toList = l2.toList) : l1 = l2 := by
   induction l1 <;> cases l2 <;> grind [ListN.toList]
 
+def ListN.fromListAux {a} (n : Nat) (l : List a) (h : l.length = n) : ListN a n :=
+  match n, l with
+  | 0, _ => .nil
+  | n + 1, x :: l' => .cons x (ListN.fromListAux n l' (Nat.succ.inj h))
+  | _ + 1, [] => nomatch h
+
+theorem ListN.fromListAux_toList {a} (n : Nat) (l : List a) (h : l.length = n) :
+  (ListN.fromListAux n l h).toList = l := by
+  induction n generalizing l <;> cases l <;> grind [fromListAux, toList]
+
+def ListN.fromListImpl {a} (l : List a) : ListN a l.length :=
+  ListN.fromListAux l.length l rfl
+
+@[csimp]
+theorem ListN.fromList_eq_fromListImpl : @ListN.fromList = @ListN.fromListImpl := by
+  funext a l
+  apply ListN.toList_inj
+  rw [ListN.from_to_inverse, fromListImpl, fromListAux_toList]
+
 /-!
 ## Positivity test
 
