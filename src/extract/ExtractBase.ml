@@ -1821,6 +1821,25 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
                       name_with_generics_to_simple_name ctx.trans_ctx name
                         params generics
                       |> flatten_name)
+              | TFnDef { binder_value = { kind = Fun fid; generics }; _ } -> (
+                  (* The self type is a function item (for instance an enum
+                     variant constructor used as a function value): the
+                     name matcher has no pattern for it, so name it after the
+                     function, like an ADT. *)
+                  match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
+                  | None ->
+                      [%save_error] span
+                        "Missing function declaration, probably because of an \
+                         error which happened before";
+                      "__UNKNOWN__" ^ FunDeclId.to_string fid
+                  | Some decl ->
+                      let name =
+                        opt_ctx_prepare_name decl.item_meta ctx
+                          decl.item_meta.name
+                      in
+                      name_with_generics_to_simple_name ctx.trans_ctx name
+                        params generics
+                      |> flatten_name)
               | _ ->
                   let name =
                     NameMatcher.ty_to_pattern nm_ctx
