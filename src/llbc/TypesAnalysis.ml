@@ -117,10 +117,10 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
      have any more custom treatment than this, and these types can be modeled
      suitably in the backend libraries, rather than special-casing for them all the
      way. *)
-  let get_builtin_info () : Pure.builtin_type_info option =
-    let open ExtractBuiltin in
-    NameMatcherMap.find_opt name_matcher_ctx def.item_meta.name
-      (builtin_types_map ())
+  let get_external_info () : Pure.external_type_info option =
+    let open ExternalNames in
+    ExtractName.NameMatcherMap.find_opt name_matcher_ctx def.item_meta.name
+      (external_types_map ())
   in
   let name_to_string () =
     let env = Charon.Print.crate_to_fmt_env crate in
@@ -132,25 +132,25 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
   let mut_regions =
     match def.kind with
     | Opaque -> (
-        (* Try to lookup the builtin information, if there is *)
-        match get_builtin_info () with
-        | Some info ->
-            (* *)
+        (* Try to lookup the external information, if there is *)
+        match get_external_info () with
+        | Some { mut_regions = Some info_mut_regions; _ } ->
             let len = List.length def.generics.regions in
-            if List.for_all (fun i -> i < len) info.mut_regions then
+            if List.for_all (fun i -> i < len) info_mut_regions then
               RegionId.Set.of_list
                 (List.map
                    (fun i ->
                      (Collections.List.nth def.generics.regions i).index)
-                   info.mut_regions)
+                   info_mut_regions)
             else (
               [%warn_opt_span] span
-                ("Found invalid builtin information for a type declaration: \
+                ("Found invalid external information for a type declaration: \
                   the indices used for the mutable regions are out of bounds.\n\
                   Type: " ^ name_to_string ());
               RegionId.Set.empty)
-        | None ->
-            (* No builtin information: use Charon's per-region [mutability] analysis *)
+        | Some { mut_regions = None; _ } | None ->
+            (* No information about the regions: use Charon's per-region
+               [mutability] analysis *)
             let has_unknown_regions = ref false in
             let mut_regions =
               RegionId.Set.of_list

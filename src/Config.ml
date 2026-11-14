@@ -46,6 +46,20 @@ let subdir : string option ref = ref None
 
 let set_subdir (s : string) : unit = subdir := Some s
 
+(** Additional modules to include at the top of every generated file.
+
+    Those are treated exactly like the includes we generate ourselves (e.g., the
+    include of [Types] inside [Funs]): [import] for Lean, [include] for F*, etc.
+*)
+let extra_includes : string list ref = ref []
+
+(** Add a comma-separated list of modules to {!extra_includes}. *)
+let add_extra_includes (includes : string) : unit =
+  let includes =
+    List.filter (fun s -> s <> "") (String.split_on_char ',' includes)
+  in
+  extra_includes := !extra_includes @ includes
+
 (** If [true], we do not generate code and simply borrow-check the program
     instead. This allows us to relax some sanity checks which are present in the
     symbolic execution only to make sure we will be able to generate the pure
@@ -60,7 +74,7 @@ let borrow_check = ref false
 (** Get the target backend
 
     If there is no backend (we are borrow-checking) we default to Lean - it
-    happens when looking up the builtin information: we use Lean as it has the
+    happens when looking up the external information: we use Lean as it has the
     most complete library.
 
     TODO: turn borrow-checking into a backend. *)
@@ -230,6 +244,19 @@ let lean_gen_lakefile = ref false
 
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
+
+(** JSON files listing external names (i.e., definitions which we do not
+    extract, and which we map to models in the backend), given through the
+    [-external-names] option. Only for Lean: the files give Lean names.
+
+    In command-line order. A Rust pattern may be mapped only once across all the
+    files and the entries we ship: a second entry is an error. *)
+let external_names_files : string list ref = ref []
+
+(** Add a file to {!external_names_files}. We append, so that the list stays in
+    command-line order. *)
+let add_external_names_file (file : string) : unit =
+  external_names_files := !external_names_files @ [ file ]
 
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
@@ -602,13 +629,16 @@ let method_names_in_impl_namespace = ref false
 let all_computable = ref false
 
 (** When extracting a trait impl, filter out the methods which are absent from
-    the model of the trait declaration (its builtin info).
+    the model of the trait declaration, if it is one of the models which ship
+    with Aeneas.
 
-    Trait declarations which have no model are not affected: all their methods
-    are extracted. This is useful for the traits of the standard library, whose
-    models often list only a subset of the methods of the original Rust trait.
-    Without this option, the extracted impls may contain fields which do not
-    exist in the model, leading to code which does not typecheck. *)
+    Trait declarations which have no model, or a model given through
+    [-external-names], are not affected: all their methods are extracted (the
+    models read from a file are trusted to have every method). This is useful
+    for the traits of the standard library, whose models often list only a
+    subset of the methods of the original Rust trait. Without this option, the
+    extracted impls may contain fields which do not exist in the model, leading
+    to code which does not typecheck. *)
 let filter_trait_impl_methods = ref false
 
 (** Do not attempt to extract loops to recursive functions *)

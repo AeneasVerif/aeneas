@@ -95,7 +95,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let stateful = ref false in
     let can_diverge = ref false in
     let is_rec = ref false in
-    let group_has_builtin_info = ref false in
+    let group_has_external_info = ref false in
     let name_matcher_ctx : Charon.NameMatcher.ctx =
       Charon.NameMatcher.ctx_from_crate m
     in
@@ -104,10 +104,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
        have any more custom treatment than this, and these functions can be modeled
        suitably in the backend libraries, rather than special-casing for them all the
        way. *)
-    let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
-      let open ExtractBuiltin in
+    let get_external_info (f : fun_decl) : ExternalNames.effect_info option =
+      let open ExtractName in
+      let open ExternalNames in
       NameMatcherMap.find_opt name_matcher_ctx f.item_meta.name
-        (builtin_fun_effects_map ())
+        (external_fun_effects_map ())
     in
 
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
@@ -157,15 +158,16 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 
-                   Check the builtin globals map first (for opaque builtins like
+                   Check the external globals map first (for opaque externals like
                    [u32::MAX]), then fall back to the initializer function's info. *)
                 let global = GlobalDeclId.Map.find gref.id m.global_decls in
-                let open ExtractBuiltin in
-                let builtin_info =
+                let open ExtractName in
+                let open ExternalNames in
+                let external_info =
                   NameMatcherMap.find_opt name_matcher_ctx global.item_meta.name
-                    (builtin_globals_map ())
+                    (external_globals_map ())
                 in
-                match builtin_info with
+                match external_info with
                 | Some info -> self#may_fail info.can_fail
                 | None -> (
                     (* Globals without initializers are constants *)
@@ -205,9 +207,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       [%cassert] f.item_meta.span
         ((not (fun_decl_is_global_initializer f)) || not !stateful)
         "Global definition containing a stateful call in its body";
-      let builtin_info = get_builtin_info f in
-      let has_builtin_info = builtin_info <> None in
-      group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
+      let external_info = get_external_info f in
+      let has_external_info = external_info <> None in
+      group_has_external_info := !group_has_external_info || has_external_info;
       match f.body with
       | StructuredBody body -> obj#visit_block body.body.span body.body
       | TargetDispatchBody targets ->
@@ -220,7 +222,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             targets
       | _ ->
           let info_can_fail =
-            match builtin_info with
+            match external_info with
             | None -> true
             | Some { can_fail } -> can_fail
           in
@@ -234,8 +236,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       ((not is_global_decl_body) || List.length d = 1)
       "This global definition is in a group of mutually recursive definitions";
     [%cassert] (List.hd d).item_meta.span
-      ((not !group_has_builtin_info) || List.length d = 1)
-      "This builtin function belongs to a group of mutually recursive \
+      ((not !group_has_external_info) || List.length d = 1)
+      "This external function belongs to a group of mutually recursive \
        definitions";
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
@@ -245,7 +247,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
      *)
     can_fail :=
       if is_global_decl_body then !can_fail
-      else if !group_has_builtin_info then !can_fail
+      else if !group_has_external_info then !can_fail
       else true;
     {
       can_fail = !can_fail;

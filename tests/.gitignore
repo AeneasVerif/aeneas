@@ -1,2 +1,3 @@
 *.llbc
+lean/RoundtripLib/translation.json
 target/

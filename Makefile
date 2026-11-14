@@ -185,6 +185,10 @@ test-%: build-dev
 	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(INPUTS_DIR)/"$*" $(AENEAS_OPTIONS)
 	echo "# Test $* done"
 
+# `roundtrip-user` reads the manifest `roundtrip-lib` writes, so it must run
+# after it - including under `make -j`, which is how CI runs the suite.
+test-roundtrip-user: test-roundtrip-lib
+
 # Run the Rust unit tests (for test files with #[cfg(test)] modules).
 
 # Single-file test crates with #[cfg(test)]

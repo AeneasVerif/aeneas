@@ -307,16 +307,23 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   [%ldebug "explicit info:\n" ^ show_explicit_info explicit_info];
   let kind = translate_type_decl_kind span def.T.kind in
   let item_meta = def.item_meta in
-  (* Lookup the builtin information, if there is *)
-  let builtin_info =
+  (* Lookup the external information, if there is *)
+  let external_info =
     match_name_find_opt ctx def.item_meta.name
-      (ExtractBuiltin.builtin_types_map ())
+      (ExternalNames.external_types_map ())
   in
+  (* Check if the type is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This type" ~foreign_too:false
+    ~opaque:(Some (Charon.TypesUtils.type_decl_is_opaque def))
+    def.item_meta
+    (Option.map
+       (fun (i : Pure.external_type_info) -> i.extract_name)
+       external_info);
   {
     def_id;
     name;
     item_meta;
-    builtin_info;
+    external_info;
     generics;
     explicit_info;
     llbc_generics = def.generics;

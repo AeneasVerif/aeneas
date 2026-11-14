@@ -753,9 +753,9 @@ and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   let span = def.item_meta.span in
-  (* Register the filtering information, if the type has builtin information *)
+  (* Register the filtering information, if the type has external information *)
   let ctx =
-    match def.builtin_info with
+    match def.external_info with
     | Some { keep_params = Some keep; _ } ->
         {
           ctx with
@@ -767,7 +767,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   in
   (* Compute and register the type decl name *)
   let def_name =
-    match def.builtin_info with
+    match def.external_info with
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
@@ -801,13 +801,34 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           in
           (* Compute the names *)
           let field_names, cons_name =
-            match def.builtin_info with
-            | None | Some { body_info = None; _ } -> compute_info_from_llbc ()
+            match def.external_info with
+            | None -> compute_info_from_llbc ()
+            | Some { body_info = None; extract_name; _ } ->
+                (* External, but its body is not described: the fields keep
+                   the names the crate which extracted the type computed, and
+                   for Lean the constructor is named after the extraction
+                   name, as the variants of an enumeration are. *)
+                let field_names, cons_name = compute_info_from_llbc () in
+                let cons_name =
+                  if Config.backend () = Lean then
+                    ExtractBuiltin.mk_struct_constructor extract_name
+                  else cons_name
+                in
+                (field_names, cons_name)
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
                 let field_names =
                   FieldId.mapi
                     (fun fid (field : field) ->
-                      let rust_name = Option.get field.field_name in
+                      let rust_name =
+                        match field.field_name with
+                        | Some rust_name -> rust_name
+                        | None ->
+                            [%craise] span
+                              ("The external information for '"
+                              ^ name_to_string ctx def.item_meta.name
+                              ^ "' names its fields, but the structure has \
+                                 unnamed fields.")
+                      in
                       let name =
                         match
                           List.find_opt
@@ -818,7 +839,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                         | None ->
                             [%warn] span
                               ("Could not find field '" ^ rust_name
-                             ^ "' in the builtin information for '"
+                             ^ "' in the external information for '"
                               ^ name_to_string ctx def.item_meta.name
                               ^ "'; the " ^ backend_name ()
                               ^ " model is probably incorrect.");
@@ -830,13 +851,12 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 (field_names, cons_name)
             | Some info ->
                 [%warn] span
-                  ("Invalid builtin information for type "
+                  ("Invalid external information for type "
                   ^ name_to_string ctx def.item_meta.name
-                  ^ ": expected builtin information about a structure, got:\n"
-                  ^ show_builtin_type_info info
+                  ^ ": expected external information about a structure, got:\n"
+                  ^ show_external_type_info info
                   ^ ". The " ^ Config.backend_name ()
-                  ^ " model defined in the standard library seems to be wrong."
-                  );
+                  ^ " model seems to be wrong.");
                 compute_info_from_llbc ()
           in
           (* Add the fields. *)
@@ -859,7 +879,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
       | Enum variants ->
           let variant_names =
-            match def.builtin_info with
+            match def.external_info with
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
@@ -873,25 +893,56 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     in
                     (variant_id, name))
                   variants
-            | Some { body_info = Some (Enum variant_infos); _ } ->
+            | Some { body_info = None; extract_name; _ } ->
+                (* External, but its body is not described: name the variants
+                   as the crate which extracted the type did. *)
+                VariantId.mapi
+                  (fun variant_id (variant : variant) ->
+                    let name = ctx_compute_variant_name ctx def variant in
+                    (* Add the type name prefix for Lean *)
+                    let name =
+                      if Config.backend () = Lean then extract_name ^ "." ^ name
+                      else name
+                    in
+                    (variant_id, name))
+                  variants
+            | Some { body_info = Some (Enum variant_infos); extract_name; _ } ->
                 (* We need to compute the map from variant to variant *)
                 let variant_map =
                   StringMap.of_list
                     (List.map
-                       (fun (info : builtin_enum_variant_info) ->
+                       (fun (info : external_enum_variant_info) ->
                          (info.rust_variant_name, info.extract_variant_name))
                        variant_infos)
                 in
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->
-                    (variant_id, StringMap.find variant.variant_name variant_map))
+                    match
+                      StringMap.find_opt variant.variant_name variant_map
+                    with
+                    | Some name -> (variant_id, name)
+                    | None ->
+                        [%warn] span
+                          ("Could not find variant '" ^ variant.variant_name
+                         ^ "' in the external information for '"
+                          ^ name_to_string ctx def.item_meta.name
+                          ^ "'; the " ^ backend_name ()
+                          ^ " model is probably incorrect.");
+                        (* Name it as if the body were not described *)
+                        let name = ctx_compute_variant_name ctx def variant in
+                        let name =
+                          if Config.backend () = Lean then
+                            extract_name ^ "." ^ name
+                          else name
+                        in
+                        (variant_id, name))
                   variants
             | Some info ->
                 [%craise] span
-                  ("Invalid builtin information for type "
+                  ("Invalid external information for type "
                   ^ name_to_string ctx def.item_meta.name
-                  ^ ": expected builtin information about an enumeration, got:\n"
-                  ^ show_builtin_type_info info)
+                  ^ ": expected external information about an enumeration, got:\n"
+                  ^ show_external_type_info info)
           in
           List.fold_left
             (fun ctx (vid, vname) ->
