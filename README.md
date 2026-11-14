@@ -47,7 +47,7 @@ opam switch create 5.3.0
 
 You can then install the dependencies with the following command:
 ```
-opam install src --deps-only --with-test
+opam install ./src --deps-only --with-test
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
@@ -55,6 +55,7 @@ For Aeneas to work, `./charon` must contain a clone of the [Charon](https://gith
 repository, at the commit specified in `./charon-pin`.  The easiest way to set this up is to call
 `make setup-charon`
 (this uses either [rustup](https://rustup.rs/) or [nix](https://nixos.org/download/) to build Charon, depending on which one is installed).
+When building with rustup, this also installs the OCaml dependencies of Charon in your current opam switch.
 In case of version mismatch, you will be instructed to update Charon.
 
 If you're also developing on Charon, you can instead set up `./charon` to be a symlink to your local version:
