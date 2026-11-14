@@ -176,6 +176,10 @@ structure Goals where
   preconditions : Array (MVarId × OptTask (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
+  /-- The preconditions proved by `SpecPreconditions` -/
+  dischargedSpecPreconditions : Array MVarId := #[]
+  /-- The ghost variables instantiated while solving the preconditions -/
+  instantiatedGhosts : Array MVarId := #[]
 deriving Inhabited
 
 structure Stats extends Goals where
@@ -252,6 +256,20 @@ meta def getSpecProgram (ty : Expr) : MetaM Expr := do
 meta def getSpecPost (ty : Expr) : MetaM Expr := do
   let (info, args) ← getSpecInfoArgs ty
   return args[info.post_index]!
+
+/-- A specification under `∀` binders (see `specUnderBinders?`). -/
+structure SpecUnderBinders where
+  /-- The specification predicate, e.g. `Std.WP.spec` -/
+  name : Name
+  /-- Is the postcondition a meta-variable (`?post`, possibly applied or under `fun`)? -/
+  postUnknown : Bool
+
+meta def specUnderBinders? (ty : Expr) : MetaM (Option SpecUnderBinders) :=
+  forallTelescope ty fun _ body => do
+    let body ← whnfR body
+    let some post ← observing? (getSpecPost body) | return none
+    let head ← lambdaTelescope post fun _ b => return b.getAppFn
+    return some { name := body.getAppFn.constName!, postUnknown := head.isMVar }
 
 /- Analyze a goal comp
 
@@ -796,7 +814,10 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
+  let allPropGoals := newPropGoals
   let (stepState, newPropGoals) ← trySolvePreconditions info args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
+  let dischargedSpecPreconditions ← allPropGoals.toArray.filterM fun mvar => isSpecPreconditionProof mvar
+  let instantiatedGhosts ← newNonPropGoals.toArray.filterM fun mvar => mvar.isAssigned
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
@@ -821,7 +842,8 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   let mainGoal ← inferPostMainGoal args mainGoal
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal,
+          dischargedSpecPreconditions, instantiatedGhosts })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -1063,6 +1085,9 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   (stepState : StepState := {})
   : TacticM Stats := do
   withTraceNode `Step (fun _ => pure m!"evalStep") do
+  -- Read by `SpecPreconditions`
+  withOptions (fun o => if config.specPreconditions then o
+    else o.setBool `aeneas.step.specPreconditions false) do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
   let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
@@ -1299,6 +1324,11 @@ theorem hashmap_insert_spec {k v : Type} [BEq k] [Hashable k]
 When encoutering ghost variables, `step` will try to instantiate them by looking
 for local assumptions which match the theorem assumptions, using heuristics to find
 the best instantiation when several are possible.
+
+**Preconditions which are specifications** (e.g. of a trait method, with a ghost `f`):
+`step` proves them by stepping through the method, instantiating the ghosts
+(`Aeneas.Tactic.Step.SpecPreconditions`; disabled by `-specPreconditions`). `step*` also infers their
+unknown postconditions when it can prove them.
 
 **Step\*:**
 When the user wants to make progress by several step, they can use the `step*` tactic,

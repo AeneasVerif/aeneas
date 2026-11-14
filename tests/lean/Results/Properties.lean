@@ -17,7 +17,7 @@ attribute [local step_simps]
 theorem doubled_ok (i : I32) (h : I32.min ≤ i.val * 2 ∧ i.val * 2 ≤ I32.max) :
     doubled (.Ok i) ⦃ o => ∃ n, o = some n ∧ n.val = i.val * 2 ⦄ := by
   unfold doubled
-  step* +inferPost
+  step*
 
 /-- …and on a line which doesn't parse: nothing is printed. -/
 theorem doubled_err : doubled (.Err ()) ⦃ o => o = none ⦄ := by
@@ -27,7 +27,7 @@ theorem doubled_err : doubled (.Err ()) ⦃ o => o = none ⦄ := by
 theorem scale_ok (x y : U32) (h : x.val * y.val ≤ U32.max) :
     scale (.Ok x) y ⦃ r => ∃ z, r = .Ok z ∧ z.val = x.val * y.val ⦄ := by
   unfold scale
-  step* +inferPost
+  step*
 
 theorem scale_err (e : Bool) (y : U32) : scale (.Err e) y ⦃ r => r = .Err e ⦄ := by
   unfold scale

@@ -62,7 +62,7 @@ theorem core.option.Option.map_none
   core.option.Option.map fnOnce (none : Option T) f = ok (none : Option U) := rfl
 
 /-- Step spec for `Option::map`: `post` is the postcondition of the closure, which
-    `step` can infer with `+inferPost`. -/
+    `step*` infers by stepping through the closure. -/
 @[step]
 theorem core.option.Option.map.spec {T U F : Type _}
   (fnOnce : core.ops.function.FnOnce F T U) (x : Option T) (f : F) {post : T → U → Prop}
@@ -101,7 +101,7 @@ theorem core.option.Option.is_some_and_none
   core.option.Option.is_some_and fnOnce (none : Option T) f = ok false := rfl
 
 /-- Step spec for `Option::is_some_and`: `post` is the postcondition of the closure,
-    which `step` can infer with `+inferPost`. -/
+    which `step*` infers by stepping through the closure. -/
 @[step]
 theorem core.option.Option.is_some_and.spec {T F : Type _}
   (fnOnce : core.ops.function.FnOnce F T Bool) (x : Option T) (f : F)
@@ -142,7 +142,7 @@ theorem core.bool.Bool.then_false
   core.bool.Bool.then fnOnce false f = ok (none : Option T) := rfl
 
 /-- Step spec for `bool::then`: `post` is the postcondition of the closure, which
-    `step` can infer with `+inferPost`. -/
+    `step*` infers by stepping through the closure. -/
 @[step]
 theorem core.bool.Bool.then.spec {T F : Type _}
   (fnOnce : core.ops.function.FnOnce F Unit T) (b : Bool) (f : F) {post : T → Prop}
