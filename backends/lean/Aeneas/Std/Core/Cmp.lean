@@ -242,6 +242,19 @@ def core.cmp.PartialEqBool : core.cmp.PartialEq Bool Bool := {
   eq := core.cmp.impls.PartialEqBool.eq
 }
 
+@[expose, rust_fun "core::cmp::impls::{core::cmp::PartialEq<char, char>}::eq"]
+def core.cmp.impls.PartialEqChar.eq (c0 c1 : Char) : Result Bool := .ok (c0 = c1)
+
+@[step]
+theorem core.cmp.impls.PartialEqChar.eq.spec (c0 c1 : Char) :
+  core.cmp.impls.PartialEqChar.eq c0 c1 ⦃ b => b ↔ c0 = c1 ⦄ := by
+  simp [core.cmp.impls.PartialEqChar.eq]
+
+@[expose, reducible, rust_trait_impl "core::cmp::PartialEq<char, char>"]
+def core.cmp.PartialEqChar : core.cmp.PartialEq Char Char := {
+  eq := core.cmp.impls.PartialEqChar.eq
+}
+
 @[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"]
 def core.cmp.impls.PartialEqShared.eq {A : Type _} {B : Type _} (PartialEqInst : core.cmp.PartialEq A B)
   (x : A) (y : B) : Result Bool :=
