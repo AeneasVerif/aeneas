@@ -783,7 +783,27 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Assert (assertion, _on_failure, _) ->
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Call (call, dest, _) -> eval_function_call config st.span call dest ctx
+  | Call (call, dest, _) ->
+      let ctx_resl, cc = eval_function_call config st.span call dest ctx in
+      if dest.ty <> TNever then (ctx_resl, cc)
+      else
+        (* The function returns [!]: it diverges, and the code after the call
+           is unreachable (Charon doesn't always insert an
+           [undefined_behavior] after the call). *)
+        let ctx_res_cfl =
+          List.map
+            (fun (ctx, res) ->
+              match res with
+              | Unit ->
+                  eval_statement_raw config
+                    { st with kind = UndefinedBehavior }
+                    ctx
+              | Panic | Break _ | Continue _ | Return ->
+                  ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
+            ctx_resl
+        in
+        let ctx_resl, cc' = comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl in
+        (ctx_resl, cc_comp cc cc')
   | Panic _ | UnwindTerminate | UndefinedBehavior ->
       (* Evaluate to a panic only if the execution is concrete, otherwise we stop
          evaluating there and synthesize a [panic] node in the symbolic AST. *)
