@@ -214,11 +214,6 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
       abs.avalues
   in
 
-  let inputs =
-    if Option.is_some abs.stateful_lifetime && inputs = [] then [ mk_unit_ty ]
-    else inputs
-  in
-
   [%ldebug
     "- abs:\n" ^ abs_to_string ctx abs ^ "\n- inputs:\n"
     ^ String.concat "\n" (List.map (pure_ty_to_string ctx) inputs)
@@ -237,7 +232,8 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
     particular, inside ADTs). *)
 let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
   let inputs, outputs = abs_to_input_output_tys ctx abs in
-  if inputs = [] && outputs = [] then None
+  if inputs = [] && outputs = [] && Option.is_none abs.stateful_lifetime then
+    None
   else
     let output = mk_simpl_tuple_ty outputs in
     let output =
@@ -1095,14 +1091,8 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     register_outputs ctx bound_outputs abs.regions.owned abs.avalues
   in
 
-  let ctx, inputs =
-    if Option.is_some abs.stateful_lifetime && inputs = [] then
-      let ctx, dummy = fresh_var None mk_unit_ty ctx in
-      (ctx, [ dummy ])
-    else (ctx, inputs)
-  in
-
-  if inputs = [] && outputs = [] then None
+  if inputs = [] && outputs = [] && Option.is_none abs.stateful_lifetime then
+    None
   else
     (* Put everything together *)
     let output_e = mk_simpl_tuple_texpr span outputs in

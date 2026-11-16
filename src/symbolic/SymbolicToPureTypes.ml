@@ -948,14 +948,12 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     in
     let inputs = translate_back_inputs_for_gid gid in
     let outputs = compute_back_outputs_for_gid gid in
-    let inputs =
-      if Option.is_some stateful_lifetime && inputs = [] then
-        [ (0, [ (None, mk_unit_ty) ]) ]
-      else inputs
-    in
-    (* We consider a backward function as stateful and potentially failing
-       **only if it has inputs** (for the "potentially failing": if it has
-       not inputs, we directly evaluate it in the body of the forward function).
+    (* We consider a non-[stateful_lifetime] backward function as stateful and
+       potentially failing **only if it has inputs** (for the "potentially
+       failing": if it has no inputs, we directly evaluate it in the body of the
+       forward function). By contrast, a [#[verify::stateful_lifetime]] backward
+       computation is suspended inside [Result] even when it has no inputs
+       (its pure type is [Result Foo] rather than [() -> Result Foo]).
 
        For instance, we do the following:
        {[
@@ -975,14 +973,16 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
        ]}
     *)
     let back_effect_info =
-      let b = inputs <> [] in
+      let b = inputs <> [] || Option.is_some stateful_lifetime in
       {
         back_effect_info with
         is_effectful = back_effect_info.is_effectful && b;
       }
     in
     let filter =
-      !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
+      !Config.simplify_merged_fwd_backs
+      && inputs = [] && outputs = []
+      && Option.is_none stateful_lifetime
     in
     let info = { inputs; outputs; effect_info = back_effect_info; filter } in
     (gid, info)
@@ -1161,8 +1161,8 @@ and mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
   if effect_info.is_effectful then mk_result_ty ty else ty
 
 and mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
-    (inputs : ty list) (ty : ty) : ty =
-  if effect_info.is_effectful && inputs <> [] then mk_result_ty ty else ty
+    (_inputs : ty list) (ty : ty) : ty =
+  if effect_info.is_effectful then mk_result_ty ty else ty
 
 (** Compute the arrow types for all the backward functions.
 
@@ -1184,8 +1184,7 @@ and compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
           back_sg.outputs
       in
       (* Filter if necessary *)
-      if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
-        None
+      if back_sg.filter then None
       else
         let output = mk_simpl_tuple_ty outputs in
         let output =

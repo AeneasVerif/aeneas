@@ -251,7 +251,10 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
                 register_edge (Pure lhs.id) 0 (Llbc lid)
             | _ -> ())
           (fst (opt_unmeta_mplace re));
-        register_assign lv re;
+        (* Only equate LHS and RHS variable names for pure assignments
+           ([let x := y]); a monadic bind ([let x ← back]) unwraps a
+           [Result] computation into its output value, not a variable copy. *)
+        if not monadic then register_assign lv re;
         (* Check if this is a loop call *)
         let f, args = destruct_apps re in
         begin

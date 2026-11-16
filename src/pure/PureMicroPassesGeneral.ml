@@ -564,9 +564,13 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
     method! visit_Let env monadic lv rv next =
       [%ldebug "Visiting let:\n" ^ let_to_string ctx monadic lv rv next];
       match rv.e with
-      | Let (rmonadic, rlv, rrv, rnext) ->
+      | Let (rmonadic, rlv, rrv, rnext) when (not rmonadic) || monadic ->
           [%ldebug "Case: inner let"];
-          (* Case 1: move the inner let outside then re-visit *)
+          (* Case 1: move the inner let outside then re-visit.
+             Note: we must not hoist a monadic let-binding ([rmonadic = true])
+             out of a pure let-binding ([monadic = false]), as a pure let may
+             bind a suspended [Result] computation (e.g., a zero-argument
+             [#[verify::stateful_lifetime]] backward computation). *)
           let rnext1 = Let (monadic, lv, rnext, next) in
           let rnext1 = { ty = next.ty; e = rnext1 } in
           self#visit_Let env rmonadic rlv rrv rnext1

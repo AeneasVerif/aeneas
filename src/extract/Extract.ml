@@ -753,8 +753,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       (* Top-level qualifier *)
       match (qualif.id, out_ty) with
       | FunOrOp fun_id, _ ->
-          extract_function_call span ctx fmt ~inside ~inside_do fun_id
-            qualif.generics args
+          extract_function_call span ctx fmt ~inside fun_id qualif.generics args
       | Global global_id, _ ->
           assert (args = []);
           extract_global span ctx fmt ~inside global_id qualif.generics
@@ -765,8 +764,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           TAdt (TBuiltin TArray, { types = [ ty ]; _ }) ) ->
           extract_array_or_slice span ctx fmt ~inside ~is_array:false ty args
       | AdtCons adt_cons_id, _ ->
-          extract_adt_cons span ctx fmt ~inside ~inside_do adt_cons_id
-            qualif.generics args
+          extract_adt_cons span ctx fmt ~inside adt_cons_id qualif.generics args
       | Proj proj, _ ->
           extract_field_projector span ctx fmt ~inside ~inside_do app proj
             qualif.generics args out_ty
@@ -796,7 +794,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           List.iter
             (fun ve ->
               F.pp_print_space fmt ();
-              extract_texpr span ctx fmt ~inside:true ~inside_do ve)
+              extract_texpr span ctx fmt ~inside:true ~inside_do:false ve)
             args;
           (* Close parentheses *)
           if inside then F.pp_print_string fmt ")"
@@ -825,12 +823,12 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt "(";
       (* Print the app expression *)
       let app_inside = (inside && args = []) || args <> [] in
-      extract_texpr span ctx fmt ~inside:app_inside ~inside_do app;
+      extract_texpr span ctx fmt ~inside:app_inside ~inside_do:false app;
       (* Print the arguments *)
       List.iter
         (fun ve ->
           F.pp_print_space fmt ();
-          extract_texpr span ctx fmt ~inside:true ~inside_do ve)
+          extract_texpr span ctx fmt ~inside:true ~inside_do:false ve)
         args;
       (* Close parentheses *)
       if inside then F.pp_print_string fmt ")"
@@ -898,8 +896,8 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
 
 (** Subcase of the app case: function call *)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) ~(inside_do : bool)
-    (fid : fun_or_op_id) (generics : generic_args) (args : texpr list) : unit =
+    (fmt : F.formatter) ~(inside : bool) (fid : fun_or_op_id)
+    (generics : generic_args) (args : texpr list) : unit =
   [%ldebug
     fun_or_op_id_to_string ctx fid
     ^ "\n- generics: "
@@ -913,12 +911,12 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
        * case where we have no argument (all functions are fully instantiated,
        * and no AST transformation introduces partial calls). *)
       extract_unop span
-        (extract_texpr span ctx fmt ~inside_do)
+        (extract_texpr span ctx fmt ~inside_do:false)
         fmt ~inside unop arg
   | Binop binop, [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
       extract_binop span ctx
-        (extract_texpr span ctx fmt ~inside_do)
+        (extract_texpr span ctx fmt ~inside_do:false)
         fmt ~inside binop arg0 arg1
   | Fun fun_id, _ ->
       let use_brackets = inside in
@@ -1087,7 +1085,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       List.iter
         (fun ve ->
           F.pp_print_space fmt ();
-          extract_texpr span ctx fmt ~inside:true ~inside_do ve)
+          extract_texpr span ctx fmt ~inside:true ~inside_do:false ve)
         args;
       (* Close the box for the function call *)
       (*F.pp_close_box fmt ();*)
@@ -1104,9 +1102,8 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
 
 (** Subcase of the app case: ADT constructor *)
 and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) ~(inside_do : bool)
-    (adt_cons : adt_cons_id) (generics : generic_args) (args : texpr list) :
-    unit =
+    (fmt : F.formatter) ~(inside : bool) (adt_cons : adt_cons_id)
+    (generics : generic_args) (args : texpr list) : unit =
   let e_ty = TAdt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
   (* Sanity check: make sure the expr is not a tuple constructor
@@ -1116,7 +1113,7 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
   let _ =
     extract_adt_g_value span
       (fun ctx inside e ->
-        extract_texpr span ctx fmt ~inside ~inside_do e;
+        extract_texpr span ctx fmt ~inside ~inside_do:false e;
         ctx)
       fmt ctx is_single_pat ~inside adt_cons.variant_id args e_ty
   in
@@ -1208,7 +1205,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
         (* Open a box *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Extract the expression *)
-        extract_texpr span ctx fmt ~inside:true ~inside_do arg;
+        extract_texpr span ctx fmt ~inside:true ~inside_do:false arg;
         (* We allow to break where the "." appears (except Lean, it's a syntax error) *)
         if backend () <> Lean then F.pp_print_break fmt 0 0;
         F.pp_print_string fmt ".";
@@ -1613,7 +1610,7 @@ and extract_meta (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   match meta with
   | TypeAnnot ->
       F.pp_print_string fmt "(";
-      extract_texpr span ctx fmt ~inside:false ~inside_do e;
+      extract_texpr span ctx fmt ~inside:false ~inside_do:false e;
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":";
       F.pp_print_space fmt ();

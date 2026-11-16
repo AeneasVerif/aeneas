@@ -57,7 +57,7 @@ axiom Ptr.cast {T : Type _} (U : Type _) : Ptr T → Result (Ptr U)
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::as_shr]:
     Source: 'tests/src/stateful-lifetime.rs', lines 29:4-31:5
     Visibility: public -/
-axiom Ptr.as_shr {T : Type _} : Ptr T → Result (T × (Unit → Result Unit))
+axiom Ptr.as_shr {T : Type _} : Ptr T → Result (T × (Result Unit))
 
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::as_mut]:
     Source: 'tests/src/stateful-lifetime.rs', lines 35:4-37:5
@@ -67,31 +67,28 @@ axiom Ptr.as_mut {T : Type _} : Ptr T → Result (T × (T → Result Unit))
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::from_mut]:
     Source: 'tests/src/stateful-lifetime.rs', lines 41:4-43:5
     Visibility: public -/
-axiom Ptr.from_mut {T : Type _} : T → Result ((Ptr T) × (Unit → Result T))
+axiom Ptr.from_mut {T : Type _} : T → Result ((Ptr T) × (Result T))
 
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::from_shr]:
     Source: 'tests/src/stateful-lifetime.rs', lines 47:4-51:5
     Visibility: public -/
-axiom Ptr.from_shr
-  {T : Type _} : T → Result ((Ptr T) × (Unit → Result Unit))
+axiom Ptr.from_shr {T : Type _} : T → Result ((Ptr T) × (Result Unit))
 
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::from_mut_regular]:
     Source: 'tests/src/stateful-lifetime.rs', lines 55:4-57:5
     Visibility: public -/
-axiom Ptr.from_mut_regular
-  {T : Type _} : T → Result ((Ptr T) × (Unit → Result T))
+axiom Ptr.from_mut_regular {T : Type _} : T → Result ((Ptr T) × (Result T))
 
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::from_shr_regular]:
     Source: 'tests/src/stateful-lifetime.rs', lines 61:4-65:5
     Visibility: public -/
 axiom Ptr.from_shr_regular
-  {T : Type _} : T → Result ((Ptr T) × (Unit → Result Unit))
+  {T : Type _} : T → Result ((Ptr T) × (Result Unit))
 
 /-- [stateful_lifetime::{stateful_lifetime::Ptr<T>}::from_mut_short]:
     Source: 'tests/src/stateful-lifetime.rs', lines 69:4-71:5
     Visibility: public -/
-axiom Ptr.from_mut_short
-  {T : Type _} : T → Result ((Ptr T) × (Unit → Result T))
+axiom Ptr.from_mut_short {T : Type _} : T → Result ((Ptr T) × (Result T))
 
 /-- [stateful_lifetime::id_mut]:
     Source: 'tests/src/stateful-lifetime.rs', lines 74:0-76:1
@@ -113,7 +110,7 @@ def «example» : Result Unit := do
   let (xref, as_mut_back) ← Ptr.as_mut ptr
   let xref1 ← xref + 1#i32
   as_mut_back xref1
-  let x ← from_mut_back ()
+  let x ← from_mut_back
   massert (x = 43#i32)
 
 /-- [stateful_lifetime::example_two_derefs]:
@@ -125,11 +122,11 @@ def example_two_derefs : Result Unit := do
   let r11 ← r1 + 1#i32
   as_mut_back r11
   let (s, as_shr_back) ← Ptr.as_shr ptr
-  as_shr_back ()
+  as_shr_back
   let (_, as_mut_back1) ← Ptr.as_mut ptr
   let r2 ← s + 10#i32
   as_mut_back1 r2
-  let x ← from_mut_back ()
+  let x ← from_mut_back
   massert (x = 53#i32)
 
 /-- [stateful_lifetime::example_join_real_input]:
@@ -145,7 +142,7 @@ def example_join_real_input (cond : Bool) : Result Unit := do
       ok (r1,
         fun i =>
           do
-          let i1 ← from_mut_back ()
+          let i1 ← from_mut_back
           let i2 := id_mut_back i
           ok (i1, i2))
     else
@@ -164,14 +161,13 @@ def example_join_real_input (cond : Bool) : Result Unit := do
 def example_join_no_input_no_hint (cond : Bool) : Result Unit := do
   let back ←
     if cond
-    then
-      do
-      let (_, from_mut_back) ← Ptr.from_mut 42#i32
-      ok (fun (_ : Unit) => from_mut_back ())
+    then do
+         let (_, from_mut_back) ← Ptr.from_mut 42#i32
+         ok from_mut_back
     else do
          let (_, i) ← freeze 42#i32
-         ok (fun (_ : Unit) => ok i)
-  let x ← back ()
+         ok (ok i)
+  let x ← back
   massert (x = 42#i32)
 
 /-- [stateful_lifetime::simple_loop_ptr_from_mut]: loop body 0:
@@ -180,13 +176,13 @@ def example_join_no_input_no_hint (cond : Bool) : Result Unit := do
 @[rust_loop_body]
 def simple_loop_ptr_from_mut_loop.body
   (n : Std.I32) (x : Std.I32) :
-  Result (ControlFlow (Std.I32 × Std.I32) (Unit → Result Std.I32))
+  Result (ControlFlow (Std.I32 × Std.I32) (Result Std.I32))
   := do
   let (_, from_mut_back) ← Ptr.from_mut x
   if n <= 0#i32
-  then ok (done (fun (_ : Unit) => from_mut_back ()))
+  then ok (done from_mut_back)
   else
-    let x1 ← from_mut_back ()
+    let x1 ← from_mut_back
     let x2 ← x1 + 1#i32
     let n1 ← n - 1#i32
     ok (cont (n1, x2))
@@ -196,7 +192,7 @@ def simple_loop_ptr_from_mut_loop.body
     Visibility: public -/
 @[rust_loop]
 def simple_loop_ptr_from_mut_loop
-  (n : Std.I32) (x : Std.I32) : Result (Unit → Result Std.I32) := do
+  (n : Std.I32) (x : Std.I32) : Result (Result Std.I32) := do
   loop
     (fun (n1, x1) => simple_loop_ptr_from_mut_loop.body n1 x1)
     (n, x)
@@ -206,7 +202,7 @@ def simple_loop_ptr_from_mut_loop
     Visibility: public -/
 def simple_loop_ptr_from_mut (n : Std.I32) : Result Std.I32 := do
   let back ← simple_loop_ptr_from_mut_loop n 42#i32
-  back ()
+  back
 
 /-- [stateful_lifetime::make_ptr_and_mut]:
     Source: 'tests/src/stateful-lifetime.rs', lines 144:0-146:1
@@ -218,7 +214,7 @@ def make_ptr_and_mut
   := do
   let (p, from_mut_back) ← Ptr.from_mut x
   let back := fun y1 => do
-                        let x1 ← from_mut_back ()
+                        let x1 ← from_mut_back
                         ok (x1, y1)
   ok ((p, y), back)
 
@@ -228,13 +224,13 @@ def make_ptr_and_mut
 @[rust_loop_body]
 def loop_explicit_move_mut_loop.body
   (n : Std.I32) (x : Std.I32) (y : Std.I32) :
-  Result (ControlFlow (Std.I32 × Std.I32 × Std.I32) (Unit → Result (Std.I32
-    × Std.I32)))
+  Result (ControlFlow (Std.I32 × Std.I32 × Std.I32) (Result (Std.I32 ×
+    Std.I32)))
   := do
   let ((_, r), make_ptr_and_mut_back) ← make_ptr_and_mut x y
   let r1 ← r + 1#i32
   if n <= 0#i32
-  then ok (done (fun (_ : Unit) => make_ptr_and_mut_back r1))
+  then ok (done (make_ptr_and_mut_back r1))
   else
     let (x1, y1) ← make_ptr_and_mut_back r1
     let x2 ← x1 + 1#i32
@@ -248,7 +244,7 @@ def loop_explicit_move_mut_loop.body
 @[rust_loop]
 def loop_explicit_move_mut_loop
   (n : Std.I32) (x : Std.I32) (y : Std.I32) :
-  Result (Unit → Result (Std.I32 × Std.I32))
+  Result (Result (Std.I32 × Std.I32))
   := do
   loop
     (fun (n1, x1, y1) => loop_explicit_move_mut_loop.body n1 x1 y1)
@@ -259,7 +255,7 @@ def loop_explicit_move_mut_loop
     Visibility: public -/
 def loop_explicit_move_mut (n : Std.I32) : Result Std.I32 := do
   let back ← loop_explicit_move_mut_loop n 42#i32 10#i32
-  let (x, y) ← back ()
+  let (x, y) ← back
   x + y
 
 /-- [stateful_lifetime::loop_equiv_stateful_lifetime]: loop body 0:
@@ -267,36 +263,35 @@ def loop_explicit_move_mut (n : Std.I32) : Result Std.I32 := do
     Visibility: public -/
 @[rust_loop_body]
 def loop_equiv_stateful_lifetime_loop.body
-  (cond : Bool) (cond2 : Bool) (back : Unit → Result Std.I32) (n : Std.I32)
+  (cond : Bool) (cond2 : Bool) (back : Result Std.I32) (n : Std.I32)
   (s : Std.I32) :
-  Result (ControlFlow ((Unit → Result Std.I32) × Std.I32 × Std.I32)
-    (Std.I32 × (Unit → Result Std.I32)))
+  Result (ControlFlow ((Result Std.I32) × Std.I32 × Std.I32) (Std.I32 ×
+    (Result Std.I32)))
   := do
   if n <= 0#i32
-  then ok (done (s, fun (_ : Unit) => back ()))
+  then ok (done (s, back))
   else
     let n1 ← n - 1#i32
     if cond2
     then
       if cond
       then
-        let z ← back ()
+        let z ← back
         let (_, from_mut_back) ← Ptr.from_mut z
-        ok (cont (fun (_ : Unit) => from_mut_back (), n1, 0#i32))
-      else
-        let z ← back ()
-        let (s1, i) ← freeze z
-        ok (cont (fun (_ : Unit) => ok i, n1, s1))
-    else ok (cont (fun (_ : Unit) => back (), n1, 0#i32))
+        ok (cont (from_mut_back, n1, 0#i32))
+      else let z ← back
+           let (s1, i) ← freeze z
+           ok (cont (ok i, n1, s1))
+    else ok (cont (back, n1, 0#i32))
 
 /-- [stateful_lifetime::loop_equiv_stateful_lifetime]: loop 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 1:0-192:5
     Visibility: public -/
 @[rust_loop]
 def loop_equiv_stateful_lifetime_loop
-  (back : Unit → Result Std.I32) (n : Std.I32) (cond : Bool) (cond2 : Bool)
+  (back : Result Std.I32) (n : Std.I32) (cond : Bool) (cond2 : Bool)
   (s : Std.I32) :
-  Result (Std.I32 × (Unit → Result Std.I32))
+  Result (Std.I32 × (Result Std.I32))
   := do
   loop
     (fun (back1, n1, s1) => loop_equiv_stateful_lifetime_loop.body cond cond2
@@ -312,9 +307,8 @@ def loop_equiv_stateful_lifetime
                     then ok (0#i32, 0#i32)
                     else freeze 0#i32
   let (s1, back1) ←
-    loop_equiv_stateful_lifetime_loop (fun (_ : Unit) => ok back) n cond cond2
-      s
-  let z ← back1 ()
+    loop_equiv_stateful_lifetime_loop (ok back) n cond cond2 s
+  let z ← back1
   s1 + z
 
 /-- [stateful_lifetime::join_mut_loan_vs_shared_loan]:
@@ -326,7 +320,7 @@ def join_mut_loan_vs_shared_loan (cond : Bool) : Result Std.I32 := do
     then
       do
       let (_, from_mut_back) ← Ptr.from_mut 42#i32
-      let x1 ← from_mut_back ()
+      let x1 ← from_mut_back
       ok (x1, 10#i32)
     else ok (42#i32, 42#i32)
   r + x
@@ -343,7 +337,7 @@ def join_mut_loan_vs_bottom (cond : Bool) (b : Std.I32) : Result Std.I32 := do
   if cond
   then
     let (_, from_mut_back) ← Ptr.from_mut b
-    let _ ← from_mut_back ()
+    let _ ← from_mut_back
     ok 0#i32
   else drop_val b
        ok 0#i32
@@ -357,18 +351,16 @@ def if_join_stateful_lifetime (cond : Bool) : Result Std.I32 := do
     then
       do
       let (ptr1, from_mut_back) ← Ptr.from_mut 42#i32
-      ok (ptr1, fun (_ : Unit) => ok 10#i32,
-        fun (_ : Unit) => from_mut_back ())
+      ok (ptr1, ok 10#i32, from_mut_back)
     else
       do
       let (ptr1, from_mut_back) ← Ptr.from_mut 10#i32
-      ok (ptr1, fun (_ : Unit) => from_mut_back (),
-        fun (_ : Unit) => ok 42#i32)
+      ok (ptr1, from_mut_back, ok 42#i32)
   let (rx, as_mut_back) ← Ptr.as_mut ptr
   let rx1 ← rx + 1#i32
   as_mut_back rx1
-  let x ← back1 ()
-  let y ← back ()
+  let x ← back1
+  let y ← back
   x + y
 
 /-- [stateful_lifetime::loop_join_stateful_lifetime]: loop body 0:
@@ -376,25 +368,25 @@ def if_join_stateful_lifetime (cond : Bool) : Result Std.I32 := do
     Visibility: public -/
 @[rust_loop_body]
 def loop_join_stateful_lifetime_loop.body
-  (back : Unit → Result Std.I32) (n : Std.I32) (ptr : Ptr Std.I32) :
-  Result (ControlFlow ((Unit → Result Std.I32) × Std.I32 × (Ptr Std.I32))
-    ((Ptr Std.I32) × (Unit → Result Std.I32)))
+  (back : Result Std.I32) (n : Std.I32) (ptr : Ptr Std.I32) :
+  Result (ControlFlow ((Result Std.I32) × Std.I32 × (Ptr Std.I32)) ((Ptr
+    Std.I32) × (Result Std.I32)))
   := do
   if n <= 0#i32
-  then ok (done (ptr, fun (_ : Unit) => back ()))
+  then ok (done (ptr, back))
   else
-    let x ← back ()
+    let x ← back
     let (ptr1, from_mut_back) ← Ptr.from_mut x
     let n1 ← n - 1#i32
-    ok (cont (fun (_ : Unit) => from_mut_back (), n1, ptr1))
+    ok (cont (from_mut_back, n1, ptr1))
 
 /-- [stateful_lifetime::loop_join_stateful_lifetime]: loop 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 235:4-241:5
     Visibility: public -/
 @[rust_loop]
 def loop_join_stateful_lifetime_loop
-  (back : Unit → Result Std.I32) (n : Std.I32) (ptr : Ptr Std.I32) :
-  Result ((Ptr Std.I32) × (Unit → Result Std.I32))
+  (back : Result Std.I32) (n : Std.I32) (ptr : Ptr Std.I32) :
+  Result ((Ptr Std.I32) × (Result Std.I32))
   := do
   loop
     (fun (back1, n1, ptr1) => loop_join_stateful_lifetime_loop.body back1 n1
@@ -406,40 +398,38 @@ def loop_join_stateful_lifetime_loop
     Visibility: public -/
 def loop_join_stateful_lifetime (n : Std.I32) : Result Std.I32 := do
   let (ptr, from_mut_back) ← Ptr.from_mut 42#i32
-  let (ptr1, back) ←
-    loop_join_stateful_lifetime_loop (fun (_ : Unit) => from_mut_back ()) n ptr
+  let (ptr1, back) ← loop_join_stateful_lifetime_loop from_mut_back n ptr
   let (r, as_mut_back) ← Ptr.as_mut ptr1
   let r1 ← r + 1#i32
   as_mut_back r1
-  back ()
+  back
 
 /-- [stateful_lifetime::loop_join_end_on_demand]: loop body 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 249:4-257:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_join_end_on_demand_loop.body
-  (cond : Bool) (back : Unit → Result Std.I32) (n : Std.I32) :
-  Result (ControlFlow ((Unit → Result Std.I32) × Std.I32) (Unit → Result
-    Std.I32))
+  (cond : Bool) (back : Result Std.I32) (n : Std.I32) :
+  Result (ControlFlow ((Result Std.I32) × Std.I32) (Result Std.I32))
   := do
   if n <= 0#i32
-  then ok (done (fun (_ : Unit) => back ()))
+  then ok (done back)
   else
     let n1 ← n - 1#i32
     if cond
     then
-      let x ← back ()
+      let x ← back
       let (_, from_mut_back) ← Ptr.from_mut x
-      ok (cont (fun (_ : Unit) => from_mut_back (), n1))
-    else ok (cont (fun (_ : Unit) => back (), n1))
+      ok (cont (from_mut_back, n1))
+    else ok (cont (back, n1))
 
 /-- [stateful_lifetime::loop_join_end_on_demand]: loop 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 249:4-257:5
     Visibility: public -/
 @[rust_loop]
 def loop_join_end_on_demand_loop
-  (back : Unit → Result Std.I32) (n : Std.I32) (cond : Bool) :
-  Result (Unit → Result Std.I32)
+  (back : Result Std.I32) (n : Std.I32) (cond : Bool) :
+  Result (Result Std.I32)
   := do
   loop
     (fun (back1, n1) => loop_join_end_on_demand_loop.body cond back1 n1)
@@ -449,37 +439,34 @@ def loop_join_end_on_demand_loop
     Source: 'tests/src/stateful-lifetime.rs', lines 247:0-259:1
     Visibility: public -/
 def loop_join_end_on_demand (n : Std.I32) (cond : Bool) : Result Std.I32 := do
-  let back ←
-    loop_join_end_on_demand_loop (fun (_ : Unit) => ok 42#i32) n cond
-  back ()
+  let back ← loop_join_end_on_demand_loop (ok 42#i32) n cond
+  back
 
 /-- [stateful_lifetime::loop_shr]: loop body 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 265:4-271:5
     Visibility: public -/
 @[rust_loop_body]
 def loop_shr_loop.body
-  (x : Std.U32) (back : Unit → Result Unit) (n : Std.I32) (ptr : Ptr Std.U32)
-  :
-  Result (ControlFlow ((Unit → Result Unit) × Std.I32 × (Ptr Std.U32))
-    ((Ptr Std.U32) × (Unit → Result Unit)))
+  (x : Std.U32) (back : Result Unit) (n : Std.I32) (ptr : Ptr Std.U32) :
+  Result (ControlFlow ((Result Unit) × Std.I32 × (Ptr Std.U32)) ((Ptr
+    Std.U32) × (Result Unit)))
   := do
   if n <= 0#i32
-  then ok (done (ptr, fun (_ : Unit) => back ()))
+  then ok (done (ptr, back))
   else
     let (ptr1, from_shr_back) ← Ptr.from_shr x
     let n1 ← n - 1#i32
-    ok (cont (fun (_ : Unit) => do
-                                from_shr_back ()
-                                back (), n1, ptr1))
+    ok (cont (do
+              from_shr_back
+              back, n1, ptr1))
 
 /-- [stateful_lifetime::loop_shr]: loop 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 265:4-271:5
     Visibility: public -/
 @[rust_loop]
 def loop_shr_loop
-  (back : Unit → Result Unit) (n : Std.I32) (x : Std.U32) (ptr : Ptr Std.U32)
-  :
-  Result ((Ptr Std.U32) × (Unit → Result Unit))
+  (back : Result Unit) (n : Std.I32) (x : Std.U32) (ptr : Ptr Std.U32) :
+  Result ((Ptr Std.U32) × (Result Unit))
   := do
   loop
     (fun (back1, n1, ptr1) => loop_shr_loop.body x back1 n1 ptr1)
@@ -490,11 +477,11 @@ def loop_shr_loop
     Visibility: public -/
 def loop_shr (n : Std.I32) (x : Std.U32) : Result Std.U32 := do
   let (ptr, from_shr_back) ← Ptr.from_shr x
-  let (ptr1, back) ← loop_shr_loop (fun (_ : Unit) => ok ()) n x ptr
+  let (ptr1, back) ← loop_shr_loop (ok ()) n x ptr
   let (i, as_shr_back) ← Ptr.as_shr ptr1
-  as_shr_back ()
-  back ()
-  from_shr_back ()
+  as_shr_back
+  back
+  from_shr_back
   ok i
 
 /-- [stateful_lifetime::read_via_shr_ptr]:
@@ -502,8 +489,8 @@ def loop_shr (n : Std.I32) (x : Std.U32) : Result Std.U32 := do
 def read_via_shr_ptr (x : Std.I32) : Result Std.I32 := do
   let (ptr, from_shr_back) ← Ptr.from_shr x
   let (i, as_shr_back) ← Ptr.as_shr ptr
-  as_shr_back ()
-  from_shr_back ()
+  as_shr_back
+  from_shr_back
   ok i
 
 /-- [stateful_lifetime::duplicate_calls_not_deduped]:
@@ -517,8 +504,8 @@ def duplicate_calls_not_deduped (x : Std.I32) : Result Std.I32 := do
 /-- [stateful_lifetime::keep_mut_and_shared]:
     Source: 'tests/src/stateful-lifetime.rs', lines 287:0-287:59 -/
 def keep_mut_and_shared
-  (_m : Std.I32) (_s : Std.U32) : Result (Unit → Result Std.I32) := do
-  ok (fun (_ : Unit) => ok _m)
+  (_m : Std.I32) (_s : Std.U32) : Result (Result Std.I32) := do
+  ok (ok _m)
 
 /-- [stateful_lifetime::return_stateful_lifetime_with_shared]: loop body 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 1:0-312:5
@@ -526,18 +513,16 @@ def keep_mut_and_shared
 @[rust_loop_body]
 def return_stateful_lifetime_with_shared_loop.body
   (a : Std.I32) (b : Std.I32) (s : Std.U32) (cond : Bool) (n : Std.I32) :
-  Result (ControlFlow Std.I32 ((Unit → Result Std.I32) × (Unit → Result
-    Std.I32)))
+  Result (ControlFlow Std.I32 ((Result Std.I32) × (Result Std.I32)))
   := do
   if n <= 0#i32
   then
     let keep_mut_and_shared_back ← keep_mut_and_shared a s
     let keep_mut_and_shared_back1 ← keep_mut_and_shared b s
-    ok (done (fun (_ : Unit) => keep_mut_and_shared_back1 (),
-      fun (_ : Unit) => keep_mut_and_shared_back ()))
+    ok (done (keep_mut_and_shared_back1, keep_mut_and_shared_back))
   else
     if cond
-    then ok (done (fun (_ : Unit) => ok 2#i32, fun (_ : Unit) => ok a))
+    then ok (done (ok 2#i32, ok a))
     else let n1 ← n - 1#i32
          ok (cont n1)
 
@@ -547,7 +532,7 @@ def return_stateful_lifetime_with_shared_loop.body
 @[rust_loop]
 def return_stateful_lifetime_with_shared_loop
   (a : Std.I32) (b : Std.I32) (s : Std.U32) (n : Std.I32) (cond : Bool) :
-  Result ((Unit → Result Std.I32) × (Unit → Result Std.I32))
+  Result ((Result Std.I32) × (Result Std.I32))
   := do
   loop
     (fun n1 => return_stateful_lifetime_with_shared_loop.body a b s cond n1)
@@ -562,17 +547,16 @@ def return_stateful_lifetime_with_shared
   Result (Std.I32 × (Std.I32 → Result (Std.I32 × Std.I32)))
   := do
   let (back, back1) ← return_stateful_lifetime_with_shared_loop a b s n cond
-  let _ ← back1 ()
+  let _ ← back1
   let back2 := fun b_out1 => do
-                             let b1 ← back ()
+                             let b1 ← back
                              ok (b1, b_out1)
   ok (b_out, back2)
 
 /-- [stateful_lifetime::keep_two_shr]:
     Source: 'tests/src/stateful-lifetime.rs', lines 319:0-319:50 -/
-def keep_two_shr
-  (_r1 : Std.I32) (_r2 : Std.U32) : Result (Unit → Result Unit) := do
-  ok (fun (_ : Unit) => ok ())
+def keep_two_shr (_r1 : Std.I32) (_r2 : Std.U32) : Result (Result Unit) := do
+  ok (ok ())
 
 /-- [stateful_lifetime::return_stateful_lifetime_two_shared]: loop body 0:
     Source: 'tests/src/stateful-lifetime.rs', lines 1:0-341:5
@@ -580,18 +564,16 @@ def keep_two_shr
 @[rust_loop_body]
 def return_stateful_lifetime_two_shared_loop.body
   (a : Std.I32) (b_shr : Std.I32) (s : Std.U32) (cond : Bool) (n : Std.I32) :
-  Result (ControlFlow Std.I32 ((Unit → Result Unit) × (Unit → Result
-    Unit)))
+  Result (ControlFlow Std.I32 ((Result Unit) × (Result Unit)))
   := do
   if n <= 0#i32
   then
     let keep_two_shr_back ← keep_two_shr a s
     let keep_two_shr_back1 ← keep_two_shr b_shr s
-    ok (done (fun (_ : Unit) => keep_two_shr_back1 (),
-      fun (_ : Unit) => keep_two_shr_back ()))
+    ok (done (keep_two_shr_back1, keep_two_shr_back))
   else
     if cond
-    then ok (done (fun (_ : Unit) => ok (), fun (_ : Unit) => ok ()))
+    then ok (done (ok (), ok ()))
     else let n1 ← n - 1#i32
          ok (cont n1)
 
@@ -601,7 +583,7 @@ def return_stateful_lifetime_two_shared_loop.body
 @[rust_loop]
 def return_stateful_lifetime_two_shared_loop
   (a : Std.I32) (b_shr : Std.I32) (s : Std.U32) (n : Std.I32) (cond : Bool) :
-  Result ((Unit → Result Unit) × (Unit → Result Unit))
+  Result ((Result Unit) × (Result Unit))
   := do
   loop
     (fun n1 => return_stateful_lifetime_two_shared_loop.body a b_shr s cond n1)
@@ -612,13 +594,12 @@ def return_stateful_lifetime_two_shared_loop
     Visibility: public -/
 def return_stateful_lifetime_two_shared
   (a : Std.I32) (b_shr : Std.I32) (s : Std.U32) (n : Std.I32) (cond : Bool) :
-  Result (Std.I32 × (Unit → Result Unit))
+  Result (Std.I32 × (Result Unit))
   := do
   let (back, back1) ←
     return_stateful_lifetime_two_shared_loop a b_shr s n cond
-  back1 ()
-  let back2 := fun (_ : Unit) => back ()
-  ok (b_shr, back2)
+  back1
+  ok (b_shr, back)
 
 /-- [stateful_lifetime::regular_straight_line]:
     Source: 'tests/src/stateful-lifetime.rs', lines 348:0-354:1
@@ -628,7 +609,7 @@ def regular_straight_line : Result Std.I32 := do
   let (r, as_mut_back) ← Ptr.as_mut ptr
   let r1 ← r + 1#i32
   as_mut_back r1
-  from_mut_regular_back ()
+  from_mut_regular_back
 
 /-- [stateful_lifetime::regular_if_join_ends_early]:
     Source: 'tests/src/stateful-lifetime.rs', lines 357:0-368:1
@@ -639,12 +620,12 @@ def regular_if_join_ends_early (cond : Bool) : Result Std.I32 := do
     then
       do
       let (_, from_mut_regular_back) ← Ptr.from_mut_regular 42#i32
-      let x1 ← from_mut_regular_back ()
+      let x1 ← from_mut_regular_back
       ok (x1, 10#i32, 1#i32)
     else
       do
       let (_, from_mut_regular_back) ← Ptr.from_mut_regular 10#i32
-      let y1 ← from_mut_regular_back ()
+      let y1 ← from_mut_regular_back
       ok (42#i32, y1, 2#i32)
   let i ← tag + x
   i + y
@@ -662,7 +643,7 @@ def regular_loop_ends_early_loop.body
   else
     let (_, from_mut_regular_back) ← Ptr.from_mut_regular x
     let n1 ← n - 1#i32
-    let x1 ← from_mut_regular_back ()
+    let x1 ← from_mut_regular_back
     ok (cont (n1, x1))
 
 /-- [stateful_lifetime::regular_loop_ends_early]: loop 0:
@@ -686,10 +667,8 @@ def regular_loop_ends_early (n : Std.I32) : Result Std.I32 := do
     Source: 'tests/src/stateful-lifetime.rs', lines 385:0-387:1
     Visibility: public -/
 def regular_wrapper_shr
-  (x : Std.U32) : Result ((Ptr Std.U32) × (Unit → Result Unit)) := do
-  let (p, from_shr_regular_back) ← Ptr.from_shr_regular x
-  let back := fun (_ : Unit) => from_shr_regular_back ()
-  ok (p, back)
+  (x : Std.U32) : Result ((Ptr Std.U32) × (Result Unit)) := do
+  Ptr.from_shr_regular x
 
 /-- [stateful_lifetime::use_regular_wrapper_shr]:
     Source: 'tests/src/stateful-lifetime.rs', lines 389:0-392:1
@@ -697,8 +676,8 @@ def regular_wrapper_shr
 def use_regular_wrapper_shr (x : Std.U32) : Result Std.U32 := do
   let (ptr, regular_wrapper_shr_back) ← regular_wrapper_shr x
   let (i, as_shr_back) ← Ptr.as_shr ptr
-  as_shr_back ()
-  regular_wrapper_shr_back ()
+  as_shr_back
+  regular_wrapper_shr_back
   ok i
 
 /-- [stateful_lifetime::side_effect]:
@@ -871,10 +850,9 @@ def short_temp_mut_borrow_of_live_ref : Result Std.I32 := do
     Visibility: public -/
 def reborrow_pair_shr
   (x : (Std.I32 × Std.I32)) :
-  Result ((Std.I32 × Std.I32) × (Unit → Result Unit))
+  Result ((Std.I32 × Std.I32) × (Result Unit))
   := do
-  let back := fun (_ : Unit) => ok ()
-  ok (x, back)
+  ok (x, ok ())
 
 /-- [stateful_lifetime::short_sub_shared_reborrow]:
     Source: 'tests/src/stateful-lifetime.rs', lines 546:0-552:1
@@ -882,7 +860,7 @@ def reborrow_pair_shr
 def short_sub_shared_reborrow : Result Std.I32 := do
   let ((f0, _), reborrow_pair_shr_back) ← reborrow_pair_shr (10#i32, 20#i32)
   let z ← side_effect 1#i32
-  reborrow_pair_shr_back ()
+  reborrow_pair_shr_back
   f0 + z
 
 /-- [stateful_lifetime::short_nested_shared_proj]:
@@ -933,7 +911,7 @@ def short_does_not_kill_long : Result Std.I32 := do
   let (rx, as_mut_back) ← Ptr.as_mut ptr
   let rx1 ← rx + 3#i32
   as_mut_back rx1
-  let r1 ← from_mut_back ()
+  let r1 ← from_mut_back
   reborrow_short_back r1
 
 /-- [stateful_lifetime::short_zero_loan_ends_immediately]:
@@ -941,7 +919,7 @@ def short_does_not_kill_long : Result Std.I32 := do
     Visibility: public -/
 def short_zero_loan_ends_immediately : Result Std.I32 := do
   let (_, from_mut_short_back) ← Ptr.from_mut_short 40#i32
-  let x ← from_mut_short_back ()
+  let x ← from_mut_short_back
   let y ← side_effect 1#i32
   x + y
 
@@ -1113,7 +1091,7 @@ def project
   let (i, as_mut_back) ← Ptr.as_mut data_ptr
   let back := fun i1 => do
                         as_mut_back i1
-                        from_mut_back ()
+                        from_mut_back
   ok (i, back)
 
 /-- [stateful_lifetime::project_reversed]:
@@ -1127,7 +1105,7 @@ def project_reversed
   let (_, from_mut_back) ← Ptr.from_mut f
   let back := fun i => do
                        as_mut_back i
-                       from_mut_back ()
+                       from_mut_back
   ok (out, back)
 
 /-- [stateful_lifetime::project_both]:
@@ -1146,10 +1124,10 @@ def project_both
   let (i1, as_mut_back1) ← Ptr.as_mut p3
   let back'a := fun i2 => do
                           as_mut_back i2
-                          from_mut_back ()
+                          from_mut_back
   let back'b := fun i2 => do
                           as_mut_back1 i2
-                          from_mut_back1 ()
+                          from_mut_back1
   ok ((i, i1), back'a, back'b)
 
 /-- [stateful_lifetime::project_shr_both]:
@@ -1157,19 +1135,18 @@ def project_both
     Visibility: public -/
 def project_shr_both
   (f1 : Wrapper) (f2 : Wrapper) :
-  Result ((Std.I32 × Std.I32) × (Unit → Result Unit) × (Unit → Result
-    Unit))
+  Result ((Std.I32 × Std.I32) × (Result Unit) × (Result Unit))
   := do
   let (p1, from_shr_back) ← Ptr.from_shr f1.data
   let (p2, from_shr_back1) ← Ptr.from_shr f2.data
   let (i, as_shr_back) ← Ptr.as_shr p1
   let (i1, as_shr_back1) ← Ptr.as_shr p2
-  let back'a := fun (_ : Unit) => do
-                                  as_shr_back ()
-                                  from_shr_back ()
-  let back'b := fun (_ : Unit) => do
-                                  as_shr_back1 ()
-                                  from_shr_back1 ()
+  let back'a := do
+                as_shr_back
+                from_shr_back
+  let back'b := do
+                as_shr_back1
+                from_shr_back1
   ok ((i, i1), back'a, back'b)
 
 /-- [stateful_lifetime::project_via_helper_both]:
@@ -1195,14 +1172,14 @@ def project_via_helper_both
       do
       let i5 := id_mut_back2 i4
       as_mut_back i5
-      let w2 ← from_mut_back ()
+      let w2 ← from_mut_back
       ok (id_mut_back w2)
   let back'b :=
     fun i4 =>
       do
       let i5 := id_mut_back3 i4
       as_mut_back1 i5
-      let w2 ← from_mut_back1 ()
+      let w2 ← from_mut_back1
       ok (id_mut_back1 w2)
   ok ((i1, i3), back'a, back'b)
 
@@ -1212,8 +1189,8 @@ def project_via_helper_both
 def forward_return_lifo : Result Std.I32 := do
   let (_, from_mut_back) ← Ptr.from_mut 10#i32
   let (_, from_mut_back1) ← Ptr.from_mut 20#i32
-  let _ ← from_mut_back1 ()
-  let _ ← from_mut_back ()
+  let _ ← from_mut_back1
+  let _ ← from_mut_back
   ok 0#i32
 
 /-- [stateful_lifetime::use_projection]:
@@ -1236,8 +1213,8 @@ def use_projection : Result Unit := do
     project_shr_both w1 w2
   let left_val1 ← s1 + s2
   massert (left_val1 = 33#i32)
-  project_shr_both_back ()
-  project_shr_both_back1 ()
+  project_shr_both_back
+  project_shr_both_back1
   let ((h1, h2), project_via_helper_both_back, project_via_helper_both_back1)
     ←
     project_via_helper_both w1 w2

@@ -58,18 +58,21 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
       (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
   in
   let back_vars =
-    List.combine back_var_names (compute_back_tys ctx.sg.fun_ty)
+    List.combine back_var_names (compute_back_tys_with_info ctx.sg.fun_ty)
   in
   let back_vars =
     List.map
-      (fun (name, ty) ->
-        match ty with
+      (fun (name, back_ty) ->
+        match back_ty with
         | None -> None
-        | Some ty ->
-            (* If the type is not an arrow type, don't use the name "back"
-               (it is a backward function with no inputs, that is to say a
-               value) *)
-            let name = if is_arrow_ty ty then name else None in
+        | Some (back_sg, ty) ->
+            (* If the type is not an arrow type and the backward computation is
+               not effectful, don't use the name "back" (it is a pure backward
+               value with no inputs) *)
+            let name =
+              if is_arrow_ty ty || back_sg.effect_info.is_effectful then name
+              else None
+            in
             Some (name, ty))
       back_vars
   in
@@ -465,14 +468,16 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                  (fun ty ->
                    match ty with
                    | None -> None
-                   | Some (_back_sg, ty) ->
+                   | Some (back_sg, ty) ->
                        (* We insert a name for the variable only if the type
-                          is an arrow type. If it is not, it means the backward
-                          function is degenerate (it takes no inputs) so it is
-                          not a function anymore but a value: it doesn't make
+                          is an arrow type or the backward computation is
+                          effectful (e.g., [Result Foo]). Otherwise it is a
+                          pure backward value with no inputs, so it doesn't make
                           sense to use a name like "back...". *)
                        let name =
-                         if is_arrow_ty ty then Some back_fun_name else None
+                         if is_arrow_ty ty || back_sg.effect_info.is_effectful
+                         then Some back_fun_name
+                         else None
                        in
                        Some (name, ty))
                  back_tys)
@@ -1144,11 +1149,6 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       if List.length mpl = List.length abs.avalues then Some mpl else None
     in
     let ctx, outputs = abs_to_given_back output_mpl abs abs_level ctx in
-    let back_inputs =
-      if Option.is_some abs.stateful_lifetime && back_inputs = [] then
-        [ mk_unit_texpr ]
-      else back_inputs
-    in
     (* Group the output values together *)
     let output = mk_simpl_tuple_pat outputs in
     (* Translate the next expression *)
@@ -1260,22 +1260,6 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     let ctx, given_back = abs_to_given_back_no_mp abs abs_level ctx in
     [%ltrace
       "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
-    (* If the function being synthesized has an [stateful_lifetime] (from
-       [#[verify::stateful_lifetime]]) and its return value contains no mutable borrows
-       for this region group ([given_back = []]), [back_sg.inputs] has a single
-       synthesized dummy [Unit] input that does not correspond to any borrow inside
-       the [SynthRet] abstraction. Ignore it here. *)
-    let inputs =
-      match (given_back, inputs) with
-      | [], [ input ] when input.ty = mk_unit_ty ->
-          let is_effectful_back =
-            (T.RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg).effect_info
-              .is_effectful
-          in
-          [%sanity_check] ctx.span is_effectful_back;
-          []
-      | _ -> inputs
-    in
     [%sanity_check] ctx.span (List.length given_back = List.length inputs);
     (* Link the inputs to those given back values - note that this also
      checks we have the same number of values, of course *)
@@ -1316,11 +1300,6 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
   (* Compute the input and output values *)
   let back_inputs = abs_to_consumed ctx ectx abs abs_level in
   let ctx, outputs = abs_to_given_back None abs abs_level ctx in
-  let back_inputs =
-    if Option.is_some abs.stateful_lifetime && back_inputs = [] then
-      [ mk_unit_texpr ]
-    else back_inputs
-  in
   let output = mk_simpl_tuple_pat outputs in
   (* Lookup the continuation to check if the abstraction is output by a join
      or a loop - note that it might not be there if the backward function was
@@ -1350,7 +1329,8 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
          through a reference. *)
       [%sanity_check] span
         (V.AbsId.Set.mem abs.abs_id ctx.ignored_abs_ids
-        || (back_inputs = [] && outputs = []));
+        || back_inputs = [] && outputs = []
+           && Option.is_none abs.stateful_lifetime);
       next_e ctx
   | Some { fvar = func; is_effectful } ->
       [%ltrace
@@ -1844,16 +1824,14 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
       (compute_back_tys ctx.sg.fun_ty)
   in
 
-  (* Compute whether the backward expressions should be evaluated straight
-     away or not (i.e., if we should bind them with monadic let-bindings
-     or not). We evaluate them straight away if they can fail and have no
-     inputs. *)
+  (* Backward expressions are always bound with pure (non-monadic) let-bindings:
+     - pure backward functions with no inputs are plain values;
+     - [#[verify::stateful_lifetime]] backward computations with no inputs have
+       type [Result Foo] and must remain suspended until the caller ends the
+       lifetime. *)
   let evaluate_backs =
     List.map
-      (fun (sg : back_sg_info) ->
-        if !Config.simplify_merged_fwd_backs then
-          sg.inputs = [] && sg.effect_info.is_effectful
-        else false)
+      (fun (_ : back_sg_info) -> false)
       (RegionGroupId.Map.values ctx.sg.fun_ty.back_sg)
   in
 
