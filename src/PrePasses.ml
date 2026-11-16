@@ -1464,9 +1464,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           let kind =
             match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
-            | Assert ({ cond; expected; check_kind }, on_failure, on_unwind) ->
+            | Assert (({ cond; _ } as assertion), on_failure, on_unwind) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
-                Assert ({ cond; expected; check_kind }, on_failure, on_unwind)
+                Assert ({ assertion with cond }, on_failure, on_unwind)
             | Call (({ func; args; _ } as call), dest, on_unwind) ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
