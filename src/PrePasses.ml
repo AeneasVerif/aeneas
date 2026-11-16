@@ -2371,6 +2371,236 @@ let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
     }
   else f
 
+(** The constructors and accessors of [core::pin::Pin] are generic in the
+    pointer type [Ptr]. This is a problem when [Ptr] is a mutable reference (the
+    typical case, [Pin<&mut T>]) because Aeneas doesn't support instantiating
+    generic functions with mutable references (see
+    https://github.com/AeneasVerif/aeneas/issues/1215): the generic model of
+    such a function has a different type than the one the call site expects.
+
+    [Pin<Ptr>] is a transparent wrapper, [struct Pin<Ptr> { pointer: Ptr }], and
+    those functions are one-liners: we replace their calls with the
+    corresponding aggregates, field accesses and reborrows. For instance (where
+    [p] is a [Pin] in the first two cases, and a reference to a [Pin] in the
+    others):
+    {[
+      p = Pin::new_unchecked(x);       ~~>  p = Pin { pointer: x };
+      x = Pin::get_unchecked_mut(p);   ~~>  x = move p.pointer;
+      x = DerefMut::deref_mut(p);      ~~>  x = &mut *p.pointer;
+      q = Pin::as_mut(p);              ~~>  tmp = &mut *p.pointer;
+                                            q = Pin { pointer: move tmp };
+      Pin::set(p, v);                  ~~>  *p.pointer = v;
+    ]}
+    This only applies when [Ptr] is a (shared or mutable) reference to a sized
+    type, and when Charon exposes the definition of [Pin]: we need to use the
+    option [--include core::pin::Pin] (we emit a warning otherwise). *)
+let simplify_pin_calls (crate : crate) (f : fun_decl) : fun_decl =
+  match f.body with
+  | StructuredBody body ->
+      let match_name = ExtractName.match_name crate in
+      let parse = NameMatcher.parse_pattern in
+      let pin_impl = "core::pin::{core::pin::Pin<@Ptr>}::" in
+      let pin_mut_impl = "core::pin::{core::pin::Pin<&'a mut @T>}::" in
+      let pin_shared_impl = "core::pin::{core::pin::Pin<&'a @T>}::" in
+      let deref_impl =
+        "core::pin::{core::ops::deref::Deref<core::pin::Pin<@Ptr>, \
+         @Clause0_Target>}::"
+      in
+      let deref_mut_impl =
+        "core::pin::{core::ops::deref::DerefMut<core::pin::Pin<@Ptr>, \
+         @Clause0_Target>}::"
+      in
+      (* The functions we know how to rewrite, with the way to rewrite them *)
+      let rewrites =
+        List.map
+          (fun (op, names) -> (op, List.map parse names))
+          [
+            (`Wrap, [ pin_impl ^ "new"; pin_impl ^ "new_unchecked" ]);
+            ( `Unwrap,
+              [
+                pin_impl ^ "into_inner";
+                pin_impl ^ "into_inner_unchecked";
+                pin_mut_impl ^ "get_mut";
+                pin_mut_impl ^ "get_unchecked_mut";
+                pin_shared_impl ^ "get_ref";
+              ] );
+            (`Deref RShared, [ deref_impl ^ "deref" ]);
+            (`Deref RMut, [ deref_mut_impl ^ "deref_mut" ]);
+            (`AsRef RShared, [ pin_impl ^ "as_ref" ]);
+            (`AsRef RMut, [ pin_impl ^ "as_mut" ]);
+            (`Set, [ pin_impl ^ "set" ]);
+          ]
+      in
+      let find_rewrite (name : Types.name) =
+        List.find_map
+          (fun (op, pats) ->
+            if List.exists (fun pat -> match_name pat name) pats then Some op
+            else None)
+          rewrites
+      in
+
+      (* Fresh locals *)
+      let new_locals = ref [] in
+      let _, gen =
+        LocalId.mk_stateful_generator_starting_at_id
+          (LocalId.of_int (List.length body.locals.locals))
+      in
+      let fresh_local ty =
+        let local =
+          {
+            index = gen ();
+            (* The types of the locals must have erased regions *)
+            local_ty = TypesUtils.ty_erase_regions ty;
+            name = None;
+            span = f.item_meta.span;
+            is_mutable = true;
+            borrowck_constraints = [];
+            drop_flag_for = None;
+          }
+        in
+        new_locals := local :: !new_locals;
+        local
+      in
+
+      let mk_place kind ty : place = { kind; ty } in
+      let proj p elem ty = mk_place (PlaceProjection (p, elem)) ty in
+      let place_of_operand (op : operand) : place option =
+        match op with
+        | Move p | Copy (p, _) | Read p -> Some p
+        | Constant _ -> None
+      in
+      (* Move out of the place if we have to, otherwise read it (this is for the
+         case where the operand is a copy: we do not have the proof that the
+         field is copyable) *)
+      let mk_operand (op : operand) (p : place) : operand =
+        match op with
+        | Move _ -> Move p
+        | _ -> Read p
+      in
+      let pin_is_exposed (ty : ty) : bool =
+        match ty with
+        | TAdt { id; _ } -> (
+            match TypeDeclId.Map.find_opt id crate.type_decls with
+            | Some { kind = Struct [ _ ]; _ } -> true
+            | _ -> false)
+        | _ -> false
+      in
+      (* The type of the pointee of the pointer wrapped by a [Pin], when it is
+         a (sized) reference *)
+      let pointee_ty (pin_ty : ty) : (ty * ty) option =
+        match pin_ty with
+        | TAdt { generics = { types = [ (TRef (_, target, _) as ptr) ]; _ }; _ }
+          -> (
+            match target with
+            | TSlice _ | TDynTrait _ | TAdt { builtin = Some TStr; _ } -> None
+            | _ -> Some (ptr, target))
+        | _ -> None
+      in
+      let borrow_kind_of (k : ref_kind) = if k = RMut then BMut else BShared in
+
+      let rewrite_call op (args : operand list) (dest : place) :
+          statement_kind list option =
+        let pointer = Field (None, FieldId.of_int 0) in
+        (* The place [deref (deref p).pointer] where [p] is a shared or mutable
+           reference to a [Pin] *)
+        let pointee_place (p : place) =
+          match p.ty with
+          | TRef (_, pin_ty, _) when pin_is_exposed pin_ty ->
+              Option.map
+                (fun (ptr_ty, target_ty) ->
+                  let pin_place = proj p Deref pin_ty in
+                  let ptr_place = proj pin_place pointer ptr_ty in
+                  proj ptr_place Deref target_ty)
+                (pointee_ty pin_ty)
+          | _ -> None
+        in
+        let rvref kind p =
+          RvRef (p, borrow_kind_of kind, Constant mk_unit_const)
+        in
+        match (op, args) with
+        | `Wrap, [ arg ] when pin_is_exposed dest.ty -> (
+            match dest.ty with
+            | TAdt tref ->
+                Some
+                  [
+                    Assign
+                      ( dest,
+                        Aggregate (AggregatedAdt (tref, None, None), [ arg ]) );
+                  ]
+            | _ -> None)
+        | `Unwrap, [ arg ] -> (
+            match place_of_operand arg with
+            | Some p when pin_is_exposed p.ty ->
+                let field = proj p pointer dest.ty in
+                Some [ Assign (dest, Use (mk_operand arg field, NoRetag)) ]
+            | _ -> None)
+        | `Deref kind, [ arg ] -> (
+            match Option.bind (place_of_operand arg) pointee_place with
+            | Some target -> Some [ Assign (dest, rvref kind target) ]
+            | None -> None)
+        | `AsRef kind, [ arg ] -> (
+            match
+              (Option.bind (place_of_operand arg) pointee_place, dest.ty)
+            with
+            | ( Some target,
+                TAdt ({ generics = { types = [ ref_ty ]; _ }; _ } as tref) )
+              when pin_is_exposed dest.ty ->
+                let tmp = fresh_local ref_ty in
+                let tmp_place = mk_place (PlaceLocal tmp.index) ref_ty in
+                Some
+                  [
+                    Assign (tmp_place, rvref kind target);
+                    Assign
+                      ( dest,
+                        Aggregate
+                          (AggregatedAdt (tref, None, None), [ Move tmp_place ])
+                      );
+                  ]
+            | _ -> None)
+        | `Set, [ arg; value ] -> (
+            match Option.bind (place_of_operand arg) pointee_place with
+            | Some target ->
+                Some
+                  [
+                    Assign (target, Use (value, NoRetag));
+                    Assign (dest, Use (Constant mk_unit_const, NoRetag));
+                  ]
+            | None -> None)
+        | _ -> None
+      in
+
+      let rewrite_statement (st : statement) : statement list =
+        match st.kind with
+        | Call
+            ( { func = FnOpRegular { kind = Fun fid; _ }; args; _ },
+              dest,
+              _on_unwind ) -> (
+            match FunDeclId.Map.find_opt fid crate.fun_decls with
+            | None -> [ st ]
+            | Some callee -> (
+                match find_rewrite callee.item_meta.name with
+                | None -> [ st ]
+                | Some op -> (
+                    match rewrite_call op args dest with
+                    | Some kinds ->
+                        List.map (fun kind -> { st with kind }) kinds
+                    | None ->
+                        [%warn] st.span
+                          "Could not simplify this call to a function of \
+                           [core::pin::Pin]: we only support references to \
+                           sized types, and we need Charon to expose the \
+                           definition of [Pin] (use the option [--include \
+                           core::pin::Pin])";
+                        [ st ])))
+        | _ -> [ st ]
+      in
+      let body_body = map_statement rewrite_statement body.body in
+      let locals =
+        { body.locals with locals = body.locals.locals @ List.rev !new_locals }
+      in
+      { f with body = StructuredBody { body with body = body_body; locals } }
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2382,6 +2612,7 @@ let apply_passes (crate : crate) : crate =
       ("fix_closure_signature_regions", fix_closure_signature_regions);
       ("fix_anon_const_initializers", fix_anon_const_initializers);
       ("erase_body_regions", erase_body_regions);
+      ("simplify_pin_calls", simplify_pin_calls);
       ("remove_unreachable", remove_unreachable);
       ("update_loop", update_loops);
       ("remove_useless_joins", remove_useless_joins);
