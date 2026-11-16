@@ -10,6 +10,12 @@ structure core.alloc.layout.Layout where
   size : Usize
   align : core.ptr.alignment.Alignment
 
+/-- `core::alloc::AllocatorClone`: allocators which can be cloned (`Allocator + Clone`). It bounds the
+allocator parameter of `Arc::clone` and `Rc::clone`. -/
+@[rust_trait "core::alloc::AllocatorClone" (parentClauses := ["cloneCloneInst"])]
+structure core.alloc.AllocatorClone (Self : Type _) where
+  cloneCloneInst : core.clone.Clone Self
+
 @[rust_trait "core::alloc::global::GlobalAlloc"]
 structure core.alloc.global.GlobalAlloc (Self : Type _) where
   alloc : Self → core.alloc.layout.Layout → Result (MutRawPtr U8)

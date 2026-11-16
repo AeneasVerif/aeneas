@@ -1,6 +1,7 @@
 /- `alloc::alloc`: the global allocator. It is the only allocator: registering another one with
 `#[global_allocator]` is not modelled. -/
 module
+public import Aeneas.Std.Core.Alloc
 public import Aeneas.Std.Core.Core
 public section
 
@@ -18,6 +19,11 @@ def alloc.alloc.CloneGlobal.clone (_ : alloc.alloc.Global) : Result alloc.alloc.
 @[expose, reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
 def core.clone.CloneGlobal : core.clone.Clone alloc.alloc.Global := {
   clone := alloc.alloc.CloneGlobal.clone
+}
+
+@[expose, reducible, rust_trait_impl "core::alloc::AllocatorClone<alloc::alloc::Global>"]
+def alloc.alloc.Global.Insts.CoreAllocAllocatorClone : core.alloc.AllocatorClone alloc.alloc.Global := {
+  cloneCloneInst := core.clone.CloneGlobal
 }
 
 end Aeneas.Std
