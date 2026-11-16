@@ -324,6 +324,26 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     preds;
   }
 
+(** Reject the signatures which introduce an implied bound relating a
+    higher-ranked lifetime to a free one (see
+    {!TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds}), except for
+    the functions which have a model in the standard library: the model fixes
+    their signature, which is reviewed by hand. For instance the bound of
+    [std::thread::scope],
+    [F: for<'scope> FnOnce(&'scope Scope<'scope, 'env>) -> T], relates ['scope]
+    and ['env] through the definition of [Scope], but the model of [scope] only
+    calls the closure. *)
+let check_fun_decl_no_bound_free_implied_bounds (decls_ctx : C.decls_ctx)
+    (fdef : LlbcAst.fun_decl) : unit =
+  let is_builtin =
+    Option.is_some
+      (match_name_find_opt decls_ctx fdef.item_meta.name
+         (ExtractBuiltin.builtin_funs_map ()))
+  in
+  if not is_builtin then
+    TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
+      decls_ctx.type_ctx.type_decls fdef
+
 let translate_type_id (span : Meta.span option) (tref : T.type_decl_ref) :
     type_id =
   match tref.builtin with
@@ -1123,8 +1143,7 @@ and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
   (* Reject signatures that introduce an implied bound relating a higher-ranked
      (locally-bound) lifetime to a free one (e.g. `for<'a> Trait<Adt<'a, 'b>>`
      where the definition of `Adt` relates its lifetime parameters). *)
-  TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
-    decls_ctx.type_ctx.type_decls fdef;
+  check_fun_decl_no_bound_free_implied_bounds decls_ctx fdef;
   let input_names =
     match fdef.body with
     | StructuredBody body ->

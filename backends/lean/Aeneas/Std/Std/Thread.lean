@@ -68,4 +68,76 @@ theorem std.thread.join_handle.JoinHandle.join.spec {T : Type _}
   std.thread.join_handle.JoinHandle.join h ⦃ r => r = .Ok h.result ⦄ := by
   simp [std.thread.join_handle.JoinHandle.join]
 
+/-! ## Scoped threads -/
+
+/-- Model of `Scope` (<https://doc.rust-lang.org/std/thread/struct.Scope.html>): nothing. The
+threads spawned in a scope run to completion when they are spawned, so the scope has no state. -/
+@[rust_type "std::thread::scoped::Scope"]
+structure std.thread.scoped.Scope where
+
+/-- Model of `ScopedJoinHandle<T>`
+(<https://doc.rust-lang.org/std/thread/struct.ScopedJoinHandle.html>): as for `JoinHandle`, the
+handle holds the result of the thread. -/
+@[rust_type "std::thread::scoped::ScopedJoinHandle"]
+structure std.thread.scoped.ScopedJoinHandle (T : Type _) where
+  result : T
+
+/-- Model of `thread::scope` (<https://doc.rust-lang.org/std/thread/fn.scope.html>): the closure is
+called with a scope, and the threads it spawns have already run to completion (and are joined) when
+it returns. As for `std.thread.functions.spawn`, this is sound when the threads do not communicate:
+they read shared immutable data and write disjoint data which they own. A thread which panics makes
+`scope` panic, as in Rust. -/
+@[expose, rust_fun "std::thread::scoped::scope"]
+def std.thread.scoped.scope {F T : Type _}
+  (fnOnce : core.ops.function.FnOnce F std.thread.scoped.Scope T) (f : F) : Result T :=
+  fnOnce.call_once f ⟨⟩
+
+/-- Model of `Scope::spawn` (<https://doc.rust-lang.org/std/thread/struct.Scope.html#method.spawn>):
+the closure runs to completion when the thread is spawned (see `std.thread.functions.spawn`). -/
+@[expose, rust_fun "std::thread::scoped::{std::thread::scoped::Scope<'scope, 'env>}::spawn"]
+def std.thread.scoped.Scope.spawn {F T : Type _} (fnOnce : core.ops.function.FnOnce F Unit T)
+  (_s : std.thread.scoped.Scope) (f : F) : Result (std.thread.scoped.ScopedJoinHandle T) := do
+  let result ← fnOnce.call_once f ()
+  ok ⟨result⟩
+
+/-- Model of `ScopedJoinHandle::join`
+(<https://doc.rust-lang.org/std/thread/struct.ScopedJoinHandle.html#method.join>): the result of the
+closure, see `std.thread.join_handle.JoinHandle.join`. -/
+@[expose, rust_fun
+  "std::thread::scoped::{std::thread::scoped::ScopedJoinHandle<'scope, @T>}::join"]
+def std.thread.scoped.ScopedJoinHandle.join {T : Type _}
+  (h : std.thread.scoped.ScopedJoinHandle T) :
+  Result (core.result.Result T (Dyn.{0, 0} (fun (_dyn : Type) => core.any.Any _dyn))) :=
+  ok (.Ok h.result)
+
+@[simp]
+theorem std.thread.scoped.ScopedJoinHandle.join_mk {T : Type _} (result : T) :
+  std.thread.scoped.ScopedJoinHandle.join ⟨result⟩ = ok (.Ok result) := rfl
+
+/-- Step spec for `thread::scope`: `post` is the postcondition of the closure, which `step` can infer
+with `+inferPost`. -/
+@[step]
+theorem std.thread.scoped.scope.spec {F T : Type _}
+  (fnOnce : core.ops.function.FnOnce F std.thread.scoped.Scope T) (f : F) {post : T → Prop}
+  (hf : fnOnce.call_once f ⟨⟩ ⦃ post ⦄) :
+  std.thread.scoped.scope fnOnce f ⦃ r => post r ⦄ := hf
+
+/-- Step spec for `Scope::spawn`. -/
+@[step]
+theorem std.thread.scoped.Scope.spawn.spec {F T : Type _}
+  (fnOnce : core.ops.function.FnOnce F Unit T) (s : std.thread.scoped.Scope) (f : F)
+  {post : T → Prop} (hf : fnOnce.call_once f () ⦃ post ⦄) :
+  std.thread.scoped.Scope.spawn fnOnce s f ⦃ h => post h.result ⦄ := by
+  unfold std.thread.scoped.Scope.spawn
+  apply WP.spec_bind hf
+  intro result hresult
+  simp [hresult]
+
+/-- Step spec for `ScopedJoinHandle::join`. -/
+@[step]
+theorem std.thread.scoped.ScopedJoinHandle.join.spec {T : Type _}
+  (h : std.thread.scoped.ScopedJoinHandle T) :
+  std.thread.scoped.ScopedJoinHandle.join h ⦃ r => r = .Ok h.result ⦄ := by
+  simp [std.thread.scoped.ScopedJoinHandle.join]
+
 end Aeneas.Std

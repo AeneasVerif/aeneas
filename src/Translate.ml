@@ -123,8 +123,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
      the signature, but the body is translated through a separate entry point, so
      we check here too to cleanly skip the function rather than failing later when
      looking up its (untranslated) signature. *)
-  TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
-    trans_ctx.type_ctx.type_decls fdef;
+  SymbolicToPureTypes.check_fun_decl_no_bound_free_implied_bounds trans_ctx fdef;
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =

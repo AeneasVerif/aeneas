@@ -198,6 +198,13 @@ let lean_builtin_types =
     mk_type "std::thread::join_handle::JoinHandle"
       "std.thread.join_handle.JoinHandle"
       ~kind:(KStruct [ ("result", Some "result") ]);
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 75 *)
+    mk_type "std::thread::scoped::Scope" "std.thread.scoped.Scope"
+      ~kind:(KStruct []);
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 81 *)
+    mk_type "std::thread::scoped::ScopedJoinHandle"
+      "std.thread.scoped.ScopedJoinHandle"
+      ~kind:(KStruct [ ("result", Some "result") ]);
   ]
 
 let lean_builtin_consts = []
@@ -1387,6 +1394,17 @@ let lean_builtin_funs =
     mk_fun
       "std::thread::join_handle::{std::thread::join_handle::JoinHandle<@T>}::join"
       "std.thread.join_handle.JoinHandle.join";
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 90 *)
+    mk_fun "std::thread::scoped::scope" "std.thread.scoped.scope";
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 97 *)
+    mk_fun
+      "std::thread::scoped::{std::thread::scoped::Scope<'scope, 'env>}::spawn"
+      "std.thread.scoped.Scope.spawn";
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 106 *)
+    mk_fun
+      "std::thread::scoped::{std::thread::scoped::ScopedJoinHandle<'scope, \
+       @T>}::join"
+      "std.thread.scoped.ScopedJoinHandle.join";
   ]
 
 let lean_builtin_trait_decls =
