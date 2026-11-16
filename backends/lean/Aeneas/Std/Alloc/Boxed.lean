@@ -4,6 +4,7 @@ public import Aeneas.Std.Alloc.Alloc
 public import Aeneas.Std.Core.Ops
 public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
+public import Aeneas.Std.Core.Fmt
 public section
 
 namespace Aeneas.Std
@@ -60,6 +61,18 @@ def alloc.boxed.PartialEqBox.eq
 def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) :
   core.cmp.PartialEq T T := {
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst
+}
+
+/-- Model of `<Box<T> as Debug>::fmt`: `Box<T>` is `T`. -/
+@[expose, rust_fun "alloc::boxed::{core::fmt::Debug<Box<@T>>}::fmt" (keepParams := [true, false])]
+def alloc.boxed.DebugBox.fmt {T : Type _} (DebugInst : core.fmt.Debug T) (x : T)
+  (fmt : core.fmt.Formatter) :
+  Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
+  DebugInst.fmt x fmt
+
+@[expose, reducible, rust_trait_impl "core::fmt::Debug<Box<@T>>" (keepParams := [true, false])]
+def core.fmt.DebugBox {T : Type _} (DebugInst : core.fmt.Debug T) : core.fmt.Debug T := {
+  fmt := alloc.boxed.DebugBox.fmt DebugInst
 }
 
 end Aeneas.Std

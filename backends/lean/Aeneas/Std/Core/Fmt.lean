@@ -199,4 +199,8 @@ def core.fmt.rt.Argument.new_display
   -- TODO: we should at least call the `fmt` method somewhere
   fun _ => Result.ok ()
 
+@[simp]
+theorem core.result.Result.unwrap_Ok {T E : Type _} (inst : core.fmt.Debug E) (x : T) :
+    core.result.Result.unwrap inst (.Ok x) = .ok x := rfl
+
 end Aeneas.Std

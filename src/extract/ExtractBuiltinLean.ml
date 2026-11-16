@@ -17,6 +17,9 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Alloc.lean", line: 8 *)
     mk_type "core::alloc::layout::Layout" "core.alloc.layout.Layout"
       ~kind:(KStruct [ ("size", Some "size"); ("align", Some "align") ]);
+    (* file: "Aeneas/Std/Core/Any.lean", line: 10 *)
+    mk_type "core::any::TypeId" "core.any.TypeId"
+      ~kind:(KStruct [ ("id", Some "id") ]);
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 126 *)
     mk_type "core::array::TryFromSliceError" "core.array.TryFromSliceError";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 62 *)
@@ -191,6 +194,10 @@ let lean_builtin_types =
     mk_type "core::sync::atomic::AtomicBool" "core.sync.atomic.AtomicBool";
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 12 *)
     mk_type "core::sync::atomic::AtomicU32" "core.sync.atomic.AtomicU32";
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 17 *)
+    mk_type "std::thread::join_handle::JoinHandle"
+      "std.thread.join_handle.JoinHandle"
+      ~kind:(KStruct [ ("result", Some "result") ]);
   ]
 
 let lean_builtin_consts = []
@@ -200,26 +207,30 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Alloc/Alloc.lean", line: 15 *)
     mk_fun "alloc::alloc::{core::clone::Clone<alloc::alloc::Global>}::clone"
       "alloc.alloc.CloneGlobal.clone";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 43 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 44 *)
     mk_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
       "alloc.boxed.CloneBox.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 54 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 55 *)
     mk_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq"
       "alloc.boxed.PartialEqBox.eq"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 34 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 35 *)
     mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
       "alloc.boxed.AsMutBox.as_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 13 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 67 *)
+    mk_fun "alloc::boxed::{core::fmt::Debug<Box<@T>>}::fmt"
+      "alloc.boxed.DebugBox.fmt"
+      ~keep_params:(Some [ true; false ]);
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 14 *)
     mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
       "alloc.boxed.Box.deref"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 16 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 17 *)
     mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
       "alloc.boxed.Box.deref_mut"
       ~keep_params:(Some [ true; false ])
@@ -336,6 +347,8 @@ let lean_builtin_funs =
        @O>}::index_mut"
       "alloc.vec.Vec.index_mut"
       ~keep_params:(Some [ true; true; false; true ]);
+    (* file: "Aeneas/Std/Core/Any.lean", line: 22 *)
+    mk_fun "core::any::{core::fmt::Debug<@>}::fmt" "core.any.DebugDynAny.fmt";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 138 *)
     mk_fun
       "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"
@@ -1368,6 +1381,12 @@ let lean_builtin_funs =
     mk_fun "core::str::{str}::chars" "core.str.Str.chars";
     (* file: "Aeneas/Std/Std/Io.lean", line: 7 *)
     mk_fun "std::io::stdio::_print" "std.io.stdio._print";
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 33 *)
+    mk_fun "std::thread::functions::spawn" "std.thread.functions.spawn";
+    (* file: "Aeneas/Std/Std/Thread.lean", line: 42 *)
+    mk_fun
+      "std::thread::join_handle::{std::thread::join_handle::JoinHandle<@T>}::join"
+      "std.thread.join_handle.JoinHandle.join";
   ]
 
 let lean_builtin_trait_decls =
@@ -1376,6 +1395,9 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::alloc::global::GlobalAlloc"
       "core.alloc.global.GlobalAlloc"
       ~methods:[ ("alloc", "alloc"); ("dealloc", "dealloc") ];
+    (* file: "Aeneas/Std/Core/Any.lean", line: 16 *)
+    mk_trait_decl "core::any::Any" "core.any.Any"
+      ~methods:[ ("type_id", "type_id") ];
     (* file: "Aeneas/Std/Core/Borrow.lean", line: 12 *)
     mk_trait_decl "core::borrow::Borrow" "core.borrow.Borrow"
       ~methods:[ ("borrow", "borrow") ];
@@ -1575,7 +1597,7 @@ let lean_builtin_trait_impls =
   [
     (* file: "Aeneas/Std/Core/Borrow.lean", line: 27 *)
     mk_trait_impl "core::borrow::Borrow<@T, @T>" "core.borrow.Borrow.Blanket";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 48 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 49 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
@@ -1596,7 +1618,7 @@ let lean_builtin_trait_impls =
       "core.cmp.PartialEqShared";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 223 *)
     mk_trait_impl "core::cmp::PartialEq<(), ()>" "core.cmp.PartialEqUnit";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 59 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 60 *)
     mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
       "core.cmp.PartialEqBox"
       ~keep_params:(Some [ true; false ]);
@@ -1610,7 +1632,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 287 *)
     mk_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"
       "core.cmp.PartialOrdShared";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 38 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 39 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 486 *)
     mk_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"
@@ -1649,6 +1671,9 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::fmt::Debug<&'0 @T>" "core.fmt.DebugShared";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 185 *)
     mk_trait_impl "core::fmt::Debug<()>" "core.fmt.DebugUnit";
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 73 *)
+    mk_trait_impl "core::fmt::Debug<Box<@T>>" "core.fmt.DebugBox"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Array/ArrayDebug.lean", line: 18 *)
     mk_trait_impl "core::fmt::Debug<[@T; @N]>" "Array.Insts.CoreFmtDebug";
     (* file: "Aeneas/Std/Alloc/Vec.lean", line: 655 *)
@@ -1783,7 +1808,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::marker::Copy<[@T; @N]>" "Array.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::marker::Copy<bool>" "core.marker.CopyBool";
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 20 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 21 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"
       ~keep_params:(Some [ true; false ]);
@@ -1791,7 +1816,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 27 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 28 *)
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
       "core.ops.deref.DerefMutBoxInst"
       ~keep_params:(Some [ true; false ]);
