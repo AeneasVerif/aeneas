@@ -97,9 +97,10 @@ let lean_builtin_types =
     mk_type "core::panicking::AssertKind" "core.panicking.AssertKind"
       ~kind:
         (KEnum [ ("Eq", Some "Eq"); ("Ne", Some "Ne"); ("Match", Some "Match") ]);
-    (* file: "Aeneas/Std/Core/Pin.lean", line: 8 *)
-    mk_type "core::pin::Pin" "core.pin.Pin";
-    (* file: "Aeneas/Std/Core/Pin.lean", line: 12 *)
+    (* file: "Aeneas/Std/Core/Pin.lean", line: 20 *)
+    mk_type "core::pin::Pin" "core.pin.Pin"
+      ~kind:(KStruct [ ("pointer", Some "pointer") ]);
+    (* file: "Aeneas/Std/Core/Pin.lean", line: 25 *)
     mk_type "core::pin::helper::PinHelper" "core.pin.helper.PinHelper";
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 77 *)
     mk_type "core::ptr::alignment::Alignment" "core.ptr.alignment.Alignment";
@@ -191,6 +192,13 @@ let lean_builtin_types =
     mk_type "core::sync::atomic::AtomicBool" "core.sync.atomic.AtomicBool";
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 12 *)
     mk_type "core::sync::atomic::AtomicU32" "core.sync.atomic.AtomicU32";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 34 *)
+    mk_type "core::task::poll::Poll" "core.task.poll.Poll"
+      ~kind:(KEnum [ ("Ready", Some "Ready"); ("Pending", Some "Pending") ]);
+    (* file: "Aeneas/Std/Core/Future.lean", line: 90 *)
+    mk_type "core::task::wake::Context" "core.task.wake.Context";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 65 *)
+    mk_type "core::task::wake::Waker" "core.task.wake.Waker";
   ]
 
 let lean_builtin_consts = []
@@ -1366,6 +1374,24 @@ let lean_builtin_funs =
       "core.str.iter.IteratorChars.next";
     (* file: "Aeneas/Std/StringIter.lean", line: 31 *)
     mk_fun "core::str::{str}::chars" "core.str.Str.chars";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 52 *)
+    mk_fun "core::task::poll::{core::task::poll::Poll<@T>}::is_pending"
+      "core.task.poll.Poll.is_pending";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 40 *)
+    mk_fun "core::task::poll::{core::task::poll::Poll<@T>}::is_ready"
+      "core.task.poll.Poll.is_ready";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 95 *)
+    mk_fun "core::task::wake::{core::task::wake::Context<'a>}::from_waker"
+      "core.task.wake.Context.from_waker";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 106 *)
+    mk_fun "core::task::wake::{core::task::wake::Context<'a>}::waker"
+      "core.task.wake.Context.waker";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 69 *)
+    mk_fun "core::task::wake::{core::task::wake::Waker}::noop"
+      "core.task.wake.Waker.noop";
+    (* file: "Aeneas/Std/Core/Future.lean", line: 80 *)
+    mk_fun "core::task::wake::{core::task::wake::Waker}::wake_by_ref"
+      "core.task.wake.Waker.wake_by_ref";
     (* file: "Aeneas/Std/Std/Io.lean", line: 7 *)
     mk_fun "std::io::stdio::_print" "std.io.stdio._print";
   ]
@@ -1439,6 +1465,9 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 74 *)
     mk_trait_decl "core::fmt::LowerHex" "core.fmt.LowerHex"
       ~methods:[ ("fmt", "fmt") ];
+    (* file: "Aeneas/Std/Core/Future.lean", line: 120 *)
+    mk_trait_decl "core::future::future::Future" "core.future.future.Future"
+      ~methods:[ ("poll", "poll") ];
     (* file: "Aeneas/Std/Core/Hash.lean", line: 13 *)
     mk_trait_decl "core::hash::Hash" "core.hash.Hash"
       ~methods:[ ("hash", "hash") ];
@@ -1558,6 +1587,10 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::ops::try_trait::Try" "core.ops.try_trait.Try"
       ~parent_clauses:[ "FromResidualInst" ]
       ~methods:[ ("from_output", "from_output"); ("branch", "branch") ];
+    (* file: "Aeneas/Std/Core/Pin.lean", line: 31 *)
+    mk_trait_decl "core::pin::helper::PinDerefMutHelper"
+      "core.pin.helper.PinDerefMutHelper"
+      ~methods:[ ("deref_mut", "deref_mut") ];
     (* file: "Aeneas/Std/Slice.lean", line: 346 *)
     mk_trait_decl "core::slice::index::SliceIndex" "core.slice.index.SliceIndex"
       ~methods:
