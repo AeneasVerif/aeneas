@@ -64,6 +64,7 @@
   FunsAnalysis
   GitVersion
   Identifiers
+  InteriorMutability
   InterpAbs
   InterpBorrowsCore
   InterpBorrows

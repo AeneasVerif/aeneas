@@ -126,6 +126,11 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
     trans_ctx.type_ctx.type_decls fdef;
 
+  (* Reject the shared references to types with interior mutability: we
+     translate shared references as immutable values, which is unsound for such
+     types (see {!InteriorMutability}). *)
+  InteriorMutability.check_fun_decl trans_ctx fdef;
+
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
     translate_function_to_symbolics trans_ctx marked_ids fdef

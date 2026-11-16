@@ -1,0 +1,6 @@
+[[92mInfo[39m ] Imported: tests/llbc/interior_mutability_mutex.llbc
+[[91mError[39m] Aeneas does not support interior mutability. This code uses shared references to types with interior mutability (e.g., `Cell`, `RefCell`, atomics, `Mutex`): `&'_ std::sync::poison::mutex::Mutex<u32>`, `&'_ std::sync::poison::mutex::MutexGuard<'_, u32>`.
+Shared references are translated as immutable values, so the effects of operations like `Cell::set(&self, ...)` or `AtomicU32::fetch_add(&self, ...)` are lost, and the generated model is unsound (see https://github.com/AeneasVerif/aeneas/issues/1525). Use `-allow-interior-mutability` to only get a warning and generate the unsound model anyway.
+Source: 'tests/src/interior-mutability-mutex.rs', lines 13:9-13:10
+Compiler source: llbc/InteriorMutability.ml, line 225
+

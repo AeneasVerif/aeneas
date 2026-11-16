@@ -12,5 +12,5 @@ Aeneas aims to provide verification facilities for **safe** Rust with some cavea
 - no functions pointers/closures: ongoing work. We have support for traits and will have support for function pointers and closures soon.
 - limited type parametricity: it is not possible for now to instantiate a type parameter with a type containing a borrow. This is mostly an engineering issue.
 - no nested borrows in function signatures: ongoing work.
-- interior mutability: ongoing work. We are thinking of modeling the effects of interior mutability by using ghost states.
+- interior mutability: ongoing work. We are thinking of modeling the effects of interior mutability by using ghost states. Meanwhile Aeneas rejects the code which uses shared references to types with interior mutability (`Cell`, `RefCell`, atomics, `Mutex`...), because their translation is unsound. The option `-allow-interior-mutability` turns this error into a warning.
 - no concurrent execution: long-term effort. We plan to address coarse-grained parallelism as a long-term goal.

@@ -256,6 +256,14 @@ let () =
         Arg.Clear drop_as_no_op,
         "Evaluate the drops. By default we do not borrow-check them by \
          treating them as no-ops." );
+      ( "-allow-interior-mutability",
+        Arg.Set allow_interior_mutability,
+        " Only emit a warning (instead of an error) when the code uses shared \
+         references to types with interior mutability (e.g., `&Cell<u32>`, \
+         `&AtomicU32`, `&Mutex<T>`). WARNING: Aeneas translates shared \
+         references as immutable values, so the effects of operations like \
+         `Cell::set(&self, ...)` are lost and the generated model is unsound \
+         (see https://github.com/AeneasVerif/aeneas/issues/1525)." );
       ( "-diagnose-translation",
         Arg.Set diagnose_translation,
         " Measure the time it takes to translate every function and print the \
