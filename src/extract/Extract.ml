@@ -282,7 +282,7 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     match FunDeclId.TreeMap.find_opt id ctx.funs_filter_trait_clauses_map with
     | None -> Result.Ok clauses
     | Some filter ->
-        if List.length filter <> List.length types then (
+        if List.length filter <> List.length clauses then (
           let decl =
             [%silent_unwrap_opt_span] None (ctx_lookup_fun_decl_info ctx id)
           in
