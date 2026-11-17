@@ -784,7 +784,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call (call, dest, _) -> eval_function_call config st.span call dest ctx
-  | Panic _ | UnwindTerminate | UndefinedBehavior ->
+  | Panic _ | UnwindTerminate _ | UndefinedBehavior ->
       (* Evaluate to a panic only if the execution is concrete, otherwise we stop
          evaluating there and synthesize a [panic] node in the symbolic AST. *)
       if config.mode = ConcreteMode then

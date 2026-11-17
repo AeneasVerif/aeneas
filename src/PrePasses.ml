@@ -577,7 +577,8 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   | st :: after -> (
                       match st.kind with
                       | Return -> [ { st with kind = Break 0 } ]
-                      | Panic _ | UnwindTerminate | UndefinedBehavior -> [ st ]
+                      | Panic _ | UnwindTerminate _ | UndefinedBehavior ->
+                          [ st ]
                       | _ -> st :: decompose_after after)
                 in
                 let after = decompose_after after in
@@ -702,7 +703,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
         | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Borrowck _
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
         | Panic _
-        | UnwindTerminate
+        | UnwindTerminate _
         | UndefinedBehavior
         | Return
         | UnwindResume
@@ -1474,7 +1475,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | SetDiscriminant _ | StorageLive _ | StorageDead _ | PlaceMention _
             | Drop (_, _, _, _)
             | Panic _
-            | UnwindTerminate
+            | UnwindTerminate _
             | UndefinedBehavior
             | Return
             | UnwindResume
