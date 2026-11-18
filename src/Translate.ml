@@ -1538,6 +1538,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trans_trait_decls;
       trans_trait_impls;
       rec_group_trait_decls;
+      self_impl = None;
       trans_types;
       trans_funs;
       trans_globals;

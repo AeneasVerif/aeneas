@@ -3138,8 +3138,8 @@ let nonpos_synth_instance_max_size = 4096
     dictionary of a trait extracted as a [nonpos_structure]: this command
     proves, once, the continuity of [f] in its dictionary arguments, which
     [nonpos_cont] otherwise proves again each time it meets [f] (see the Lean
-    file [Aeneas/NonPos/Tactic.lean]). Opaque functions are skipped: they
-    have no body to prove their continuity from. *)
+    file [Aeneas/NonPos/Tactic.lean]). Opaque functions are skipped: they have
+    no body to prove their continuity from. *)
 let extract_nonpos_continuity (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   if
@@ -3527,16 +3527,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      the proof of its condition) rather than with the [{ ... }] notation *)
   let is_nonpos = trait_decl_is_nonpos ctx impl.impl_trait.trait_decl_id in
   (* An impl of a [nonpos_structure] which refers to itself (e.g., through a
-     provided method) is defined with [partial_fixpoint], not [impl_def] *)
+     provided method) is the least fixed point of its body, not an [impl_def]:
+     [NonPos.Fix.fixRec _ (fun self => mk ...) hf], where the references to the
+     impl in its items are [self] and [hf] proves that the body is continuous *)
   let is_fixpoint = is_rec && is_nonpos in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
-  (* Without this option, a [by] proof in the body is abstracted into an
-     auxiliary theorem, and [partial_fixpoint] then fails to see that the
-     parameters of a generic impl are fixed *)
-  if is_fixpoint then (
-    F.pp_print_string fmt "set_option backward.proofsInPublic true in";
-    F.pp_print_break fmt 0 0);
   (* Print a comment to link the extracted type to its original rust definition *)
   begin
     let decl_id = impl.impl_trait.trait_decl_id in
@@ -3662,7 +3658,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Outer box *)
     F.pp_close_box fmt ())
   else (
-    if is_nonpos then
+    if is_fixpoint then
+      F.pp_print_string fmt
+        (":= NonPos.Fix.fixRec _ (fun self => "
+        ^ ctx_get_trait_constructor span impl.impl_trait.trait_decl_id ctx)
+    else if is_nonpos then
       F.pp_print_string fmt
         (":= "
         ^ ctx_get_trait_constructor span impl.impl_trait.trait_decl_id ctx)
@@ -3676,6 +3676,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (*
      * Extract the items
      *)
+    (* In the body of a fixed point, the references to the impl are [self] *)
+    let ctx =
+      if is_fixpoint then { ctx with self_impl = Some impl.def_id } else ctx
+    in
     let trait_decl_id = impl.impl_trait.trait_decl_id in
     let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.crate.trait_decls in
 
@@ -3787,6 +3791,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt
         ("(by nonpos_cont " ^ string_of_int nonpos_cont_fuel ^ ")"));
+    (* For a fixed point: close the body, then the proof that it is continuous *)
+    if is_fixpoint then
+      F.pp_print_string fmt
+        (") (by nonpos_cont " ^ string_of_int nonpos_cont_fuel ^ ")");
     (* Close the outer boxes for the definition, as well as the brackets *)
     F.pp_close_box fmt ();
     if backend () = Coq then (
@@ -3797,14 +3805,6 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "}"));
   F.pp_close_box fmt ();
-  (* The impl is the least fixed point of its body; the [monotonicity] proof
-     comes from the continuity of the body *)
-  if is_fixpoint then (
-    F.pp_print_break fmt 0 0;
-    F.pp_print_string fmt
-      ("partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont "
-      ^ string_of_int nonpos_cont_fuel
-      ^ ")"));
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 

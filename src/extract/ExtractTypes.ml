@@ -650,6 +650,10 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "/- Unexpected occurrence of Self -/"
       | _ -> F.pp_print_string fmt "ERROR(\"Unexpected Self\")")
+  | TraitImpl (id, _) when ctx.self_impl = Some id ->
+      (* Inside the body of a self-referential impl of a [nonpos_structure]:
+         the impl is the bound variable [self] (see [extract_trait_impl]) *)
+      F.pp_print_string fmt "self"
   | TraitImpl (id, generics) ->
       let name = ctx_get_trait_impl span id ctx in
       (* Lookup the the information about the explicit/implicit parameters. *)
