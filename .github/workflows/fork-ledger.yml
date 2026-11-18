@@ -1,0 +1,76 @@
+# Checks the fork's patch ledger: every fork commit carries exactly one
+# `Fork-Patch: <patch-name>` trailer, and every patch has a description file
+# `fork/patches/<patch-name>.md`. The rules are listed in the docstring of
+# `fork/scripts/check-ledger.py`.
+#
+# - Pull requests to `dev` are checked in PR mode: the ledger must be valid for
+#   Squash and merge (trailer at the end of the PR description) or for Rebase
+#   and merge (trailer in every commit). The job summary says which.
+# - Draft PRs from `dev-YYYY-MM-DD-rebased` branches, which only run CI for a
+#   rebase of the fork, and pushes to `dev` are checked in stack mode.
+#
+# To run the check locally before opening a PR (with `origin` being
+# cryspen/aeneas and `upstream` AeneasVerif/aeneas, both fetched):
+#
+#     fork/scripts/check-ledger.py pr --upstream upstream/main --base origin/dev \
+#         --title "<PR title>" --body-file <file with the PR description>
+name: Fork ledger
+
+on:
+  pull_request:
+    branches:
+      - dev
+    # `edited` re-runs the check when the title or description changes.
+    types: [opened, edited, reopened, synchronize]
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Reads the pull request title and description.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The PR's own head commit rather than its merge with `dev`.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Full history and all branches, including the old `dev-YYYY-MM-DD`
+          # branches that identify PRs based on a `dev` from before a rebase.
+          fetch-depth: 0
+      - name: Fetch upstream main
+        run: |
+          git fetch --no-tags https://github.com/AeneasVerif/aeneas.git \
+            +main:refs/remotes/upstream/main
+      - name: Check the ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          # Empty outside of pull requests.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          check=fork/scripts/check-ledger.py
+          if [ "$EVENT" != pull_request ]; then
+            exec "$check" stack --upstream upstream/main --head HEAD
+          fi
+          if [[ "$HEAD_REF" =~ ^dev-[0-9]{4}-[0-9]{2}-[0-9]{2}-rebased$ ]]; then
+            exec "$check" stack --upstream upstream/main --head HEAD --adjacent
+          fi
+          # Fetched rather than taken from `github.event`, so that re-running
+          # the job checks the current title and description.
+          pr="$RUNNER_TEMP/pr.json"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$pr"
+          jq -r '.title' "$pr" > "$RUNNER_TEMP/title"
+          jq -r '.body // ""' "$pr" > "$RUNNER_TEMP/body"
+          exec "$check" pr --upstream upstream/main --base "origin/$BASE_REF" --head HEAD \
+            --title="$(cat "$RUNNER_TEMP/title")" --body-file "$RUNNER_TEMP/body"
