@@ -5,6 +5,11 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** [core::panicking::panic_in_cleanup]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 364:0-364:26
+    Name pattern: [core::panicking::panic_in_cleanup] *)
+assume val core_panicking_panic_in_cleanup : result never
+
 (** [constants::X0]
     Source: 'tests/src/constants.rs', lines 6:0-6:22
     Visibility: public *)
