@@ -204,16 +204,23 @@ macro "nonpos_cond_dsimp" : tactic =>
       Shape.const, Shape.var]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
-arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
+arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).1. … t₁ … tₖ` (the path of the
+field in the tree of fields, see `fieldPath` in `Top.lean`).  The
 condition `Fix.cond F e` has the nested shape of the tuple (a plain field's part is `True`), so it
 is read along the same path, then applied to the arguments (past a dictionary binder, its `.2`
 first), and its `.1` is the fact.  `none` if `fn'` is not of this form. -/
 meta def nonposProjCondProof? (fn' : Expr) : MetaM (Option Expr) := do
   let isProj (e : Expr) := e.isAppOf ``PProd.fst || e.isAppOf ``PProd.snd
-  unless isProj fn' && fn'.getAppNumArgs ≥ 3 do return none
-  let args := fn'.getAppArgs.extract 3 fn'.getAppNumArgs  -- `t₁ … tₖ`
-  let mut e := fn'.getAppArgs[2]!
-  let mut path := #[fn'.isAppOf ``PProd.fst]  -- the projections, outermost first (`true` for `.1`)
+  -- the projections, outermost first (`true` for `.1`), and the arguments `t₁ … tₖ`; no projection
+  -- for a structure with one field (its tuple is the field)
+  let (args, e₀, path₀) ←
+    if isProj fn' && fn'.getAppNumArgs ≥ 3 then
+      pure (fn'.getAppArgs.extract 3 fn'.getAppNumArgs, fn'.getAppArgs[2]!, #[fn'.isAppOf ``PProd.fst])
+    else if fn'.isAppOf ``Fix.unfold && fn'.getAppNumArgs ≥ 5 then
+      pure (fn'.getAppArgs.extract 5 fn'.getAppNumArgs, mkAppN fn'.getAppFn (fn'.getAppArgs.extract 0 5), #[])
+    else return none
+  let mut e := e₀
+  let mut path := path₀
   while isProj e && e.getAppNumArgs == 3 do
     path := path.push (e.isAppOf ``PProd.fst)
     e := e.appArg!
@@ -250,7 +257,7 @@ meta partial def pprodDomArgs? (inst : Expr) (fuel : Nat := 8) : MetaM (Option (
   | some e => pprodDomArgs? e (fuel - 1)
   | none => return none
 
-/-- The projection `fun d => (Fix.unfold F (g d)).2. … .1` (with `path`, outermost first, `true` for
+/-- The projection `fun d => (Fix.unfold F (g d)).1. …` (with `path`, outermost first, `true` for
 `.1`) of structure `k`, from `Bla.unfold_cont` (section 4): `Cont.fst` and `Cont.snd`, with the parts
 of the instance `instDomPProd …` of the tuple.  The goal `Cont g`, or `none` (on any failure). -/
 meta def unfoldContChain? (goal : MVarId) (D iD : Expr) (n : Name) (dTy gd : Expr) (bi : BinderInfo)
@@ -275,7 +282,7 @@ meta def unfoldContChain? (goal : MVarId) (D iD : Expr) (n : Name) (dTy gd : Exp
   catch _ => return none
 
 open Tactic in
-/-- A field of a varying dictionary, `fun d => (Fix.unfold F (g d)).2. … .1`: proved inside out, from
+/-- A field of a varying dictionary, `fun d => (Fix.unfold F (g d)).1. …`: proved inside out, from
 `Cont.unfold` (at the `Dom` of the shape of the tuple) by `Cont.shape_snd` and `Cont.shape_fst`, with
 the parts read from the `Shape` instances, so that only the field's own `Dom` is
 compared with the goal's (comparing the `Dom` of the whole tuple with the one instance search
@@ -288,12 +295,12 @@ meta def nonposShapeProj (goal : MVarId) (D iD f : Expr) : TacticM Bool := do
   while e.isAppOfArity ``PProd.fst 3 || e.isAppOfArity ``PProd.snd 3 do
     path := path.push (e.isAppOfArity ``PProd.fst 3)
     e := e.appArg!
-  if path.isEmpty || !e.isAppOfArity ``Fix.unfold 5 then return false
+  if !e.isAppOfArity ``Fix.unfold 5 then return false  -- (no projection: a structure with one field)
   let args := e.getAppArgs  -- `I F inst k (g d)`
   let (F, inst, k, gd) := (args[1]!, args[2]!, args[3]!, args[4]!)
   if F.hasLooseBVars || inst.hasLooseBVars || k.hasLooseBVars then return false
   let s ← saveState
-  -- with `Bla.unfold_cont`: the chain at the `Dom` that instance search builds for the tuple
+  -- with `Bla.unfold_cont`: the path at the `Dom` that instance search builds for the tuple
   if let some r ← unfoldContChain? goal D iD n dTy gd bi k path then
     replaceMainGoal [r]; return true
   s.restore
@@ -550,9 +557,30 @@ meta def contAssumption (g : MVarId) (f : Expr) : MetaM Bool := g.withContext do
     if ← isDefEq t (← g.getType) then g.assign ld.toExpr; return true
   return false
 
-/-- On a goal `Shape.cond ⟨f₁, …, fₙ⟩` of structure `Bla` (its `F` is `G.F (G.I.Bla …)`), apply
-`Bla.cond_intro` (section 4): the new goals are the conjuncts of the condition.  `none` if there is
-no such lemma or it does not apply. -/
+/-- The part of a tuple `x` (nested `PProd.mk`) at `path` (`true` for `.1`), or `none`. -/
+meta def tupleAt? (x : Expr) (path : List Bool) : Option Expr :=
+  path.foldlM (init := x) fun x left =>
+    if x.isAppOfArity ``PProd.mk 4 then some (if left then x.appFn!.appArg! else x.appArg!) else none
+
+/-- The `n` fields of a tree of fields (see `fieldPath` in `Top.lean`), or `#[]` if `x` does not
+have its shape. -/
+meta def tupleLeaves (x : Expr) (n : Nat) : Array Expr :=
+  ((List.range n).mapM fun j => tupleAt? x (fieldPath n j)).getD [] |>.toArray
+
+/-- The projections of `e` (a tuple of `n` fields, of the shape of `x`) down to its `j`-th field,
+with the types of the components read from `x` (`PProd.mk α β a b`). -/
+meta def tupleProj (x e : Expr) (n j : Nat) : Expr := Id.run do
+  let mut (x, e) := (x, e)
+  for left in fieldPath n j do
+    unless x.isAppOfArity ``PProd.mk 4 do return e
+    let (α, β, ls) := (x.appFn!.appFn!.appFn!.appArg!, x.appFn!.appFn!.appArg!, x.getAppFn.constLevels!)
+    (x, e) := if left then (x.appFn!.appArg!, mkApp3 (mkConst ``PProd.fst ls) α β e)
+      else (x.appArg!, mkApp3 (mkConst ``PProd.snd ls) α β e)
+  return e
+
+/-- On a goal `Shape.cond ⟨⟨f₁, …, fₙ⟩, ⟨⟩⟩` (the tree of fields) of structure `Bla` (its `F` is
+`G.F (G.I.Bla …)`), apply `Bla.cond_intro` (section 4): the new goals are the conjuncts of the
+condition.  `none` if there is no such lemma or it does not apply. -/
 meta def condIntro? (g : MVarId) (ty : Expr) : MetaM (Option (List MVarId)) := do
   let_expr Shape.cond _ F _ _ _ _ := ty | return none
   let some ctor := F.appArg!.getAppFn.constName? | return none
@@ -560,13 +588,12 @@ meta def condIntro? (g : MVarId) (ty : Expr) : MetaM (Option (List MVarId)) := d
   let lem := ctor.getPrefix.getPrefix.getPrefix ++ Name.mkSimple ctor.getString! ++ `cond_intro
   unless (← getEnv).contains lem do return none
   let_expr Shape.cond _ _ _ _ _ x := ty | return none
-  -- the fields of the tuple `⟨f₁, …, fₙ, ⟨⟩⟩`
-  let mut fs := #[]
-  let mut x := x
-  while x.isAppOfArity ``PProd.mk 4 do
-    fs := fs.push x.appFn!.appArg!
-    x := x.appArg!
+  -- the fields of the tuple (their number from the type of `mk`)
   let ps := F.appArg!.getAppArgs
+  let mkName := lem.getPrefix ++ `mk
+  let nf := forallArity (← getConstInfo mkName).type - ps.size - 1
+  -- the tree is paired with `⟨⟩` at the root (see `elabGroup` in `Top.lean`)
+  let fs := if nf == 0 || !x.isAppOfArity ``PProd.mk 4 then #[] else tupleLeaves x.appFn!.appArg! nf
   let nh := forallArity (← getConstInfo lem).type - ps.size - fs.size
   if let some gs ← applyWith? g lem ((ps ++ fs).map some ++ Array.replicate nh none) then return some gs
   -- otherwise by unification (then the conjuncts, with the fields substituted, beta-reduced)
@@ -686,7 +713,7 @@ elab "nonpos_continuity " id:ident : command => do
 `nonpos_structure` also proves, through its hook `nonpos_structure_lemmas` (which `Top.lean` leaves
 empty and this section implements), once for each structure `Bla`, these facts.  (This section
 also implements `nonpos_proj_mk`, the tactic that proves the `simp` lemmas `Bla.f_mk` stated by
-`Top.lean`, from a lemma `Bla.mk_unfold : Fix.unfold F (Bla.mk f₁ … fₙ h) = ⟨f₁, …, fₙ⟩` that it
+`Top.lean`, from a lemma `Bla.mk_unfold : Fix.unfold F (Bla.mk f₁ … fₙ h) = ⟨⟨f₁, …, fₙ⟩, ⟨⟩⟩` that it
 proves once per structure.)  Except for the
 first, they are for performance: each would otherwise be derived from the whole tuple of fields at
 each use.  The ones built as terms (rather than elaborated from syntax) are built so to avoid
@@ -820,12 +847,12 @@ elab_rules : tactic
     let (_, g) ← (← getMainGoal).intros  -- (`Top.lean` gives the equation itself: nothing to introduce)
     g.withContext do
     let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | throwError "nonpos_proj_mk: not an equation"
-    -- `Bla.mk ps f₁ … fₙ h` is `Fix.fold F x h`, with `x = ⟨f₁, …, fₙ, ⟨⟩⟩`
+    -- `Bla.mk ps f₁ … fₙ h` is `Fix.fold F x h`, with `x = ⟨⟨f₁, …, fₙ⟩, ⟨⟩⟩` (the tree of fields)
     let some fold ← unfoldDefinition? lhs.appArg! | throwError "nonpos_proj_mk: cannot unfold {lhs.appArg!}"
     let fold := fold.headBeta
     unless fold.isAppOfArity ``Fix.fold 6 do throwError "nonpos_proj_mk: unexpected {fold}"
     let a := fold.getAppArgs  -- `I F inst k x h`
-    -- `Bla.mk_unfold : ∀ ps f₁ … fₙ h, Fix.unfold F (Bla.mk ps f₁ … fₙ h) = ⟨f₁, …, fₙ, ⟨⟩⟩`, proved
+    -- `Bla.mk_unfold : ∀ ps f₁ … fₙ h, Fix.unfold F (Bla.mk ps f₁ … fₙ h) = ⟨⟨f₁, …, fₙ⟩, ⟨⟩⟩`, proved
     -- (by `Fix.unfold_fold`) at the first of these lemmas: the kernel checks that the tuple has its
     -- type once per structure, and not once per lemma
     let mkApp := lhs.appArg!
@@ -840,20 +867,22 @@ elab_rules : tactic
       let value ← instantiateMVars (← mkLambdaFVars xs (mkAppN (mkConst ``Fix.unfold_fold fold.getAppFn.constLevels!) a))
       addDecl (Declaration.thmDecl { name := lem, levelParams := info.levelParams, type, value })
     let uf := mkAppN (mkConst lem lvls) xs
-    -- `fun t => t.2. … .1`, the component of the field `rhs` (up to eta: a field with implicit
-    -- binders is `fun {…} => f` in the tuple), with the types of the components read from the
-    -- tuple `⟨f₁, ⟨f₂, …⟩⟩` (`PProd.mk α β a b`), so that nothing has to be inferred
+    -- `fun t => t.1. …`, the component of the field `rhs` (the `j`-th argument of `mk`, after the
+    -- parameters), with the types of the components read from the tuple, so that nothing has to
+    -- be inferred
     let x := a[4]!
+    let np := lhs.getAppNumArgs - 1
+    let n := xs.size - np - 1
+    let some j := (List.range n).find? (fun j => xs[np + j]! == rhs)
+      | throwError "nonpos_proj_mk: {rhs} is not a field of {mkApp}"
+    let tTy ← if x.isAppOfArity ``PProd.mk 4 then
+        pure (mkApp2 (mkConst ``PProd x.getAppFn.constLevels!) x.appFn!.appFn!.appFn!.appArg! x.appFn!.appFn!.appArg!)
+      else inferType x
+    -- the tree is paired with `⟨⟩` at the root (see `elabGroup` in `Top.lean`)
     unless x.isAppOfArity ``PProd.mk 4 do throwError "nonpos_proj_mk: unexpected tuple {x}"
-    let get ← withLocalDeclD `t (mkApp2 (mkConst ``PProd x.getAppFn.constLevels!) x.appFn!.appFn!.appFn!.appArg! x.appFn!.appFn!.appArg!) fun t => do
-      let mut x := x
-      let mut e := t
-      while x.isAppOfArity ``PProd.mk 4 do
-        let (α, β, ls) := (x.appFn!.appFn!.appFn!.appArg!, x.appFn!.appFn!.appArg!, x.getAppFn.constLevels!)
-        if etaFull x.appFn!.appArg! == rhs then return ← mkLambdaFVars #[t] (mkApp3 (mkConst ``PProd.fst ls) α β e)
-        e := mkApp3 (mkConst ``PProd.snd ls) α β e
-        x := x.appArg!
-      throwError "nonpos_proj_mk: {rhs} is not a field of the tuple"
+    let (α, β, ls) := (x.appFn!.appFn!.appFn!.appArg!, x.appFn!.appFn!.appArg!, x.getAppFn.constLevels!)
+    let get ← withLocalDeclD `t tTy fun t =>
+      mkLambdaFVars #[t] (tupleProj x.appFn!.appArg! (mkApp3 (mkConst ``PProd.fst ls) α β t) n j)
     g.assign (← mkCongrArg get uf)
     replaceMainGoal []
 

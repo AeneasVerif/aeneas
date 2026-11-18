@@ -29,14 +29,15 @@ example : Cont (fun d : Bla Int => d) := Cont.id
 
 /-! ## 2. Projections: `unfold`, `fst`, `snd`, `app`
 
-`d.to_num` is, by definition, `(Fix.unfold Bla.F d).1`.  So a projection out of the varying
-dictionary is `Cont.unfold` (the unfolding is continuous in `d`) followed by `Cont.fst`/`Cont.snd`
+`d.to_num` is, by definition, `(Fix.unfold Bla.F d).1.1` (the fields `⟨to_num, add⟩` are paired at the
+root with `⟨⟩`; part 3 of `Examples.lean`).  So a projection out of the varying dictionary is
+`Cont.unfold` (the unfolding is continuous in `d`) followed by `Cont.fst`/`Cont.snd` along its path
 (a tuple component is continuous).  Applying the method to a fixed argument is `Cont.app`. -/
 
 example : Cont (fun d : Bla Int => d.to_num) :=
-  Cont.fst (Cont.unfold Bla.F Cont.id)
+  Cont.fst (Cont.fst (Cont.unfold Bla.F Cont.id))
 example : Cont (fun d : Bla Int => d.to_num 1) :=
-  Cont.app (f := fun d : Bla Int => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) 1
+  Cont.app (f := fun d : Bla Int => d.to_num) (Cont.fst (Cont.fst (Cont.unfold Bla.F Cont.id))) 1
 
 -- the same by the tactic: `Cont.app` is chosen by `nonpos_cont_peel` (the last argument `1` does not
 -- mention `d`), then `Cont.fst` and `Cont.unfold` are found in `getContTheorems`, then `Cont.id`.
@@ -57,8 +58,8 @@ example {O : Type} (BlaInst : Bla O) (o : Int) (s : O) : Cont (fun inst : Bla In
   -- h : ∀ (Other : Type), Cont (fun inst : Bla Other => BlaInst.add inst)
   exact h Int
 
--- the tactic: two `Cont.app`, then the last line above, built directly as `((Fix.cond _ BlaInst).2.1 Int).1`
--- (the condition has the nested shape of the tuple `⟨to_num, add, ⟨⟩⟩`, and `add`'s part is its `.2.1`).
+-- the tactic: two `Cont.app`, then the last line above, built directly as `((Fix.cond _ BlaInst).1.2 Int).1`
+-- (the condition has the nested shape of the tuple `⟨⟨to_num, add⟩, ⟨⟩⟩`, and `add`'s part is its `.1.2`).
 example {O : Type} (BlaInst : Bla O) (o : Int) (s : O) : Cont (fun inst : Bla Int => BlaInst.add inst o s) := by
   nonpos_cont
 
@@ -74,7 +75,7 @@ example {O : Type} (BlaInst : Bla O) (o : O) :
   · exact Cont.const _                             -- `BlaInst.to_num o` does not mention `inst`
   · intro i
     apply Cont.bind
-    · exact Cont.app (f := fun d : Bla Int => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) 1
+    · exact Cont.app (f := fun d : Bla Int => d.to_num) (Cont.fst (Cont.fst (Cont.unfold Bla.F Cont.id))) 1
     · intro j
       exact Cont.pure (Cont.const _)
 
@@ -84,8 +85,9 @@ example {O : Type} (BlaInst : Bla O) (o : O) :
 
 /-! ## 5. Building a dictionary from a varying one: `fold`, `pair`
 
-`Bla.mk f g h` is `Fix.fold Bla.F ⟨f, g, ⟨⟩⟩ h`.  `Cont.fold` asks for the tuple to be continuous in
-`inst`, which `Cont.pair` splits into the fields; a field with binders is `Cont.lam` once per binder.
+`Bla.mk f g h` is `Fix.fold Bla.F ⟨⟨f, g⟩, ⟨⟩⟩ h`.  `Cont.fold` asks for the tuple to be continuous in
+`inst`, which `Cont.pair` splits along the tree into the fields; a field with binders is `Cont.lam`
+once per binder.
 This is the shape of the monotonicity obligation of a self-referential instance
 (`def inst := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`). -/
 
@@ -93,14 +95,14 @@ example : Cont (fun inst : Bla Int =>
     Bla.mk (fun s => some s) (fun {O} (BlaInst : Bla O) o s => BlaInst.add inst s o) (by nonpos_cont)) := by
   apply Cont.fold
   apply Cont.pair
-  · exact Cont.const _                             -- `to_num` does not mention `inst`
-  · apply Cont.pair
+  · apply Cont.pair                                -- the fields `⟨to_num, add⟩`
+    · exact Cont.const _                           -- `to_num` does not mention `inst`
     · apply Cont.lam; intro O                      -- `{O}`
       apply Cont.lam; intro BlaInst                -- `(BlaInst : Bla O)`
       apply Cont.lam; intro o
       apply Cont.lam; intro s
       nonpos_cont                                  -- part 3 again: `BlaInst.add inst s o`
-    · exact Cont.const _                           -- the `⟨⟩` terminator
+  · exact Cont.const _                             -- the `⟨⟩` at the root
 
 /-! ## 6. `if`, `match`, and helper functions
 
@@ -117,10 +119,10 @@ example {O : Type} (b : Bool) (o : O) :
   apply Cont.ite
   · delta helper                                   -- unfold, then it is a `do` block as in part 4
     apply Cont.bind
-    · exact Cont.app (f := fun d : Bla O => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) o
+    · exact Cont.app (f := fun d : Bla O => d.to_num) (Cont.fst (Cont.fst (Cont.unfold Bla.F Cont.id))) o
     · intro i; exact Cont.pure (Cont.const _)
   · cases b                                        -- the scrutinee `b` does not mention `inst`
-    · exact Cont.app (f := fun d : Bla O => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) o
+    · exact Cont.app (f := fun d : Bla O => d.to_num) (Cont.fst (Cont.fst (Cont.unfold Bla.F Cont.id))) o
     · exact Cont.const _
 
 example {O : Type} (b : Bool) (o : O) :

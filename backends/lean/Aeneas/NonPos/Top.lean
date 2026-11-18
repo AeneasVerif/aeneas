@@ -198,12 +198,14 @@ structure:
 
 * `G.I`, the index type of the group: an inductive with one constructor `G.I.Bla (Self : Type)` per
   structure, carrying its parameters;
-* `Bla.Fields (Bla : Type → Type 1) (Self : Type) : Type 1 := (Self → Result I32) ×' (∀ ..., Bla Other → ...) ×' PUnit`:
-  the fields *as written*, with the structure names as parameters;
+* `Bla.Fields (Bla : Type → Type 1) (Self : Type) : Type 1 := ((Self → Result I32) ×' (∀ ..., Bla Other → ...)) ×' PUnit`:
+  the fields *as written*, with the structure names as parameters, as a tree of pairs (`fieldPath`:
+  a field is about `2 log₂` of its position deep), paired at the root with `PUnit` (at the
+  universe of the structure);
 * `G.F : G.I → Fam G.I → Type 1`, dispatching to the `Fields`;
 * `Bla Self := Fix G.F (.Bla Self)`;
-* `Bla.mk to_num add (h : Shape.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
-* `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
+* `Bla.mk to_num add (h : Shape.cond ⟨⟨to_num, add⟩, ⟨⟩⟩) := Fix.fold G.F _ h`;
+* `Bla.to_num d := (Fix.unfold G.F d).1.1`, `Bla.add d := (Fix.unfold G.F d).1.2`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk` (a projection of `mk` is
   the field), stated here and proved by the tactic `nonpos_proj_mk` of `NonPos/Tactic.lean`;
 * then, through the hook of section 5, the lemmas of `NonPos/Tactic.lean` (section 4 there).
@@ -256,10 +258,44 @@ meta def implicitBinders (ps : Array (Ident × Term)) : CommandElabM (Array (TSy
 /-- The parameters as explicit binders `(x₁ : T₁) ... (xₙ : Tₙ)` (for `G.I`, `Fields` and the structure itself). -/
 meta def explicitBinders (ps : Array (Ident × Term)) : CommandElabM (Array (TSyntax ``Parser.Term.bracketedBinder)) :=
   ps.mapM fun (x, T) => `(bracketedBinder| ($x:ident : $T))
-/-- The `j`-th component of a right-nested product: `t.2.2. ... .1`, with `j` times `.2`. -/
-meta def projN (t : Term) : Nat → CommandElabM Term
-  | 0 => `(@PProd.fst _ _ $t)
-  | j + 1 => do projN (← `(@PProd.snd _ _ $t)) j
+/-! The arrangement of the fields in pairs (`fieldPath`, `tree`, `projN`) is chosen for performance
+only: a field is a few projections deep, rather than up to `n` deep in a chain.  Any arrangement
+gives the same structure: the tuple is built from the fields, pairs and `⟨⟩` only (`tree` is generic
+in what it arranges), every field is in it (the `_mk` lemmas, stated below, say that each
+projection of `mk` gives back its field), and the condition of a pair is the conjunction of the
+conditions of its two parts (`Shape.prod`, section 2), so the condition of `mk` is that each field
+satisfies the condition of its type, however the pairs are nested. -/
+
+/-- The path to the `j`-th leaf of a balanced tree with `n` leaves (`true` for `.1`): the first
+`n / 2` leaves on the left. -/
+meta partial def balancedPath (n j : Nat) : List Bool :=
+  if n ≤ 1 then [] else if j < n / 2 then true :: balancedPath (n / 2) j
+  else false :: balancedPath (n - n / 2) (j - n / 2)
+/-- The path to the `j`-th of `n` fields in the tree of fields (`true` for `.1`).  The fields are
+cut into chunks of `k = 1, 2, 4, …` fields, each a balanced tree, and the chunks are paired in a
+chain: the `j`-th field is about `2 log₂ j` projections deep, so the first fields (the required
+methods of a trait come first) stay shallow, and none is more than about `2 log₂ n` deep (in a chain
+of all the fields, the last of `n` would be `n` deep). -/
+meta partial def fieldPath (n j : Nat) (k : Nat := 1) : List Bool :=
+  if n ≤ k then balancedPath n j
+  else if j < k then true :: balancedPath k j
+  else false :: fieldPath (n - k) (j - k) (2 * k)
+/-- The fields `xs` as the tree of `fieldPath`: a field itself (`leaf`), two parts paired (`node`),
+or `empty` for none. -/
+meta partial def tree {α β : Type} (xs : Array α) (leaf : α → CommandElabM β)
+    (node : β → β → CommandElabM β) (empty : CommandElabM β) (k : Nat := 1) : CommandElabM β :=
+  let rec balanced (xs : Array α) : CommandElabM β :=
+    if h : xs.size = 1 then leaf xs[0] else do
+      let m := xs.size / 2
+      node (← balanced (xs.extract 0 m)) (← balanced (xs.extract m xs.size))
+  if xs.isEmpty then empty
+  else if xs.size ≤ k then balanced xs
+  else do node (← balanced (xs.extract 0 k)) (← tree (xs.extract k xs.size) leaf node empty (2 * k))
+/-- The `j`-th of `n` fields of the tree `t` (see `fieldPath`) (the root pair with `PUnit` is
+stepped into by the caller). -/
+meta def projN (t : Term) (n j : Nat) : CommandElabM Term :=
+  (fieldPath n j).foldlM (init := t) fun t left =>
+    if left then `(@PProd.fst _ _ $t) else `(@PProd.snd _ _ $t)
 
 /-- See Examples.lean for examples of what this command produces for the `Example1` and `A`/`B` examples.
 Comments throughout point to the corresponding definitions in that file. -/
@@ -280,7 +316,10 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
   for s in ss do
     let fieldsId := mkIdentFrom s.name (s.name.getId ++ `Fields)
     let famBinders ← ss.mapM fun s' => do `(bracketedBinder| ($(s'.name):ident : $(← paramsPi s'.params univ)))
-    let body ← s.fields.foldrM (init := ← punitAt univ) fun (_, τ) acc => `($τ ×' $acc)
+    -- the tree of fields, paired at the root with `PUnit` at the universe of the structure (the
+    -- fields may live in a smaller one)
+    let body ← if s.fields.isEmpty then punitAt univ else
+      `($(← tree s.fields (fun (_, τ) => pure τ) (fun a b => `($a ×' $b)) (punitAt univ)) ×' $(← punitAt univ))
     elabCommand (← `(noncomputable abbrev $fieldsId $famBinders* $(← explicitBinders s.params)* : $univ := $body))
       -- `Example1.Fields`, `A.Fields`, `B.Fields`
   -- The functor of the group and its shape
@@ -309,8 +348,8 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let impl ← implicitBinders s.params                         -- `{Self : Type}`        nothing
     let args := s.params.map (·.1)                              -- `Self`                 nothing
     let fieldBinders ← explicitBinders s.fields                 -- `(fa : ∀ {O} …)`      `(to_nat : Nat) (f : Example1 → Option Nat)`
-    let fieldTuple                                              -- `⟨fa, ⟨⟩⟩`             `⟨to_nat, ⟨f, ⟨⟩⟩⟩`
-      ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
+    let fieldTuple ← if s.fields.isEmpty then `(⟨⟩) else       -- `⟨fa, ⟨⟩⟩`             `⟨⟨to_nat, f⟩, ⟨⟩⟩`
+      `(⟨$(← tree s.fields (fun (f, _) => `(@$f:ident)) (fun a b => `(⟨$a, $b⟩)) `(⟨⟩)), ⟨⟩⟩)
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
     -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 3)
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
@@ -319,7 +358,7 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     for (f, τ) in s.fields, j in List.range s.fields.size do
       let projId := mkIdentFrom f (s.name.getId ++ f.getId)                   -- `A.fa`       `Example1.to_nat`
       elabCommand (← `(def $projId $impl* (d : $(s.name):ident $args*) : $τ :=
-        no_implicit_lambda% $(← projN (← `(Fix.unfold $fId d)) j)))  -- `Example1.to_nat`, `Example1.f`, `A.fa`, `B.fb`
+        no_implicit_lambda% $(← projN (← `(@PProd.fst _ _ (Fix.unfold $fId d))) s.fields.size j)))  -- `Example1.to_nat`, `Example1.f`, `A.fa`, `B.fb`
 
 /-! The `simp` lemmas of the projections, `Bla.f_mk : Bla.f (Bla.mk f₁ … fₙ h) = f` for each field
 `f`: their statements are built here, from the type of `mk`; their proofs are by the tactic
