@@ -184,33 +184,6 @@ instance (k : I) [Fix.BotTotal F k] : Shape.BotTotal F (fun X => X k) := ⟨Proo
 instance (k : I) [Shape.BotTotal F (F k)] : Fix.BotTotal F k := Fix.BotTotal.ofShape F k
 instance (k : I) [Fix.BotTotal F k] : Pointed (Fix F k) := Fix.pointed F
 instance (k : I) [Fix.BotTotal F k] : Lean.Order.CCPO (Fix F k) := Fix.ccpo F k
-
-/-! `fixRec`: a self-referential dictionary, defined with `partial_fixpoint` once here (in
-`fixRecCore`), so that the self-referential impls are plain definitions `fixRec (fun self => mk …) hf`.
-The recursive call is under `foldDelayed`, so Lean's compiled code for it (assumption 1) is
-evaluated only when the dictionary is unfolded.  Logically `fixRec body hf` is the least fixed point
-of `fold ∘ unfold ∘ body`, which is `body` when `body` is a `mk` (by `Fix.unfold_fold`);
-`Fix.unfold_fixRec` is what projections use.
-
-`fixRecCore` takes the tuple of fields `x self`, not the dictionary `body self`: the compiler sees
-through `Fix F k` to a function type, so it would compile a lambda returning a dictionary with more
-arguments than `fixRecCore` applies it to.  `fixRec` is `@[macro_inline]`, so that this lambda is
-built at the call site, where `unfold` of the `mk` is a tuple. -/
-def Fix.fixRecCore {k : I} [Fix.BotTotal F k] (x : Fix F k → F k (Fix F)) (h : ∀ d, Shape.cond (x d))
-    (hx : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) x) : Fix F k :=
-  Fix.foldDelayed F (fun _ => x (Fix.fixRecCore x h hx)) (h _)
-partial_fixpoint monotonicity by
-  letI : FixCompat (Fix F k) := Fix.fixCompat F k
-  exact Proofs.Cont.monotone (Proofs.Cont.fold F h hx)
-@[macro_inline]
-def Fix.fixRec {k : I} [Fix.BotTotal F k] (body : Fix F k → Fix F k) (hf : Cont body) : Fix F k :=
-  Fix.fixRecCore F (fun d => Fix.unfold F (body d)) (fun d => Fix.cond F (body d)) (Proofs.Cont.unfold F hf)
-theorem Fix.fixRec_eq {k : I} [Fix.BotTotal F k] (body : Fix F k → Fix F k) (hf : Cont body) :
-    Fix.fixRec F body hf = Fix.fold F (Fix.unfold F (body (Fix.fixRec F body hf))) (Fix.cond F _) :=
-  Fix.fixRecCore.eq_1 F _ _ _
-theorem Fix.unfold_fixRec {k : I} [Fix.BotTotal F k] (body : Fix F k → Fix F k) (hf : Cont body) :
-    Fix.unfold F (Fix.fixRec F body hf) = Fix.unfold F (body (Fix.fixRec F body hf)) :=
-  (congrArg (Fix.unfold F) (Fix.fixRec_eq F body hf)).trans (Fix.unfold_fold F _ _)
 end Fix
 
 /-! ## 4. The `nonpos_structure` command
