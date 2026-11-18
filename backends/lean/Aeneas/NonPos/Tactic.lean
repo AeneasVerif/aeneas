@@ -737,6 +737,35 @@ meta def unfoldContLemma (structName lemName : Name) : TermElabM Unit := do
       let lps := (collectLevelParams (collectLevelParams {} type) value).params.toList
       addDecl (Declaration.thmDecl { name := lemName, levelParams := lps, type, value })
 
+/-- `Bla.mk_cont : ∀ ps {D} [Dom D] (g₁ : D → τ₁) … (gₙ : D → τₙ) (h : ∀ d, Shape.cond ⟨g₁ d, …⟩),
+Cont g₁ → … → Cont gₙ → Cont (fun d => Bla.mk ps (g₁ d) … (gₙ d) (h d))`, its statement built from
+the type of `mk` (not elaborated from syntax), and proved by `nonpos_cont`. -/
+meta def mkContLemma (mkName lemName : Name) (nf : Nat) : TermElabM Unit := do
+  let info ← getConstInfo mkName
+  let lvls := info.levelParams.map Level.param
+  forallTelescope info.type fun xs _ => do  -- `xs` is `ps f₁ … fₙ h`
+    let np := xs.size - nf - 1
+    let (ps, fs, h) := (xs.extract 0 np, xs.extract np (np + nf), xs.back!)
+    let u := Level.param `u_nonpos
+    withLocalDecl `D .implicit (.sort (.succ u)) fun D => do
+    withLocalDecl `iD .instImplicit (← mkAppM ``Dom #[D]) fun iD => do
+    let gTys ← fs.mapM fun f => do mkArrow D (← inferType f)
+    withLocalDeclsDND (gTys.mapIdx fun i t => (Name.mkSimple s!"g{i}", t)) fun gs => do
+    let hTy ← withLocalDeclD `d D fun d => do
+      mkForallFVars #[d] ((← inferType h).replaceFVars fs (gs.map (mkApp · d)))
+    withLocalDeclD `h hTy fun hh => do
+    let cTys ← gs.mapM fun g => mkAppM ``Cont #[g]
+    withLocalDeclsDND (cTys.mapIdx fun i t => (Name.mkSimple s!"hc{i}", t)) fun hcs => do
+      let fn ← withLocalDeclD `d D fun d => do
+        mkLambdaFVars #[d] (mkAppN (mkConst mkName lvls) ((ps ++ gs.map (mkApp · d)).push (mkApp hh d)))
+      let stmt ← mkAppM ``Cont #[fn]
+      let m ← mkFreshExprSyntheticOpaqueMVar stmt
+      let [] ← Tactic.run m.mvarId! (nonposCont 5000) | throwError "mk_cont: not proved"
+      let xs' := ps ++ #[D, iD] ++ gs ++ #[hh] ++ hcs
+      let type ← instantiateMVars (← mkForallFVars xs' stmt)
+      let value ← instantiateMVars (← mkLambdaFVars xs' m)
+      addDecl (Declaration.thmDecl { name := lemName, levelParams := info.levelParams ++ [`u_nonpos], type, value })
+
 /-- `∀ x₁ … xₙ, True` (`n ≥ 0`). -/
 meta partial def isForallTrue (e : Expr) : Bool :=
   if e.isForall then isForallTrue e.bindingBody! else e.isConstOf ``True
@@ -863,15 +892,9 @@ meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
     if found then elabCommand (← `(attribute [instance high] $(mkIdent botName)))
     -- `Bla.mk_cont`
     if s.fields.isEmpty then continue
-    let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)
     let contId := mkIdentFrom s.name (s.name.getId ++ `mk_cont)
-    let fieldFns ← s.fields.mapM fun (f, τ) => `(bracketedBinder| ($f : D → $τ))
-    let fieldConts ← s.fields.mapM fun (f, _) => `(bracketedBinder| (_ : Cont $f))
-    let apps ← s.fields.mapM fun (f, _) => `($f d)
-    let tuple ← apps.foldrM (init := ← `(⟨⟩)) fun a acc => `(⟨$a, $acc⟩)
-    elabCommand (← `(theorem $contId $impl* {D : Type _} [Dom D] $fieldFns*
-        (h : ∀ d, Shape.cond (F := $fId $k) (X := Fix $fId) $tuple) $fieldConts* :
-        Cont (fun d => $mkId $apps* (h d)) := by nonpos_cont 5000))
+    let ns ← getCurrNamespace
+    liftTermElabM <| mkContLemma (ns ++ s.name.getId ++ `mk) (ns ++ s.name.getId ++ `mk_cont) s.fields.size
     elabCommand (← `(attribute [nonpos_continuous] $contId))
 
 /-- The hook: `nonpos_structure_lemmas core₁ … coreₙ`, with the structures of the group. -/
