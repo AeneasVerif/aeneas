@@ -8,6 +8,17 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Paper.
 
+(** [core::panicking::panic]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 138:0-138:43
+    Name pattern: [core::panicking::panic]
+    Visibility: public *)
+Axiom core_panicking_panic : str -> result Never.
+
+(** [core::panicking::panic_in_cleanup]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 364:0-364:26
+    Name pattern: [core::panicking::panic_in_cleanup] *)
+Axiom core_panicking_panic_in_cleanup : result Never.
+
 (** [paper::ref_incr]:
     Source: 'tests/src/paper.rs', lines 7:0-9:1
     Visibility: public *)

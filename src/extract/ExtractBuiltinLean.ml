@@ -90,7 +90,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Core.lean", line: 14 *)
     mk_type "core::option::Option" "Option" ~prefix_variant_names:false
       ~kind:(KEnum [ ("None", Some "none"); ("Some", Some "some") ]);
-    (* file: "Aeneas/Std/Core/Panic.lean", line: 8 *)
+    (* file: "Aeneas/Std/Core/Panic.lean", line: 9 *)
     mk_type "core::panic::panic_info::PanicInfo"
       "core.panic.panic_info.PanicInfo";
     (* file: "Aeneas/Std/Core/Core.lean", line: 109 *)
@@ -1101,6 +1101,16 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 83 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
+    (* file: "Aeneas/Std/Core/Panic.lean", line: 27 *)
+    mk_fun "core::panicking::assert_failed" "core.panicking.assert_failed";
+    (* file: "Aeneas/Std/Core/Panic.lean", line: 15 *)
+    mk_fun "core::panicking::panic" "core.panicking.panic";
+    (* file: "Aeneas/Std/Core/Panic.lean", line: 18 *)
+    mk_fun "core::panicking::panic_fmt" "core.panicking.panic_fmt";
+    (* file: "Aeneas/Std/Core/Panic.lean", line: 21 *)
+    mk_fun "core::panicking::panic_in_cleanup" "core.panicking.panic_in_cleanup";
+    (* file: "Aeneas/Std/Core/Panic.lean", line: 24 *)
+    mk_fun "core::panicking::panic_no_unwind" "core.panicking.panic_no_unwind";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 108 *)
     mk_fun
       "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, \
