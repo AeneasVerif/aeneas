@@ -65,6 +65,7 @@ Check (if true then Ok (1 + 2) else Fail_ Failure)%global = 3.
 
 Definition string := Coq.Strings.String.string.
 Definition str := string.
+Inductive Never : Type :=.
 Definition char := Coq.Strings.Ascii.ascii.
 Definition char_of_byte := Coq.Strings.Ascii.ascii_of_byte.
 
