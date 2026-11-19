@@ -1333,7 +1333,7 @@ let lean_builtin_funs =
     mk_fun
       "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, \
        @T>, &'a @T>}::fold"
-      "core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold";
+      "core.slice.iter.IteratorSliceIter.fold";
     (* file: "Aeneas/Std/SliceIter.lean", line: 69 *)
     mk_fun
       "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, \

@@ -39,12 +39,12 @@ impl_def
 }
 
 /-- [iter_rfold::Odd]
-    Source: 'tests/src/iter_rfold.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/iter_rfold.rs', lines 9:0-11:1 -/
 structure Odd where
   remaining : Bool
 
 /-- [iter_rfold::{impl core::iter::traits::iterator::Iterator<u32> for iter_rfold::Odd}::next]:
-    Source: 'tests/src/iter_rfold.rs', lines 14:4-21:5
+    Source: 'tests/src/iter_rfold.rs', lines 16:4-23:5
     Visibility: public -/
 def Odd.Insts.CoreIterTraitsIteratorIteratorU32.next
   (self : Odd) : Result ((Option Std.U32) × Odd) := do
@@ -53,7 +53,7 @@ def Odd.Insts.CoreIterTraitsIteratorIteratorU32.next
   else ok (none, self)
 
 /-- Trait implementation: [iter_rfold::{impl core::iter::traits::iterator::Iterator<u32> for iter_rfold::Odd}]
-    Source: 'tests/src/iter_rfold.rs', lines 11:0-22:1 -/
+    Source: 'tests/src/iter_rfold.rs', lines 13:0-24:1 -/
 @[reducible]
 impl_def Odd.Insts.CoreIterTraitsIteratorIteratorU32 :
   core.iter.traits.iterator.Iterator Odd Std.U32 := {
@@ -65,7 +65,7 @@ impl_def Odd.Insts.CoreIterTraitsIteratorIteratorU32 :
 }
 
 /-- [iter_rfold::{impl core::iter::traits::double_ended::DoubleEndedIterator<u32> for iter_rfold::Odd}::rfold]:
-    Source: 'tests/src/iter_rfold.rs', lines 34:4-39:5
+    Source: 'tests/src/iter_rfold.rs', lines 36:4-41:5
     Visibility: public -/
 def Odd.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorU32.rfold
   {B : Type _} {F : Type _} (coreopsfunctionFnMutFPairBU32BInst :
@@ -77,7 +77,7 @@ def Odd.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorU32.rfold
   ok t
 
 /-- [iter_rfold::{impl core::iter::traits::double_ended::DoubleEndedIterator<u32> for iter_rfold::Odd}::next_back]:
-    Source: 'tests/src/iter_rfold.rs', lines 25:4-32:5
+    Source: 'tests/src/iter_rfold.rs', lines 27:4-34:5
     Visibility: public -/
 def Odd.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorU32.next_back
   (self : Odd) : Result ((Option Std.U32) × Odd) := do
@@ -86,7 +86,7 @@ def Odd.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorU32.next_back
   else ok (none, self)
 
 /-- Trait implementation: [iter_rfold::{impl core::iter::traits::double_ended::DoubleEndedIterator<u32> for iter_rfold::Odd}]
-    Source: 'tests/src/iter_rfold.rs', lines 24:0-40:1 -/
+    Source: 'tests/src/iter_rfold.rs', lines 26:0-42:1 -/
 @[reducible]
 def Odd.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorU32 :
   core.iter.traits.double_ended.DoubleEndedIterator Odd Std.U32 := {
@@ -100,12 +100,12 @@ def Odd.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorU32 :
 }
 
 /-- [iter_rfold::rfold_slice::{closure}]
-    Source: 'tests/src/iter_rfold.rs', lines 45:42-45:70 -/
+    Source: 'tests/src/iter_rfold.rs', lines 47:42-47:70 -/
 @[reducible]
 def rfold_slice.closure := Unit
 
 /-- [iter_rfold::rfold_slice::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/iter_rfold.rs', lines 45:42-45:70 -/
+    Source: 'tests/src/iter_rfold.rs', lines 47:42-47:70 -/
 def rfold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
   (c : rfold_slice.closure) (tupled_args : (Std.U32 × Std.U32)) :
   Result (Std.U32 × rfold_slice.closure)
@@ -116,7 +116,7 @@ def rfold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
   ok (i1, ())
 
 /-- [iter_rfold::rfold_slice::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/iter_rfold.rs', lines 45:42-45:70 -/
+    Source: 'tests/src/iter_rfold.rs', lines 47:42-47:70 -/
 def
   rfold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
   (c : rfold_slice.closure) (p : (Std.U32 × Std.U32)) : Result Std.U32 := do
@@ -126,7 +126,7 @@ def
   ok i
 
 /-- Trait implementation: [iter_rfold::rfold_slice::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice::{closure}<'_0>}]
-    Source: 'tests/src/iter_rfold.rs', lines 45:42-45:70 -/
+    Source: 'tests/src/iter_rfold.rs', lines 47:42-47:70 -/
 @[reducible]
 def rfold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
   core.ops.function.FnOnce rfold_slice.closure (Std.U32 × Std.U32) Std.U32
@@ -136,7 +136,7 @@ def rfold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
 }
 
 /-- Trait implementation: [iter_rfold::rfold_slice::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice::{closure}<'_0>}]
-    Source: 'tests/src/iter_rfold.rs', lines 45:42-45:70 -/
+    Source: 'tests/src/iter_rfold.rs', lines 47:42-47:70 -/
 @[reducible]
 def rfold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
   core.ops.function.FnMut rfold_slice.closure (Std.U32 × Std.U32) Std.U32 := {
@@ -147,7 +147,7 @@ def rfold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
 }
 
 /-- [iter_rfold::rfold_slice]:
-    Source: 'tests/src/iter_rfold.rs', lines 43:0-47:1
+    Source: 'tests/src/iter_rfold.rs', lines 45:0-49:1
     Visibility: public -/
 def rfold_slice : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
@@ -163,13 +163,79 @@ def rfold_slice : Result Unit := do
 /- Unit test for [iter_rfold::rfold_slice] -/
 #guard (rfold_slice).reducesTo ()
 
+/-- [iter_rfold::rfold_slice_last::{closure}]
+    Source: 'tests/src/iter_rfold.rs', lines 54:42-54:57 -/
+@[reducible]
+def rfold_slice_last.closure := Unit
+
+/-- [iter_rfold::rfold_slice_last::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice_last::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_rfold.rs', lines 54:42-54:57 -/
+def
+  rfold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+  (c : rfold_slice_last.closure) (tupled_args : (Std.U32 × Std.U32)) :
+  Result (Std.U32 × rfold_slice_last.closure)
+  := do
+  let (_, item) := tupled_args
+  ok (item, ())
+
+/-- [iter_rfold::rfold_slice_last::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice_last::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_rfold.rs', lines 54:42-54:57 -/
+def
+  rfold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
+  (c : rfold_slice_last.closure) (p : (Std.U32 × Std.U32)) :
+  Result Std.U32
+  := do
+  let (i, _) ←
+    rfold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+      () p
+  ok i
+
+/-- Trait implementation: [iter_rfold::rfold_slice_last::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice_last::{closure}<'_0>}]
+    Source: 'tests/src/iter_rfold.rs', lines 54:42-54:57 -/
+@[reducible]
+def rfold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
+  core.ops.function.FnOnce rfold_slice_last.closure (Std.U32 × Std.U32)
+  Std.U32 := {
+  call_once :=
+    rfold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
+}
+
+/-- Trait implementation: [iter_rfold::rfold_slice_last::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_rfold::rfold_slice_last::{closure}<'_0>}]
+    Source: 'tests/src/iter_rfold.rs', lines 54:42-54:57 -/
+@[reducible]
+def rfold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
+  core.ops.function.FnMut rfold_slice_last.closure (Std.U32 × Std.U32) Std.U32
+  := {
+  FnOnceInst :=
+    rfold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32
+  call_mut :=
+    rfold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+}
+
+/-- [iter_rfold::rfold_slice_last]:
+    Source: 'tests/src/iter_rfold.rs', lines 52:0-56:1
+    Visibility: public -/
+def rfold_slice_last : Result Unit := do
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let i ← core.slice.Slice.iter s
+  let value ←
+    core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32)
+      rfold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 i
+      0#u32 ()
+  massert (value = 1#u32)
+
+/- Unit test for [iter_rfold::rfold_slice_last] -/
+#guard (rfold_slice_last).reducesTo ()
+
 /-- [iter_rfold::rev_fold_slice::{closure}]
-    Source: 'tests/src/iter_rfold.rs', lines 52:47-52:75 -/
+    Source: 'tests/src/iter_rfold.rs', lines 61:47-61:75 -/
 @[reducible]
 def rev_fold_slice.closure := Unit
 
 /-- [iter_rfold::rev_fold_slice::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_rfold::rev_fold_slice::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/iter_rfold.rs', lines 52:47-52:75 -/
+    Source: 'tests/src/iter_rfold.rs', lines 61:47-61:75 -/
 def
   rev_fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
   (c : rev_fold_slice.closure) (tupled_args : (Std.U32 × Std.U32)) :
@@ -181,7 +247,7 @@ def
   ok (i1, ())
 
 /-- [iter_rfold::rev_fold_slice::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_rfold::rev_fold_slice::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/iter_rfold.rs', lines 52:47-52:75 -/
+    Source: 'tests/src/iter_rfold.rs', lines 61:47-61:75 -/
 def
   rev_fold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
   (c : rev_fold_slice.closure) (p : (Std.U32 × Std.U32)) :
@@ -193,7 +259,7 @@ def
   ok i
 
 /-- Trait implementation: [iter_rfold::rev_fold_slice::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_rfold::rev_fold_slice::{closure}<'_0>}]
-    Source: 'tests/src/iter_rfold.rs', lines 52:47-52:75 -/
+    Source: 'tests/src/iter_rfold.rs', lines 61:47-61:75 -/
 @[reducible]
 def rev_fold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
   core.ops.function.FnOnce rev_fold_slice.closure (Std.U32 × Std.U32) Std.U32
@@ -203,7 +269,7 @@ def rev_fold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
 }
 
 /-- Trait implementation: [iter_rfold::rev_fold_slice::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_rfold::rev_fold_slice::{closure}<'_0>}]
-    Source: 'tests/src/iter_rfold.rs', lines 52:47-52:75 -/
+    Source: 'tests/src/iter_rfold.rs', lines 61:47-61:75 -/
 @[reducible]
 def rev_fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
   core.ops.function.FnMut rev_fold_slice.closure (Std.U32 × Std.U32) Std.U32
@@ -215,7 +281,7 @@ def rev_fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
 }
 
 /-- [iter_rfold::rev_fold_slice]:
-    Source: 'tests/src/iter_rfold.rs', lines 50:0-54:1
+    Source: 'tests/src/iter_rfold.rs', lines 59:0-63:1
     Visibility: public -/
 def rev_fold_slice : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
@@ -237,12 +303,12 @@ def rev_fold_slice : Result Unit := do
 #guard (rev_fold_slice).reducesTo ()
 
 /-- [iter_rfold::rev_fold_override::{closure}]
-    Source: 'tests/src/iter_rfold.rs', lines 60:20-60:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 69:20-69:42 -/
 @[reducible]
 def rev_fold_override.closure := Unit
 
 /-- [iter_rfold::rev_fold_override::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_rfold::rev_fold_override::{closure}}::call_mut]:
-    Source: 'tests/src/iter_rfold.rs', lines 60:20-60:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 69:20-69:42 -/
 def rev_fold_override.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   (c : rev_fold_override.closure) (tupled_args : (Std.U32 × Std.U32)) :
   Result (Std.U32 × rev_fold_override.closure)
@@ -252,7 +318,7 @@ def rev_fold_override.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   ok (i, c)
 
 /-- [iter_rfold::rev_fold_override::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_rfold::rev_fold_override::{closure}}::call_once]:
-    Source: 'tests/src/iter_rfold.rs', lines 60:20-60:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 69:20-69:42 -/
 def
   rev_fold_override.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   (c : rev_fold_override.closure) (p : (Std.U32 × Std.U32)) :
@@ -264,7 +330,7 @@ def
   ok i
 
 /-- Trait implementation: [iter_rfold::rev_fold_override::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_rfold::rev_fold_override::{closure}}]
-    Source: 'tests/src/iter_rfold.rs', lines 60:20-60:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 69:20-69:42 -/
 @[reducible]
 def rev_fold_override.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
   core.ops.function.FnOnce rev_fold_override.closure (Std.U32 × Std.U32)
@@ -274,7 +340,7 @@ def rev_fold_override.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
 }
 
 /-- Trait implementation: [iter_rfold::rev_fold_override::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_rfold::rev_fold_override::{closure}}]
-    Source: 'tests/src/iter_rfold.rs', lines 60:20-60:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 69:20-69:42 -/
 @[reducible]
 def rev_fold_override.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
   core.ops.function.FnMut rev_fold_override.closure (Std.U32 × Std.U32)
@@ -286,7 +352,7 @@ def rev_fold_override.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
 }
 
 /-- [iter_rfold::rev_fold_override]:
-    Source: 'tests/src/iter_rfold.rs', lines 57:0-62:1
+    Source: 'tests/src/iter_rfold.rs', lines 66:0-71:1
     Visibility: public -/
 def rev_fold_override : Result Unit := do
   let r ←
@@ -305,12 +371,12 @@ def rev_fold_override : Result Unit := do
 #guard (rev_fold_override).reducesTo ()
 
 /-- [iter_rfold::fold_generic::{closure}]
-    Source: 'tests/src/iter_rfold.rs', lines 65:20-65:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 74:20-74:42 -/
 @[reducible]
 def fold_generic.closure (I : Type _) := Unit
 
 /-- [iter_rfold::fold_generic::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_rfold::fold_generic::{closure}<I>}::call_mut]:
-    Source: 'tests/src/iter_rfold.rs', lines 65:20-65:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 74:20-74:42 -/
 def fold_generic.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (c : fold_generic.closure I)
@@ -322,7 +388,7 @@ def fold_generic.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   ok (i, c)
 
 /-- [iter_rfold::fold_generic::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_rfold::fold_generic::{closure}<I>}::call_once]:
-    Source: 'tests/src/iter_rfold.rs', lines 65:20-65:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 74:20-74:42 -/
 def fold_generic.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (c : fold_generic.closure I)
@@ -335,7 +401,7 @@ def fold_generic.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   ok i
 
 /-- Trait implementation: [iter_rfold::fold_generic::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_rfold::fold_generic::{closure}<I>}]
-    Source: 'tests/src/iter_rfold.rs', lines 65:20-65:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 74:20-74:42 -/
 @[reducible]
 def fold_generic.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 {I : Type _}
   (coreitertraitsiteratorIteratorIU32Inst : core.iter.traits.iterator.Iterator
@@ -347,7 +413,7 @@ def fold_generic.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 {I : Type _}
 }
 
 /-- Trait implementation: [iter_rfold::fold_generic::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_rfold::fold_generic::{closure}<I>}]
-    Source: 'tests/src/iter_rfold.rs', lines 65:20-65:42 -/
+    Source: 'tests/src/iter_rfold.rs', lines 74:20-74:42 -/
 @[reducible]
 def fold_generic.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 {I : Type _}
   (coreitertraitsiteratorIteratorIU32Inst : core.iter.traits.iterator.Iterator
@@ -361,7 +427,7 @@ def fold_generic.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 {I : Type _}
 }
 
 /-- [iter_rfold::fold_generic]:
-    Source: 'tests/src/iter_rfold.rs', lines 64:0-66:1 -/
+    Source: 'tests/src/iter_rfold.rs', lines 73:0-75:1 -/
 def fold_generic
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (iter : I) :
@@ -372,7 +438,7 @@ def fold_generic
     coreitertraitsiteratorIteratorIU32Inst) iter 0#u32 ()
 
 /-- [iter_rfold::rev_fold_generic_override]:
-    Source: 'tests/src/iter_rfold.rs', lines 69:0-71:1
+    Source: 'tests/src/iter_rfold.rs', lines 78:0-80:1
     Visibility: public -/
 def rev_fold_generic_override : Result Unit := do
   let r ←

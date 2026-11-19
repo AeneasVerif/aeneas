@@ -1,5 +1,4 @@
 //@ [!lean] skip
-//@ [lean] aeneas-args=-filter-trait-methods
 #![feature(register_tool)]
 #![register_tool(verify)]
 
@@ -86,4 +85,27 @@ pub fn fold_slice() {
     let values = [1u32, 2, 3];
     let value = values.iter().fold(0u32, |acc, item| acc * 10 + *item);
     assert!(value == 123);
+}
+
+#[verify::test]
+pub fn fold_slice_last() {
+    let values = [1u32, 2, 3];
+    let value = values.iter().fold(0u32, |_, item| *item);
+    assert!(value == 3);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fold_cases() {
+        fold_countdown();
+        fold_empty();
+        fold_generic();
+        fold_override();
+        fold_stateful_closure();
+        fold_slice();
+        fold_slice_last();
+    }
 }

@@ -21,12 +21,12 @@ set_option maxRecDepth 2048
 namespace iter_fold
 
 /-- [iter_fold::Countdown]
-    Source: 'tests/src/iter_fold.rs', lines 6:0-8:1 -/
+    Source: 'tests/src/iter_fold.rs', lines 5:0-7:1 -/
 structure Countdown where
   remaining : Std.U32
 
 /-- [iter_fold::{impl core::iter::traits::iterator::Iterator<u32> for iter_fold::Countdown}::next]:
-    Source: 'tests/src/iter_fold.rs', lines 13:4-21:5
+    Source: 'tests/src/iter_fold.rs', lines 12:4-20:5
     Visibility: public -/
 def Countdown.Insts.CoreIterTraitsIteratorIteratorU32.next
   (self : Countdown) : Result ((Option Std.U32) × Countdown) := do
@@ -37,7 +37,7 @@ def Countdown.Insts.CoreIterTraitsIteratorIteratorU32.next
     ok (some self.remaining, { remaining := i })
 
 /-- Trait implementation: [iter_fold::{impl core::iter::traits::iterator::Iterator<u32> for iter_fold::Countdown}]
-    Source: 'tests/src/iter_fold.rs', lines 10:0-22:1 -/
+    Source: 'tests/src/iter_fold.rs', lines 9:0-21:1 -/
 @[reducible]
 impl_def Countdown.Insts.CoreIterTraitsIteratorIteratorU32 :
   core.iter.traits.iterator.Iterator Countdown Std.U32 := {
@@ -50,12 +50,12 @@ impl_def Countdown.Insts.CoreIterTraitsIteratorIteratorU32 :
 }
 
 /-- [iter_fold::OneShot]
-    Source: 'tests/src/iter_fold.rs', lines 24:0-26:1 -/
+    Source: 'tests/src/iter_fold.rs', lines 23:0-25:1 -/
 structure OneShot where
   value : Option Std.U32
 
 /-- [iter_fold::{impl core::iter::traits::iterator::Iterator<u32> for iter_fold::OneShot}::fold]:
-    Source: 'tests/src/iter_fold.rs', lines 37:4-45:5
+    Source: 'tests/src/iter_fold.rs', lines 36:4-44:5
     Visibility: public -/
 def OneShot.Insts.CoreIterTraitsIteratorIteratorU32.fold
   {B : Type _} {F : Type _} (coreopsfunctionFnMutFPairBU32BInst :
@@ -71,14 +71,14 @@ def OneShot.Insts.CoreIterTraitsIteratorIteratorU32.fold
     ok init1
 
 /-- [iter_fold::{impl core::iter::traits::iterator::Iterator<u32> for iter_fold::OneShot}::next]:
-    Source: 'tests/src/iter_fold.rs', lines 31:4-35:5
+    Source: 'tests/src/iter_fold.rs', lines 30:4-34:5
     Visibility: public -/
 def OneShot.Insts.CoreIterTraitsIteratorIteratorU32.next
   (self : OneShot) : Result ((Option Std.U32) × OneShot) := do
   ok (self.value, { value := none })
 
 /-- Trait implementation: [iter_fold::{impl core::iter::traits::iterator::Iterator<u32> for iter_fold::OneShot}]
-    Source: 'tests/src/iter_fold.rs', lines 28:0-46:1 -/
+    Source: 'tests/src/iter_fold.rs', lines 27:0-45:1 -/
 @[reducible]
 def OneShot.Insts.CoreIterTraitsIteratorIteratorU32 :
   core.iter.traits.iterator.Iterator OneShot Std.U32 := {
@@ -90,12 +90,12 @@ def OneShot.Insts.CoreIterTraitsIteratorIteratorU32 :
 }
 
 /-- [iter_fold::fold_countdown::{closure}]
-    Source: 'tests/src/iter_fold.rs', lines 50:52-50:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 49:52-49:76 -/
 @[reducible]
 def fold_countdown.closure := Unit
 
 /-- [iter_fold::fold_countdown::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_countdown::{closure}}::call_mut]:
-    Source: 'tests/src/iter_fold.rs', lines 50:52-50:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 49:52-49:76 -/
 def fold_countdown.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   (c : fold_countdown.closure) (tupled_args : (Std.U32 × Std.U32)) :
   Result (Std.U32 × fold_countdown.closure)
@@ -105,7 +105,7 @@ def fold_countdown.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   ok (i, c)
 
 /-- [iter_fold::fold_countdown::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_countdown::{closure}}::call_once]:
-    Source: 'tests/src/iter_fold.rs', lines 50:52-50:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 49:52-49:76 -/
 def fold_countdown.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   (c : fold_countdown.closure) (p : (Std.U32 × Std.U32)) :
   Result Std.U32
@@ -115,7 +115,7 @@ def fold_countdown.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   ok i
 
 /-- Trait implementation: [iter_fold::fold_countdown::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_countdown::{closure}}]
-    Source: 'tests/src/iter_fold.rs', lines 50:52-50:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 49:52-49:76 -/
 @[reducible]
 def fold_countdown.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
   core.ops.function.FnOnce fold_countdown.closure (Std.U32 × Std.U32) Std.U32
@@ -125,7 +125,7 @@ def fold_countdown.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
 }
 
 /-- Trait implementation: [iter_fold::fold_countdown::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_countdown::{closure}}]
-    Source: 'tests/src/iter_fold.rs', lines 50:52-50:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 49:52-49:76 -/
 @[reducible]
 def fold_countdown.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
   core.ops.function.FnMut fold_countdown.closure (Std.U32 × Std.U32) Std.U32
@@ -136,7 +136,7 @@ def fold_countdown.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
 }
 
 /-- [iter_fold::fold_countdown]:
-    Source: 'tests/src/iter_fold.rs', lines 49:0-52:1
+    Source: 'tests/src/iter_fold.rs', lines 48:0-51:1
     Visibility: public -/
 def fold_countdown : Result Unit := do
   let sum ←
@@ -150,12 +150,12 @@ def fold_countdown : Result Unit := do
 #guard (fold_countdown).reducesTo ()
 
 /-- [iter_fold::fold_empty::{closure}]
-    Source: 'tests/src/iter_fold.rs', lines 56:52-56:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 55:52-55:76 -/
 @[reducible]
 def fold_empty.closure := Unit
 
 /-- [iter_fold::fold_empty::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_empty::{closure}}::call_mut]:
-    Source: 'tests/src/iter_fold.rs', lines 56:52-56:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 55:52-55:76 -/
 def fold_empty.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   (c : fold_empty.closure) (tupled_args : (Std.U32 × Std.U32)) :
   Result (Std.U32 × fold_empty.closure)
@@ -165,7 +165,7 @@ def fold_empty.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   ok (i, c)
 
 /-- [iter_fold::fold_empty::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_empty::{closure}}::call_once]:
-    Source: 'tests/src/iter_fold.rs', lines 56:52-56:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 55:52-55:76 -/
 def fold_empty.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   (c : fold_empty.closure) (p : (Std.U32 × Std.U32)) : Result Std.U32 := do
   let (i, _) ←
@@ -173,7 +173,7 @@ def fold_empty.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   ok i
 
 /-- Trait implementation: [iter_fold::fold_empty::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_empty::{closure}}]
-    Source: 'tests/src/iter_fold.rs', lines 56:52-56:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 55:52-55:76 -/
 @[reducible]
 def fold_empty.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
   core.ops.function.FnOnce fold_empty.closure (Std.U32 × Std.U32) Std.U32 := {
@@ -182,7 +182,7 @@ def fold_empty.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
 }
 
 /-- Trait implementation: [iter_fold::fold_empty::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_empty::{closure}}]
-    Source: 'tests/src/iter_fold.rs', lines 56:52-56:76 -/
+    Source: 'tests/src/iter_fold.rs', lines 55:52-55:76 -/
 @[reducible]
 def fold_empty.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
   core.ops.function.FnMut fold_empty.closure (Std.U32 × Std.U32) Std.U32 := {
@@ -192,7 +192,7 @@ def fold_empty.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
 }
 
 /-- [iter_fold::fold_empty]:
-    Source: 'tests/src/iter_fold.rs', lines 55:0-58:1
+    Source: 'tests/src/iter_fold.rs', lines 54:0-57:1
     Visibility: public -/
 def fold_empty : Result Unit := do
   let sum ←
@@ -206,12 +206,12 @@ def fold_empty : Result Unit := do
 #guard (fold_empty).reducesTo ()
 
 /-- [iter_fold::fold_values::{closure}]
-    Source: 'tests/src/iter_fold.rs', lines 61:20-61:44 -/
+    Source: 'tests/src/iter_fold.rs', lines 60:20-60:44 -/
 @[reducible]
 def fold_values.closure (I : Type _) := Unit
 
 /-- [iter_fold::fold_values::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_values::{closure}<I>}::call_mut]:
-    Source: 'tests/src/iter_fold.rs', lines 61:20-61:44 -/
+    Source: 'tests/src/iter_fold.rs', lines 60:20-60:44 -/
 def fold_values.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (c : fold_values.closure I)
@@ -223,7 +223,7 @@ def fold_values.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   ok (i, c)
 
 /-- [iter_fold::fold_values::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_values::{closure}<I>}::call_once]:
-    Source: 'tests/src/iter_fold.rs', lines 61:20-61:44 -/
+    Source: 'tests/src/iter_fold.rs', lines 60:20-60:44 -/
 def fold_values.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (c : fold_values.closure I)
@@ -236,7 +236,7 @@ def fold_values.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   ok i
 
 /-- Trait implementation: [iter_fold::fold_values::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_values::{closure}<I>}]
-    Source: 'tests/src/iter_fold.rs', lines 61:20-61:44 -/
+    Source: 'tests/src/iter_fold.rs', lines 60:20-60:44 -/
 @[reducible]
 def fold_values.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 {I : Type _}
   (coreitertraitsiteratorIteratorIU32Inst : core.iter.traits.iterator.Iterator
@@ -248,7 +248,7 @@ def fold_values.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 {I : Type _}
 }
 
 /-- Trait implementation: [iter_fold::fold_values::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_values::{closure}<I>}]
-    Source: 'tests/src/iter_fold.rs', lines 61:20-61:44 -/
+    Source: 'tests/src/iter_fold.rs', lines 60:20-60:44 -/
 @[reducible]
 def fold_values.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 {I : Type _}
   (coreitertraitsiteratorIteratorIU32Inst : core.iter.traits.iterator.Iterator
@@ -262,7 +262,7 @@ def fold_values.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 {I : Type _}
 }
 
 /-- [iter_fold::fold_values]:
-    Source: 'tests/src/iter_fold.rs', lines 60:0-62:1 -/
+    Source: 'tests/src/iter_fold.rs', lines 59:0-61:1 -/
 def fold_values
   {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (iter : I) :
@@ -273,7 +273,7 @@ def fold_values
     coreitertraitsiteratorIteratorIU32Inst) iter 0#u32 ()
 
 /-- [iter_fold::fold_generic]:
-    Source: 'tests/src/iter_fold.rs', lines 65:0-67:1
+    Source: 'tests/src/iter_fold.rs', lines 64:0-66:1
     Visibility: public -/
 def fold_generic : Result Unit := do
   let i ←
@@ -285,7 +285,7 @@ def fold_generic : Result Unit := do
 #guard (fold_generic).reducesTo ()
 
 /-- [iter_fold::fold_override]:
-    Source: 'tests/src/iter_fold.rs', lines 70:0-72:1
+    Source: 'tests/src/iter_fold.rs', lines 69:0-71:1
     Visibility: public -/
 def fold_override : Result Unit := do
   let i ←
@@ -297,12 +297,12 @@ def fold_override : Result Unit := do
 #guard (fold_override).reducesTo ()
 
 /-- [iter_fold::fold_stateful_closure::{closure}]
-    Source: 'tests/src/iter_fold.rs', lines 77:52-80:5 -/
+    Source: 'tests/src/iter_fold.rs', lines 76:52-79:5 -/
 @[reducible]
 def fold_stateful_closure.closure := Std.U32
 
 /-- [iter_fold::fold_stateful_closure::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_stateful_closure::{closure}}::call_mut]:
-    Source: 'tests/src/iter_fold.rs', lines 77:52-80:5 -/
+    Source: 'tests/src/iter_fold.rs', lines 76:52-79:5 -/
 def
   fold_stateful_closure.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32.call_mut
   (c : fold_stateful_closure.closure) (tupled_args : (Std.U32 × Std.U32)) :
@@ -315,7 +315,7 @@ def
   ok (i2, i)
 
 /-- [iter_fold::fold_stateful_closure::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_stateful_closure::{closure}}::call_once]:
-    Source: 'tests/src/iter_fold.rs', lines 77:52-80:5 -/
+    Source: 'tests/src/iter_fold.rs', lines 76:52-79:5 -/
 def
   fold_stateful_closure.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32.call_once
   (c : fold_stateful_closure.closure) (p : (Std.U32 × Std.U32)) :
@@ -327,7 +327,7 @@ def
   ok i
 
 /-- Trait implementation: [iter_fold::fold_stateful_closure::{impl core::ops::function::FnOnce<(u32, u32), u32> for iter_fold::fold_stateful_closure::{closure}}]
-    Source: 'tests/src/iter_fold.rs', lines 77:52-80:5 -/
+    Source: 'tests/src/iter_fold.rs', lines 76:52-79:5 -/
 @[reducible]
 def fold_stateful_closure.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
   core.ops.function.FnOnce fold_stateful_closure.closure (Std.U32 × Std.U32)
@@ -337,7 +337,7 @@ def fold_stateful_closure.closure.Insts.CoreOpsFunctionFnOncePairU32U32U32 :
 }
 
 /-- Trait implementation: [iter_fold::fold_stateful_closure::{impl core::ops::function::FnMut<(u32, u32), u32> for iter_fold::fold_stateful_closure::{closure}}]
-    Source: 'tests/src/iter_fold.rs', lines 77:52-80:5 -/
+    Source: 'tests/src/iter_fold.rs', lines 76:52-79:5 -/
 @[reducible]
 def fold_stateful_closure.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
   core.ops.function.FnMut fold_stateful_closure.closure (Std.U32 × Std.U32)
@@ -349,7 +349,7 @@ def fold_stateful_closure.closure.Insts.CoreOpsFunctionFnMutPairU32U32U32 :
 }
 
 /-- [iter_fold::fold_stateful_closure]:
-    Source: 'tests/src/iter_fold.rs', lines 75:0-82:1
+    Source: 'tests/src/iter_fold.rs', lines 74:0-81:1
     Visibility: public -/
 def fold_stateful_closure : Result Unit := do
   let sum ←
@@ -363,12 +363,12 @@ def fold_stateful_closure : Result Unit := do
 #guard (fold_stateful_closure).reducesTo ()
 
 /-- [iter_fold::fold_slice::{closure}]
-    Source: 'tests/src/iter_fold.rs', lines 87:41-87:69 -/
+    Source: 'tests/src/iter_fold.rs', lines 86:41-86:69 -/
 @[reducible]
 def fold_slice.closure := Unit
 
 /-- [iter_fold::fold_slice::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_fold::fold_slice::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/iter_fold.rs', lines 87:41-87:69 -/
+    Source: 'tests/src/iter_fold.rs', lines 86:41-86:69 -/
 def fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
   (c : fold_slice.closure) (tupled_args : (Std.U32 × Std.U32)) :
   Result (Std.U32 × fold_slice.closure)
@@ -379,7 +379,7 @@ def fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
   ok (i1, ())
 
 /-- [iter_fold::fold_slice::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_fold::fold_slice::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/iter_fold.rs', lines 87:41-87:69 -/
+    Source: 'tests/src/iter_fold.rs', lines 86:41-86:69 -/
 def
   fold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
   (c : fold_slice.closure) (p : (Std.U32 × Std.U32)) : Result Std.U32 := do
@@ -389,7 +389,7 @@ def
   ok i
 
 /-- Trait implementation: [iter_fold::fold_slice::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_fold::fold_slice::{closure}<'_0>}]
-    Source: 'tests/src/iter_fold.rs', lines 87:41-87:69 -/
+    Source: 'tests/src/iter_fold.rs', lines 86:41-86:69 -/
 @[reducible]
 def fold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
   core.ops.function.FnOnce fold_slice.closure (Std.U32 × Std.U32) Std.U32 := {
@@ -398,7 +398,7 @@ def fold_slice.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
 }
 
 /-- Trait implementation: [iter_fold::fold_slice::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_fold::fold_slice::{closure}<'_0>}]
-    Source: 'tests/src/iter_fold.rs', lines 87:41-87:69 -/
+    Source: 'tests/src/iter_fold.rs', lines 86:41-86:69 -/
 @[reducible]
 def fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
   core.ops.function.FnMut fold_slice.closure (Std.U32 × Std.U32) Std.U32 := {
@@ -409,18 +409,82 @@ def fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
 }
 
 /-- [iter_fold::fold_slice]:
-    Source: 'tests/src/iter_fold.rs', lines 85:0-89:1
+    Source: 'tests/src/iter_fold.rs', lines 84:0-88:1
     Visibility: public -/
 def fold_slice : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
   let i ← core.slice.Slice.iter s
   let value ←
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+    core.slice.iter.IteratorSliceIter.fold
       fold_slice.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 i 0#u32
       ()
   massert (value = 123#u32)
 
 /- Unit test for [iter_fold::fold_slice] -/
 #guard (fold_slice).reducesTo ()
+
+/-- [iter_fold::fold_slice_last::{closure}]
+    Source: 'tests/src/iter_fold.rs', lines 93:41-93:56 -/
+@[reducible]
+def fold_slice_last.closure := Unit
+
+/-- [iter_fold::fold_slice_last::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_fold::fold_slice_last::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_fold.rs', lines 93:41-93:56 -/
+def
+  fold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+  (c : fold_slice_last.closure) (tupled_args : (Std.U32 × Std.U32)) :
+  Result (Std.U32 × fold_slice_last.closure)
+  := do
+  let (_, item) := tupled_args
+  ok (item, ())
+
+/-- [iter_fold::fold_slice_last::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_fold::fold_slice_last::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_fold.rs', lines 93:41-93:56 -/
+def
+  fold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
+  (c : fold_slice_last.closure) (p : (Std.U32 × Std.U32)) :
+  Result Std.U32
+  := do
+  let (i, _) ←
+    fold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+      () p
+  ok i
+
+/-- Trait implementation: [iter_fold::fold_slice_last::{impl core::ops::function::FnOnce<(u32, &'_0 u32), u32> for iter_fold::fold_slice_last::{closure}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 93:41-93:56 -/
+@[reducible]
+def fold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32 :
+  core.ops.function.FnOnce fold_slice_last.closure (Std.U32 × Std.U32) Std.U32
+  := {
+  call_once :=
+    fold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32.call_once
+}
+
+/-- Trait implementation: [iter_fold::fold_slice_last::{impl core::ops::function::FnMut<(u32, &'_0 u32), u32> for iter_fold::fold_slice_last::{closure}<'_0>}]
+    Source: 'tests/src/iter_fold.rs', lines 93:41-93:56 -/
+@[reducible]
+def fold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 :
+  core.ops.function.FnMut fold_slice_last.closure (Std.U32 × Std.U32) Std.U32
+  := {
+  FnOnceInst :=
+    fold_slice_last.closure.Insts.CoreOpsFunctionFnOncePairU32Shared0U32U32
+  call_mut :=
+    fold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32.call_mut
+}
+
+/-- [iter_fold::fold_slice_last]:
+    Source: 'tests/src/iter_fold.rs', lines 91:0-95:1
+    Visibility: public -/
+def fold_slice_last : Result Unit := do
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let i ← core.slice.Slice.iter s
+  let value ←
+    core.slice.iter.IteratorSliceIter.fold
+      fold_slice_last.closure.Insts.CoreOpsFunctionFnMutPairU32Shared0U32U32 i
+      0#u32 ()
+  massert (value = 3#u32)
+
+/- Unit test for [iter_fold::fold_slice_last] -/
+#guard (fold_slice_last).reducesTo ()
 
 end iter_fold

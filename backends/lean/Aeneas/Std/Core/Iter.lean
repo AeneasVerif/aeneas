@@ -1064,6 +1064,19 @@ def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold
   (self : core.iter.adapters.rev.Rev I) (init : Acc) (f : F) : Result Acc :=
   DEInst.rfold FnMutInst self.iter init f
 
+/-- `Rev::fold` uses the exact `rfold` implementation selected by the inner iterator. -/
+@[step]
+theorem core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold.spec
+    {I Acc F Item : Type _}
+    (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (self : core.iter.adapters.rev.Rev I) (init : Acc) (f : F)
+    (post : Acc → Prop)
+    (hrfold : DEInst.rfold FnMutInst self.iter init f ⦃ post ⦄) :
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.fold
+      DEInst FnMutInst self init f ⦃ post ⦄ := by
+  exact hrfold
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>"]
 impl_def core.iter.traits.iterator.IteratorRev {I Item : Type _}
@@ -1160,6 +1173,87 @@ theorem core.iter.traits.iterator.Iterator.fold.default.loop.spec_decr_nat
     intro r hr
     cases r <;> exact hr
   · exact hInit
+
+/-- A finite iterator whose `next` follows a list folds that list when the closure is pure. -/
+theorem core.iter.traits.iterator.Iterator.fold.default.loop.spec_list
+    {Self Item Acc F : Type _}
+    (next : Self → Result ((Option Item) × Self))
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (remaining : Self → List Item) (step : Acc → Item → Acc)
+    (self : Self) (init : Acc) (f : F)
+    (hnext : ∀ s, next s ⦃ r =>
+      match remaining s with
+      | [] => r.1 = none
+      | x :: xs => r.1 = some x ∧ remaining r.2 = xs ⦄)
+    (hcall : ∀ acc x, FnMutInst.call_mut f (acc, x) ⦃ r => r = (step acc x, f) ⦄) :
+    core.iter.traits.iterator.Iterator.fold.default.loop next FnMutInst self init f
+      ⦃ r => r = (remaining self).foldl step init ⦄ := by
+  let target := (remaining self).foldl step init
+  apply core.iter.traits.iterator.Iterator.fold.default.loop.spec_decr_nat
+    next FnMutInst self init f
+    (fun s => (remaining s.1).length)
+    (fun s => (remaining s.1).foldl step s.2.1 = target ∧ s.2.2 = f)
+    (fun r => r = target)
+  · intro ⟨s, acc, f1⟩ ⟨hinv, hf⟩
+    change f1 = f at hf
+    subst f1
+    unfold core.iter.traits.iterator.Iterator.fold.default.body
+    apply WP.spec_bind (hnext s)
+    intro ⟨o, s1⟩ ho
+    cases hrem : remaining s with
+    | nil =>
+      simp [hrem] at ho hinv
+      subst o
+      simp [WP.spec_ok, hinv]
+    | cons x xs =>
+      simp [hrem] at ho hinv
+      rcases ho with ⟨ho, hrest⟩
+      subst o
+      apply WP.spec_bind (hcall acc x)
+      intro ⟨acc1, f2⟩ hresult
+      cases hresult
+      simp [WP.spec_ok, hrest, hinv]
+  · simp [target]
+
+/-- The default `Iterator::fold` follows a finite list of remaining elements. -/
+@[step]
+theorem core.iter.traits.iterator.Iterator.fold.trait_default.spec_list
+    {Self Item Acc F : Type _}
+    (IterInst : core.iter.traits.iterator.Iterator Self Item)
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (remaining : Self → List Item) (step : Acc → Item → Acc)
+    (self : Self) (init : Acc) (f : F)
+    (hnext : ∀ s, IterInst.next s ⦃ r =>
+      match remaining s with
+      | [] => r.1 = none
+      | x :: xs => r.1 = some x ∧ remaining r.2 = xs ⦄)
+    (hcall : ∀ acc x, FnMutInst.call_mut f (acc, x) ⦃ r => r = (step acc x, f) ⦄) :
+    core.iter.traits.iterator.Iterator.fold.trait_default
+      IterInst FnMutInst self init f
+      ⦃ r => r = (remaining self).foldl step init ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.fold.trait_default
+  exact core.iter.traits.iterator.Iterator.fold.default.loop.spec_list
+    IterInst.next FnMutInst remaining step self init f hnext hcall
+
+/-- The default `DoubleEndedIterator::rfold` follows `next_back` in order. -/
+@[step]
+theorem core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default.spec_list
+    {Self Item Acc F : Type _}
+    (DEInst : core.iter.traits.double_ended.DoubleEndedIterator Self Item)
+    (FnMutInst : core.ops.function.FnMut F (Acc × Item) Acc)
+    (remaining : Self → List Item) (step : Acc → Item → Acc)
+    (self : Self) (init : Acc) (f : F)
+    (hnext : ∀ s, DEInst.next_back s ⦃ r =>
+      match remaining s with
+      | [] => r.1 = none
+      | x :: xs => r.1 = some x ∧ remaining r.2 = xs ⦄)
+    (hcall : ∀ acc x, FnMutInst.call_mut f (acc, x) ⦃ r => r = (step acc x, f) ⦄) :
+    core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default
+      DEInst FnMutInst self init f
+      ⦃ r => r = (remaining self).foldl step init ⦄ := by
+  unfold core.iter.traits.double_ended.DoubleEndedIterator.rfold.trait_default
+  exact core.iter.traits.iterator.Iterator.fold.default.loop.spec_list
+    DEInst.next_back FnMutInst remaining step self init f hnext hcall
 
 /-- Prove a result for the default `rfold` using a decreasing measure and a
     specification for each `next_back` and closure call. -/

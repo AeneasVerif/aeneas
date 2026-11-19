@@ -90,16 +90,53 @@ theorem core.slice.iter.IteratorSliceIter.next.spec
     exact Slice.getElem_Nat_eq it.slice it.i h
   · simp [core.slice.iter.IteratorSliceIter.next, h, WP.spec_ok]
 
+/-- `next` removes the head of the list of remaining slice elements. -/
+theorem core.slice.iter.IteratorSliceIter.next.spec_remaining
+    {T : Type _} (it : core.slice.iter.Iter T) :
+    core.slice.iter.IteratorSliceIter.next it ⦃ r =>
+      match it.slice.val.drop it.i with
+      | [] => r.1 = none
+      | x :: xs => r.1 = some x ∧ r.2.slice.val.drop r.2.i = xs ⦄ := by
+  apply WP.spec_mono (core.slice.iter.IteratorSliceIter.next.spec it)
+  intro ⟨o, it1⟩ ho
+  by_cases hi : it.i < it.slice.val.length
+  · simp [hi] at ho
+    rcases ho with ⟨rfl, rfl⟩
+    rw [List.drop_eq_getElem_cons hi]
+    simp
+  · simp [hi] at ho
+    rcases ho with ⟨rfl, rfl⟩
+    have hnil : it1.slice.val.drop it1.i = [] :=
+      List.drop_eq_nil_of_le (Nat.le_of_not_lt hi)
+    simp [hnil]
+
 /-- Behavioural model of the optimised slice-iterator `fold`. It visits the
     remaining elements in the same order as repeated `next` calls. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::fold"]
-def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+def core.slice.iter.IteratorSliceIter.fold
     {T Acc F : Type _}
     (FnMutInst : core.ops.function.FnMut F (Acc × T) Acc)
     (it : core.slice.iter.Iter T) (init : Acc) (f : F) : Result Acc :=
   core.iter.traits.iterator.Iterator.fold.default.loop
     core.slice.iter.IteratorSliceIter.next FnMutInst it init f
+
+/-- A pure closure folds the elements still held by the slice iterator, in order. -/
+@[step]
+theorem core.slice.iter.IteratorSliceIter.fold.spec
+    {T Acc F : Type _}
+    (FnMutInst : core.ops.function.FnMut F (Acc × T) Acc)
+    (step : Acc → T → Acc)
+    (it : core.slice.iter.Iter T) (init : Acc) (f : F)
+    (hcall : ∀ acc x,
+      FnMutInst.call_mut f (acc, x) ⦃ r => r = (step acc x, f) ⦄) :
+    core.slice.iter.IteratorSliceIter.fold FnMutInst it init f
+      ⦃ r => r = (it.slice.val.drop it.i).foldl step init ⦄ := by
+  unfold core.slice.iter.IteratorSliceIter.fold
+  exact core.iter.traits.iterator.Iterator.fold.default.loop.spec_list
+    core.slice.iter.IteratorSliceIter.next FnMutInst
+    (fun s => s.slice.val.drop s.i) step it init f
+    core.slice.iter.IteratorSliceIter.next.spec_remaining hcall
 
 /-- `DoubleEndedIterator::next_back` on `slice::Iter`.
 
@@ -139,12 +176,50 @@ theorem core.slice.iter.IteratorSliceIter.next_back.spec
   rw [List.getElem?_eq_getElem (by scalar_tac), Slice.getElem_Nat_eq]
   scalar_tac
 
+/-- `next_back` removes the head of the reversed list of remaining elements. -/
+theorem core.slice.iter.IteratorSliceIter.next_back.spec_remaining
+    {T : Type _} (it : core.slice.iter.Iter T) :
+    core.slice.iter.IteratorSliceIter.next_back it ⦃ r =>
+      match (it.slice.val.drop it.i).reverse with
+      | [] => r.1 = none
+      | x :: xs => r.1 = some x ∧
+          (r.2.slice.val.drop r.2.i).reverse = xs ⦄ := by
+  by_cases hi : it.i < it.slice.val.length
+  · apply WP.spec_mono (core.slice.iter.IteratorSliceIter.next_back.spec it hi)
+    intro ⟨o, it1⟩ ho
+    rcases ho with ⟨ho1, ho2, ho3⟩
+    have hne : (it.slice.val.drop it.i).reverse ≠ [] := by
+      intro he
+      have hd := List.reverse_eq_nil_iff.mp he
+      exact (Nat.not_le_of_lt hi) (List.drop_eq_nil_iff.mp hd)
+    cases hrev : (it.slice.val.drop it.i).reverse with
+    | nil => exact False.elim (hne hrev)
+    | cons x xs =>
+      have hxs : it.slice.val.drop it.i = xs.reverse ++ [x] :=
+        List.reverse_eq_cons_iff.mp hrev
+      have hget : it.slice.val.getLast? = some x := by
+        have hg : (it.slice.val.drop it.i).getLast? = some x := by
+          rw [hxs]
+          simp
+        rw [List.getLast?_drop] at hg
+        simpa [Nat.not_le_of_lt hi] using hg
+      have hrest : (it1.slice.val.drop it1.i).reverse = xs := by
+        rw [ho2, ho3]
+        rw [← List.dropLast_eq_take, ← List.dropLast_drop_eq_drop_dropLast, hxs]
+        simp
+      constructor
+      · simpa [hget] using ho1
+      · exact hrest
+  · have hnil : it.slice.val.drop it.i = [] :=
+      List.drop_eq_nil_of_le (Nat.le_of_not_lt hi)
+    simp [core.slice.iter.IteratorSliceIter.next_back, hi, hnil, WP.spec_ok]
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
 impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type _) :
   core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
   next := core.slice.iter.IteratorSliceIter.next
-  fold := core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.fold
+  fold := core.slice.iter.IteratorSliceIter.fold
   step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
     (core.iter.traits.iterator.IteratorSliceIter T)
   enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
