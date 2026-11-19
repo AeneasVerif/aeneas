@@ -45,13 +45,13 @@ let name_matcher_expr_to_simple_name span (n : NameMatcher.expr) : string =
 let match_name_find_opt (ctx : trans_ctx) (name : Types.name)
     (m : 'a NameMatcher.NameMatcherMap.t) : 'a option =
   let mctx = NameMatcher.ctx_from_crate ctx.crate in
-  ExtractBuiltin.NameMatcherMap.find_opt mctx name m
+  ExtractName.NameMatcherMap.find_opt mctx name m
 
 let match_name_with_generics_find_opt (ctx : trans_ctx) (name : Types.name)
     (generics : Types.generic_args) (m : 'a NameMatcher.NameMatcherMap.t) :
     'a option =
   let mctx = NameMatcher.ctx_from_crate ctx.crate in
-  ExtractBuiltin.NameMatcherMap.find_with_generics_opt mctx name generics m
+  ExtractName.NameMatcherMap.find_with_generics_opt mctx name generics m
 
 let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
     ?(prefix : Types.name option = None) (n : Types.name)

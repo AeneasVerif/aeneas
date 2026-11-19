@@ -1,0 +1,8 @@
+{
+  "functions": [
+    {
+      "rust_pattern": "external_names_local::f",
+      "lean_name": "ExternalNamesModel.f"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "types": [
+    {
+      "rust_pattern": "external_names_split::Counter",
+      "lean_name": "ExternalNamesModel.Counter"
+    }
+  ],
+  "functions": [
+    {
+      "rust_pattern": "external_names_split::incr",
+      "lean_name": "ExternalNamesModel.incr"
+    }
+  ]
+}

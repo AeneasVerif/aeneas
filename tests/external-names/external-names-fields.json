@@ -1,0 +1,71 @@
+{
+  "functions": [
+    {
+      "rust_pattern": "external_names_fields::tag",
+      "lean_name": "ExternalNamesModel.tag",
+      "keep_params": [false],
+      "can_fail": false,
+      "lift": false
+    },
+    {
+      "rust_pattern": "external_names_fields::first",
+      "lean_name": "ExternalNamesModel.first",
+      "keep_trait_clauses": [false]
+    },
+    {
+      "rust_pattern": "core::task::poll::{core::clone::Clone<core::task::poll::Poll<@T>>}::clone",
+      "lean_name": "ExternalNamesModel.clonePoll.clone"
+    }
+  ],
+  "globals": [
+    {
+      "rust_pattern": "external_names_fields::LIMIT",
+      "lean_name": "ExternalNamesModel.limit",
+      "can_fail": false
+    }
+  ],
+  "types": [
+    {
+      "rust_pattern": "external_names_fields::Tagged",
+      "lean_name": "ExternalNamesModel.Tagged",
+      "keep_params": [true, false]
+    },
+    {
+      "rust_pattern": "core::ops::range::RangeToInclusive",
+      "lean_name": "ExternalNamesModel.UpTo",
+      "body": {
+        "kind": "struct",
+        "constructor": "ExternalNamesModel.UpTo.make",
+        "fields": [{ "rust": "end", "extract": "hi" }]
+      }
+    },
+    {
+      "rust_pattern": "core::task::poll::Poll",
+      "lean_name": "ExternalNamesModel.Poll",
+      "body": {
+        "kind": "enum",
+        "prefix_variant_names": false,
+        "variants": [
+          { "rust": "Ready", "extract": "ExternalNamesModel.Poll.ready" },
+          { "rust": "Pending", "extract": "ExternalNamesModel.Poll.pending" }
+        ]
+      }
+    }
+  ],
+  "trait_decls": [
+    {
+      "rust_pattern": "core::fmt::Write",
+      "lean_name": "ExternalNamesModel.Writer",
+      "methods": [
+        { "rust": "write_str", "extract": "write_str" },
+        { "rust": "write_char", "extract": "write_char", "has_default": true }
+      ]
+    }
+  ],
+  "trait_impls": [
+    {
+      "rust_pattern": "core::clone::Clone<core::task::poll::Poll<@T>>",
+      "lean_name": "ExternalNamesModel.clonePoll"
+    }
+  ]
+}

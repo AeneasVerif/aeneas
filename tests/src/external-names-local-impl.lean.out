@@ -1,0 +1,8 @@
+[[92mInfo[39m ] Imported: tests/llbc/external_names_local_impl.llbc
+[[91mError[39m] This trait implementation is defined in this crate, but an external name (user-provided or built-in) maps it to the model 'ExternalNamesModel.TrU32', which would silently replace it. Remove that entry.
+Source: 'tests/src/external-names-local-impl.rs', lines 11:0-15:1
+Compiler source: llbc/LlbcAstUtils.ml, line 198
+[[91mError[39m] This trait implementation is defined in this crate, but an external name (user-provided or built-in) maps it to the model 'ExternalNamesModel.TrU32', which would silently replace it. Remove that entry.
+Source: 'tests/src/external-names-local-impl.rs', lines 11:0-15:1
+Compiler source: llbc/LlbcAstUtils.ml, line 198
+

@@ -1,0 +1,9 @@
+{
+  "trait_decls": [
+    {
+      "rust_pattern": "core::iter::traits::marker::FusedIterator",
+      "lean_name": "ExternalNamesModel.FusedIterator",
+      "parent_clauses": ["iteratorInst", "extraInst"]
+    }
+  ]
+}

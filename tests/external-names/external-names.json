@@ -1,0 +1,9 @@
+{
+  "functions": [
+    {
+      "rust_pattern": "external_names::is_mult",
+      "lean_name": "ExternalNamesModel.isMult",
+      "source": "unknown keys, such as this one, must be ignored"
+    }
+  ]
+}
