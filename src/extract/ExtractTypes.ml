@@ -498,7 +498,8 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref span ctx fmt no_params_tys ~inside:false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
-  | TNever -> F.pp_print_string fmt "Never"
+  | TNever ->
+      F.pp_print_string fmt (if backend () = FStar then "never" else "Never")
   | TError -> extract_ty_errors fmt
   | TDynTrait params -> (
       [%ltrace "dyn trait:\n" ^ dyn_predicate_to_string ctx params];

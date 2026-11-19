@@ -784,7 +784,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call (call, dest, _) -> eval_function_call config st.span call dest ctx
-  | Panic _ | UnwindTerminate | UndefinedBehavior ->
+  | Panic _ | UnwindTerminate _ | UndefinedBehavior ->
       (* Evaluate to a panic only if the execution is concrete, otherwise we stop
          evaluating there and synthesize a [panic] node in the symbolic AST. *)
       if config.mode = ConcreteMode then
@@ -1293,7 +1293,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
         [%add_loc] Subst.make_subst_from_generics (Some span) def.generics
           generics Self
       in
-      let locals, body_st = Subst.expr_body_substitute subst body in
+      let body = Subst.expr_body_substitute subst body in
 
       (* Evaluate the input operands *)
       [%sanity_check] body.span (List.length args = body.locals.arg_count);
@@ -1307,7 +1307,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* Compute the initial values for the local variables *)
       (* 1. Push the return value *)
       let ret_var, locals =
-        match locals with
+        match body.locals.locals with
         | ret_ty :: locals -> (ret_ty, locals)
         | _ -> [%craise] span "Unreachable"
       in
@@ -1329,7 +1329,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       let ctx = push_uninitialized_vars span locals ctx in
 
       (* Execute the function body *)
-      let ctx_resl, cc = comp cc (eval_function_body config body_st ctx) in
+      let ctx_resl, cc = comp cc (eval_function_body config body.body ctx) in
 
       (* Pop the stack frame and move the return value to its destination *)
       let ctx_resl_cfl =

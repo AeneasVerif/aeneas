@@ -623,6 +623,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                and handled in [translate_cast_unsize] *)
               [%internal_error] ctx.span
           | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
+          | CastBoxDerefTransmute _ ->
+              [%craise] ctx.span
+                "Unexpected box deref transmute: Charon should have \
+                 reconstructed the box deref"
           | CastConcretize _ ->
               [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
         in

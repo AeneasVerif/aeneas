@@ -10,6 +10,7 @@ package «tests» {}
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
 @[default_target] lean_lib ArrayConstructors
+@[default_target] lean_lib ArrayIterMut
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib ArraySliceIndex

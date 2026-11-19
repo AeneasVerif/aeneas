@@ -27,5 +27,6 @@ Copilot) and `.claude/skills/` (for Claude Code). **Always edit files in
 - `documentation/proof-strategies.md` — Proof strategies (step, loops, decomposition, specs)
 - `documentation/tactics-reference.md` — All tactics with docstrings and examples
 - `documentation/crypto-verification.md` — Crypto verification guide (ML-KEM/Kyber patterns)
+- `documentation/std-models.md` — Adding a model of the Rust standard library (tests, specs)
 - `documentation/tips-and-tricks.md` — Pitfalls, tips, and tricks
 - `documentation/glossary.md` — Glossary of Aeneas-specific terms

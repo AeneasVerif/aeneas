@@ -577,7 +577,8 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   | st :: after -> (
                       match st.kind with
                       | Return -> [ { st with kind = Break 0 } ]
-                      | Panic _ | UnwindTerminate | UndefinedBehavior -> [ st ]
+                      | Panic _ | UnwindTerminate _ | UndefinedBehavior ->
+                          [ st ]
                       | _ -> st :: decompose_after after)
                 in
                 let after = decompose_after after in
@@ -702,7 +703,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
         | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Borrowck _
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
         | Panic _
-        | UnwindTerminate
+        | UnwindTerminate _
         | UndefinedBehavior
         | Return
         | UnwindResume
@@ -1410,6 +1411,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
               name = None;
               span = f.item_meta.span;
               is_mutable = true;
+              borrowck_constraints = [];
               drop_flag_for = None;
             }
           in
@@ -1463,9 +1465,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           let kind =
             match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
-            | Assert ({ cond; expected; check_kind }, on_failure, on_unwind) ->
+            | Assert (({ cond; _ } as assertion), on_failure, on_unwind) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
-                Assert ({ cond; expected; check_kind }, on_failure, on_unwind)
+                Assert ({ assertion with cond }, on_failure, on_unwind)
             | Call (({ func; args; _ } as call), dest, on_unwind) ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
@@ -1473,7 +1475,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | SetDiscriminant _ | StorageLive _ | StorageDead _ | PlaceMention _
             | Drop (_, _, _, _)
             | Panic _
-            | UnwindTerminate
+            | UnwindTerminate _
             | UndefinedBehavior
             | Return
             | UnwindResume
@@ -2201,6 +2203,7 @@ let anon_consts_to_calls (crate : crate) : crate =
               name = None;
               span = f.item_meta.span;
               is_mutable = true;
+              borrowck_constraints = [];
               drop_flag_for = None;
             }
           in
