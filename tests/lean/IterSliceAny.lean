@@ -20,13 +20,128 @@ set_option maxRecDepth 2048
 
 namespace iter_slice_any
 
+/-- [iter_slice_any::any_reports_nonzero::{closure}]
+    Source: 'tests/src/iter_slice_any.rs', lines 7:21-7:38 -/
+@[reducible]
+def any_reports_nonzero.closure := Unit
+
+/-- [iter_slice_any::any_reports_nonzero::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_reports_nonzero::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_slice_any.rs', lines 7:21-7:38 -/
+def
+  any_reports_nonzero.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+  (c : any_reports_nonzero.closure) (tupled_args : Std.U8) :
+  Result (Bool × any_reports_nonzero.closure)
+  := do
+  ok (tupled_args != 0#u8, ())
+
+/-- [iter_slice_any::any_reports_nonzero::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_reports_nonzero::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_slice_any.rs', lines 7:21-7:38 -/
+def
+  any_reports_nonzero.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
+  (c : any_reports_nonzero.closure) (i : Std.U8) : Result Bool := do
+  let (b, _) ←
+    any_reports_nonzero.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+      () i
+  ok b
+
+/-- Trait implementation: [iter_slice_any::any_reports_nonzero::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_reports_nonzero::{closure}<'_0>}]
+    Source: 'tests/src/iter_slice_any.rs', lines 7:21-7:38 -/
+@[reducible]
+def any_reports_nonzero.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool :
+  core.ops.function.FnOnce any_reports_nonzero.closure Std.U8 Bool := {
+  call_once :=
+    any_reports_nonzero.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
+}
+
+/-- Trait implementation: [iter_slice_any::any_reports_nonzero::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_reports_nonzero::{closure}<'_0>}]
+    Source: 'tests/src/iter_slice_any.rs', lines 7:21-7:38 -/
+@[reducible]
+def any_reports_nonzero.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool :
+  core.ops.function.FnMut any_reports_nonzero.closure Std.U8 Bool := {
+  FnOnceInst :=
+    any_reports_nonzero.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
+  call_mut :=
+    any_reports_nonzero.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+}
+
+/-- [iter_slice_any::any_reports_nonzero]:
+    Source: 'tests/src/iter_slice_any.rs', lines 5:0-8:1
+    Visibility: public -/
+def any_reports_nonzero : Result Bool := do
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 0#u8, 1#u8, 2#u8 ]))
+  let i ← core.slice.Slice.iter s
+  let (b, _) ←
+    core.slice.iter.IteratorSliceIter.any
+      any_reports_nonzero.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
+      i ()
+  ok b
+
+/-- [iter_slice_any::any_on_empty_slice::{closure}]
+    Source: 'tests/src/iter_slice_any.rs', lines 14:22-14:30 -/
+@[reducible]
+def any_on_empty_slice.closure := Unit
+
+/-- [iter_slice_any::any_on_empty_slice::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_on_empty_slice::{closure}<'_0>}::call_mut]:
+    Source: 'tests/src/iter_slice_any.rs', lines 14:22-14:30 -/
+def
+  any_on_empty_slice.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+  (c : any_on_empty_slice.closure) (tupled_args : Std.U8) :
+  Result (Bool × any_on_empty_slice.closure)
+  := do
+  ok (true, ())
+
+/-- [iter_slice_any::any_on_empty_slice::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_on_empty_slice::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/iter_slice_any.rs', lines 14:22-14:30 -/
+def
+  any_on_empty_slice.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
+  (c : any_on_empty_slice.closure) (i : Std.U8) : Result Bool := do
+  let (b, _) ←
+    any_on_empty_slice.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+      () i
+  ok b
+
+/-- Trait implementation: [iter_slice_any::any_on_empty_slice::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_on_empty_slice::{closure}<'_0>}]
+    Source: 'tests/src/iter_slice_any.rs', lines 14:22-14:30 -/
+@[reducible]
+def any_on_empty_slice.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool :
+  core.ops.function.FnOnce any_on_empty_slice.closure Std.U8 Bool := {
+  call_once :=
+    any_on_empty_slice.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
+}
+
+/-- Trait implementation: [iter_slice_any::any_on_empty_slice::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_on_empty_slice::{closure}<'_0>}]
+    Source: 'tests/src/iter_slice_any.rs', lines 14:22-14:30 -/
+@[reducible]
+def any_on_empty_slice.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool :
+  core.ops.function.FnMut any_on_empty_slice.closure Std.U8 Bool := {
+  FnOnceInst :=
+    any_on_empty_slice.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
+  call_mut :=
+    any_on_empty_slice.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
+}
+
+/-- [iter_slice_any::any_on_empty_slice]:
+    Source: 'tests/src/iter_slice_any.rs', lines 11:0-15:1
+    Visibility: public -/
+def any_on_empty_slice : Result Unit := do
+  let s ← lift (Array.to_slice (Std.Array.empty Std.U8))
+  let iter ← core.slice.Slice.iter s
+  let (b, _) ←
+    core.slice.iter.IteratorSliceIter.any
+      any_on_empty_slice.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
+      iter ()
+  massert (¬ b)
+
+/- Unit test for [iter_slice_any::any_on_empty_slice] -/
+#guard (any_on_empty_slice).reducesTo ()
+
 /-- [iter_slice_any::any_stops_after_match::{closure}]
-    Source: 'tests/src/iter_slice_any.rs', lines 9:21-9:38 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 21:21-21:38 -/
 @[reducible]
 def any_stops_after_match.closure := Unit
 
 /-- [iter_slice_any::any_stops_after_match::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_stops_after_match::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/iter_slice_any.rs', lines 9:21-9:38 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 21:21-21:38 -/
 def
   any_stops_after_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
   (c : any_stops_after_match.closure) (tupled_args : Std.U8) :
@@ -35,7 +150,7 @@ def
   ok (tupled_args != 0#u8, ())
 
 /-- [iter_slice_any::any_stops_after_match::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_stops_after_match::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/iter_slice_any.rs', lines 9:21-9:38 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 21:21-21:38 -/
 def
   any_stops_after_match.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
   (c : any_stops_after_match.closure) (i : Std.U8) : Result Bool := do
@@ -45,7 +160,7 @@ def
   ok b
 
 /-- Trait implementation: [iter_slice_any::any_stops_after_match::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_stops_after_match::{closure}<'_0>}]
-    Source: 'tests/src/iter_slice_any.rs', lines 9:21-9:38 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 21:21-21:38 -/
 @[reducible]
 def any_stops_after_match.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
   : core.ops.function.FnOnce any_stops_after_match.closure Std.U8 Bool := {
@@ -54,7 +169,7 @@ def any_stops_after_match.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
 }
 
 /-- Trait implementation: [iter_slice_any::any_stops_after_match::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_stops_after_match::{closure}<'_0>}]
-    Source: 'tests/src/iter_slice_any.rs', lines 9:21-9:38 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 21:21-21:38 -/
 @[reducible]
 def any_stops_after_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
   : core.ops.function.FnMut any_stops_after_match.closure Std.U8 Bool := {
@@ -65,13 +180,13 @@ def any_stops_after_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
 }
 
 /-- [iter_slice_any::any_stops_after_match]:
-    Source: 'tests/src/iter_slice_any.rs', lines 6:0-12:1
+    Source: 'tests/src/iter_slice_any.rs', lines 18:0-24:1
     Visibility: public -/
 def any_stops_after_match : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 0#u8, 1#u8, 2#u8 ]))
   let iter ← core.slice.Slice.iter s
   let (b, iter1) ←
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+    core.slice.iter.IteratorSliceIter.any
       any_stops_after_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
       iter ()
   massert b
@@ -86,12 +201,12 @@ def any_stops_after_match : Result Unit := do
 #guard (any_stops_after_match).reducesTo ()
 
 /-- [iter_slice_any::any_exhausts_without_match::{closure}]
-    Source: 'tests/src/iter_slice_any.rs', lines 18:22-18:39 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 30:22-30:39 -/
 @[reducible]
 def any_exhausts_without_match.closure := Unit
 
 /-- [iter_slice_any::any_exhausts_without_match::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_exhausts_without_match::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/iter_slice_any.rs', lines 18:22-18:39 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 30:22-30:39 -/
 def
   any_exhausts_without_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
   (c : any_exhausts_without_match.closure) (tupled_args : Std.U8) :
@@ -100,7 +215,7 @@ def
   ok (tupled_args != 0#u8, ())
 
 /-- [iter_slice_any::any_exhausts_without_match::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_exhausts_without_match::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/iter_slice_any.rs', lines 18:22-18:39 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 30:22-30:39 -/
 def
   any_exhausts_without_match.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
   (c : any_exhausts_without_match.closure) (i : Std.U8) : Result Bool := do
@@ -110,7 +225,7 @@ def
   ok b
 
 /-- Trait implementation: [iter_slice_any::any_exhausts_without_match::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_exhausts_without_match::{closure}<'_0>}]
-    Source: 'tests/src/iter_slice_any.rs', lines 18:22-18:39 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 30:22-30:39 -/
 @[reducible]
 def
   any_exhausts_without_match.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
@@ -121,7 +236,7 @@ def
 }
 
 /-- Trait implementation: [iter_slice_any::any_exhausts_without_match::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_exhausts_without_match::{closure}<'_0>}]
-    Source: 'tests/src/iter_slice_any.rs', lines 18:22-18:39 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 30:22-30:39 -/
 @[reducible]
 def
   any_exhausts_without_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
@@ -133,14 +248,14 @@ def
 }
 
 /-- [iter_slice_any::any_exhausts_without_match]:
-    Source: 'tests/src/iter_slice_any.rs', lines 15:0-20:1
+    Source: 'tests/src/iter_slice_any.rs', lines 27:0-32:1
     Visibility: public -/
 def any_exhausts_without_match : Result Unit := do
   let bytes := Array.repeat 2#usize 0#u8
   let s ← lift (Array.to_slice bytes)
   let iter ← core.slice.Slice.iter s
   let (b, iter1) ←
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+    core.slice.iter.IteratorSliceIter.any
       any_exhausts_without_match.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
       iter ()
   massert (¬ b)
@@ -152,12 +267,12 @@ def any_exhausts_without_match : Result Unit := do
 #guard (any_exhausts_without_match).reducesTo ()
 
 /-- [iter_slice_any::any_threads_owned_predicate_state::{closure}]
-    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 39:21-42:5 -/
 @[reducible]
 def any_threads_owned_predicate_state.closure := Std.U8
 
 /-- [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 39:21-42:5 -/
 def
   any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool.call_mut
   (c : any_threads_owned_predicate_state.closure) (tupled_args : Std.U8) :
@@ -167,7 +282,7 @@ def
   ok (i = 2#u8, i)
 
 /-- [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 39:21-42:5 -/
 def
   any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool.call_once
   (c : any_threads_owned_predicate_state.closure) (i : Std.U8) :
@@ -179,7 +294,7 @@ def
   ok b
 
 /-- Trait implementation: [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnOnce<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}]
-    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 39:21-42:5 -/
 @[reducible]
 def
   any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnOnceTupleShared0U8Bool
@@ -190,7 +305,7 @@ def
 }
 
 /-- Trait implementation: [iter_slice_any::any_threads_owned_predicate_state::{impl core::ops::function::FnMut<(&'_0 u8,), bool> for iter_slice_any::any_threads_owned_predicate_state::{closure}<'_0>}]
-    Source: 'tests/src/iter_slice_any.rs', lines 27:21-30:5 -/
+    Source: 'tests/src/iter_slice_any.rs', lines 39:21-42:5 -/
 @[reducible]
 def
   any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
@@ -203,13 +318,13 @@ def
 }
 
 /-- [iter_slice_any::any_threads_owned_predicate_state]:
-    Source: 'tests/src/iter_slice_any.rs', lines 23:0-32:1
+    Source: 'tests/src/iter_slice_any.rs', lines 35:0-44:1
     Visibility: public -/
 def any_threads_owned_predicate_state : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 10#u8, 20#u8, 30#u8 ]))
   let iter ← core.slice.Slice.iter s
   let (b, iter1) ←
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+    core.slice.iter.IteratorSliceIter.any
       any_threads_owned_predicate_state.closure.Insts.CoreOpsFunctionFnMutTupleShared0U8Bool
       iter 0#u8
   massert b

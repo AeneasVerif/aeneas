@@ -38,6 +38,11 @@ structure core.slice.iter.IterMut (T : Type _) where
 def core.slice.Slice.iter {T : Type _} (s : Slice T) : Result (core.slice.iter.Iter T) :=
   ok ⟨ s, 0 ⟩
 
+@[step]
+theorem core.slice.Slice.iter.spec {T : Type _} (s : Slice T) :
+    core.slice.Slice.iter s ⦃ it => it.slice = s ∧ it.i = 0 ⦄ := by
+  simp [core.slice.Slice.iter, WP.spec_ok]
+
 @[rust_fun "core::slice::{[@T]}::contains"]
 def core.slice.Slice.contains {T : Type _} (partialEqInst : core.cmp.PartialEq T T)
   (s : Slice T) (x : T) : Result Bool :=
@@ -398,7 +403,7 @@ private def collectNestedStepBy
 Calls the predicate on each element in order, threading its `FnMut` state, and stops at the first
 `true`. Returns whether an element matched and how many elements were consumed, including the
 match. -/
-def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop
+def core.slice.iter.IteratorSliceIter.any.loop
   {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) :
   List T → F → Result (Bool × Nat)
   | [], _ => ok (false, 0)
@@ -406,13 +411,15 @@ def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop
     let (b, f1) ← FnMutInst.call_mut f x
     if b then ok (true, 1)
     else do
-      let (b1, k) ← core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop FnMutInst xs f1
+      let (b1, k) ← core.slice.iter.IteratorSliceIter.any.loop FnMutInst xs f1
       ok (b1, k + 1)
 
 /-- `Iterator::any` on `slice::Iter`.
 
 The standard library overrides this in the `iterator!` macro
 (`library/core/src/slice/iter/macros.rs`):
+See [the `Iterator::any` documentation](https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.any)
+for the method's short-circuiting and iterator-state behavior.
 ```rust
 fn any<F>(&mut self, mut f: F) -> bool
 where
@@ -432,28 +439,32 @@ consumed, so the matching element is consumed and the ones after it remain. A fa
 call fails the whole call. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::any"]
-def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
+def core.slice.iter.IteratorSliceIter.any
   {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) :
   core.slice.iter.Iter T → F → Result (Bool × (core.slice.iter.Iter T)) :=
   fun it f => do
-    let (b, k) ← core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop FnMutInst (it.slice.val.drop it.i) f
+    let (b, k) ← core.slice.iter.IteratorSliceIter.any.loop FnMutInst (it.slice.val.drop it.i) f
     ok (b, { it with i := it.i + k })
 
 /-- With a pure predicate `p`, the loop returns `l.any p`, and the elements left after it are
     those after the first match (none, if nothing matched). -/
-theorem core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop.spec
+theorem core.slice.iter.IteratorSliceIter.any.loop.spec
     {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) (p : T → Bool) (f : F)
-    (hf : ∀ x, FnMutInst.call_mut f x = ok (p x, f)) (l : List T) :
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop FnMutInst l f
+    (l : List T)
+    (hf : ∀ x ∈ l, FnMutInst.call_mut f x ⦃ r => r = (p x, f) ⦄) :
+    core.slice.iter.IteratorSliceIter.any.loop FnMutInst l f
     ⦃ r => r.1 = l.any p ∧ l.drop r.2 = (l.dropWhile (fun x => !p x)).drop 1 ⦄ := by
   induction l with
-  | nil => simp [core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop, WP.spec_ok]
+  | nil => simp [core.slice.iter.IteratorSliceIter.any.loop, WP.spec_ok]
   | cons x xs ih =>
-    simp only [core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop, hf]
+    simp only [core.slice.iter.IteratorSliceIter.any.loop]
+    apply WP.spec_bind (hf x (by simp))
+    intro ⟨b, f1⟩ heq
+    cases heq
     by_cases hx : p x
     · simp [hx, WP.spec_ok]
-    · simp only [hx, Bool.false_eq_true, ↓reduceIte, bind_ok, uncurry_apply_pair]
-      apply WP.spec_bind ih
+    · simp only [hx, Bool.false_eq_true, ↓reduceIte, uncurry_apply_pair]
+      apply WP.spec_bind (ih (by intro y hy; exact hf y (by simp [hy])))
       intro ⟨b1, k⟩ hr
       simp_all [WP.spec_ok]
 
@@ -461,15 +472,17 @@ theorem core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.lo
     element satisfies `p`, and the iterator is left just after the first match (exhausted, if
     nothing matched). -/
 @[step]
-theorem core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.spec
+theorem core.slice.iter.IteratorSliceIter.any.spec
     {T F : Type _} (FnMutInst : core.ops.function.FnMut F T Bool) (p : T → Bool) (f : F)
-    (hf : ∀ x, FnMutInst.call_mut f x = ok (p x, f)) (it : core.slice.iter.Iter T) :
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any FnMutInst it f
+    (it : core.slice.iter.Iter T)
+    (hf : ∀ x ∈ it.slice.val.drop it.i,
+      FnMutInst.call_mut f x ⦃ r => r = (p x, f) ⦄) :
+    core.slice.iter.IteratorSliceIter.any FnMutInst it f
     ⦃ r => r.1 = (it.slice.val.drop it.i).any p ∧ r.2.slice = it.slice ∧
            r.2.slice.val.drop r.2.i =
              ((it.slice.val.drop it.i).dropWhile (fun x => !p x)).drop 1 ⦄ := by
-  unfold core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any
-  apply WP.spec_bind (core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.any.loop.spec FnMutInst p f hf _)
+  unfold core.slice.iter.IteratorSliceIter.any
+  apply WP.spec_bind (core.slice.iter.IteratorSliceIter.any.loop.spec FnMutInst p f _ hf)
   intro ⟨b, k⟩ hr
   simp only [uncurry_apply_pair, WP.spec_ok]
   refine ⟨hr.1, trivial, ?_⟩

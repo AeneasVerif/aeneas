@@ -2,6 +2,18 @@
 #![feature(register_tool)]
 #![register_tool(verify)]
 
+pub fn any_reports_nonzero() -> bool {
+    let bytes: [u8; 3] = [0, 1, 2];
+    bytes.iter().any(|byte| *byte != 0)
+}
+
+#[verify::test]
+pub fn any_on_empty_slice() {
+    let bytes: [u8; 0] = [];
+    let mut iter = bytes.iter();
+    assert!(!iter.any(|_| true));
+}
+
 #[verify::test]
 pub fn any_stops_after_match() {
     let bytes: [u8; 3] = [0, 1, 2];
@@ -29,4 +41,34 @@ pub fn any_threads_owned_predicate_state() {
         calls == 2
     }));
     assert!(*iter.next().unwrap() == 30);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reports_nonzero() {
+        assert!(any_reports_nonzero());
+    }
+
+    #[test]
+    fn empty_slice() {
+        any_on_empty_slice();
+    }
+
+    #[test]
+    fn stops_after_match() {
+        any_stops_after_match();
+    }
+
+    #[test]
+    fn exhausts_without_match() {
+        any_exhausts_without_match();
+    }
+
+    #[test]
+    fn threads_owned_predicate_state() {
+        any_threads_owned_predicate_state();
+    }
 }
