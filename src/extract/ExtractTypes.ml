@@ -7,23 +7,66 @@ open Config
 include ExtractBase
 module T = Types
 
-(** Print a string literal (without any conversion to [str]) *)
-let extract_pure_string (fmt : F.formatter) (s : string) : unit =
-  let chars = StringUtils.string_to_chars s in
-  (* Using the OCaml escape conventions for now.
+(** Escape a code point the way Lean's lexer reads it (see [Char.quote] in
+    Lean's core): backslash, newline, tab, carriage return and the delimiter
+    [quote] of the literal (double or single quote) are escaped with a
+    backslash, the other ASCII control characters are printed as [\xHH], the
+    other code points up to U+FFFF as [\uHHHH], and the code points above as raw
+    UTF-8 (Lean has no escape for those). *)
+let lean_escape_uchar (quote : char) (u : Uchar.t) : string =
+  let n = Uchar.to_int u in
+  if n = Char.code quote || n = Char.code '\\' then
+    "\\" ^ String.make 1 (Char.chr n)
+  else if n = Char.code '\n' then "\\n"
+  else if n = Char.code '\t' then "\\t"
+  else if n = Char.code '\r' then "\\r"
+  else if n < 0x20 || n = 0x7f then Printf.sprintf "\\x%02x" n
+  else if n < 0x80 then String.make 1 (Char.chr n)
+  else if n <= 0xffff then Printf.sprintf "\\u%04x" n
+  else
+    let b = Buffer.create 4 in
+    Buffer.add_utf_8_uchar b u;
+    Buffer.contents b
 
-     TODO: does this really work? *)
-  let s = String.concat "" (List.map Char.escaped chars) in
+(** Decode a (UTF-8 encoded) string into its code points *)
+let string_to_uchars (span : Meta.span) (s : string) : Uchar.t list =
+  let len = String.length s in
+  let rec decode i =
+    if i >= len then []
+    else
+      let d = String.get_utf_8_uchar s i in
+      if Uchar.utf_decode_is_valid d then
+        Uchar.utf_decode_uchar d :: decode (i + Uchar.utf_decode_length d)
+      else [%craise] span "Invalid UTF-8 in a string literal"
+  in
+  decode 0
+
+(** Print a string literal (without any conversion to [str]) *)
+let extract_pure_string (span : Meta.span) (fmt : F.formatter) (s : string) :
+    unit =
+  let s =
+    match backend () with
+    | Lean ->
+        (* Lean's escape conventions, so that a double quote in the string
+           cannot end the literal early and non-ASCII characters are accepted *)
+        String.concat ""
+          (List.map (lean_escape_uchar '"') (string_to_uchars span s))
+    | Coq | FStar | HOL4 ->
+        (* Using the OCaml escape conventions for now.
+
+           TODO: does this really work? *)
+        String.concat "" (List.map Char.escaped (StringUtils.string_to_chars s))
+  in
   F.pp_print_string fmt ("\"" ^ s ^ "\"")
 
-let extract_str (_span : Meta.span) (fmt : F.formatter) ~(inside : bool)
+let extract_str (span : Meta.span) (fmt : F.formatter) ~(inside : bool)
     (s : string) : unit =
   (* We need to convert the string to a str (the conversion inserts a static check
      that the string is not too long) *)
   if inside then F.pp_print_string fmt "(";
   F.pp_print_string fmt "toStr";
   F.pp_print_space fmt ();
-  extract_pure_string fmt s;
+  extract_pure_string span fmt s;
   if inside then F.pp_print_string fmt ")"
 
 (** Format a constant value.
@@ -78,20 +121,26 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
         | Coq | FStar | Lean -> if b then "true" else "false"
       in
       F.pp_print_string fmt b
-  | VChar c when Uchar.is_char c -> (
-      let c = Uchar.to_char c in
+  | VChar c -> (
       match backend () with
+      | Lean ->
+          (* Lean's escape conventions (single quote, backslash, newline, etc.),
+             which also allow for non-ASCII chars *)
+          F.pp_print_string fmt ("'" ^ lean_escape_uchar '\'' c ^ "'")
+      | (HOL4 | FStar | Coq) when not (Uchar.is_char c) ->
+          [%admit_raise] span "Non-ASCII char literals are unsupported" fmt
       | HOL4 ->
           (* [#"a"] is a notation for [CHR 97] (97 is the ASCII code for 'a') *)
-          F.pp_print_string fmt ("#\"" ^ String.make 1 c ^ "\"")
-      | FStar | Lean -> F.pp_print_string fmt ("'" ^ String.make 1 c ^ "'")
+          F.pp_print_string fmt ("#\"" ^ String.make 1 (Uchar.to_char c) ^ "\"")
+      | FStar ->
+          F.pp_print_string fmt ("'" ^ String.make 1 (Uchar.to_char c) ^ "'")
       | Coq ->
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt "char_of_byte";
           F.pp_print_space fmt ();
           (* Convert the the char to ascii *)
           let c =
-            let i = Char.code c in
+            let i = Char.code (Uchar.to_char c) in
             let x0 = i / 16 in
             let x1 = i mod 16 in
             "Coq.Init.Byte.x" ^ string_of_int x0 ^ string_of_int x1
@@ -99,12 +148,9 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
   | VStr s -> extract_str span ~inside fmt s
-  | VPureString s -> extract_pure_string fmt s
-  | VChar _ | VFloat _ | VByteStr _ ->
-      [%admit_raise] span
-        "Float, string, non-ASCII chars and byte string literals are \
-         unsupported"
-        fmt
+  | VPureString s -> extract_pure_string span fmt s
+  | VFloat _ | VByteStr _ ->
+      [%admit_raise] span "Float and byte string literals are unsupported" fmt
   | VPureNat n -> F.pp_print_string fmt (Z.to_string n)
   | VPureInt n ->
       let s = Z.to_string n in
