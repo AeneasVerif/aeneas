@@ -261,6 +261,11 @@ meta def projN (t : Term) : Nat → CommandElabM Term
   | 0 => `(@PProd.fst _ _ $t)
   | j + 1 => do projN (← `(@PProd.snd _ _ $t)) j
 
+/-- The tactic that proves the `simp` lemmas `Bla.f_mk` of the projections (stated by `elabGroup`):
+implemented by `NonPos/Tactic.lean` (it has no implementation here); its proofs are checked by the
+kernel. -/
+syntax "nonpos_proj_mk" : tactic
+
 /-- See Examples.lean for examples of what this command produces for the `Example1` and `A`/`B` examples.
 Comments throughout point to the corresponding definitions in that file. -/
 meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
@@ -316,37 +321,18 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
         (h : Shape.cond (F := $fId $k) (X := Fix $fId) $fieldTuple) : $(s.name):ident $args* :=
       Fix.fold $fId $fieldTuple h))  -- `Example1.mk`, `A.mk`, `B.mk`
+    let fieldArgs ← s.fields.mapM fun (f, _) => `(@$f:ident)
     for (f, τ) in s.fields, j in List.range s.fields.size do
       let projId := mkIdentFrom f (s.name.getId ++ f.getId)                   -- `A.fa`       `Example1.to_nat`
       elabCommand (← `(def $projId $impl* (d : $(s.name):ident $args*) : $τ :=
         no_implicit_lambda% $(← projN (← `(Fix.unfold $fId d)) j)))  -- `Example1.to_nat`, `Example1.f`, `A.fa`, `B.fb`
-
-/-! The `simp` lemmas of the projections, `Bla.f_mk : Bla.f (Bla.mk f₁ … fₙ h) = f` for each field
-`f`: their statements are built here, from the type of `mk`; their proofs are by the tactic
-`nonpos_proj_mk`, which `NonPos/Tactic.lean` implements (it has no implementation here), and are
-checked by the kernel. -/
-
-syntax "nonpos_proj_mk" : tactic
-
-/-- `Bla.f_mk` for each field `f` of each structure `Bla` of a group made by `elabGroup`. -/
-meta def elabMkLemmas (ss : Array StructStx) : CommandElabM Unit := liftTermElabM do
-  for s in ss do
-    let bla := (← getCurrNamespace) ++ s.name.getId
-    let mkInfo ← getConstInfo (bla ++ `mk)
-    forallTelescope mkInfo.type fun xs _ => do  -- `xs` is `ps f₁ … fₙ h`
-      let ps := xs.extract 0 (xs.size - s.fields.size - 1)
-      let mk ← mkConstWithLevelParams (bla ++ `mk)
-      for (f, _) in s.fields, fj in xs.extract ps.size (xs.size - 1) do
-        -- `Bla.f ps (Bla.mk ps f₁ … fₙ h) = fⱼ`, proved by `nonpos_proj_mk`, then closed over `xs`
-        let eq ← mkEq (mkAppN (← mkConstWithLevelParams (bla ++ f.getId)) (ps.push (mkAppN mk xs))) fj
-        let pf ← mkFreshExprSyntheticOpaqueMVar eq
-        let [] ← Tactic.run pf.mvarId! (Tactic.evalTactic (← `(tactic| nonpos_proj_mk)))
-          | throwError "nonpos_proj_mk did not prove{indentExpr eq}"
-        let name := bla ++ f.getId.appendAfter "_mk"
-        let type ← mkForallFVars xs eq
-        let value ← mkLambdaFVars xs (← instantiateMVars pf)
-        addDecl (Declaration.thmDecl { name := name, levelParams := mkInfo.levelParams, type, value })
-        addSimpTheorem simpExtension name (post := true) (inv := false) .global (eval_prio default)
+      -- its `simp` lemma: the projection of `mk` is the field (proved by `nonpos_proj_mk`, which
+      -- adds a lemma `Bla.mk_unfold` the first time: so not elaborated asynchronously, where a proof
+      -- may only add declarations named after its theorem)
+      let lemmaId := mkIdentFrom f (s.name.getId ++ f.getId.appendAfter "_mk") -- `A.fa_mk`    `Example1.to_nat_mk`
+      elabCommand (← `(set_option Elab.async false in @[simp] theorem $lemmaId $impl* $fieldBinders*
+          (h : Shape.cond (F := $fId $k) (X := Fix $fId) $fieldTuple) :
+          @$projId $args* ($mkId $fieldArgs* h) = @$f := by nonpos_proj_mk))
 
 /-! ## 5. Continuity, and the `nonpos_cont` tactic
 
@@ -385,7 +371,6 @@ syntax (name := nonposStructureLemmas) "nonpos_structure_lemmas " nonposStructur
 meta def elabGroupAndLemmas (stxs : Array Syntax) : CommandElabM Unit := do
   let ss ← stxs.mapM parseStruct
   elabGroup ss
-  elabMkLemmas ss
   elabCommand (mkNode ``nonposStructureLemmas #[mkAtom "nonpos_structure_lemmas ", mkNullNode (stxs.map (·[0]))])
 
 @[command_elab nonposStructure] meta def elabNonposStructure : CommandElab := fun stx =>
