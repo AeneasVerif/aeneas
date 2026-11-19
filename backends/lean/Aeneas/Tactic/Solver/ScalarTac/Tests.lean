@@ -211,5 +211,18 @@ theorem inv_imp (x : Nat) (h : inv x) : 0 < x ∧ x % 2 = 0 := by simp [inv] at 
 --example (x y : Nat) (h : inv x) : y % x < x := by
 --  scalar_tac
 
+/- Set membership: `x ∈ {1, 2}` reduces to `x = 1 ∨ x = 2`. -/
+
+-- `Set.mem_singleton_nat`
+example (y : ℕ) (h : y ∈ ({7} : Set ℕ)) : y = 7 := by scalar_tac
+
+-- `Set.mem_singleton_int`
+example (y : ℤ) (h : y ∈ ({-7} : Set ℤ)) : y = -7 := by scalar_tac
+
+-- `Set.mem_insert_nat`
+example (s : Set ℕ) (y : ℕ) (h : y ∈ insert 3 s) (hs : y ∉ s) : y = 3 := by scalar_tac
+
+-- `Set.mem_insert_int`
+example (s : Set ℤ) (y : ℤ) (h : y ∈ insert (-3) s) (hs : y ∉ s) : y = -3 := by scalar_tac
 
 end Aeneas.Std.ScalarTac.Tests

@@ -480,6 +480,7 @@ def test_enumerate_step_by : Result Unit := do
   let (i1, x1) ← core.option.Option.unwrap o1
   massert (i1 = 2#usize)
   massert (x1 = 30#u32)
+  ok ()
 
 /- Unit test for [iter_adapters::test_enumerate_step_by] -/
 #guard (test_enumerate_step_by).reducesTo ()
