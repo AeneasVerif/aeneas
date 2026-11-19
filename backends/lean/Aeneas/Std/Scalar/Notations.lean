@@ -5,6 +5,7 @@ public import Mathlib.Tactic.Linarith
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Ops.Add -- we need to use addition in some of the tests below
 public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Simproc.ReduceScalarVal
 public section
 
 namespace Aeneas
@@ -149,6 +150,11 @@ example : Result Usize := 0#usize + 1#usize
 -- More complex expressions
 example (x y : Nat) (h : x + y ≤ 1000) : U32 := (x + y)#u32
 example (x y : Int) (h : 0 ≤ x + y ∧ x + y ≤ 1000) : I32 := (x + y)#i32
+
+-- Testing `seval` simprocs
+example : (3#u32).val = 3 := by simp only [seval]
+example : (4#i32).val = 4 := by simp only [seval]
+example (x : Nat) : (5#usize).val ∣ (5#usize).val * x := by grind
 
 namespace Scalar.Examples
 
