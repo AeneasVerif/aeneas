@@ -9,7 +9,6 @@ Two examples, expanded exactly as `nonpos_structure` would expand them: the defi
 lemmas of section 4 of `Top.lean`, and the lemmas of section 4 of `Tactic.lean` (same names, same
 shapes of terms), so that the output of the command can be read without running it.  The first has one structure with a
 data field; the second is the mutual pair `A`/`B` of `Test.lean`.  Both use `Option` as the monad.
-Part 3 shows how the fields of a larger structure are arranged (a tree, not a chain).
 -/
 namespace NonPos.Examples
 open NonPos
@@ -29,16 +28,15 @@ nonpos_structure Example1 : Type where
 inductive Example1.I where
   | Example1
 
--- The field types as written, with the structure names of the group as parameters: a tree of
--- pairs (here just one pair; see part 3), paired at the root with `PUnit`.
+-- The field types as written, with the structure names of the group as parameters.
 abbrev Example1.Fields (Example1 : Type) : Type :=
-  (Nat ×' (Example1 → Option Nat)) ×' PUnit.{1}
+  Nat ×' (Example1 → Option Nat) ×' PUnit.{1}
 
 -- `F`: the body of each structure, with the structures replaced by the family `X`.
 abbrev Example1.F : Example1.I → Fam Example1.I → Type
   | .Example1, X => Example1.Fields (X .Example1)
 
--- The shape, found by instance search: `Shape.prod (Shape.prod (Shape.data Nat) (Shape.arr …)) (Shape.const PUnit)`.
+-- The shape, found by instance search: `Shape.prod (Shape.data Nat) (Shape.prod (Shape.arr …) (Shape.const PUnit))`.
 @[reducible] instance Example1.shape : ∀ k, Shape (Example1.F k)
   | .Example1 => inferInstance
 -- Its runtime implementation, never read (section 3 of `Top.lean`, assumption 3).
@@ -51,23 +49,23 @@ abbrev Example1 : Type := Fix Example1.F .Example1
 -- `mk`, from the fields and the condition.  `macro_inline`, so that the fields are not evaluated
 -- before `fold` delays them (section 3 of `Top.lean`).
 @[macro_inline] def Example1.mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨⟨to_nat, f⟩, ⟨⟩⟩) : Example1 :=
-  Fix.fold Example1.F ⟨⟨to_nat, f⟩, ⟨⟩⟩ h
+    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
+  Fix.fold Example1.F ⟨to_nat, f, ⟨⟩⟩ h
 
 -- The projections, with the types as written, and their `simp` lemmas (stated by section 4 of
 -- `Top.lean`; there proved by `nonpos_proj_mk`, of `Tactic.lean`: `congrArg` of the projection on
 -- `Fix.unfold_fold`).
 def Example1.to_nat (d : Example1) : Nat :=
-  no_implicit_lambda% (@PProd.fst _ _ (@PProd.fst _ _ (Fix.unfold Example1.F d)))
+  no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold Example1.F d))
 @[simp] theorem Example1.to_nat_mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨⟨to_nat, f⟩, ⟨⟩⟩) :
+    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) :
     Example1.to_nat (Example1.mk to_nat f h) = to_nat := by
   simp only [Example1.to_nat, Example1.mk, Fix.unfold_fold]
 
 def Example1.f (d : Example1) : Example1 → Option Nat :=
-  no_implicit_lambda% (@PProd.snd _ _ (@PProd.fst _ _ (Fix.unfold Example1.F d)))
+  no_implicit_lambda% (@PProd.fst _ _ (@PProd.snd _ _ (Fix.unfold Example1.F d)))
 @[simp] theorem Example1.f_mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨⟨to_nat, f⟩, ⟨⟩⟩) :
+    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) :
     Example1.f (Example1.mk to_nat f h) = f := by
   simp only [Example1.f, Example1.mk, Fix.unfold_fold]
 
@@ -78,7 +76,7 @@ def Example1.f (d : Example1) : Example1 → Option Nat :=
 -- `mk` is continuous in its fields (section 4 of `Tactic.lean`): proved once here, and used by
 -- `nonpos_cont` on any `mk` whose fields vary, instead of going through the tuple of fields.
 theorem Example1.mk_cont {D : Type _} [Dom D] (to_nat : D → Nat) (f : D → Example1 → Option Nat)
-    (h : ∀ d, Shape.cond (F := Example1.F Example1.I.Example1) (X := Fix Example1.F) ⟨⟨to_nat d, f d⟩, ⟨⟩⟩)
+    (h : ∀ d, Shape.cond (F := Example1.F Example1.I.Example1) (X := Fix Example1.F) ⟨to_nat d, f d, ⟨⟩⟩)
     (_ : Cont to_nat) (_ : Cont f) :
     Cont (fun d => Example1.mk (to_nat d) (f d) (h d)) := by
   nonpos_cont 5000
@@ -88,8 +86,8 @@ attribute [nonpos_continuous] Example1.mk_cont
 -- condition unfolded by `nonpos_cond_dsimp`): `nonpos_cont` applies it to the condition of each `mk`,
 -- instead of unfolding the condition there.  The conjuncts that are `True` are left out.
 theorem Example1.cond_intro (to_nat : Nat) (f : Example1 → Option Nat) (h0 : Cont f) :
-    Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨⟨to_nat, f⟩, ⟨⟩⟩ :=
-  ⟨⟨trivial, h0, fun _ => trivial⟩, trivial⟩
+    Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩ :=
+  ⟨trivial, ⟨h0, fun _ => trivial⟩, trivial⟩
 
 -- `Fix.unfold` is continuous at the `Dom` that instance search builds for the tuple of fields
 -- (section 4 of `Tactic.lean`), so that a projection out of a varying dictionary is proved by
@@ -128,49 +126,7 @@ nonpos_structure Example2 : Type where
 def ex2 : Example2 := Example2.mk 3 (fun d => d.f d >>= fun n => some (n + 1)) (by nonpos_cont)
 example : ex2.to_nat = 3 := by simp [ex2]
 
-/-! ## 3. The tree of fields
-
-The fields are not stored as a chain `⟨f₀, ⟨f₁, ⟨f₂, …⟩⟩⟩`, where the last of `n` fields would be `n`
-projections deep (and every projection, `mk` and continuity proof would go through that chain).  They
-are cut into chunks of 1, 2, 4, 8, … fields, each chunk a balanced tree, and the chunks are chained
-(`fieldPath` in `Top.lean`): field `j` is about `2 log₂ j` projections deep, so the first fields (a
-trait's required methods come first) stay shallow.  With seven fields the chunks are `f0`, then
-`f1 f2`, then `f3 … f6`, and the tuple of `mk` is, with all its brackets,
-`⟨⟨f0, ⟨⟨f1, f2⟩, ⟨⟨f3, f4⟩, ⟨f5, f6⟩⟩⟩⟩, ⟨⟩⟩`.  (Lean prints right-nested pairs and tuples without
-their brackets, so `Fields` and `mk` below look flatter than they are; the projections show the
-paths.) -/
-
-nonpos_structure Seven : Type where
-  f0 : Nat
-  f1 : Nat
-  f2 : Nat
-  f3 : Nat
-  f4 : Nat
-  f5 : Nat
-  f6 : Seven → Option Nat
-
-/--
-info: @[reducible, expose] def NonPos.Examples.Seven.Fields : Type → Type :=
-fun Seven => (Nat ×' (Nat ×' Nat) ×' (Nat ×' Nat) ×' Nat ×' (Seven → Option Nat)) ×' PUnit
--/
-#guard_msgs in #print Seven.Fields
-/--
-info: @[expose] def NonPos.Examples.Seven.f0 : Seven → Nat :=
-fun d => (Fix.unfold Seven.F d).fst.fst
--/
-#guard_msgs in #print Seven.f0
-/--
-info: @[expose] def NonPos.Examples.Seven.f2 : Seven → Nat :=
-fun d => (Fix.unfold Seven.F d).fst.snd.fst.snd
--/
-#guard_msgs in #print Seven.f2
-/--
-info: @[expose] def NonPos.Examples.Seven.f6 : Seven → Seven → Option Nat :=
-fun d => (Fix.unfold Seven.F d).fst.snd.snd.snd.snd
--/
-#guard_msgs in #print Seven.f6
-
-/-! ## 4. A mutual group
+/-! ## 3. A mutual group
 
 ```
 mutual
