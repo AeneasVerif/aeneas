@@ -262,7 +262,7 @@ def u8_id (x : Std.U8) : Result Std.U8 := do
 
 /-- [closures::{impl core::ops::function::FnMut<(u8,), u8> for closures::u8_id}::call_mut]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
-def P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
+def u8_id.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
   (state : Std.U8 → Result Std.U8) (args : Std.U8) :
   Result (Std.U8 × (Std.U8 → Result Std.U8))
   := do
@@ -271,25 +271,25 @@ def P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
 
 /-- [closures::{impl core::ops::function::FnOnce<(u8,), u8> for closures::u8_id}::call_once]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
-def P.Insts.CoreOpsFunctionFnOnceTupleU8U8.call_once
+def u8_id.Insts.CoreOpsFunctionFnOnceTupleU8U8.call_once
   (state : Std.U8 → Result Std.U8) (args : Std.U8) : Result Std.U8 := do
   u8_id args
 
 /-- Trait implementation: [closures::{impl core::ops::function::FnOnce<(u8,), u8> for closures::u8_id}]
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
 @[reducible]
-def P.Insts.CoreOpsFunctionFnOnceTupleU8U8 : core.ops.function.FnOnce (Std.U8
-  → Result Std.U8) Std.U8 Std.U8 := {
-  call_once := P.Insts.CoreOpsFunctionFnOnceTupleU8U8.call_once
+def u8_id.Insts.CoreOpsFunctionFnOnceTupleU8U8 : core.ops.function.FnOnce
+  (Std.U8 → Result Std.U8) Std.U8 Std.U8 := {
+  call_once := u8_id.Insts.CoreOpsFunctionFnOnceTupleU8U8.call_once
 }
 
 /-- Trait implementation: [closures::{impl core::ops::function::FnMut<(u8,), u8> for closures::u8_id}]
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
 @[reducible]
-def P.Insts.CoreOpsFunctionFnMutTupleU8U8 : core.ops.function.FnMut (Std.U8 →
-  Result Std.U8) Std.U8 Std.U8 := {
-  FnOnceInst := P.Insts.CoreOpsFunctionFnOnceTupleU8U8
-  call_mut := P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
+def u8_id.Insts.CoreOpsFunctionFnMutTupleU8U8 : core.ops.function.FnMut (Std.U8
+  → Result Std.U8) Std.U8 Std.U8 := {
+  FnOnceInst := u8_id.Insts.CoreOpsFunctionFnOnceTupleU8U8
+  call_mut := u8_id.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
 }
 
 /-- [closures::map_fn_pointer]:
@@ -299,7 +299,7 @@ def map_fn_pointer (x : alloc.vec.Vec Std.U8) : Result Unit := do
   let _ ←
     core.iter.traits.iterator.Iterator.map.default
       (core.iter.traits.iterator.IteratorVecIntoIter Std.U8)
-      P.Insts.CoreOpsFunctionFnMutTupleU8U8 ii (u8_id)
+      u8_id.Insts.CoreOpsFunctionFnMutTupleU8U8 ii (u8_id)
   ok ()
 
 end closures
