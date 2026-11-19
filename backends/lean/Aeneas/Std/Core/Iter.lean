@@ -28,6 +28,8 @@ structure core.iter.range.Step (Self : Type _) where
   steps_between : Self → Self → Result (Usize × (Option Usize))
   forward_checked : Self → Usize → Result (Option Self)
   backward_checked : Self → Usize → Result (Option Self)
+  forward_overflowing : Self → Usize → Result (Self × Bool)
+  backward_overflowing : Self → Usize → Result (Self × Bool)
 
 open Result
 
@@ -360,6 +362,8 @@ def core.iter.range.UScalarStep (ty : UScalarTy)
   steps_between := UScalarStep.steps_between
   forward_checked := UScalarStep.forward_checked
   backward_checked := UScalarStep.backward_checked
+  forward_overflowing := UScalarStep.forward_overflowing
+  backward_overflowing := UScalarStep.backward_overflowing
 }
 
 /-- Generic Step instance for all unsigned scalar types. The per-type instances
@@ -373,6 +377,8 @@ def core.iter.range.IScalarStep (ty : IScalarTy)
   steps_between := IScalarStep.steps_between
   forward_checked := IScalarStep.forward_checked
   backward_checked := IScalarStep.backward_checked
+  forward_overflowing := IScalarStep.forward_overflowing
+  backward_overflowing := IScalarStep.backward_overflowing
 }
 
 -- Per-type abbreviations with @[rust_fun] tags for the Aeneas compiler.
