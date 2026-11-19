@@ -178,9 +178,11 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
   v1.val = v.val ++ [x] ⦄ := by
   unfold push; grind
 
+/-- `Vec::insert` inserts `x` at position `i`, shifting the elements after it to the right.
+Rust panics only if `index > len`: inserting at `len` appends. -/
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
-  if i.val < v.length then
+  if i.val ≤ v.length then
     if h : v.length < Usize.max then
       ok (.from (v.val.insertIdx i x)
         (List.length_insertIdx_le_succ.trans (Nat.succ_le_of_lt h)))
@@ -191,10 +193,19 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 
 @[step]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
-  (hbound : i.val < v.length)
+  (hbound : i.val ≤ v.length)
   (hsize : v.length < Usize.max) :
   v.insert i x ⦃ nv => nv.val = v.val.insertIdx i x ⦄ := by
   simp [insert, *]
+
+/-- Inserting at the length appends. -/
+theorem Vec.insert_length_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
+  (hi : i.val = v.length)
+  (hsize : v.length < Usize.max) :
+  v.insert i x ⦃ nv => nv.val = v.val ++ [x] ⦄ := by
+  have h := Vec.insert_spec v i x (Nat.le_of_eq hi) hsize
+  simp only [Vec.length] at hi
+  simpa [hi, List.insertIdx_length_self] using h
 
 @[expose] def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   match v[i.val]? with
