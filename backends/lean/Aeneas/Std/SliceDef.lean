@@ -61,7 +61,7 @@ theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
       grind
     cases s0; cases s1
     simp at *
-    constructor <;> try grind [ListN_length]
+    constructor <;> grind [ListN_length]
 
 @[ext, grind ext, agrind ext]
 theorem Slice.ext {α} (s0 s1 : Slice α) (h : s0.val = s1.val) : s0 = s1 :=

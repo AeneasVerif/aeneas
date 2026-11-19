@@ -725,7 +725,7 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     cases eff
     have : heq = PEmpty.elim := by funext; contradiction
     simp [*] at *
-    try trivial
+    trivial
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/

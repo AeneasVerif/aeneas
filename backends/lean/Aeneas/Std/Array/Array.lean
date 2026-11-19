@@ -130,7 +130,7 @@ theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Na
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind = _, agrind = _]
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
-  simp only [getElem!]; split <;> (simp_all; try rfl)
+  simp only [getElem!]; split <;> simp_all; rfl
 
 instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
@@ -147,7 +147,7 @@ theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : 
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind = _, agrind = _]
 theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by
-  simp only [getElem!]; split <;> (simp_all; try rfl)
+  simp only [getElem!]; split <;> simp_all; rfl
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
