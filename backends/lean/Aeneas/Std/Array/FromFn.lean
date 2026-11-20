@@ -91,7 +91,7 @@ theorem core.array.from_fn.spec_stateless_getElem! {T F : Type u} [Inhabited T] 
     state unchanged (this is the case for closures which don't mutate their captured state). For
     closures which update their state, use `core.array.from_fn.spec` with an invariant.
 
-    This is the `@[step]` theorem, used by `step* +inferPost`, which infers `post` from the body
+    This is the `@[step]` theorem, used by `step*`, which infers `post` from the body
     of the closure. This only works for a body with exactly one call (it fails for `|i| i`, and
     stops after the first call of a longer body), and the postcondition is on `a.val[j]`.
     Otherwise, use `core.array.from_fn.spec_stateless_getElem!` through `step with`. -/
