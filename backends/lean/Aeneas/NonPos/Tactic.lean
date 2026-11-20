@@ -6,16 +6,16 @@ public import Aeneas.NonPos.Top
 /-!
 # The `nonpos_cont` tactic
 
-Not part of the trusted surface: `Top.lean` (section 5) states what this file is expected to do,
-and every proof built here is checked by the kernel.  This file contains:
+Not part of the trusted surface: `Command.lean` (section 2) states what this file is expected to
+do, and every proof built here is checked by the kernel.  This file contains:
 
 1. the continuity theorems, one per form of term, and the `@[nonpos_continuous]` attribute;
 2. the `nonpos_cont` tactic, a thin wrapper around those theorems;
 3. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
    so that it does not have to prove them again at each use;
-4. the lemmas proved for each structure of a `nonpos_structure` group (the hook
-   `nonpos_structure_lemmas` of `Top.lean`), lemmas used by the tactic; and the proofs of the
-   `simp` lemmas `Bla.f_mk` that `Top.lean` states (`nonpos_proj_mk`).
+4. the lemmas proved for each structure of a `nonpos_structure` group (`elabGroupLemmas`, which
+   `Command.lean` calls), lemmas used by the tactic; and the proofs of the `simp` lemmas `Bla.f_mk`
+   that `Command.lean` states (`nonpos_proj_mk`).
 -/
 
 namespace NonPos
@@ -683,12 +683,11 @@ elab "nonpos_continuity " id:ident : command => do
 
 /-! ## 4. The lemmas of each structure
 
-`nonpos_structure` also proves, through its hook `nonpos_structure_lemmas` (which `Top.lean` leaves
-empty and this section implements), once for each structure `Bla`, these facts.  (This section
-also implements `nonpos_proj_mk`, the tactic that proves the `simp` lemmas `Bla.f_mk` stated by
-`Top.lean`, from a lemma `Bla.mk_unfold : Fix.unfold F (Bla.mk f₁ … fₙ h) = ⟨f₁, …, fₙ⟩` that it
-proves once per structure.)  Except for the
-first, they are for performance: each would otherwise be derived from the whole tuple of fields at
+`nonpos_structure` (`Command.lean`) also proves, by calling `elabGroupLemmas` (below), once for
+each structure `Bla`, these facts.  (This section also implements `nonpos_proj_mk`, the tactic that
+proves the `simp` lemmas `Bla.f_mk` stated by `Command.lean`, from a lemma
+`Bla.mk_unfold : Fix.unfold F (Bla.mk f₁ … fₙ h) = ⟨f₁, …, fₙ⟩` that it proves once per structure.)
+They are all for performance: each would otherwise be derived from the whole tuple of fields at
 each use.  The ones built as terms (rather than elaborated from syntax) are built so to avoid
 re-elaborating the tuple for each lemma, or a slow comparison by the elaborator of two `Dom`s which
 the kernel checks quickly.
@@ -811,13 +810,16 @@ meta def condIntroLemma (mkName lemName : Name) : TermElabM Unit := do
       let value ← instantiateMVars (← mkLambdaFVars (vs ++ hs) g)
       addDecl (Declaration.thmDecl { name := lemName, levelParams := info.levelParams, type, value })
 
+/-- Proves the `simp` lemmas `Bla.f_mk` of the projections, which `Command.lean` states. -/
+syntax "nonpos_proj_mk" : tactic
+
 open Tactic in
-/-- The proof of `Bla.f_mk : ∀ ps f₁ … fₙ h, Bla.f ps (Bla.mk ps f₁ … fₙ h) = fⱼ` (stated by `Top.lean`):
+/-- The proof of `Bla.f_mk : ∀ ps f₁ … fₙ h, Bla.f ps (Bla.mk ps f₁ … fₙ h) = fⱼ` (stated by `Command.lean`):
 `congrArg` of the `j`-th component of the tuple on `Fix.unfold_fold`, built as a term (no `simp`,
 which goes through the whole tuple). -/
 elab_rules : tactic
   | `(tactic| nonpos_proj_mk) => do
-    let (_, g) ← (← getMainGoal).intros  -- (`Top.lean` gives the equation itself: nothing to introduce)
+    let (_, g) ← (← getMainGoal).intros
     g.withContext do
     let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | throwError "nonpos_proj_mk: not an equation"
     -- `Bla.mk ps f₁ … fₙ h` is `Fix.fold F x h`, with `x = ⟨f₁, …, fₙ, ⟨⟩⟩`
@@ -857,49 +859,44 @@ elab_rules : tactic
     g.assign (← mkCongrArg get uf)
     replaceMainGoal []
 
-/-- The lemmas of section 4 for each structure of a group made by `elabGroup`. -/
-meta def elabGroupLemmas (ss : Array StructStx) : CommandElabM Unit := do
-  let g := ss[0]!.name
-  let fId := mkIdentFrom g (g.getId ++ `F)
-  for s in ss do
-    let impl ← implicitBinders s.params
-    let args := s.params.map (·.1)
-    let k ← `($(mkIdent (g.getId ++ `I ++ s.name.getId)) $args*)  -- `G.I.Bla x₁ ... xₙ`
+/-- The lemmas of section 4 for each structure of a group made by `nonpos_structure`, given by the
+full names of the structures (everything else is read from the environment). -/
+meta def elabGroupLemmas (structs : Array Name) : CommandElabM Unit := do
+  for bla in structs do
+    let some mkInfo := (← getEnv).find? (bla ++ `mk) | throwError "nonpos_structure: no {bla ++ `mk}"
+    let blaInfo ← getConstInfo bla
+    -- the number of fields: the arguments of `mk` after the parameters, but the condition
+    let np := forallArity blaInfo.type
+    let nf := forallArity mkInfo.type - np - 1
     -- `Bla.cond_intro`, `Bla.unfold_cont`
-    unless s.fields.isEmpty do
-      let resolve (n : Name) := liftCoreM <| realizeGlobalConstNoOverload (mkIdentFrom s.name n)
-      let mkName ← resolve (s.name.getId ++ `mk)
-      let ns ← getCurrNamespace
-      try liftTermElabM (condIntroLemma mkName (ns ++ s.name.getId ++ `cond_intro))
-      catch e => logWarning m!"nonpos_structure: no `cond_intro` lemma for {s.name} ({e.toMessageData})"
-      try liftTermElabM (unfoldContLemma (← resolve s.name.getId) (ns ++ s.name.getId ++ `unfold_cont))
-      catch e => logWarning m!"nonpos_structure: no `unfold_cont` lemma for {s.name} ({e.toMessageData})"
-    -- `Bla.botTotal`: only if instance search finds `Fix.BotTotal` for every value of the parameters
-    -- (declared with the instance found, rather than searched for again)
-    let botTy ← if s.params.isEmpty then `(Fix.BotTotal $fId $k) else `(∀ $impl*, Fix.BotTotal $fId $k)
-    let botName := (← getCurrNamespace) ++ s.name.getId ++ `botTotal
+    if nf > 0 then
+      try liftTermElabM (condIntroLemma (bla ++ `mk) (bla ++ `cond_intro))
+      catch e => logWarning m!"nonpos_structure: no `cond_intro` lemma for {bla} ({e.toMessageData})"
+      try liftTermElabM (unfoldContLemma bla (bla ++ `unfold_cont))
+      catch e => logWarning m!"nonpos_structure: no `unfold_cont` lemma for {bla} ({e.toMessageData})"
+    -- `Bla.botTotal : ∀ ps, Fix.BotTotal F k`: only if instance search finds `Fix.BotTotal` for every
+    -- value of the parameters (declared with the instance found, rather than searched for again)
+    let botName := bla ++ `botTotal
     let found ← liftTermElabM do
       try
-        let ty ← instantiateMVars (← Term.elabType botTy)
-        let some v ← forallTelescope ty fun xs b => do
+        let some (ty, v) ← forallTelescope blaInfo.type fun xs _ => do
+            -- `Bla ps` unfolds to `Fix F k`
+            let e ← whnfR (mkAppN (mkConst bla (blaInfo.levelParams.map Level.param)) xs)
+            unless e.isAppOfArity ``Fix 4 do return none
+            let b ← mkAppOptM ``Fix.BotTotal (e.getAppArgs.map some)
             let some i ← synthInstance? b | return none
-            return some (← instantiateMVars (← mkLambdaFVars xs i))
+            return some (← mkForallFVars xs b, ← instantiateMVars (← mkLambdaFVars xs i))
           | return false
+        let ty ← instantiateMVars ty
         let lps := (collectLevelParams (collectLevelParams {} ty) v).params.toList
         addDecl (Declaration.thmDecl { name := botName, levelParams := lps, type := ty, value := v })
         return true
       catch _ => return false
-    if found then elabCommand (← `(attribute [instance high] $(mkIdent botName)))
+    if found then elabCommand (← `(attribute [instance high] $(mkIdent (`_root_ ++ botName))))
     -- `Bla.mk_cont`
-    if s.fields.isEmpty then continue
-    let contId := mkIdentFrom s.name (s.name.getId ++ `mk_cont)
-    let ns ← getCurrNamespace
-    liftTermElabM <| mkContLemma (ns ++ s.name.getId ++ `mk) (ns ++ s.name.getId ++ `mk_cont) s.fields.size
-    elabCommand (← `(attribute [nonpos_continuous] $contId))
-
-/-- The hook: `nonpos_structure_lemmas core₁ … coreₙ`, with the structures of the group. -/
-@[command_elab nonposStructureLemmas] meta def elabNonposStructureLemmas : CommandElab := fun stx => do
-  elabGroupLemmas (← stx[1].getArgs.mapM fun core => parseStruct (mkNode ``nonposStructure #[core]))
+    if nf == 0 then continue
+    liftTermElabM <| mkContLemma (bla ++ `mk) (bla ++ `mk_cont) nf
+    elabCommand (← `(attribute [nonpos_continuous] $(mkIdent (`_root_ ++ bla ++ `mk_cont))))
 
 /-! ## 5. Axioms
 

@@ -6,7 +6,7 @@ public import Aeneas.NonPos.Tests.Test
 # What `nonpos_structure` generates, written out by hand
 
 Two examples, expanded exactly as `nonpos_structure` would expand them: the definitions and `simp`
-lemmas of section 4 of `Top.lean`, and the lemmas of section 4 of `Tactic.lean` (same names, same
+lemmas of section 1 of `Command.lean`, and the lemmas of section 4 of `Tactic.lean` (same names, same
 shapes of terms), so that the output of the command can be read without running it.  The first has one structure with a
 data field; the second is the mutual pair `A`/`B` of `Test.lean`.  Both use `Option` as the monad.
 -/
@@ -52,8 +52,8 @@ abbrev Example1 : Type := Fix Example1.F .Example1
     (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
   Fix.fold Example1.F ⟨to_nat, f, ⟨⟩⟩ h
 
--- The projections, with the types as written, and their `simp` lemmas (stated by section 4 of
--- `Top.lean`; there proved by `nonpos_proj_mk`, of `Tactic.lean`: `congrArg` of the projection on
+-- The projections, with the types as written, and their `simp` lemmas (stated by section 1 of
+-- `Command.lean`; there proved by `nonpos_proj_mk`, of `Tactic.lean`: `congrArg` of the projection on
 -- `Fix.unfold_fold`).
 def Example1.to_nat (d : Example1) : Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold Example1.F d))

@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Tactic
+public import Aeneas.NonPos.Command
 
 @[expose] public section
 -- `partial_fixpoint` misses the fixed parameters of a self-referential instance when the `by` proof

@@ -1,6 +1,6 @@
 module
 public import Aeneas.NonPos.Tests.Test
-public import Aeneas.NonPos.Tactic
+public import Aeneas.NonPos.Command
 
 @[expose] public section
 /-!
