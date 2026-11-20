@@ -196,15 +196,17 @@ in the goal and hypotheses (by definitional unfolding, checked by `change`) so t
 literal lambda and its instance is built from the pieces of section 2 of `Top.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.const,
-      Shape.var, Shape.prodInst, Shape.piInst, Shape.arrInst, Shape.dataInst, Shape.constInst, Shape.varInst, true_and, and_true, implies_true, forall_and] $[$loc]?))
+  `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.monad,
+      Shape.unit, Shape.dict, Shape.dictPointed, Shape.var, Shape.prodInst, Shape.piInst, Shape.arrInst,
+      Shape.dataInst, Shape.monadInst, Shape.unitInst, Shape.dictInst, Shape.dictPointedInst, Shape.varInst, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
   `(tactic| (nonpos_cond_norm; dsimp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data,
-      Shape.const, Shape.var, Shape.prodInst, Shape.piInst, Shape.arrInst, Shape.dataInst, Shape.constInst,
+      Shape.monad, Shape.unit, Shape.dict, Shape.dictPointed, Shape.var, Shape.prodInst, Shape.piInst,
+      Shape.arrInst, Shape.dataInst, Shape.monadInst, Shape.unitInst, Shape.dictInst, Shape.dictPointedInst,
       Shape.varInst]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to

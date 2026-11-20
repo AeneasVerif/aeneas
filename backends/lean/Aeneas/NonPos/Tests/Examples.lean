@@ -36,7 +36,7 @@ abbrev Example1.Fields (Example1 : Type) : Type :=
 abbrev Example1.F : Example1.I → Fam Example1.I → Type
   | .Example1, X => Example1.Fields (X .Example1)
 
--- The shape, found by instance search: `Shape.prod (Shape.data Nat) (Shape.prod (Shape.arr …) (Shape.const PUnit))`.
+-- The shape, found by instance search: `Shape.prod (Shape.data Nat) (Shape.prod (Shape.arr …) Shape.unit)`.
 @[reducible] instance Example1.shape : ∀ k, Shape (Example1.F k)
   | .Example1 => inferInstance
 -- Its runtime implementation, never read (section 3 of `Top.lean`, assumption 3).
@@ -155,7 +155,7 @@ abbrev A.F : A.I → Fam A.I → Type 1
   | .A Self, X => A.Fields (fun Self => X (.A Self)) (fun Self => X (.B Self)) Self
   | .B Self, X => B.Fields (fun Self => X (.A Self)) (fun Self => X (.B Self)) Self
 
--- Shape of `A.F (.A Self)`: `prod (pi Type (fun O => arr (.B O) (pi Self (pi O (const (Option Nat)))))) (const PUnit)`.
+-- Shape of `A.F (.A Self)`: `prod (pi Type (fun O => arr (.B O) (pi Self (pi O (monad Option Nat)))))) unit`.
 @[reducible] instance A.shape : ∀ k, Shape (A.F k)
   | .A Self => inferInstance
   | .B Self => inferInstance

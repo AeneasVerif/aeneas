@@ -49,12 +49,29 @@ example (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M]
 section Pieces
 variable {I : Type pu}
 
-@[reducible] def Shape.dataInst (A : Type w) [Dom A] : Shape (fun _ : (I → Type v) => A) where
+/-- Data, with the discrete order. -/
+@[reducible] def Shape.dataInst (A : Type w) : Shape (fun _ : (I → Type v) => A) where
   cond _ := True
-  sd := Model.Shape.data A
-@[reducible] def Shape.constInst (A : Type w) [Dom A] [NonPos.Pointed A] : Shape (fun _ : (I → Type v) => A) where
+  sd := letI : Dom A := Dom.discrete A; Model.Shape.data A
+/-- The value of a supported monad, with its order and least element. -/
+@[reducible] def Shape.monadInst (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    Shape (fun _ : (I → Type v) => M α) where
   cond _ := True
-  sd := Model.Shape.const A
+  sd := Model.Shape.const (M α)
+/-- `PUnit`, with its order and least element. -/
+@[reducible] def Shape.unitInst : Shape (fun _ : (I → Type v) => PUnit.{w+1}) where
+  cond _ := True
+  sd := Model.Shape.const PUnit
+/-- A dictionary of another group `H'`, with the order of dictionaries. -/
+@[reducible] def Shape.dictInst {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I') :
+    Shape (fun _ : (I → Type v) => Fix H' k) where
+  cond _ := True
+  sd := letI := Fix.dom H' k; Model.Shape.data (Fix H' k)
+/-- A dictionary of another group `H'` in which `⊥` is total, with the order of dictionaries and `⊥`. -/
+@[reducible] def Shape.dictPointedInst {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)]
+    (k : I') [Fix.BotTotal H' k] : Shape (fun _ : (I → Type v) => Fix H' k) where
+  cond _ := True
+  sd := letI := Fix.dom H' k; letI := Fix.pointed (k := k) H'; Model.Shape.const (Fix H' k)
 @[reducible] def Shape.varInst (k : I) : Shape (fun X : (I → Type v) => X k) where
   cond _ := True
   sd := Model.Shape.var k
@@ -70,6 +87,14 @@ variable {I : Type pu}
     Shape (fun X => F X ×' G X) where
   cond x := Model.Shape.cond x.1 ∧ Model.Shape.cond x.2
   sd := Model.Shape.prod F G
+theorem Shape.monadIsPointed (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    @Shape.Pointed _ (fun _ : (I → Type v) => M α) (Shape.monadInst M α) :=
+  @Shape.Pointed.mk _ _ (Shape.monadInst M α) (Proofs.pointed_const (M α))
+theorem Shape.unitIsPointed : @Shape.Pointed _ (fun _ : (I → Type v) => PUnit.{w+1}) Shape.unitInst :=
+  @Shape.Pointed.mk _ _ Shape.unitInst (Proofs.pointed_const PUnit)
+theorem Shape.dictIsPointed {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I')
+    [Fix.BotTotal H' k] : @Shape.Pointed _ (fun _ : (I → Type v) => Fix H' k) (Shape.dictPointedInst H' k) :=
+  @Shape.Pointed.mk _ _ (Shape.dictPointedInst H' k) (letI := Fix.dom H' k; letI := Fix.pointed (k := k) H'; Proofs.pointed_const (Fix H' k))
 end Pieces
 
 /-! ## 3. Continuity at the fixed point of a group -/

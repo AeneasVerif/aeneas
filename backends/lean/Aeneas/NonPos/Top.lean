@@ -31,11 +31,10 @@ stands for the structures, and the body of `k` is a functor `F k : (I → Type v
 of its fields over `X`).  `Shape (F k)` says that `F k` is built from the pieces below and from
 nothing else; what each piece requires of a body is stated right after it.  Every binder is treated alike: a
 `Type` binder, a `Nat` binder and a dictionary binder are all `Shape.pi`, except that a binder whose
-type is one of the structures being defined is `Shape.arr`.  A plain field is `Shape.const` when its
-type has a least element (`Pointed`: a monadic value, a function into one, ...) and `Shape.data`
-otherwise; the body of a binder must be pointed (`Shape.Pointed`: no `Shape.data` and no plain
-dictionary field in it).  `Dom A` is the order of the type `A` (every type has one; they are defined,
-with `Pointed`, in `NonPos/Orders.lean`): the pieces take the order of each plain field's type. -/
+type is one of the structures being defined is `Shape.arr`.  The rest are plain fields: the value of
+a method (`Shape.monad`), the end of the tuple (`Shape.unit`), a dictionary of another group
+(`Shape.dict`), or any other type (`Shape.data`).  The body of a binder must be pointed
+(`Shape.Pointed`: built from `Shape.monad`, `Shape.unit` and pointed dictionaries only). -/
 
 section Shapes
 variable {I : Type pu}
@@ -51,15 +50,29 @@ example (H : I → (I → Type v) → Type v) [∀ k, Shape (H k)] (G : (I → T
 variable {H : I → (I → Type v) → Type v} [∀ k, Shape (H k)]
 
 /-- Data: `A`, any type (`Nat`, `Type`, ordinary structures, ...), as a plain field. -/
-instance (priority := low) Shape.data (A : Type w) [Dom A] : Shape (fun _ : (I → Type v) => A) :=
-  Shape.dataInst A
-theorem Shape.cond_data (A : Type w) [Dom A] (a : A) :
+instance (priority := low) Shape.data (A : Type w) : Shape (fun _ : (I → Type v) => A) := Shape.dataInst A
+theorem Shape.cond_data (A : Type w) (a : A) :
     Shape.cond H (G := fun _ => A) (iG := Shape.data A) a ↔ True := Iff.rfl
-/-- Constant: `A`, a type with a least element (`M τ`, a function into one, ...), as a plain field. -/
-instance Shape.const (A : Type w) [Dom A] [NonPos.Pointed A] : Shape (fun _ : (I → Type v) => A) :=
-  Shape.constInst A
-theorem Shape.cond_const (A : Type w) [Dom A] [NonPos.Pointed A] (a : A) :
-    Shape.cond H (G := fun _ => A) (iG := Shape.const A) a ↔ True := Iff.rfl
+/-- The value of a method: `M α`, for a supported monad `M` (`NonPosMonad`, e.g. `Result`). -/
+instance Shape.monad (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    Shape (fun _ : (I → Type v) => M α) := Shape.monadInst M α
+theorem Shape.cond_monad (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) (m : M α) :
+    Shape.cond H (G := fun _ => M α) (iG := Shape.monad M α) m ↔ True := Iff.rfl
+/-- The end of a tuple of fields. -/
+instance Shape.unit : Shape (fun _ : (I → Type v) => PUnit.{w+1}) := Shape.unitInst
+theorem Shape.cond_unit (u : PUnit.{w+1}) : Shape.cond H (G := fun _ => PUnit.{w+1}) (iG := Shape.unit) u ↔ True :=
+  Iff.rfl
+/-- A dictionary of another group `H'` (a supertrait), as a plain field. -/
+instance (priority := low) Shape.dict {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I') :
+    Shape (fun _ : (I → Type v) => Fix H' k) := Shape.dictInst H' k
+theorem Shape.cond_dict {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I') (d : Fix H' k) :
+    Shape.cond H (G := fun _ => Fix H' k) (iG := Shape.dict H' k) d ↔ True := Iff.rfl
+/-- The same, when `⊥` is total in `Fix H' k` (so that it may appear under a binder). -/
+instance Shape.dictPointed {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I')
+    [Fix.BotTotal H' k] : Shape (fun _ : (I → Type v) => Fix H' k) := Shape.dictPointedInst H' k
+theorem Shape.cond_dictPointed {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I')
+    [Fix.BotTotal H' k] (d : Fix H' k) :
+    Shape.cond H (G := fun _ => Fix H' k) (iG := Shape.dictPointed H' k) d ↔ True := Iff.rfl
 /-- Recursive occurrence: `X k`, as a plain field. -/
 instance Shape.var (k : I) : Shape (fun X : (I → Type v) => X k) := Shape.varInst k
 theorem Shape.cond_var (k : I) (d : Fix H k) : Shape.cond H (G := fun X => X k) d ↔ True := Iff.rfl
@@ -82,11 +95,14 @@ theorem Shape.cond_prod (F : (I → Type v) → Type w₁) (G : (I → Type v) �
     Shape.cond H (G := fun X => F X ×' G X) x ↔ Shape.cond H x.1 ∧ Shape.cond H x.2 := Iff.rfl
 
 /-! `Shape.Pointed F`: the bodies allowed under a binder.  Every plain field of `F`, at any depth, has
-a pointed type: no `Shape.data` field and no plain field of a structure of the group.  For a whole
+a least element: no `Shape.data` field and no plain field of a structure of the group.  For a whole
 structure, this is the set of structures that consist of methods and plain fields of pointed type. -/
 
-instance (A : Type w) [Dom A] [Pointed A] : Shape.Pointed (fun _ : (I → Type v) => A) :=
-  @Shape.Pointed.mk _ _ (Shape.constInst A) (Proofs.pointed_const A)
+instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    Shape.Pointed (fun _ : (I → Type v) => M α) := Shape.monadIsPointed M α
+instance : Shape.Pointed (fun _ : (I → Type v) => PUnit.{w+1}) := Shape.unitIsPointed
+instance {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I') [Fix.BotTotal H' k] :
+    Shape.Pointed (fun _ : (I → Type v) => Fix H' k) := Shape.dictIsPointed H' k
 instance (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
     Shape.Pointed (fun X => (t : T) → G t X) := ⟨Proofs.pointed_pi T G⟩
 instance (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] :
