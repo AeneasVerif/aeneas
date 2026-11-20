@@ -263,17 +263,17 @@ def u8_id (x : Std.U8) : Result Std.U8 := do
 /-- [closures::{impl core::ops::function::FnMut<(u8,), u8> for closures::u8_id}::call_mut]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
 def P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
-  (state : Std.U8 → Result Std.U8) (args : Std.U8) :
+  (f : Std.U8 → Result Std.U8) (i : Std.U8) :
   Result (Std.U8 × (Std.U8 → Result Std.U8))
   := do
-  let i ← u8_id args
-  ok (i, state)
+  let i1 ← u8_id i
+  ok (i1, f)
 
 /-- [closures::{impl core::ops::function::FnOnce<(u8,), u8> for closures::u8_id}::call_once]:
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
 def P.Insts.CoreOpsFunctionFnOnceTupleU8U8.call_once
-  (state : Std.U8 → Result Std.U8) (args : Std.U8) : Result Std.U8 := do
-  u8_id args
+  (f : Std.U8 → Result Std.U8) (i : Std.U8) : Result Std.U8 := do
+  u8_id i
 
 /-- Trait implementation: [closures::{impl core::ops::function::FnOnce<(u8,), u8> for closures::u8_id}]
     Source: 'tests/src/closures.rs', lines 43:0-45:1 -/
