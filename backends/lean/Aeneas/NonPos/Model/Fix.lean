@@ -26,7 +26,7 @@ section Fix
 variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
 
 /-- The shape data of structure `k`. -/
-abbrev Fix.sd (k : I) : ShapeData (F k) (Shape.cond (F := F k)) := Shape.sd (F := F k)
+abbrev Fix.sd (k : I) : ShapeData (F k) (Model.Shape.cond (F := F k)) := Model.Shape.sd (F := F k)
 
 /-- The signature: the operator of each structure. -/
 abbrev Fix.sig : Signature.{pu, v} (I) := fun k => (Fix.sd F k).op
@@ -125,7 +125,7 @@ attribute [local instance] Fix.dom
 
 /-- The retraction of structure `k` at the solution. -/
 def Fix.r (k : I) :
-    ContRetract {y // (Fix.sd F k).total (Fix.D F) (Fix.T F) y} {x : F k (Fix F) // Shape.cond (F := F k) x}
+    ContRetract {y // (Fix.sd F k).total (Fix.D F) (Fix.T F) y} {x : F k (Fix F) // Model.Shape.cond (F := F k) x}
       (Dom.subtype (Fix.dU F k) _ ⟨(Fix.sd F k).total_sup (Fix.Φ F), Dom.ChainClosed.of_mono ((Fix.sd F k).total_mono (Fix.Φ F))⟩)
       (Dom.subtype (Shape.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩) :=
   (Fix.sd F k).conv (Fix.Φ F)
@@ -133,15 +133,15 @@ def Fix.r (k : I) :
 def Model.Fix.unfold {k : I} (d : Fix F k) : F k (Fix F) :=
   ((Fix.r F k).toFun ⟨unroll (Fix.sig F) k d.1, (Fix.T_iff F _ _).1 d.2⟩).1
 
-theorem Model.Fix.cond {k : I} (d : Fix F k) : Shape.cond (F := F k) (Model.Fix.unfold F d) :=
+theorem Model.Fix.cond {k : I} (d : Fix F k) : Model.Shape.cond (F := F k) (Model.Fix.unfold F d) :=
   ((Fix.r F k).toFun ⟨unroll (Fix.sig F) k d.1, (Fix.T_iff F _ _).1 d.2⟩).2
 
-def Model.Fix.fold {k : I} (x : F k (Fix F)) (h : Shape.cond (F := F k) x) : Fix F k :=
+def Model.Fix.fold {k : I} (x : F k (Fix F)) (h : Model.Shape.cond (F := F k) x) : Fix F k :=
   ⟨roll (Fix.sig F) k ((Fix.r F k).invFun ⟨x, h⟩).1,
     (Fix.T_iff F _ _).2 (Eq.mpr (congrArg ((Fix.sd F k).total (Fix.D F) (Fix.T F)) (unroll_roll (Fix.sig F) k _))
       ((Fix.r F k).invFun ⟨x, h⟩).2)⟩
 
-theorem Model.Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Shape.cond (F := F k) x) :
+theorem Model.Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Model.Shape.cond (F := F k) x) :
     Model.Fix.unfold F (Model.Fix.fold F x h) = x :=
   have e : (⟨unroll (Fix.sig F) k (Model.Fix.fold F x h).1, (Fix.T_iff F _ _).1 (Model.Fix.fold F x h).2⟩ :
       {y // (Fix.sd F k).total (Fix.D F) (Fix.T F) y}) = (Fix.r F k).invFun ⟨x, h⟩ :=
@@ -174,7 +174,7 @@ theorem Model.Cont.unfold {D : Type w} [Dom D] {k : I} {f : D → Fix F k} (hf :
   Cont.comp' (g := Model.Fix.unfold F) (f := f) (dB := Fix.dom F k) (Model.Cont.unfold₀ F) hf
 
 theorem Model.Cont.fold {D : Type w} [Dom D] {k : I} {f : D → F k (Fix F)}
-    (h : ∀ d, Shape.cond (F := F k) (f d)) (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) :
+    (h : ∀ d, Model.Shape.cond (F := F k) (f d)) (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) :
     Cont (fun d => Model.Fix.fold F (f d) (h d)) := by
   refine Cont.intoSubtype (Fix.dD F k) _ (q := Fix.T F k) (hq := Fix.closedT F k)
     (f := fun d => Model.Fix.fold F (f d) (h d)) ?_
@@ -194,7 +194,7 @@ which `⊥` is total (`Shape.BotTotal`, decided by instances in `Top`). -/
 
 /-- `⊥` is total for the shape `G`, at the totality of the group `F`. -/
 class Shape.BotTotal (G : Fam.{pu, v} I → Type w) [Shape G] : Prop where
-  bot : (Shape.sd (F := G)).total (Fix.D F) (Fix.T F) OmegaComplete.bottom
+  bot : (Model.Shape.sd (F := G)).total (Fix.D F) (Fix.T F) OmegaComplete.bottom
 
 /-- `⊥` is a total element of structure `k` of the group. -/
 class Fix.BotTotal (k : I) : Prop where
@@ -236,6 +236,12 @@ theorem Fix.fixCompat (k : I) [Fix.BotTotal F k] : @FixCompat (Fix F k) (Fix.dom
   @FixCompat.mk (Fix F k) (Fix.dom F k) (Fix.ccpo F k) (fun _ _ => Iff.rfl)
 
 end Fix
+
+/-- The condition of a body `G` over the structures of the group `H` (for `G = H k`, the condition
+for folding into `Fix H k`): its condition at the order of the dictionaries. -/
+abbrev Shape.cond {I : Type pu} (H : I → Fam.{pu, v} I → Type v) [∀ k, Shape (H k)]
+    {G : Fam.{pu, v} I → Type w} [iG : Shape G] (x : G (Fix H)) : Prop :=
+  @Model.Shape.cond _ G _ (Fix H) (Fix.dom H) x
 
 end
 end NonPos

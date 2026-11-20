@@ -1,18 +1,19 @@
 module
 public import Lean
-public import Aeneas.NonPos.Proofs
+public import Aeneas.NonPos.Orders
 
 @[expose] public section
 /-!
 # `nonpos_structure`: the definitions
 
 With `NonPos/Command.lean`, this file is the whole trusted surface of the library.  It contains,
-and only contains, the *statements* that pin down the imported constants (`Dom`, `Cont`, `Shape`,
-`Fix`, ...).  `NonPos/Command.lean` has the `nonpos_structure` command, a thin wrapper around `Fix`,
+and only contains, the *statements* that pin down the imported constants (`Shape`, `Fix`,
+`Shape.cond`, ...).  `NonPos/Command.lean` has the `nonpos_structure` command, a thin wrapper around `Fix`,
 and what the `nonpos_cont` tactic, which proves the condition of each structure, is expected to do.
 
-Proofs live in `NonPos/Proofs.lean` and the definitions of the constants in `NonPos/Model/`;
-neither needs to be read.  Every theorem below is proved by a one-line reference to `Proofs`.  The
+Proofs live in `NonPos/Proofs.lean`, the definitions of the constants in `NonPos/Model/`, and the
+orders of the model with the bodies of the instances below in `NonPos/Orders.lean`; none of them
+needs to be read.  Every theorem below is proved by a one-line reference to them, or by `Iff.rfl`.  The
 tactic is in `NonPos/Tactic.lean`, which does not need to be read either.
 -/
 
@@ -22,107 +23,92 @@ noncomputable section
 
 universe pu v u w w₁ w₂
 
-/-! ## 1. Admissible types, the condition, monads
-
-`Dom A` says the type `A` is admissible; `Cont f` is the condition on functions between admissible
-types (the "continuity" of the goal; its definition is not needed here).  Every type is admissible in
-a trivial way (`Dom.discrete`, low priority); products and function types are admissible componentwise
-and pointwise; `M α` is admissible for a supported monad `M`.  `Pointed A` says `A` has a least
-element: this is what makes a plain field of type `A` free of the lifting of section 2. -/
-
-/-! No instance of these classes is registered anywhere but in this file. -/
-
-instance (priority := low) (A : Type w) : Dom A := Dom.discrete A
-instance : Dom PUnit.{w+1} := Dom.unit
-instance (T : Type w₁) (B : T → Type w₂) [∀ t, Dom (B t)] : Dom ((t : T) → B t) := Dom.pi T B
-instance (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] : Dom (A ×' B) := Dom.pprod A B
-
-instance : Pointed PUnit.{w+1} := Pointed.unit
-instance (T : Type w₁) (B : T → Type w₂) [∀ t, Dom (B t)] [∀ t, Pointed (B t)] : Pointed ((t : T) → B t) :=
-  Pointed.pi T B
-instance (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] [Pointed A] [Pointed B] : Pointed (A ×' B) := Pointed.pprod A B
-
-/-- A supported monad `M` carries the chain-complete order that `partial_fixpoint` uses
-(`Lean.Order.CCPO (M α)`); `NonPosMonad M` says that `bind` satisfies the condition for it. -/
-instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) : Dom (M α) :=
-  NonPosMonad.dom α
-instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) : Pointed (M α) :=
-  Pointed.monad α
-example (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u} :
-    Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2) := NonPosMonad.bind_cont
-
-/-! ## 2. Signatures
+/-! ## 1. Shapes
 
 A group of mutually defined structures is indexed by a type `I`, whose elements are the structures
-of the group applied to their parameters (`k : I` is, say, `Bla Self`).  `Fam I = I → Type v` is the
-type of families `X k` that the structures range over.  The body of `k` is a functor
-`F k : Fam I → Type v`, and `Shape (F k)` says that `F k` is built from the pieces below and from nothing else, and gives the condition `Shape.cond` that
-`.mk` requires of a body: trivial on plain fields, pointwise through binders, componentwise on
-products, and `Cont` on dictionary binders.  Every binder is treated alike: a `Type` binder, a `Nat`
-binder and a dictionary binder are all `Shape.pi`, except that a binder whose type is one of the
-structures being defined is `Shape.arr`.  A plain field is `Shape.const` when its type is pointed and
-`Shape.data` otherwise; the body of a binder must be pointed (`Shape.Pointed`: no `Shape.data` and no
-plain dictionary field in it). -/
+of the group applied to their parameters (`k : I` is, say, `Bla Self`).  A family `X : I → Type v`
+stands for the structures, and the body of `k` is a functor `F k : (I → Type v) → Type v` (the tuple
+of its fields over `X`).  `Shape (F k)` says that `F k` is built from the pieces below and from
+nothing else; what each piece requires of a body is stated right after it.  Every binder is treated alike: a
+`Type` binder, a `Nat` binder and a dictionary binder are all `Shape.pi`, except that a binder whose
+type is one of the structures being defined is `Shape.arr`.  A plain field is `Shape.const` when its
+type has a least element (`Pointed`: a monadic value, a function into one, ...) and `Shape.data`
+otherwise; the body of a binder must be pointed (`Shape.Pointed`: no `Shape.data` and no plain
+dictionary field in it).  `Dom A` is the order of the type `A` (every type has one; they are defined,
+with `Pointed`, in `NonPos/Orders.lean`): the pieces take the order of each plain field's type. -/
 
 section Shapes
 variable {I : Type pu}
 
-/-- Data: `A`, any admissible type (`Nat`, `Type`, ordinary structures, ...), as a plain field. -/
-instance (priority := low) Shape.data (A : Type w) [Dom A] : Shape (fun _ : (I → Type v) => A) where
-  cond _ := True
-  sd := Model.Shape.data A
-/-- Constant: `A`, a pointed admissible type (`M τ`, a function into one, ...), as a plain field. -/
-instance Shape.const (A : Type w) [Dom A] [NonPos.Pointed A] : Shape (fun _ : Fam.{pu, v} I => A) where
-  cond _ := True
-  sd := Model.Shape.const A
+/-! `Shape.cond H x` is the condition of a body `x : G (Fix H)` over the structures of the group
+`H`: for `G = H k`, the condition for folding `x` into `Fix H k` (section 2).  After each piece is
+what it requires of a body (by `Iff.rfl`): trivial on plain fields, pointwise through binders,
+componentwise on products, and continuity (`Fix.Cont`) on dictionary binders. -/
+
+example (H : I → (I → Type v) → Type v) [∀ k, Shape (H k)] (G : (I → Type v) → Type w) [Shape G] :
+    G (Fix H) → Prop := Shape.cond H
+
+variable {H : I → (I → Type v) → Type v} [∀ k, Shape (H k)]
+
+/-- Data: `A`, any type (`Nat`, `Type`, ordinary structures, ...), as a plain field. -/
+instance (priority := low) Shape.data (A : Type w) [Dom A] : Shape (fun _ : (I → Type v) => A) :=
+  Shape.dataInst A
+theorem Shape.cond_data (A : Type w) [Dom A] (a : A) :
+    Shape.cond H (G := fun _ => A) (iG := Shape.data A) a ↔ True := Iff.rfl
+/-- Constant: `A`, a type with a least element (`M τ`, a function into one, ...), as a plain field. -/
+instance Shape.const (A : Type w) [Dom A] [NonPos.Pointed A] : Shape (fun _ : (I → Type v) => A) :=
+  Shape.constInst A
+theorem Shape.cond_const (A : Type w) [Dom A] [NonPos.Pointed A] (a : A) :
+    Shape.cond H (G := fun _ => A) (iG := Shape.const A) a ↔ True := Iff.rfl
 /-- Recursive occurrence: `X k`, as a plain field. -/
-instance Shape.var (k : I) : Shape (fun X : Fam.{pu, v} I => X k) where
-  cond _ := True
-  sd := Model.Shape.var k
+instance Shape.var (k : I) : Shape (fun X : (I → Type v) => X k) := Shape.varInst k
+theorem Shape.cond_var (k : I) (d : Fix H k) : Shape.cond H (G := fun X => X k) d ↔ True := Iff.rfl
 /-- Binder: `(t : T) → G t X`, for any type `T` (implicit or explicit, `Type`-valued or not). -/
-instance Shape.pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
-    Shape (fun X => (t : T) → G t X) where
-  cond f := ∀ t, Shape.cond (f t)
-  sd := Model.Shape.pi T G
+instance Shape.pi (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
+    Shape (fun X => (t : T) → G t X) := Shape.piInst T G
+theorem Shape.cond_pi (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
+    (f : (t : T) → G t (Fix H)) :
+    Shape.cond H (G := fun X => (t : T) → G t X) f ↔ ∀ t, Shape.cond H (f t) := Iff.rfl
 /-- Dictionary binder: `X k → G X`. -/
-instance Shape.arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
-    Shape (fun X => X k → G X) where
-  cond {X} _ f := Cont (inst_1 := Shape.dom (F := G) X) f ∧ ∀ d, Shape.cond (f d)
-  sd := Model.Shape.arr k G
+instance Shape.arr (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] :
+    Shape (fun X => X k → G X) := Shape.arrInst k G
+theorem Shape.cond_arr (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] (f : Fix H k → G (Fix H)) :
+    Shape.cond H (G := fun X => X k → G X) f ↔ Fix.Cont H f ∧ ∀ d, Shape.cond H (f d) := Iff.rfl
 /-- Two fields. -/
-instance Shape.prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G] :
-    Shape (fun X => F X ×' G X) where
-  cond x := Shape.cond x.1 ∧ Shape.cond x.2
-  sd := Model.Shape.prod F G
+instance Shape.prod (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G] :
+    Shape (fun X => F X ×' G X) := Shape.prodInst F G
+theorem Shape.cond_prod (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G]
+    (x : F (Fix H) ×' G (Fix H)) :
+    Shape.cond H (G := fun X => F X ×' G X) x ↔ Shape.cond H x.1 ∧ Shape.cond H x.2 := Iff.rfl
 
 /-! `Shape.Pointed F`: the bodies allowed under a binder.  Every plain field of `F`, at any depth, has
 a pointed type: no `Shape.data` field and no plain field of a structure of the group.  For a whole
 structure, this is the set of structures that consist of methods and plain fields of pointed type. -/
 
-instance (A : Type w) [Dom A] [Pointed A] : Shape.Pointed (fun _ : Fam.{pu, v} I => A) := ⟨Proofs.pointed_const A⟩
-instance (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
+instance (A : Type w) [Dom A] [Pointed A] : Shape.Pointed (fun _ : (I → Type v) => A) :=
+  @Shape.Pointed.mk _ _ (Shape.constInst A) (Proofs.pointed_const A)
+instance (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
     Shape.Pointed (fun X => (t : T) → G t X) := ⟨Proofs.pointed_pi T G⟩
-instance (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
+instance (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] :
     Shape.Pointed (fun X => X k → G X) := ⟨Proofs.pointed_arr k G⟩
-instance (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G]
+instance (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G]
     [Shape.Pointed F] [Shape.Pointed G] : Shape.Pointed (fun X => F X ×' G X) := ⟨Proofs.pointed_prod F G⟩
 end Shapes
 
-/-! ## 3. The fixed point
+/-! ## 2. The fixed point
 
 `Fix F k` is the structure `k` (a structure of the group at its parameters).  A body `x : F k (Fix F)`
-satisfying the condition folds into it, and unfolding gives it back.  When `⊥` is total in it
+satisfying the condition `Shape.cond F x` (section 1) folds into it, and unfolding gives it back.  When `⊥` is total in it
 (`Fix.BotTotal`: every plain field of structure `k` is pointed, or is a structure of the group in
 which `⊥` is total), it is pointed and a `Lean.Order.CCPO`, so self-referential instances can be
 defined with `partial_fixpoint`. -/
 
 /-- The runtime value of every generated `Shape` instance (assumption 3 below: it is never read). -/
-@[instance_reducible] unsafe def Shape.runtime {I : Type pu} {F : Fam.{pu, v} I → Type w} : Shape F := unsafeCast ()
+@[instance_reducible] unsafe def Shape.runtime {I : Type pu} {F : (I → Type v) → Type w} : Shape F := unsafeCast ()
 
 section Fix
-variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
+variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, Shape (F k)]
 
-instance (k : I) : Dom (Fix F k) := Fix.dom F k
 
 /-! `fold` and `unfold`, and how they run.
 
@@ -131,7 +117,7 @@ dictionary is an element of an inverse-limit domain.  Compiled code never builds
 dictionary is stored as a `Thunk` of the tuple of its fields.  So `fold` stores the tuple
 `x : F k (Fix F)` without evaluating it (only its static type changes to `Fix F k`), and `unfold`
 forces it (and changes the type back).  The work of `fold` is all in the logic: proving
-`Shape.cond x`, and `Fix.unfold_fold` below, which says that unfolding gives back the same tuple.
+`Shape.cond F x`, and `Fix.unfold_fold` below, which says that unfolding gives back the same tuple.
 
 Why delayed: a self-referential dictionary `d := mk … (f d) …` (defined by `partial_fixpoint`) is
 compiled by Lean as a recursive constant, and a field such as `f d` that mentions `d` outside a
@@ -154,20 +140,20 @@ Under 1 and 2, the dictionary `unfold` receives is a `Thunk` of the tuple `x` th
 and forcing it gives `x`, which is also the logical value of `unfold (fold x h)` by
 `Fix.unfold_fold`; so compiled projections compute their logical values. -/
 
-unsafe def Fix.foldDelayedImpl {k : I} (x : Unit → F k (Fix F)) (_ : Shape.cond (x ())) : Fix F k :=
+unsafe def Fix.foldDelayedImpl {k : I} (x : Unit → F k (Fix F)) (_ : Shape.cond F (x ())) : Fix F k :=
   unsafeCast (Thunk.mk x)
 unsafe def Fix.unfoldImpl {k : I} (d : Fix F k) : F k (Fix F) := (unsafeCast d : Thunk (F k (Fix F))).get
 /-- `fold` of the tuple `x ()`; at runtime, `x` is stored in a `Thunk` without being called. -/
 @[implemented_by Fix.foldDelayedImpl]
-noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : Shape.cond (x ())) : Fix F k :=
+noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : Shape.cond F (x ())) : Fix F k :=
   Model.Fix.fold F (x ()) h
 @[macro_inline]
-def Fix.fold {k : I} (x : F k (Fix F)) (h : Shape.cond x) : Fix F k := Fix.foldDelayed F (fun _ => x) h
+def Fix.fold {k : I} (x : F k (Fix F)) (h : Shape.cond F x) : Fix F k := Fix.foldDelayed F (fun _ => x) h
 @[implemented_by Fix.unfoldImpl]
 noncomputable def Fix.unfold {k : I} (d : Fix F k) : F k (Fix F) := Model.Fix.unfold F d
 
-theorem Fix.cond {k : I} (d : Fix F k) : Shape.cond (Fix.unfold F d) := Model.Fix.cond F d
-theorem Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Shape.cond x) :
+theorem Fix.cond {k : I} (d : Fix F k) : Shape.cond F (Fix.unfold F d) := Model.Fix.cond F d
+theorem Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Shape.cond F x) :
     Fix.unfold F (Fix.fold F x h) = x := Proofs.unfold_fold F x h
 
 /-! `Shape.BotTotal F G` and `Fix.BotTotal F k`: the structures that are `CCPO`s, so that
@@ -175,8 +161,8 @@ theorem Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Shape.cond x) :
 structure of group `F` is in this set when each of its plain fields is of pointed type or is a
 structure of the group that is itself in the set; `Shape.BotTotal F G` says the same of a body `G`.
 This is larger than `Shape.Pointed`, which does not admit plain dictionary fields. -/
-instance (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] : Shape.BotTotal F G := Shape.BotTotal.ofPointed F G
-instance (G₁ : Fam.{pu, v} I → Type w) (G₂ : Fam.{pu, v} I → Type w₁) [Shape G₁] [Shape G₂]
+instance (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] : Shape.BotTotal F G := Shape.BotTotal.ofPointed F G
+instance (G₁ : (I → Type v) → Type w) (G₂ : (I → Type v) → Type w₁) [Shape G₁] [Shape G₂]
     [Shape.BotTotal F G₁] [Shape.BotTotal F G₂] : Shape.BotTotal F (fun X => G₁ X ×' G₂ X) := ⟨Proofs.botTotal_prod F G₁ G₂⟩
 instance (k : I) [Fix.BotTotal F k] : Shape.BotTotal F (fun X => X k) := ⟨Proofs.botTotal_var F k⟩
 instance (k : I) [Shape.BotTotal F (F k)] : Fix.BotTotal F k := Fix.BotTotal.ofShape F k
@@ -184,7 +170,7 @@ instance (k : I) [Fix.BotTotal F k] : Pointed (Fix F k) := Fix.pointed F
 instance (k : I) [Fix.BotTotal F k] : Lean.Order.CCPO (Fix F k) := Fix.ccpo F k
 end Fix
 
-/-! ## 4. Axioms
+/-! ## 3. Axioms
 
 Everything above, with its proofs and model, uses only the standard axioms (no `sorry`, no
 axiom of the library's own).  The build fails if this changes. -/

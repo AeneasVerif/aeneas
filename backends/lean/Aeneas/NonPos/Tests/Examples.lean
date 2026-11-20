@@ -49,7 +49,7 @@ abbrev Example1 : Type := Fix Example1.F .Example1
 -- `mk`, from the fields and the condition.  `macro_inline`, so that the fields are not evaluated
 -- before `fold` delays them (section 3 of `Top.lean`).
 @[macro_inline] def Example1.mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
+    (h : Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
   Fix.fold Example1.F ⟨to_nat, f, ⟨⟩⟩ h
 
 -- The projections, with the types as written, and their `simp` lemmas (stated by section 1 of
@@ -58,14 +58,14 @@ abbrev Example1 : Type := Fix Example1.F .Example1
 def Example1.to_nat (d : Example1) : Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold Example1.F d))
 @[simp] theorem Example1.to_nat_mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) :
+    (h : Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
     Example1.to_nat (Example1.mk to_nat f h) = to_nat := by
   simp only [Example1.to_nat, Example1.mk, Fix.unfold_fold]
 
 def Example1.f (d : Example1) : Example1 → Option Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (@PProd.snd _ _ (Fix.unfold Example1.F d)))
 @[simp] theorem Example1.f_mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩) :
+    (h : Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
     Example1.f (Example1.mk to_nat f h) = f := by
   simp only [Example1.f, Example1.mk, Fix.unfold_fold]
 
@@ -76,7 +76,7 @@ def Example1.f (d : Example1) : Example1 → Option Nat :=
 -- `mk` is continuous in its fields (section 4 of `Tactic.lean`): proved once here, and used by
 -- `nonpos_cont` on any `mk` whose fields vary, instead of going through the tuple of fields.
 theorem Example1.mk_cont {D : Type _} [Dom D] (to_nat : D → Nat) (f : D → Example1 → Option Nat)
-    (h : ∀ d, Shape.cond (F := Example1.F Example1.I.Example1) (X := Fix Example1.F) ⟨to_nat d, f d, ⟨⟩⟩)
+    (h : ∀ d, Shape.cond Example1.F (G := Example1.F Example1.I.Example1) ⟨to_nat d, f d, ⟨⟩⟩)
     (_ : Cont to_nat) (_ : Cont f) :
     Cont (fun d => Example1.mk (to_nat d) (f d) (h d)) := by
   nonpos_cont 5000
@@ -86,7 +86,7 @@ attribute [nonpos_continuous] Example1.mk_cont
 -- condition unfolded by `nonpos_cond_dsimp`): `nonpos_cont` applies it to the condition of each `mk`,
 -- instead of unfolding the condition there.  The conjuncts that are `True` are left out.
 theorem Example1.cond_intro (to_nat : Nat) (f : Example1 → Option Nat) (h0 : Cont f) :
-    Shape.cond (F := Example1.F .Example1) (X := Fix Example1.F) ⟨to_nat, f, ⟨⟩⟩ :=
+    Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩ :=
   ⟨trivial, ⟨h0, fun _ => trivial⟩, trivial⟩
 
 -- `Fix.unfold` is continuous at the `Dom` that instance search builds for the tuple of fields
@@ -168,22 +168,22 @@ abbrev A (Self : Type) : Type 1 := Fix A.F (.A Self)
 abbrev B (Self : Type) : Type 1 := Fix A.F (.B Self)
 
 @[macro_inline] def A.mk {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
-    (h : Shape.cond (F := A.F (.A Self)) (X := Fix A.F) ⟨fa, ⟨⟩⟩) : A Self :=
+    (h : Shape.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩) : A Self :=
   Fix.fold A.F ⟨fa, ⟨⟩⟩ h
 def A.fa {Self : Type} (d : A Self) : ∀ {O : Type} (BInst : B O), Self → O → Option Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold A.F d))
 @[simp] theorem A.fa_mk {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
-    (h : Shape.cond (F := A.F (.A Self)) (X := Fix A.F) ⟨fa, ⟨⟩⟩) :
+    (h : Shape.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩) :
     @A.fa Self (A.mk fa h) = @fa := by
   simp only [A.fa, A.mk, Fix.unfold_fold]
 
 @[macro_inline] def B.mk {Self : Type} (fb : ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
-    (h : Shape.cond (F := A.F (.B Self)) (X := Fix A.F) ⟨fb, ⟨⟩⟩) : B Self :=
+    (h : Shape.cond A.F (G := A.F (.B Self)) ⟨fb, ⟨⟩⟩) : B Self :=
   Fix.fold A.F ⟨fb, ⟨⟩⟩ h
 def B.fb {Self : Type} (d : B Self) : ∀ {O : Type} (AInst : A O), Self → O → Option Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold A.F d))
 @[simp] theorem B.fb_mk {Self : Type} (fb : ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
-    (h : Shape.cond (F := A.F (.B Self)) (X := Fix A.F) ⟨fb, ⟨⟩⟩) :
+    (h : Shape.cond A.F (G := A.F (.B Self)) ⟨fb, ⟨⟩⟩) :
     @B.fb Self (B.mk fb h) = @fb := by
   simp only [B.fb, B.mk, Fix.unfold_fold]
 
@@ -194,19 +194,19 @@ instance (priority := high) B.botTotal {Self : Type} : Fix.BotTotal A.F (A.I.B S
 
 -- `mk` of each structure is continuous in its fields (section 4 of `Tactic.lean`).
 theorem A.mk_cont {Self : Type} {D : Type _} [Dom D] (fa : D → ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
-    (h : ∀ d, Shape.cond (F := A.F (A.I.A Self)) (X := Fix A.F) ⟨fa d, ⟨⟩⟩) (_ : Cont fa) :
+    (h : ∀ d, Shape.cond A.F (G := A.F (A.I.A Self)) ⟨fa d, ⟨⟩⟩) (_ : Cont fa) :
     Cont (fun d => A.mk (fa d) (h d)) := by
   nonpos_cont 5000
 attribute [nonpos_continuous] A.mk_cont
 theorem B.mk_cont {Self : Type} {D : Type _} [Dom D] (fb : D → ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
-    (h : ∀ d, Shape.cond (F := A.F (A.I.B Self)) (X := Fix A.F) ⟨fb d, ⟨⟩⟩) (_ : Cont fb) :
+    (h : ∀ d, Shape.cond A.F (G := A.F (A.I.B Self)) ⟨fb d, ⟨⟩⟩) (_ : Cont fb) :
     Cont (fun d => B.mk (fb d) (h d)) := by
   nonpos_cont 5000
 attribute [nonpos_continuous] B.mk_cont
 
 -- The condition of `A.mk`, unfolded: `fa` is continuous in its dictionary argument, for every `O`.
 example {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat) :
-    Shape.cond (F := A.F (.A Self)) (X := Fix A.F) ⟨fa, ⟨⟩⟩ ↔
+    Shape.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩ ↔
       ∀ O : Type, Cont (fun BInst : B O => (fa BInst : Self → O → Option Nat)) := by
   nonpos_cond_simp
 

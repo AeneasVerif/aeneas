@@ -39,7 +39,7 @@ end Shapes
 
 section Fix
 variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
-theorem unfold_fold {k : I} (x : F k (Fix F)) (h : Shape.cond x) :
+theorem unfold_fold {k : I} (x : F k (Fix F)) (h : Model.Shape.cond x) :
     Model.Fix.unfold F (Model.Fix.fold F x h) = x := Model.Fix.unfold_fold F x h
 end Fix
 
@@ -78,7 +78,7 @@ theorem Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonP
 variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
 theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
     Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d => Model.Fix.unfold F (f d)) := NonPos.Model.Cont.unfold F hf
-theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Shape.cond (f d))
+theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Model.Shape.cond (f d))
     (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) : Cont (fun d => Model.Fix.fold F (f d) (h d)) :=
   NonPos.Model.Cont.fold F h hf
 

@@ -71,7 +71,7 @@ variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
 /-- Projections out of a structure, and `mk` of fields depending on `d`. -/
 theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
     Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d => Fix.unfold F (f d)) := Proofs.Cont.unfold F hf
-theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Shape.cond (f d))
+theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Shape.cond F (f d))
     (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) : Cont (fun d => Fix.fold F (f d) (h d)) :=
   Proofs.Cont.fold F h hf
 
@@ -174,16 +174,19 @@ For performance:
 so they can be matched against. -/
 meta def normCond (e : Expr) : MetaM Expr := do
   let e ← instantiateMVars e
-  let_expr Shape.cond I F inst X instX x := e | return e
+  -- `Shape.cond H x` is `Model.Shape.cond` at the order of the dictionaries
+  let e ← if e.isAppOf ``Shape.cond then whnfR e else pure e
+  let_expr Model.Shape.cond I F inst X instX x := e | return e
   let F' ← lambdaTelescope (← whnfR F) fun xs b => do mkLambdaFVars xs (← whnfR b)
-  return mkAppN (.const ``Shape.cond e.getAppFn.constLevels!) #[I, F', ← whnfR inst, X, instX, x]
+  return mkAppN (.const ``Model.Shape.cond e.getAppFn.constLevels!) #[I, F', ← whnfR inst, X, instX, x]
 
 open Tactic in
 elab "nonpos_cond_norm" : tactic => withMainContext do
   let mut g ← getMainGoal
   g ← g.change (← normCond (← g.getType))
   for d in ← getLCtx do
-    if !d.isImplementationDetail && (← instantiateMVars d.type).isAppOf ``Shape.cond then
+    let t ← instantiateMVars d.type
+    if !d.isImplementationDetail && (t.isAppOf ``Shape.cond || t.isAppOf ``Model.Shape.cond) then
       g ← g.changeLocalDecl d.fvarId (← normCond d.type)
   replaceMainGoal [g]
 
@@ -193,15 +196,16 @@ in the goal and hypotheses (by definitional unfolding, checked by `change`) so t
 literal lambda and its instance is built from the pieces of section 2 of `Top.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.const,
-      Shape.var, true_and, and_true, implies_true, forall_and] $[$loc]?))
+  `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.const,
+      Shape.var, Shape.prodInst, Shape.piInst, Shape.arrInst, Shape.dataInst, Shape.constInst, Shape.varInst, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
-  `(tactic| (nonpos_cond_norm; dsimp only [Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data,
-      Shape.const, Shape.var]))
+  `(tactic| (nonpos_cond_norm; dsimp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data,
+      Shape.const, Shape.var, Shape.prodInst, Shape.piInst, Shape.arrInst, Shape.dataInst, Shape.constInst,
+      Shape.varInst]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
 arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
@@ -554,12 +558,12 @@ meta def contAssumption (g : MVarId) (f : Expr) : MetaM Bool := g.withContext do
 `Bla.cond_intro` (section 4): the new goals are the conjuncts of the condition.  `none` if there is
 no such lemma or it does not apply. -/
 meta def condIntro? (g : MVarId) (ty : Expr) : MetaM (Option (List MVarId)) := do
-  let_expr Shape.cond _ F _ _ _ _ := ty | return none
+  let_expr Model.Shape.cond _ F _ _ _ _ := ty | return none
   let some ctor := F.appArg!.getAppFn.constName? | return none
   -- `ctor` is `ns.G.I.Bla`
   let lem := ctor.getPrefix.getPrefix.getPrefix ++ Name.mkSimple ctor.getString! ++ `cond_intro
   unless (← getEnv).contains lem do return none
-  let_expr Shape.cond _ _ _ _ _ x := ty | return none
+  let_expr Model.Shape.cond _ _ _ _ _ x := ty | return none
   -- the fields of the tuple `⟨f₁, …, fₙ, ⟨⟩⟩`
   let mut fs := #[]
   let mut x := x
@@ -581,7 +585,7 @@ meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM U
   setGoals [g]
   let ty ← g.withContext do whnfR (← instantiateMVars (← g.getType))
   if ty.isForall then replaceMainGoal [(← g.intro1).2]
-  else if ty.isAppOf ``Shape.cond then
+  else if ty.isAppOf ``Model.Shape.cond then
     match ← condIntro? g ty with
     | some gs => replaceMainGoal gs
     | none => evalTactic (← `(tactic| nonpos_cond_dsimp))
@@ -628,7 +632,7 @@ open Tactic in
 meta def nonposCont (fuel : Nat) : TacticM Unit := do
   let tree ← getContTheorems
   let ty ← whnfR (← instantiateMVars (← (← getMainGoal).getType))
-  if ty.isAppOf ``Shape.cond then nonposCondAux tree fuel else nonposContLoop tree fuel
+  if ty.isAppOf ``Model.Shape.cond then nonposCondAux tree fuel else nonposContLoop tree fuel
 
 elab_rules : tactic
   | `(tactic| nonpos_cont) => nonposCont 300
