@@ -138,6 +138,9 @@ let () =
         Arg.Set generate_lib_entry_point,
         " Add an entry point file to the generated library (only valid if the \
          crate is split between different files)" );
+      ( "-gen-layouts",
+        Arg.Set generate_has_layout,
+        " Generate HasLayout instances for extracted types in Lean" );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
