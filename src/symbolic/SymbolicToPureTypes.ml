@@ -262,8 +262,8 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_attr_info = v.attr_info in
   let discriminant, ty =
     match v.discriminant with
-    | SignedInteger (ty, v) -> (Z.to_int v, TInt ty)
-    | UnsignedInteger (ty, v) -> (Z.to_int v, TUInt ty)
+    | SignedInteger (ty, v) -> (v, TInt ty)
+    | UnsignedInteger (ty, v) -> (v, TUInt ty)
   in
   { variant_name; fields; variant_attr_info; discriminant; ty }
 
