@@ -33,8 +33,8 @@ def Struct.constructor (i : Std.U32) : Result Struct := do
 /-- [issue_767_adt_constructor::{impl core::ops::function::FnOnce<(u32,), issue_767_adt_constructor::Struct> for issue_767_adt_constructor::Struct}::call_once]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
 def P.Insts.CoreOpsFunctionFnOnceTupleU32Struct.call_once
-  (state : Std.U32 → Result Struct) (args : Std.U32) : Result Struct := do
-  Struct.constructor args
+  (f : Std.U32 → Result Struct) (i : Std.U32) : Result Struct := do
+  Struct.constructor i
 
 /-- Trait implementation: [issue_767_adt_constructor::{impl core::ops::function::FnOnce<(u32,), issue_767_adt_constructor::Struct> for issue_767_adt_constructor::Struct}]
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
@@ -59,8 +59,8 @@ def Enum.Tuple.constructor (i : Std.U32) : Result Enum := do
 /-- [issue_767_adt_constructor::Enum::{impl core::ops::function::FnOnce<(u32,), issue_767_adt_constructor::Enum> for issue_767_adt_constructor::Enum::Tuple}::call_once]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 9:4-9:14 -/
 def P.Insts.CoreOpsFunctionFnOnceTupleU32Enum.call_once
-  (state : Std.U32 → Result Enum) (args : Std.U32) : Result Enum := do
-  Enum.Tuple.constructor args
+  (f : Std.U32 → Result Enum) (i : Std.U32) : Result Enum := do
+  Enum.Tuple.constructor i
 
 /-- Trait implementation: [issue_767_adt_constructor::Enum::{impl core::ops::function::FnOnce<(u32,), issue_767_adt_constructor::Enum> for issue_767_adt_constructor::Enum::Tuple}]
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 9:4-9:14 -/
