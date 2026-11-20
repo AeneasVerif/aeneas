@@ -10,5 +10,6 @@ Aeneas translates Rust programs to into pure functional programs (primarily Lean
 - [Crypto Verification](crypto-verification.md) — Verifying cryptographic code
 - [Adding Standard Library Models](std-models.md) — Models of the Rust standard library, with their tests and specifications
 - [Glossary](glossary.md) — Aeneas-specific terms
+- [`translation.json`](emit-json.md) — The manifest written by `-emit-json`
 
 For AI agent instructions see the [skills/](skills/) folder.

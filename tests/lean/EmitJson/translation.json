@@ -1,0 +1,294 @@
+{
+  "charon_version": "0.1.315",
+  "crate": "emit_json",
+  "lean_modules": true,
+  "functions": [
+    {
+      "def_id": 22,
+      "lean_name": "emit_json.Shape.double_area.default",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Shape::double_area",
+      "rust_pattern": "emit_json::Shape::double_area",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 34,
+        "end_line": 36
+      },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 23,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonNamed.id",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Named for emit_json::Point}::id",
+      "rust_pattern": "emit_json::{emit_json::Named<emit_json::Point>}::id",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 40,
+        "end_line": 42
+      },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 24,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonShapeU32.area",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Shape<u32> for emit_json::Point}::area",
+      "rust_pattern": "emit_json::{emit_json::Shape<emit_json::Point, u32>}::area",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 48,
+        "end_line": 50
+      },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 25,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonConvU64.conv",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Conv<u64> for emit_json::Point}::conv",
+      "rust_pattern": "emit_json::{emit_json::Conv<emit_json::Point, u64>}::conv",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 59,
+        "end_line": 61
+      },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    },
+    {
+      "def_id": 19,
+      "lean_name": "emit_json.double_area_of",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::double_area_of",
+      "rust_pattern": "emit_json::double_area_of",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 64,
+        "end_line": 66
+      },
+      "is_opaque": false,
+      "can_fail": true,
+      "can_diverge": false,
+      "is_rec": false,
+      "reducible": false
+    }
+  ],
+  "types": [
+    {
+      "def_id": 5,
+      "lean_name": "emit_json.Point",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Point",
+      "rust_pattern": "emit_json::Point",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 7,
+        "end_line": 10
+      },
+      "constructor": "emit_json.Point.mk",
+      "fields": [
+        { "rust": "x", "lean": "x" }, { "rust": "y", "lean": "y" }
+      ]
+    },
+    {
+      "def_id": 6,
+      "lean_name": "emit_json.Meters",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Meters",
+      "rust_pattern": "emit_json::Meters",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 13,
+        "end_line": 13
+      }
+    },
+    {
+      "def_id": 7,
+      "lean_name": "emit_json.Dir",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Dir",
+      "rust_pattern": "emit_json::Dir",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 16,
+        "end_line": 19
+      },
+      "variants": [
+        { "rust": "Left", "lean": "emit_json.Dir.Left" },
+        { "rust": "Right", "lean": "emit_json.Dir.Right" }
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "def_id": 6,
+      "lean_name": "emit_json.ORIGIN",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::ORIGIN",
+      "rust_pattern": "emit_json::ORIGIN",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 22,
+        "end_line": 22
+      },
+      "can_fail": false
+    },
+    {
+      "def_id": 8,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonShapeU32.SIDES",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Shape<u32> for emit_json::Point}::SIDES",
+      "rust_pattern": "emit_json::{emit_json::Shape<emit_json::Point, u32>}::SIDES",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 46,
+        "end_line": 46
+      },
+      "can_fail": false
+    }
+  ],
+  "trait_decls": [
+    {
+      "def_id": 4,
+      "lean_name": "emit_json.Named",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Named",
+      "rust_pattern": "emit_json::Named",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 24,
+        "end_line": 26
+      },
+      "constructor": "emit_json.Named.mk",
+      "methods": [ { "rust": "id", "lean": "id" } ]
+    },
+    {
+      "def_id": 5,
+      "lean_name": "emit_json.Shape",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Shape",
+      "rust_pattern": "emit_json::Shape",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 30,
+        "end_line": 37
+      },
+      "constructor": "emit_json.Shape.mk",
+      "parent_clauses": [ "NamedInst" ],
+      "consts": [ { "rust": "SIDES", "lean": "SIDES" } ],
+      "methods": [
+        { "rust": "area", "lean": "area" },
+        { "rust": "double_area", "lean": "double_area" }
+      ]
+    },
+    {
+      "def_id": 6,
+      "lean_name": "emit_json.Conv",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::Conv",
+      "rust_pattern": "emit_json::Conv",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 54,
+        "end_line": 56
+      },
+      "constructor": "emit_json.Conv.mk",
+      "methods": [ { "rust": "conv", "lean": "conv" } ]
+    }
+  ],
+  "trait_impls": [
+    {
+      "def_id": 6,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonNamed",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Named for emit_json::Point}",
+      "rust_pattern": "emit_json::Named<emit_json::Point>",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 39,
+        "end_line": 43
+      },
+      "impl_trait_def_id": 4,
+      "impl_trait_rust_name": "emit_json::Named",
+      "impl_trait_is_builtin": false
+    },
+    {
+      "def_id": 7,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonShapeU32",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Shape<u32> for emit_json::Point}",
+      "rust_pattern": "emit_json::Shape<emit_json::Point, u32>",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 45,
+        "end_line": 51
+      },
+      "impl_trait_def_id": 5,
+      "impl_trait_rust_name": "emit_json::Shape",
+      "impl_trait_is_builtin": false
+    },
+    {
+      "def_id": 8,
+      "lean_name": "emit_json.Point.Insts.Emit_jsonConvU64",
+      "lean_file": "EmitJson.lean",
+      "lean_module": "EmitJson",
+      "rust_name": "emit_json::{impl emit_json::Conv<u64> for emit_json::Point}",
+      "rust_pattern": "emit_json::Conv<emit_json::Point, u64>",
+      "is_local": true,
+      "source": {
+        "file": "tests/src/emit-json.rs",
+        "begin_line": 58,
+        "end_line": 62
+      },
+      "impl_trait_def_id": 6,
+      "impl_trait_rust_name": "emit_json::Conv",
+      "impl_trait_is_builtin": false
+    }
+  ]
+}
