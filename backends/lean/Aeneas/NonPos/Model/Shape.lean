@@ -78,7 +78,7 @@ def Dom.subtype {A : Type w} (d : Dom A) (p : A → Prop) (hp : Dom.Closed d p) 
 /-- An upward-closed predicate is closed under suprema of nonempty chains. -/
 theorem Dom.ChainClosed.of_mono {A : Type w} {d : Dom A} {p : A → Prop}
     (h : ∀ {x y : A}, @Dom.le A d x y → p x → p y) : Dom.ChainClosed d p :=
-  fun _ _ ⟨x, hx⟩ hp s hs => h (@isSup_le A d.po _ _ hs x hx) (hp x hx)
+  fun _ _ ⟨x, hx⟩ hp _ hs => h (@isSup_le A d.po _ _ hs x hx) (hp x hx)
 
 /-- A supremum in `A ×' B` is computed componentwise. -/
 theorem Dom.isSup_pprod {A : Type w₁} {B : Type w₂} (dA : Dom A) (dB : Dom B) {c : A ×' B → Prop}
@@ -300,7 +300,7 @@ def Shape.const' (A : Type w) [Dom A] [NonPos.Pointed A] : ShapeData (fun _ : Fa
 /-- The recursive occurrence `X k`, as a plain field: total when the field is. -/
 def Shape.var' (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) where
   op := DomainOperator.variable k
-  dom X := inferInstance
+  dom _ := inferInstance
   cond_sup := fun X [∀ k, Dom (X k)] _ _ => trivial
   cond_csup := fun X [∀ k, Dom (X k)] _ _ _ _ _ _ => trivial
   total := fun _ T y => T k y
@@ -309,7 +309,7 @@ def Shape.var' (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True
   total_ev := fun Φ c h => Φ.ev k c h
   total_imp := fun _ _ _ h _ hy => h k _ hy
   total_fin := fun _ _ _ _ h => h
-  conv Φ :=
+  conv _ :=
     { toFun := fun y => ⟨⟨y.1, y.2⟩, trivial⟩
       invFun := fun x => ⟨x.1.1, x.1.2⟩
       right_inv := fun _ => rfl
@@ -593,7 +593,7 @@ reaches it in a few steps: comparing it with the `Dom` that instance search find
 @[reducible] def Model.Shape.pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)]
     [∀ t, Shape.Pointed (G t)] :
     ShapeData (fun X => (t : T) → G t X) (fun f => ∀ t, Shape.cond (F := G t) (f t)) :=
-  { Shape.pi' (fun t => Shape.sd (F := G t)) (fun t D T y => Shape.Pointed.total D T y) with
+  { Shape.pi' (fun t => Shape.sd (F := G t)) (fun _ D T y => Shape.Pointed.total D T y) with
     dom := fun X [∀ k, Dom (X k)] => @Dom.pi T (fun t => G t X) (fun t => Shape.dom (G t) X) }
 /-- A dictionary binder, whose body is pointed. -/
 @[reducible] def Model.Shape.arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :

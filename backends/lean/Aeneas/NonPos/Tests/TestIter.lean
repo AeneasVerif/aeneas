@@ -2,6 +2,8 @@ module
 public import Aeneas.NonPos.Tests.Test
 
 @[expose] public section
+-- as in the files Aeneas generates: the named instance binders of trait methods are unused
+set_option linter.unusedVariables false
 -- see the comment on this option in `Test.lean`
 set_option backward.proofsInPublic true
 /-!

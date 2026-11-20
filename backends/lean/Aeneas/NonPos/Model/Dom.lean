@@ -136,7 +136,7 @@ def Dom.ofCCPO (A : Type w) [CCPO A] : Dom A where
   os :=
     { sup := fun c => CCPO.csup (Dom.chain_range c)
       le_sup := fun c n => le_csup (Dom.chain_range c) ⟨n, rfl⟩
-      sup_le := fun c x h => csup_le (Dom.chain_range c) (fun y ⟨n, hn⟩ => hn ▸ h n) }
+      sup_le := fun c _ h => csup_le (Dom.chain_range c) (fun _ ⟨n, hn⟩ => hn ▸ h n) }
   cc := ⟨fun _ hc _ => CCPO.has_csup hc⟩
 
 /-- The `Dom` structure agrees with the given `CCPO`: same order, same suprema of chains. -/

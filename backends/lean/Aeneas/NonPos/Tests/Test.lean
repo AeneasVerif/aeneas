@@ -2,6 +2,8 @@ module
 public import Aeneas.NonPos.Command
 
 @[expose] public section
+-- as in the files Aeneas generates: the named instance binders of trait methods are unused
+set_option linter.unusedVariables false
 -- `partial_fixpoint` misses the fixed parameters of a self-referential instance when the `by` proof
 -- in its body is abstracted into an auxiliary theorem, as happens by default in a public section.
 set_option backward.proofsInPublic true

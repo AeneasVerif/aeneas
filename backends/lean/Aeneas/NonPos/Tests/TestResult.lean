@@ -2,6 +2,8 @@ module
 public import Aeneas.NonPos.Tests.Result
 
 @[expose] public section
+-- as in the files Aeneas generates: the named instance binders of trait methods are unused
+set_option linter.unusedVariables false
 /-!
 # Tests over `Result`: the examples of `nonpos/main/Test.lean` and `nonpos/tests/fix_pred`
 -/
