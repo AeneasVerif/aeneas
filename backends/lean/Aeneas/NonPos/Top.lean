@@ -24,10 +24,10 @@ outputs.
 
 * **This file** states what the library provides.  Section 1 is the one notion everything is stated
   with: the relation `⊑` of Lean's `partial_fixpoint`.  A group of structures is described by a
-  functor (section 2), for which there is a type `Fix`, with `fold` (the `mk` of a structure),
-  `unfold` (its projections), and `unfold (fold x) = x`.  The functors that are allowed are the ones
-  built from a few pieces (section 3).  Section 4 says which structures can have instances that
-  refer to themselves, and section 5 is about compiled code.
+  functor (section 2), for which there is a type `Fix`, with `fold` (the `mk` of a structure) and
+  `unfold` (its projections), inverse of each other.  The functors that are allowed are the ones
+  built from a few pieces (section 3).  Section 4 is about instances that refer to themselves, and
+  section 5 about compiled code.
 * **`Command.lean`** has the `nonpos_structure` command, which only names these for a group of
   structures written as above.
 * **Section 1 of `Tactic.lean`** states that the condition holds of every term built from the forms
@@ -57,9 +57,10 @@ example {T : Type w₁} {B : T → Type w₂} [∀ t, PartialOrder (B t)] (f g :
 example {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] (x y : A ×' B) :
     x ⊑ y ↔ x.1 ⊑ y.1 ∧ x.2 ⊑ y.2 := Iff.rfl
 
-/-! Plain data is compared by equality (`discreteOrder`), and any two values of `PUnit`, which ends
-each tuple of fields, are related (`unitOrder`).  A structure is compared as its fields are
-(section 2). -/
+/-! Any two values of `PUnit`, which ends each tuple of fields, are related (`unitOrder`), and a
+structure is compared as its fields are (section 2).  Plain data (a `Nat`) is not a field of a
+structure, but it occurs as a value inside a computation (`Cont.pure`, in `Tactic.lean`), where it is
+compared by equality (`discreteOrder`). -/
 
 example (A : Type w) (x y : A) : (discreteOrder A).rel x y ↔ x = y := Iff.rfl
 example (x y : PUnit.{w+1}) : unitOrder.rel x y ↔ True := Iff.rfl
@@ -101,28 +102,26 @@ example : I → Type v := Fix F
 instance Fix.instPartialOrder (k : I) : PartialOrder (Fix F k) := Fix.order F k
 
 /-! A body of structure `k` over the structures themselves, satisfying the condition, folds into
-structure `k` (`fold` is the `mk` of the structure); unfolding gives the body back (`unfold` is the
-tuple of its projections), and every unfolded body satisfies the condition.  (`foldDelayed` is how
-`fold` runs: section 5.) -/
+structure `k` (`fold` is the `mk` of the structure), and a structure unfolds into such a body
+(`unfold` is the tuple of its projections).  (`foldDelayed` is how `fold` runs: section 5.) -/
 
 noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : FixFunctor.cond (x ())) : Fix F k :=
   Model.Fix.fold F (x ()) h
 noncomputable def Fix.fold {k : I} (x : F k (Fix F)) (h : FixFunctor.cond x) : Fix F k :=
   Fix.foldDelayed F (fun _ => x) h
 noncomputable def Fix.unfold {k : I} (d : Fix F k) : F k (Fix F) := Model.Fix.unfold F d
+theorem Fix.cond {k : I} (d : Fix F k) : FixFunctor.cond (Fix.unfold F d) := Proofs.cond_unfold F d
+
+/-! `fold` and `unfold` are inverse of each other, and a structure is compared as its body is: so
+structure `k` is exactly the bodies of `k` that satisfy the condition, with their `⊑`.
+(`o.rel x y` is `x ⊑ y` for the order `o`.) -/
 
 theorem Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : FixFunctor.cond x) :
     Fix.unfold F (Fix.fold F x h) = x := Proofs.unfold_fold' F x h
-theorem Fix.cond {k : I} (d : Fix F k) : FixFunctor.cond (Fix.unfold F d) := Proofs.cond_unfold F d
-
-/-! A structure is compared as its fields are: `fold` and `unfold` both preserve `⊑`, where the
-bodies are compared by the `order` of the functor.  (`o.rel x y` is `x ⊑ y` for the order `o`.) -/
-
-theorem Fix.unfold_mono {k : I} {d₁ d₂ : Fix F k} (h : d₁ ⊑ d₂) :
-    (FixFunctor.order (F k) (Fix F)).rel (Fix.unfold F d₁) (Fix.unfold F d₂) := Proofs.unfold_mono F h
-theorem Fix.fold_mono {k : I} {x₁ x₂ : F k (Fix F)} (h₁ : FixFunctor.cond x₁) (h₂ : FixFunctor.cond x₂)
-    (h : (FixFunctor.order (F k) (Fix F)).rel x₁ x₂) : Fix.fold F x₁ h₁ ⊑ Fix.fold F x₂ h₂ :=
-  Proofs.fold_mono F h₁ h₂ h
+theorem Fix.fold_unfold {k : I} (d : Fix F k) :
+    Fix.fold F (Fix.unfold F d) (Fix.cond F d) = d := Proofs.fold_unfold' F d
+theorem Fix.le_iff {k : I} (d₁ d₂ : Fix F k) :
+    d₁ ⊑ d₂ ↔ (FixFunctor.order (F k) (Fix F)).rel (Fix.unfold F d₁) (Fix.unfold F d₂) := Proofs.le_iff F d₁ d₂
 
 end Interface
 
@@ -130,49 +129,31 @@ end Interface
 
 The pieces a functor may be built from follow, each with its `order` and its `cond` (its `model` is
 not read).  A body is a tuple (`prod`, ended by `unit`) of fields.  A field is a method, that is a
-chain of binders (`pi`, `arr`) ending in a value of a monad (`const`); or a plain value: data
-(`data`), a structure of another group (`dict`), or a structure of this group (`var`).  Every binder
-is `pi`, whether it binds a type, a number or a dictionary of another group, except a binder of a
-structure of the group itself, which is `arr`.
+chain of binders (`pi`, `arr`) ending in a value of a monad (`const`); or a plain value: of a type
+with a least element (`const` again: an associated constant, of type `Result T`, or a structure of
+another group), or a structure of this group (`var`).  Every binder is `pi`, whether it binds a
+type, a number or a dictionary of another group, except a binder of a structure of the group
+itself, which is `arr`.  There is no piece for a field of plain data, such as a `Nat`.
 
 The order is Lean's on each type, and the condition is trivial on plain fields and goes through
 tuples and binders.  At an `arr`, the condition is `Cont`: the method, as a function of the
-dictionary it takes.
-
-`FixFunctor.Methods G` says that `G` may stand under a binder: what a binder returns is a
-computation, so it must consist of values of types with a least element (those of a monad), and not
-of plain data such as a `Nat`.  Its instances are stated with the pieces. -/
+dictionary it takes. -/
 
 section Pieces
 variable {I : Type pu}
 
-/-- Data: any type `A` (`Nat`, `Type`, an ordinary structure, ...), as a plain field. -/
-instance (priority := low) FixFunctor.data (A : Type w) : FixFunctor (fun _ : (I → Type v) => A) where
-  order := fun _ _ => discreteOrder A
-  cond := fun _ => True
-  model := .data A
-
 /-- A value of a type that has a `Lean.Order.CCPO` (the type of a `partial_fixpoint`: `Result α`, a
-function into it, a structure of another group that is `Fix.Recursive`), as a plain field. -/
+function into it, a structure of another group), as a plain field or at the end of a method. -/
 instance FixFunctor.const (A : Type w) [i : CCPO A] : FixFunctor (fun _ : (I → Type v) => A) where
   order := fun _ _ => i.toPartialOrder
   cond := fun _ => True
   model := .ccpo A
-instance (A : Type w) [CCPO A] : FixFunctor.Methods (fun _ : (I → Type v) => A) := ⟨FixFunctor.Model.ccpo_pointed A⟩
 
 /-- The end of a tuple of fields. -/
 instance FixFunctor.unit : FixFunctor (fun _ : (I → Type v) => PUnit.{w+1}) where
   order := fun _ _ => unitOrder
   cond := fun _ => True
   model := .unit
-instance : FixFunctor.Methods (fun _ : (I → Type v) => PUnit.{w+1}) := ⟨FixFunctor.Model.unit_pointed⟩
-
-/-- A structure of another group `F'` (the dictionary of a supertrait), as a plain field. -/
-instance (priority := low) FixFunctor.dict {I' : Type pu} (F' : I' → (I' → Type v) → Type v)
-    [∀ k, FixFunctor (F' k)] (k : I') : FixFunctor (fun _ : (I → Type v) => Fix F' k) where
-  order := fun _ _ => Fix.instPartialOrder F' k
-  cond := fun _ => True
-  model := .dict F' k
 
 /-- A structure of the group itself, `X k`, as a plain field. -/
 instance FixFunctor.var (k : I) : FixFunctor (fun X : (I → Type v) => X k) where
@@ -181,22 +162,17 @@ instance FixFunctor.var (k : I) : FixFunctor (fun X : (I → Type v) => X k) whe
   model := .var k
 
 /-- A binder: `(t : T) → G t X`, for any type `T` (implicit or explicit, `Type`-valued or not). -/
-instance FixFunctor.pi (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, FixFunctor (G t)]
-    [∀ t, FixFunctor.Methods (G t)] : FixFunctor (fun X => (t : T) → G t X) where
+instance FixFunctor.pi (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, FixFunctor (G t)] :
+    FixFunctor (fun X => (t : T) → G t X) where
   order := fun X _ => @instOrderPi T (fun t => G t X) (fun t => FixFunctor.order (G t) X)
   cond := fun f => ∀ t, FixFunctor.cond (f t)
-  model := .pi (fun t => FixFunctor.model (G := G t)) (fun _ => FixFunctor.Methods.shape)
-instance (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, FixFunctor (G t)] [∀ t, FixFunctor.Methods (G t)] :
-    FixFunctor.Methods (fun X => (t : T) → G t X) := ⟨FixFunctor.Model.pi_pointed (fun t => FixFunctor.model (G := G t)) (fun _ => FixFunctor.Methods.shape)⟩
+  model := .pi (fun t => FixFunctor.model (G := G t))
 
 /-- A binder of a structure of the group itself: `X k → G X`.  This is where the condition is. -/
-instance FixFunctor.arr (k : I) (G : (I → Type v) → Type w) [FixFunctor G] [FixFunctor.Methods G] :
-    FixFunctor (fun X => X k → G X) where
+instance FixFunctor.arr (k : I) (G : (I → Type v) → Type w) [FixFunctor G] : FixFunctor (fun X => X k → G X) where
   order := fun X _ => @instOrderPi (X k) (fun _ => G X) (fun _ => FixFunctor.order G X)
   cond := fun {X} _ f => Cont (iB := FixFunctor.order G X) f ∧ ∀ d, FixFunctor.cond (f d)
-  model := .arr k (FixFunctor.model (G := G)) FixFunctor.Methods.shape
-instance (k : I) (G : (I → Type v) → Type w) [FixFunctor G] [FixFunctor.Methods G] :
-    FixFunctor.Methods (fun X => X k → G X) := ⟨FixFunctor.Model.arr_pointed k (FixFunctor.model (G := G)) FixFunctor.Methods.shape⟩
+  model := .arr k (FixFunctor.model (G := G))
 
 /-- Two fields. -/
 instance FixFunctor.prod (G₁ : (I → Type v) → Type w₁) (G₂ : (I → Type v) → Type w₂) [FixFunctor G₁]
@@ -204,10 +180,6 @@ instance FixFunctor.prod (G₁ : (I → Type v) → Type w₁) (G₂ : (I → Ty
   order := fun X _ => @instPartialOrderPProd (G₁ X) (G₂ X) (FixFunctor.order G₁ X) (FixFunctor.order G₂ X)
   cond := fun x => FixFunctor.cond x.1 ∧ FixFunctor.cond x.2
   model := .prod (FixFunctor.model (G := G₁)) (FixFunctor.model (G := G₂))
-instance (G₁ : (I → Type v) → Type w₁) (G₂ : (I → Type v) → Type w₂) [FixFunctor G₁] [FixFunctor G₂]
-    [FixFunctor.Methods G₁] [FixFunctor.Methods G₂] : FixFunctor.Methods (fun X => G₁ X ×' G₂ X) :=
-  ⟨FixFunctor.Model.prod_pointed (FixFunctor.model (G := G₁)) (FixFunctor.model (G := G₂)) FixFunctor.Methods.shape
-    FixFunctor.Methods.shape⟩
 
 end Pieces
 
@@ -219,29 +191,15 @@ solution of the equation for `⊑`, on a type that has a `Lean.Order.CCPO` (a `�
 and least upper bounds of chains).  For a function into `Result`, this is what makes it diverge
 where the program loops, rather than return something else that also satisfies the equation.
 
-`Fix.Recursive F k` says that structure `k` has a `CCPO`, whose `⊑` is the one of section 2.  This
-holds when each of its fields is a method (more generally, a body that may stand under a binder:
-`FixFunctor.Methods`) or, as a plain field, a structure of the group that is itself `Recursive`.
-`FixFunctor.Recursive F G` says this of a body `G`.  A structure with a plain field of data is not
-`Recursive`.
-
-With `Fix.unfold_fold`, `Fix.fold_mono` and `Fix.unfold_mono`, this determines the fields of a
-self-referential instance: they are the least body `x`, for the `order` of the functor and among
-the bodies satisfying the condition, that satisfies its equation `x = … Fix.fold F x _ …`. -/
+Every structure has a `CCPO`, whose `⊑` is the one of section 2.  By `Fix.le_iff`, the instance that
+`partial_fixpoint` defines is therefore the least one whose fields satisfy the equation, the
+fields being compared as section 3 says: by the `⊑` of the monad on the values of methods, at
+every argument. -/
 
 section Recursive
 variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, FixFunctor (F k)]
 
-instance (G : (I → Type v) → Type w) [FixFunctor G] [FixFunctor.Methods G] : FixFunctor.Recursive F G :=
-  Proofs.recursive_ofMethods F G
-instance (k : I) [Fix.Recursive F k] : FixFunctor.Recursive F (fun X => X k) := ⟨Proofs.recursive_var F k⟩
-instance (G₁ : (I → Type v) → Type w) (G₂ : (I → Type v) → Type w₁) [FixFunctor G₁] [FixFunctor G₂]
-    [FixFunctor.Recursive F G₁] [FixFunctor.Recursive F G₂] : FixFunctor.Recursive F (fun X => G₁ X ×' G₂ X) :=
-  ⟨Proofs.recursive_prod F (FixFunctor.model (G := G₁)) (FixFunctor.model (G := G₂)) FixFunctor.Recursive.shape
-    FixFunctor.Recursive.shape⟩
-instance (k : I) [FixFunctor.Recursive F (F k)] : Fix.Recursive F k := Proofs.recursive_fix F k
-
-instance Fix.instCCPO (k : I) [Fix.Recursive F k] : CCPO (Fix F k) where
+instance Fix.instCCPO (k : I) : CCPO (Fix F k) where
   toPartialOrder := Fix.instPartialOrder F k
   has_csup := Proofs.has_csup F k
 
@@ -302,10 +260,10 @@ axiom of the library's own).  The build fails if this changes. -/
 
 /-- info: 'NonPos.Fix.unfold_fold' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Fix.unfold_fold
-/-- info: 'NonPos.Fix.fold_mono' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Fix.fold_mono
-/-- info: 'NonPos.Fix.unfold_mono' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Fix.unfold_mono
+/-- info: 'NonPos.Fix.fold_unfold' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Fix.fold_unfold
+/-- info: 'NonPos.Fix.le_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Fix.le_iff
 
 end
 end NonPos

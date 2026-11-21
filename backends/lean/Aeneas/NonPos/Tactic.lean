@@ -205,15 +205,15 @@ in the goal and hypotheses (by definitional unfolding, checked by `change`) so t
 literal lambda and its instance is built from the pieces of section 2 of `Top.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr, FixFunctor.data, FixFunctor.const,
-      FixFunctor.var, FixFunctor.unit, FixFunctor.dict, true_and, and_true, implies_true, forall_and] $[$loc]?))
+  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr, FixFunctor.const,
+      FixFunctor.var, FixFunctor.unit, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
-  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr, FixFunctor.data,
-      FixFunctor.const, FixFunctor.var, FixFunctor.unit, FixFunctor.dict]))
+  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr,
+      FixFunctor.const, FixFunctor.var, FixFunctor.unit]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
 arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
@@ -713,10 +713,6 @@ the kernel checks quickly.
   `Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
   `@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
   left with one goal per field.
-* `Bla.recursive`: `Fix.Recursive` of the structure, as an instance, when instance search finds it at
-  every value of the parameters (it does not when the structure has a plain field of unpointed
-  type).  The `CCPO` instance of the structure, which `partial_fixpoint` and `Cont.monotone` look
-  for, then does not re-derive it field by field at each search.
 -/
 
 /-- `Bla.unfold_cont : ∀ params {D} [PartialOrder D] (g : D → Bla params), Cont g → Cont (fun d => Fix.unfold F (g d))`,
@@ -765,8 +761,8 @@ meta def mkContLemma (mkName lemName : Name) (nf : Nat) : TermElabM Unit := do
     let hTy ← withLocalDeclD `d D fun d => do
       mkForallFVars #[d] ((← inferType h).replaceFVars fs (gs.map (mkApp · d)))
     withLocalDeclD `h hTy fun hh => do
-    -- the order of each field is read from the functor of the tuple of fields (a field of plain data
-    -- has no order for instance search to find)
+    -- the order of each field is read from the functor of the tuple of fields (instance search does
+    -- not find the order of every field type)
     let hTy ← instantiateMVars (← inferType h)
     unless hTy.isAppOfArity ``FixFunctor.cond 6 do throwError "mk_cont: unexpected condition {hTy}"
     let ca := hTy.getAppArgs  -- `I G inst X instX x`
@@ -896,26 +892,7 @@ meta def elabGroupLemmas (structs : Array Name) : CommandElabM Unit := do
       try liftTermElabM (condIntroLemma (bla ++ `mk) (bla ++ `cond_intro))
       catch e => logWarning m!"nonpos_structure: no `cond_intro` lemma for {bla} ({e.toMessageData})"
       try liftTermElabM (unfoldContLemma bla (bla ++ `unfold_cont))
-      catch _ => pure ()  -- no order for instance search to find (a field of plain data): `Cont.unfold` is used
-    -- `Bla.recursive : ∀ ps, Fix.Recursive F k`: only if instance search finds `Fix.Recursive` for every
-    -- value of the parameters (declared with the instance found, rather than searched for again)
-    let botName := bla ++ `recursive
-    let found ← liftTermElabM do
-      try
-        let some (ty, v) ← forallTelescope blaInfo.type fun xs _ => do
-            -- `Bla ps` unfolds to `Fix F k`
-            let e ← whnfR (mkAppN (mkConst bla (blaInfo.levelParams.map Level.param)) xs)
-            unless e.isAppOfArity ``Fix 4 do return none
-            let b ← mkAppOptM ``Fix.Recursive (e.getAppArgs.map some)
-            let some i ← synthInstance? b | return none
-            return some (← mkForallFVars xs b, ← instantiateMVars (← mkLambdaFVars xs i))
-          | return false
-        let ty ← instantiateMVars ty
-        let lps := (collectLevelParams (collectLevelParams {} ty) v).params.toList
-        addDecl (Declaration.thmDecl { name := botName, levelParams := lps, type := ty, value := v })
-        return true
-      catch _ => return false
-    if found then elabCommand (← `(attribute [instance high] $(mkIdent (`_root_ ++ botName))))
+      catch _ => pure ()  -- no order for instance search to find for the tuple: `Cont.unfold` is used
     -- `Bla.mk_cont`
     if nf == 0 then continue
     liftTermElabM <| mkContLemma (bla ++ `mk) (bla ++ `mk_cont) nf

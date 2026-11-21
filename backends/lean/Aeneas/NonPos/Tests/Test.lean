@@ -76,7 +76,7 @@ end OptionMonad
 /-! ## The example of the goal -/
 
 nonpos_structure Example1 : Type where
-  to_nat : Nat
+  to_nat : Option Nat
   f : Example1 → Option Nat
 
 #check @Example1.mk
@@ -241,13 +241,14 @@ example {O : Type} (inst' : Child O) (s : Int) (o : O) : Child.cf SymChild inst'
   conv => lhs; rw [SymChild.eq_1]
   simp
 
-/-- Data, a plain dictionary field and a function field together. -/
+/-- A plain field of a monad value (as an associated constant), a plain dictionary field and a function
+field together. -/
 nonpos_structure Mixed (Self : Type) : Type 1 where
-  n : Nat
+  n : Option Nat
   parent : Parent Self
   mf : Self → Option Nat
 
-noncomputable example (m : Mixed Int) : Nat := m.n
+noncomputable example (m : Mixed Int) : Option Nat := m.n
 example : Cont (fun m : Mixed Int => m.mf) := by nonpos_cont
 
 /-! ## `partial_fixpoint` with a dictionary parameter -/
@@ -378,31 +379,24 @@ nonpos_structure Real2 (Self : Type) : Type 1 where
   sqrt : Self → Option Self
 end
 
-/-! The impls would then be mutual self-referential instances, as `natA2`/`natB2` above.  This is
-where the present library stops: totality is a least fixed point, so a cycle of plain dictionary
-fields has no total element: `Complex2 Nat Nat` is empty (as `partial_fixpoint` reports), so it is
-not pointed and has no `CCPO` instance.  Option 2 needs the totality of such groups changed in the model (every element
-of a group without data fields counts as total), under a well-formedness condition that would
-return to Top. -/
+/-! The impls are then mutual self-referential instances, as `natA2`/`natB2` above.  Every structure
+has a `CCPO` (section 4 of `Top.lean`), including those of a group with a cycle of plain dictionary
+fields, so `partial_fixpoint` defines them. -/
 
-/--
-error: failed to compile definition 'NonPos.Test.natComplex2' using `partial_fixpoint`, could not prove that the type
-  Complex2 Nat Nat
-is nonempty.
-
-This process uses multiple strategies:
-- It looks for a parameter that matches the return type.
-- It tries synthesizing 'Inhabited' and 'Nonempty' instances for the return type, while making every parameter into a local 'Inhabited' instance.
-- It tries unfolding the return type.
-
-If the return type is defined using the 'structure' or 'inductive' command, you can try adding a 'deriving Nonempty' clause to it.
--/
-#guard_msgs in
 mutual
 def natComplex2 : Complex2 Nat Nat := Complex2.mk natReal2 (fun s => some s) (by nonpos_cont)
 partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)
 def natReal2 : Real2 Nat := Real2.mk natComplex2 (fun s => some s) (by nonpos_cont)
 partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)
 end
+
+example (s : Nat) : Complex2.abs natComplex2 s = some s := by
+  conv => lhs; rw [natComplex2.eq_1]
+  simp
+example (s : Nat) : Real2.sqrt (Complex2.ReRealInst natComplex2) s = some s := by
+  conv => lhs; rw [natComplex2.eq_1]
+  simp only [Complex2.ReRealInst_mk]
+  conv => lhs; rw [natReal2.eq_1]
+  simp
 
 end NonPos.Test

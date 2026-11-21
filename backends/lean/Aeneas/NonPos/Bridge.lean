@@ -241,13 +241,6 @@ class FixFunctor {I : Type pu} (G : (I → Type v) → Type w) where
 @[reducible] instance FixFunctor.toShape {I : Type pu} {G : (I → Type v) → Type w} [i : FixFunctor G] : Shape G :=
   i.model.shape
 
-/-- `G` may stand under a binder. -/
-class FixFunctor.Methods {I : Type pu} (G : (I → Type v) → Type w) [i : FixFunctor G] : Prop where
-  shape : @Shape.Pointed _ G i.model.shape
-
-instance {I : Type pu} {G : (I → Type v) → Type w} [FixFunctor G] [h : FixFunctor.Methods G] : Shape.Pointed G :=
-  h.shape
-
 /-- The value of a type with a `CCPO`, as a plain field (in the model: with its least element). -/
 @[reducible] def Shape.ccpoInst {I : Type pu} (A : Type w) [CCPO A] : Shape (fun _ : (I → Type v) => A) where
   cond _ := True
@@ -256,22 +249,10 @@ instance {I : Type pu} {G : (I → Type v) → Type w} [FixFunctor G] [h : FixFu
 namespace FixFunctor.Model
 variable {I : Type pu}
 
-def data (A : Type w) : Model (fun _ : (I → Type v) => A) (fun _ _ => discreteOrder A) (fun _ => True) :=
-  ⟨Shape.dataInst A, fun _ _ => rfl, fun _ _ _ => Iff.rfl⟩
-
 def ccpo (A : Type w) [i : CCPO A] : Model (fun _ : (I → Type v) => A) (fun _ _ => i.toPartialOrder) (fun _ => True) :=
   ⟨Shape.ccpoInst A, fun _ _ => rfl, fun _ _ _ => Iff.rfl⟩
-theorem ccpo_pointed (A : Type w) [CCPO A] : @Shape.Pointed I (fun _ : (I → Type v) => A) (ccpo A).shape :=
-  @Shape.Pointed.mk _ _ (Shape.ccpoInst A) (letI := Dom.ofCCPO A; letI := Pointed.ofCCPO A; Proofs.pointed_const A)
-
 def unit : Model (fun _ : (I → Type v) => PUnit.{w+1}) (fun _ _ => unitOrder) (fun _ => True) :=
   ⟨Shape.unitInst, fun _ _ => rfl, fun _ _ _ => Iff.rfl⟩
-theorem unit_pointed : @Shape.Pointed I (fun _ : (I → Type v) => PUnit.{w+1}) unit.shape := Shape.unitIsPointed
-
-def dict {I' : Type pu} (F' : I' → (I' → Type v) → Type v) [∀ k, Shape (F' k)] (k : I') :
-    Model (fun _ : (I → Type v) => MFix F' k) (fun _ _ => (MFix.dom F' k).po) (fun _ => True) :=
-  ⟨Shape.dictInst F' k, fun _ _ => rfl, fun _ _ _ => Iff.rfl⟩
-
 def var (k : I) : Model (fun X : (I → Type v) => X k) (fun _ i => i k) (fun _ => True) :=
   ⟨Shape.varInst k, fun _ _ => rfl, fun _ _ _ => Iff.rfl⟩
 
@@ -279,29 +260,27 @@ section Pi
 variable {T : Type w₁} {G : T → (I → Type v) → Type w₂}
   {o : ∀ t (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G t X)}
   {c : ∀ t {X : I → Type v} [∀ k, PartialOrder (X k)], G t X → Prop}
-  (m : ∀ t, Model (G t) (o t) (c t)) (hp : ∀ t, @Shape.Pointed _ (G t) (m t).shape)
+  (m : ∀ t, Model (G t) (o t) (c t))
 
 def pi : Model (fun X => (t : T) → G t X)
     (fun X _ => @instOrderPi T (fun t => G t X) (fun t => o t X)) (fun f => ∀ t, c t (f t)) where
-  shape := @Shape.piInst _ T G (fun t => (m t).shape) hp
+  shape := @Shape.piInst _ T G (fun t => (m t).shape)
   order_eq X d := by
     show @instOrderPi T (fun t => G t X) (fun t => (@Shape.dom _ (G t) (m t).shape X d).po) = _
     exact congrArg (@instOrderPi T (fun t => G t X)) (funext fun t => (m t).order_eq X d)
   cond_iff X d f := forall_congr' fun t => (m t).cond_iff X d (f t)
-theorem pi_pointed : @Shape.Pointed _ _ (pi m hp).shape :=
-  @Shape.Pointed.mk _ _ (pi m hp).shape (@Proofs.pointed_pi _ T G (fun t => (m t).shape) hp)
 end Pi
 
 section Arr
 variable (k : I) {G : (I → Type v) → Type w}
   {o : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G X)}
   {c : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G X → Prop}
-  (m : Model G o c) (hp : @Shape.Pointed _ G m.shape)
+  (m : Model G o c)
 
 def arr : Model (fun X => X k → G X)
     (fun X _ => @instOrderPi (X k) (fun _ => G X) (fun _ => o X))
     (fun {X} [i : ∀ k, PartialOrder (X k)] f => @Cont (X k) (G X) (i k) (o X) f ∧ ∀ d, c (f d)) where
-  shape := @Shape.arrInst _ k G m.shape hp
+  shape := @Shape.arrInst _ k G m.shape
   order_eq X d := by
     show @instOrderPi (X k) (fun _ => G X) (fun _ => (@Shape.dom _ G m.shape X d).po) = _
     exact congrArg (fun p => @instOrderPi (X k) (fun _ => G X) (fun _ => p)) (m.order_eq X d)
@@ -309,8 +288,6 @@ def arr : Model (fun X => X k → G X)
     (@Proofs.Cont.iff_dom (X k) (G X) (d k).po (@o X (fun k => (d k).po)) (d k) (@Shape.dom _ G m.shape X d) rfl
       (m.order_eq X d) f).symm
     (forall_congr' fun x => m.cond_iff X d (f x))
-theorem arr_pointed : @Shape.Pointed _ _ (arr k m hp).shape :=
-  @Shape.Pointed.mk _ _ (arr k m hp).shape (@Proofs.pointed_arr _ k G m.shape hp)
 end Arr
 
 section Prod
@@ -328,9 +305,6 @@ def prod : Model (fun X => G₁ X ×' G₂ X)
     show @instPartialOrderPProd (G₁ X) (G₂ X) (@Shape.dom _ G₁ m₁.shape X d).po (@Shape.dom _ G₂ m₂.shape X d).po = _
     rw [m₁.order_eq X d, m₂.order_eq X d]
   cond_iff X d x := and_congr (m₁.cond_iff X d x.1) (m₂.cond_iff X d x.2)
-theorem prod_pointed (h₁ : @Shape.Pointed _ G₁ m₁.shape) (h₂ : @Shape.Pointed _ G₂ m₂.shape) :
-    @Shape.Pointed _ _ (prod m₁ m₂).shape :=
-  @Shape.Pointed.mk _ _ (prod m₁ m₂).shape (@Proofs.pointed_prod _ G₁ G₂ m₁.shape m₂.shape h₁ h₂)
 end Prod
 end FixFunctor.Model
 
@@ -407,34 +381,21 @@ theorem Proofs.Cont.fold {D : Type w} [PartialOrder D] {k : I} {f : D → F k (F
       fun c hc s hs => ⟨fun n => (hf'.2 c hc s hs).1 n, fun u hu => (hf'.2 c hc s hs).2 u.1 hu⟩⟩
   exact @Proofs.Cont.comp D _ _ (Fix F k) dS.po (Fix.order F k) _ _ hfold hpair
 
-/-! Which structures have a `CCPO`. -/
+theorem Proofs.fold_unfold' {k : I} (d : Fix F k) :
+    Model.Fix.fold F (Model.Fix.unfold F d) (Proofs.cond_unfold F d) = d := Model.MFix.fold_unfold F d
 
-/-- The body `G` has a least element, at the structures of `F`. -/
-class FixFunctor.Recursive (G : (I → Type v) → Type w) [i : FixFunctor G] : Prop where
-  shape : @Shape.BotTotal _ F _ G i.model.shape
-/-- Structure `k` has a least element. -/
-class Fix.Recursive (k : I) : Prop where
-  shape : MFix.BotTotal F k
+/-- A structure is compared as its body is. -/
+theorem Proofs.le_iff {k : I} (d₁ d₂ : Fix F k) :
+    (Fix.order F k).rel d₁ d₂ ↔
+      (@FixFunctor.order _ (F k) _ (Fix F) (Fix.order F)).rel (Model.Fix.unfold F d₁) (Model.Fix.unfold F d₂) :=
+  ⟨Proofs.unfold_mono F, fun h => by
+    have := Proofs.fold_mono F (Proofs.cond_unfold F d₁) (Proofs.cond_unfold F d₂) h
+    rwa [Proofs.fold_unfold', Proofs.fold_unfold'] at this⟩
 
-theorem Proofs.recursive_ofMethods (G : (I → Type v) → Type w) [FixFunctor G] [FixFunctor.Methods G] :
-    FixFunctor.Recursive F G := ⟨Shape.BotTotal.ofPointed F G⟩
-theorem Proofs.recursive_var (k : I) [h : Fix.Recursive F k] :
-    @Shape.BotTotal _ F _ (fun X => X k) (FixFunctor.Model.var k).shape :=
-  haveI := h.shape; @Shape.BotTotal.mk _ F _ _ (FixFunctor.Model.var k).shape (Proofs.botTotal_var F k)
-theorem Proofs.recursive_prod {G₁ : (I → Type v) → Type w₁} {G₂ : (I → Type v) → Type w₂}
-    {o₁ : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G₁ X)}
-    {c₁ : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G₁ X → Prop}
-    {o₂ : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G₂ X)}
-    {c₂ : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G₂ X → Prop}
-    (m₁ : FixFunctor.Model G₁ o₁ c₁) (m₂ : FixFunctor.Model G₂ o₂ c₂)
-    (h₁ : @Shape.BotTotal _ F _ G₁ m₁.shape) (h₂ : @Shape.BotTotal _ F _ G₂ m₂.shape) :
-    @Shape.BotTotal _ F _ _ (FixFunctor.Model.prod m₁ m₂).shape :=
-  @Shape.BotTotal.mk _ F _ _ (FixFunctor.Model.prod m₁ m₂).shape (@Proofs.botTotal_prod _ F _ G₁ G₂ m₁.shape m₂.shape h₁ h₂)
-theorem Proofs.recursive_fix (k : I) [h : FixFunctor.Recursive F (F k)] : Fix.Recursive F k :=
-  ⟨@MFix.BotTotal.ofShape _ F _ k h.shape⟩
-theorem Proofs.has_csup (k : I) [h : Fix.Recursive F k] {c : Fix F k → Prop} (hc : @chain _ (Fix.order F k) c) :
+/-- Every structure has a least element, and least upper bounds of chains. -/
+theorem Proofs.has_csup (k : I) {c : Fix F k → Prop} (hc : @chain _ (Fix.order F k) c) :
     Exists (@is_sup _ (Fix.order F k) c) :=
-  (@MFix.ccpo _ F _ k h.shape).has_csup hc
+  (@MFix.ccpo _ F _ k).has_csup hc
 
 end Fix
 

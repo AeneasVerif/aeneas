@@ -14,28 +14,9 @@ universe pu v u w w₁ w₂
 
 attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod NonPosMonad.dom
 attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO Pointed.monad FixCompat.pointed FixCompat.ofCCPO FixCompat.monad FixCompat.pi FixCompat.prod FixCompat.pprod
-attribute [local instance] MFix.dom Shape.BotTotal.ofPointed MFix.BotTotal.ofShape MFix.pointed
+attribute [local instance] MFix.dom MFix.pointed
 
 
-section Shapes
-variable {I : Type pu}
-
-theorem pointed_const (A : Type w) [Dom A] [Pointed A] :
-    ∀ D T y, (Model.Shape.const.{pu, v} (I := I) A).total D T y := Model.Shape.pointed_const A
-theorem pointed_pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
-    ∀ D T' y, (Model.Shape.pi T G).total D T' y := Model.Shape.pointed_pi T G
-theorem pointed_arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
-    ∀ D T y, (Model.Shape.arr k G).total D T y := Model.Shape.pointed_arr k G
-theorem pointed_prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G]
-    [Shape.Pointed F] [Shape.Pointed G] : ∀ D T y, (Model.Shape.prod F G).total D T y := Model.Shape.pointed_prod F G
-
-variable (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
-theorem botTotal_prod (G₁ : Fam.{pu, v} I → Type w) (G₂ : Fam.{pu, v} I → Type w₁) [Shape G₁] [Shape G₂]
-    [Shape.BotTotal F G₁] [Shape.BotTotal F G₂] :
-    (Model.Shape.prod G₁ G₂).total (MFix.D F) (MFix.T F) NonPos.Domain.OmegaComplete.bottom := Model.Shape.botTotal_prod F G₁ G₂
-theorem botTotal_var (k : I) [MFix.BotTotal F k] :
-    (Model.Shape.var k).total (MFix.D F) (MFix.T F) NonPos.Domain.OmegaComplete.bottom := Model.Shape.botTotal_var F k
-end Shapes
 
 section MFix
 variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
