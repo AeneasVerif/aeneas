@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Model.Shape
+public import Aeneas.NonPos.Model.FixFunctor
 
 @[expose] public section
 /-!
@@ -23,10 +23,10 @@ attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Po
 attribute [local instance] TFam.instDom
 
 section Fix
-variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
+variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, FixFunctor (F k)]
 
 /-- The shape data of structure `k`. -/
-abbrev Fix.sd (k : I) : ShapeData (F k) (Model.Shape.cond (F := F k)) := Model.Shape.sd (F := F k)
+abbrev Fix.sd (k : I) : ShapeData (F k) (Model.FixFunctor.cond (F := F k)) := Model.FixFunctor.sd (F := F k)
 
 /-- The signature: the operator of each structure. -/
 abbrev Fix.sig : Signature.{pu, v} (I) := fun k => (Fix.sd F k).op
@@ -125,23 +125,23 @@ attribute [local instance] Fix.dom
 
 /-- The retraction of structure `k` at the solution. -/
 def Fix.r (k : I) :
-    ContRetract {y // (Fix.sd F k).total (Fix.D F) (Fix.T F) y} {x : F k (Fix F) // Model.Shape.cond (F := F k) x}
+    ContRetract {y // (Fix.sd F k).total (Fix.D F) (Fix.T F) y} {x : F k (Fix F) // Model.FixFunctor.cond (F := F k) x}
       (Dom.subtype (Fix.dU F k) _ ⟨(Fix.sd F k).total_sup (Fix.Φ F), Dom.ChainClosed.of_mono ((Fix.sd F k).total_mono (Fix.Φ F))⟩)
-      (Dom.subtype (Shape.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩) :=
+      (Dom.subtype (FixFunctor.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩) :=
   (Fix.sd F k).conv (Fix.Φ F)
 
 def Model.Fix.unfold {k : I} (d : Fix F k) : F k (Fix F) :=
   ((Fix.r F k).toFun ⟨unroll (Fix.sig F) k d.1, (Fix.T_iff F _ _).1 d.2⟩).1
 
-theorem Model.Fix.cond {k : I} (d : Fix F k) : Model.Shape.cond (F := F k) (Model.Fix.unfold F d) :=
+theorem Model.Fix.cond {k : I} (d : Fix F k) : Model.FixFunctor.cond (F := F k) (Model.Fix.unfold F d) :=
   ((Fix.r F k).toFun ⟨unroll (Fix.sig F) k d.1, (Fix.T_iff F _ _).1 d.2⟩).2
 
-def Model.Fix.fold {k : I} (x : F k (Fix F)) (h : Model.Shape.cond (F := F k) x) : Fix F k :=
+def Model.Fix.fold {k : I} (x : F k (Fix F)) (h : Model.FixFunctor.cond (F := F k) x) : Fix F k :=
   ⟨roll (Fix.sig F) k ((Fix.r F k).invFun ⟨x, h⟩).1,
     (Fix.T_iff F _ _).2 (Eq.mpr (congrArg ((Fix.sd F k).total (Fix.D F) (Fix.T F)) (unroll_roll (Fix.sig F) k _))
       ((Fix.r F k).invFun ⟨x, h⟩).2)⟩
 
-theorem Model.Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Model.Shape.cond (F := F k) x) :
+theorem Model.Fix.unfold_fold {k : I} (x : F k (Fix F)) (h : Model.FixFunctor.cond (F := F k) x) :
     Model.Fix.unfold F (Model.Fix.fold F x h) = x :=
   have e : (⟨unroll (Fix.sig F) k (Model.Fix.fold F x h).1, (Fix.T_iff F _ _).1 (Model.Fix.fold F x h).2⟩ :
       {y // (Fix.sd F k).total (Fix.D F) (Fix.T F) y}) = (Fix.r F k).invFun ⟨x, h⟩ :=
@@ -161,20 +161,20 @@ theorem Fix.cont_unroll (k : I) :
     (Fix.cont_unroll' F k) (Cont.subtypeVal (Fix.dD F k) (p := Fix.T F k) (hp := Fix.closedT F k))
 
 theorem Model.Cont.unfold₀ {k : I} :
-    Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d : Fix F k => Model.Fix.unfold F d) := by
+    Cont (inst_1 := FixFunctor.dom (F := F k) (Fix F)) (fun d : Fix F k => Model.Fix.unfold F d) := by
   refine Cont.comp' (g := fun y => y.1)
     (f := fun d : Fix F k => (Fix.r F k).toFun ⟨unroll (Fix.sig F) k d.1, (Fix.T_iff F _ _).1 d.2⟩)
-    (dB := Dom.subtype (Shape.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩) (Cont.subtypeVal _) ?_
+    (dB := Dom.subtype (FixFunctor.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩) (Cont.subtypeVal _) ?_
   exact Cont.comp' (g := (Fix.r F k).toFun)
     (f := fun d : Fix F k => ⟨unroll (Fix.sig F) k d.1, (Fix.T_iff F _ _).1 d.2⟩)
     (Fix.r F k).cont_toFun (Fix.cont_unroll F k)
 
 theorem Model.Cont.unfold {D : Type w} [Dom D] {k : I} {f : D → Fix F k} (hf : Cont f) :
-    Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d => Model.Fix.unfold F (f d)) :=
+    Cont (inst_1 := FixFunctor.dom (F := F k) (Fix F)) (fun d => Model.Fix.unfold F (f d)) :=
   Cont.comp' (g := Model.Fix.unfold F) (f := f) (dB := Fix.dom F k) (Model.Cont.unfold₀ F) hf
 
 theorem Model.Cont.fold {D : Type w} [Dom D] {k : I} {f : D → F k (Fix F)}
-    (h : ∀ d, Model.Shape.cond (F := F k) (f d)) (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) :
+    (h : ∀ d, Model.FixFunctor.cond (F := F k) (f d)) (hf : Cont (inst_1 := FixFunctor.dom (F := F k) (Fix F)) f) :
     Cont (fun d => Model.Fix.fold F (f d) (h d)) := by
   refine Cont.intoSubtype (Fix.dD F k) _ (q := Fix.T F k) (hq := Fix.closedT F k)
     (f := fun d => Model.Fix.fold F (f d) (h d)) ?_
@@ -183,46 +183,57 @@ theorem Model.Cont.fold {D : Type w} [Dom D] {k : I} {f : D → F k (Fix F)}
   refine Cont.comp' (g := fun y => y.1) (f := fun d => (Fix.r F k).invFun ⟨f d, h d⟩)
     (dB := Dom.subtype (Fix.dU F k) _ ⟨(Fix.sd F k).total_sup (Fix.Φ F), Dom.ChainClosed.of_mono ((Fix.sd F k).total_mono (Fix.Φ F))⟩) (Cont.subtypeVal _) ?_
   refine Cont.comp' (g := (Fix.r F k).invFun) (f := fun d => ⟨f d, h d⟩)
-    (dB := Dom.subtype (Shape.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩)
+    (dB := Dom.subtype (FixFunctor.dom (F k) (Fix F)) _ ⟨(Fix.sd F k).cond_sup _, (Fix.sd F k).cond_csup _⟩)
     (Fix.r F k).cont_invFun ?_
   exact Cont.intoSubtype _ _ (f := fun d => ⟨f d, h d⟩) hf
+
+/-! ## Monotonicity of `unfold` and `fold` -/
+
+theorem Model.Fix.unfold_mono {k : I} {d₁ d₂ : Fix F k} (h : @Dom.le _ (Fix.dom F k) d₁ d₂) :
+    @Dom.le _ (FixFunctor.dom (F k) (Fix F)) (Model.Fix.unfold F d₁) (Model.Fix.unfold F d₂) :=
+  Cont.mono' (Model.Cont.unfold₀ F) h
+
+theorem Model.Fix.fold_mono {k : I} {x₁ x₂ : F k (Fix F)} (h₁ : Model.FixFunctor.cond (F := F k) x₁)
+    (h₂ : Model.FixFunctor.cond (F := F k) x₂) (h : @Dom.le _ (FixFunctor.dom (F k) (Fix F)) x₁ x₂) :
+    @Dom.le _ (Fix.dom F k) (Model.Fix.fold F x₁ h₁) (Model.Fix.fold F x₂ h₂) :=
+  Cont.mono' (Fix.cont_roll' F k) (Cont.mono' (Fix.r F k).cont_invFun (x := ⟨x₁, h₁⟩) (y := ⟨x₂, h₂⟩) h)
 
 /-! ## Pointedness
 
 `⊥` is total in structure `k` when every plain field of `k` is pointed or a structure of the group in
-which `⊥` is total (`Shape.BotTotal`, decided by instances in `Top`). -/
+which `⊥` is total (`FixFunctor.Recursive`, decided by instances in `Top`). -/
 
 /-- `⊥` is total for the shape `G`, at the totality of the group `F`. -/
-class Shape.BotTotal (G : Fam.{pu, v} I → Type w) [Shape G] : Prop where
-  bot : (Model.Shape.sd (F := G)).total (Fix.D F) (Fix.T F) OmegaComplete.bottom
+class FixFunctor.Recursive (G : Fam.{pu, v} I → Type w) [FixFunctor G] : Prop where
+  bot : (Model.FixFunctor.sd (F := G)).total (Fix.D F) (Fix.T F) OmegaComplete.bottom
 
 /-- `⊥` is a total element of structure `k` of the group. -/
-class Fix.BotTotal (k : I) : Prop where
+class Fix.Recursive (k : I) : Prop where
   bot : Fix.T F k OmegaComplete.bottom
 
-theorem Shape.BotTotal.ofPointed (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] : Shape.BotTotal F G :=
-  ⟨Shape.Pointed.total _ _ _⟩
-attribute [local instance] Shape.BotTotal.ofPointed
+theorem FixFunctor.Recursive.ofMethods (G : Fam.{pu, v} I → Type w) [FixFunctor G] [FixFunctor.Methods G] : FixFunctor.Recursive F G :=
+  ⟨FixFunctor.Methods.total _ _ _⟩
+attribute [local instance] FixFunctor.Recursive.ofMethods
 
-theorem Model.Shape.botTotal_prod (G₁ : Fam.{pu, v} I → Type w) (G₂ : Fam.{pu, v} I → Type w₁)
-    [Shape G₁] [Shape G₂] [Shape.BotTotal F G₁] [Shape.BotTotal F G₂] :
-    (Model.Shape.prod G₁ G₂).total (Fix.D F) (Fix.T F) OmegaComplete.bottom :=
-  ⟨Shape.BotTotal.bot (F := F) (G := G₁), Shape.BotTotal.bot (F := F) (G := G₂)⟩
+theorem Model.FixFunctor.recursive_prod (G₁ : Fam.{pu, v} I → Type w) (G₂ : Fam.{pu, v} I → Type w₁)
+    [FixFunctor G₁] [FixFunctor G₂] [FixFunctor.Recursive F G₁] [FixFunctor.Recursive F G₂] :
+    (Model.FixFunctor.prod G₁ G₂).total (Fix.D F) (Fix.T F) OmegaComplete.bottom :=
+  ⟨FixFunctor.Recursive.bot (F := F) (G := G₁), FixFunctor.Recursive.bot (F := F) (G := G₂)⟩
 
-theorem Model.Shape.botTotal_var (k : I) [h : Fix.BotTotal F k] :
-    (Model.Shape.var k).total (Fix.D F) (Fix.T F) OmegaComplete.bottom := h.bot
+theorem Model.FixFunctor.recursive_var (k : I) [h : Fix.Recursive F k] :
+    (Model.FixFunctor.var k).total (Fix.D F) (Fix.T F) OmegaComplete.bottom := h.bot
 
-theorem Fix.BotTotal.ofShape (k : I) [h : Shape.BotTotal F (F k)] : Fix.BotTotal F k :=
+theorem Fix.Recursive.ofShape (k : I) [h : FixFunctor.Recursive F (F k)] : Fix.Recursive F k :=
   ⟨(Fix.T_iff F k _).2 (by rw [Fix.unroll_bottom]; exact h.bot)⟩
-attribute [local instance] Fix.BotTotal.ofShape
+attribute [local instance] Fix.Recursive.ofShape
 
-theorem Fix.pointed {k : I} [h : Fix.BotTotal F k] : Pointed (Fix F k) :=
+theorem Fix.pointed {k : I} [h : Fix.Recursive F k] : Pointed (Fix F k) :=
   ⟨⟨⟨OmegaComplete.bottom, h.bot⟩, fun x => OmegaComplete.bottom_le x.1⟩⟩
 attribute [local instance] Fix.pointed
 
-/-- Under `Fix.BotTotal`, a dictionary type is a `CCPO`, with the order of its `Dom`: a nonempty chain
+/-- Under `Fix.Recursive`, a dictionary type is a `CCPO`, with the order of its `Dom`: a nonempty chain
 has a supremum (`Dom.cc`), and the empty chain has the total `⊥`. -/
-@[instance_reducible] def Fix.ccpo (k : I) [h : Fix.BotTotal F k] : CCPO (Fix F k) :=
+@[instance_reducible] def Fix.ccpo (k : I) [h : Fix.Recursive F k] : CCPO (Fix F k) :=
   letI := (Fix.dom F k).po
   { toPartialOrder := (Fix.dom F k).po
     has_csup := fun {c} hc => by
@@ -232,16 +243,22 @@ has a supremum (`Dom.cc`), and the empty chain has the total `⊥`. -/
           ⟨fun _ x hx => absurd ⟨x, hx⟩ hne, fun _ => OmegaComplete.bottom_le u.1⟩⟩ }
 
 /-- The `CCPO` of a dictionary type has the order of its `Dom`. -/
-theorem Fix.fixCompat (k : I) [Fix.BotTotal F k] : @FixCompat (Fix F k) (Fix.dom F k) (Fix.ccpo F k) :=
+theorem Fix.fixCompat (k : I) [Fix.Recursive F k] : @FixCompat (Fix F k) (Fix.dom F k) (Fix.ccpo F k) :=
   @FixCompat.mk (Fix F k) (Fix.dom F k) (Fix.ccpo F k) (fun _ _ => Iff.rfl)
 
 end Fix
 
 /-- The condition of a body `G` over the structures of the group `H` (for `G = H k`, the condition
 for folding into `Fix H k`): its condition at the order of the dictionaries. -/
-abbrev Shape.cond {I : Type pu} (H : I → Fam.{pu, v} I → Type v) [∀ k, Shape (H k)]
-    {G : Fam.{pu, v} I → Type w} [iG : Shape G] (x : G (Fix H)) : Prop :=
-  @Model.Shape.cond _ G _ (Fix H) (Fix.dom H) x
+abbrev FixFunctor.cond {I : Type pu} (H : I → Fam.{pu, v} I → Type v) [∀ k, FixFunctor (H k)]
+    {G : Fam.{pu, v} I → Type w} [iG : FixFunctor G] (x : G (Fix H)) : Prop :=
+  @Model.FixFunctor.cond _ G _ (Fix H) (Fix.dom H) x
+
+/-- Two bodies `G` over the structures of the group `H`, compared field by field: the order that the
+model gives them, at the order of the dictionaries. -/
+abbrev FixFunctor.Le {I : Type pu} (H : I → Fam.{pu, v} I → Type v) [∀ k, FixFunctor (H k)]
+    {G : Fam.{pu, v} I → Type w} [iG : FixFunctor G] (x y : G (Fix H)) : Prop :=
+  @Dom.le _ (@FixFunctor.dom _ G iG (Fix H) (Fix.dom H)) x y
 
 end
 end NonPos

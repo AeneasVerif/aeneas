@@ -180,7 +180,7 @@ structure ContRetract (A : Type w₁) (B : Type w₂) (dA : Dom A) (dB : Dom B) 
   cont_toFun : @Cont A B dA dB toFun
   cont_invFun : @Cont B A dB dA invFun
 
-/-! ## Shape data
+/-! ## FixFunctor data
 
 The model of a functor `F` with condition `cond`.  Totality `total D T y` of an element of the
 operator's domain is relative to a totality predicate `T` on the family `D` (used by the plain
@@ -211,22 +211,22 @@ structure ShapeData (F : Fam.{pu, v} I → Type w)
       (Dom.subtype (Dom.ofDomain (op.obj Φ.D)) _ ⟨total_sup Φ, Dom.ChainClosed.of_mono (total_mono Φ)⟩)
       (Dom.subtype (dom Φ.X) _ ⟨cond_sup Φ.X, cond_csup Φ.X⟩)
 
-/-- `Model.Shape F`: `F` is built from the pieces, with the condition `cond` on its bodies over any
-family `X` of admissible types.  (`Shape`, below, is this class; its condition at the fixed point of
-a group, `Shape.cond`, is in `Model/Fix.lean`.) -/
-class Model.Shape (F : Fam.{pu, v} I → Type w) where
+/-- `Model.FixFunctor F`: `F` is built from the pieces, with the condition `cond` on its bodies over any
+family `X` of admissible types.  (`FixFunctor`, below, is this class; its condition at the fixed point of
+a group, `FixFunctor.cond`, is in `Model/Fix.lean`.) -/
+class Model.FixFunctor (F : Fam.{pu, v} I → Type w) where
   cond : ∀ {X : Fam.{pu, v} I} [∀ k, Dom (X k)], F X → Prop
   sd : ShapeData F cond
 
-/-- `Shape F`: `F` is built from the pieces. -/
-abbrev Shape (F : Fam.{pu, v} I → Type w) := Model.Shape F
+/-- `FixFunctor F`: `F` is built from the pieces. -/
+abbrev FixFunctor (F : Fam.{pu, v} I → Type w) := Model.FixFunctor F
 
-abbrev Shape.dom (F : Fam.{pu, v} I → Type w) [Shape F] (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (F X) :=
-  (Model.Shape.sd (F := F)).dom X
+abbrev FixFunctor.dom (F : Fam.{pu, v} I → Type w) [FixFunctor F] (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (F X) :=
+  (Model.FixFunctor.sd (F := F)).dom X
 
 /-- A pointed shape: no plain field of unpointed type (so no lifting, totality is trivial). -/
-class Shape.Pointed (F : Fam.{pu, v} I → Type w) [inst : Shape F] : Prop where
-  total : ∀ D T y, (Model.Shape.sd (F := F)).total D T y
+class FixFunctor.Methods (F : Fam.{pu, v} I → Type w) [inst : FixFunctor F] : Prop where
+  total : ∀ D T y, (Model.FixFunctor.sd (F := F)).total D T y
 
 /-- Stages of totality are monotone. -/
 theorem TPred.le {D : I → Domain.{v}} {Tn : Nat → TPred D} (h : ∀ n k d, Tn n k d → Tn (n + 1) k d)
@@ -261,7 +261,7 @@ theorem Lift.vals_eq_upChain {A : Type w} [Dom A]
   Domain.Chain.ext fun n => (Lift.up_get (c n).1 (c n).2).symm
 
 /-- Data: a plain field of any admissible type, lifted. -/
-def Shape.data' (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) where
+def FixFunctor.data' (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) where
   op := DomainOperator.constant (Lift.domain A)
   dom _ := inferInstance
   cond_sup := fun X [∀ k, Dom (X k)] _ _ => trivial
@@ -289,7 +289,7 @@ def Shape.data' (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (f
         exact (Lift.sup_upChain (Dom.vals _ c)).symm }
 
 /-- Constant: a plain field of a pointed admissible type. -/
-def Shape.const' (A : Type w) [Dom A] [NonPos.Pointed A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) where
+def FixFunctor.const' (A : Type w) [Dom A] [NonPos.Pointed A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) where
   op := DomainOperator.constant (Domain.ofDom A)
   dom _ := inferInstance
   cond_sup := fun X [∀ k, Dom (X k)] _ _ => trivial
@@ -303,7 +303,7 @@ def Shape.const' (A : Type w) [Dom A] [NonPos.Pointed A] : ShapeData (fun _ : Fa
   conv _ := ContRetract.trivialOfId _ _ _ (fun _ _ => trivial) (fun _ _ => trivial)
 
 /-- The recursive occurrence `X k`, as a plain field: total when the field is. -/
-def Shape.var' (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) where
+def FixFunctor.var' (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) where
   op := DomainOperator.variable k
   dom _ := inferInstance
   cond_sup := fun X [∀ k, Dom (X k)] _ _ => trivial
@@ -328,7 +328,7 @@ variable {F : Fam.{pu, v} I → Type w₁} {G : Fam.{pu, v} I → Type w₂}
   (dF : ShapeData F cF) (dG : ShapeData G cG)
 
 /-- Two fields. -/
-def Shape.prod' : ShapeData (fun X => F X ×' G X) (fun x => cF x.1 ∧ cG x.2) where
+def FixFunctor.prod' : ShapeData (fun X => F X ×' G X) (fun x => cF x.1 ∧ cG x.2) where
   op := DomainOperator.product dF.op dG.op
   dom := fun X [∀ k, Dom (X k)] => @Dom.pprod _ _ (dF.dom X) (dG.dom X)
   cond_sup := fun X [∀ k, Dom (X k)] c h =>
@@ -383,7 +383,7 @@ variable {T : Type w₁} {G : T → Fam.{pu, v} I → Type w₂}
   (dG : ∀ t, ShapeData (G t) (cG t)) (hG : ∀ t D T y, (dG t).total D T y)
 
 /-- A binder `(t : T) → G t X`, whose body is pointed. -/
-def Shape.pi' : ShapeData (fun X => (t : T) → G t X) (fun f => ∀ t, cG t (f t)) where
+def FixFunctor.pi' : ShapeData (fun X => (t : T) → G t X) (fun f => ∀ t, cG t (f t)) where
   op := DomainOperator.pi (fun t => (dG t).op)
   dom := fun X [∀ k, Dom (X k)] => @Dom.pi T (fun t => G t X) (fun t => (dG t).dom X)
   cond_sup := fun X [∀ k, Dom (X k)] c h t => (dG t).cond_sup X
@@ -425,17 +425,17 @@ variable (k : I) {G : Fam.{pu, v} I → Type w}
   (dG : ShapeData G cG) (hG : ∀ D T y, dG.total D T y)
 
 /-- The order on `X k → G X` is the pointwise one. -/
-abbrev Shape.arrDom (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (X k → G X) :=
+abbrev FixFunctor.arrDom (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (X k → G X) :=
   @Dom.pi (X k) (fun _ => G X) (fun _ => dG.dom X)
 
 /-- The condition on `X k → G X`: continuity, and the condition of the body at every argument. -/
-abbrev Shape.arrCond (X : Fam.{pu, v} I) [∀ k, Dom (X k)] (f : X k → G X) : Prop :=
+abbrev FixFunctor.arrCond (X : Fam.{pu, v} I) [∀ k, Dom (X k)] (f : X k → G X) : Prop :=
   @Cont _ _ (inferInstance : Dom (X k)) (dG.dom X) f ∧ ∀ d, cG (f d)
 
 /-- The extension of a plain field `f : Φ.X k → G Φ.X` satisfying the condition to all of `Φ.D k`,
 by `⊥` off the total elements. -/
-def Shape.arrExt (Φ : TFam.{pu, v} I)
-    (f : {x : Φ.X k → G Φ.X // Shape.arrCond k dG Φ.X x}) :
+def FixFunctor.arrExt (Φ : TFam.{pu, v} I)
+    (f : {x : Φ.X k → G Φ.X // FixFunctor.arrCond k dG Φ.X x}) :
     ContinuousMap (Φ.D k) (dG.op.obj Φ.D) :=
   let r := dG.conv Φ
   { toFun := fun d => if h : Φ.T k d then (r.invFun ⟨f.1 ⟨d, h⟩, f.2.2 _⟩).1 else OmegaComplete.bottom
@@ -469,19 +469,19 @@ def Shape.arrExt (Φ : TFam.{pu, v} I)
         · rw [dite_eq_right hs]
           exact OmegaComplete.bottom_le _ }
 
-theorem Shape.arrExt_apply_total (Φ : TFam.{pu, v} I) (f) (d : (Φ.D k).Carrier) (h : Φ.T k d) :
-    Shape.arrExt k dG Φ f d = ((dG.conv Φ).invFun ⟨f.1 ⟨d, h⟩, f.2.2 _⟩).1 := by
+theorem FixFunctor.arrExt_apply_total (Φ : TFam.{pu, v} I) (f) (d : (Φ.D k).Carrier) (h : Φ.T k d) :
+    FixFunctor.arrExt k dG Φ f d = ((dG.conv Φ).invFun ⟨f.1 ⟨d, h⟩, f.2.2 _⟩).1 := by
   show (if h : Φ.T k d then _ else _) = _
   rw [dite_eq_left h]
 
-theorem Shape.arrExt_apply_not (Φ : TFam.{pu, v} I) (f) (d : (Φ.D k).Carrier) (h : ¬ Φ.T k d) :
-    Shape.arrExt k dG Φ f d = OmegaComplete.bottom := by
+theorem FixFunctor.arrExt_apply_not (Φ : TFam.{pu, v} I) (f) (d : (Φ.D k).Carrier) (h : ¬ Φ.T k d) :
+    FixFunctor.arrExt k dG Φ f d = OmegaComplete.bottom := by
   show (if h : Φ.T k d then _ else _) = _
   rw [dite_eq_right h]
 
 /-- The plain field of a bundled continuous map: restrict to the total elements and convert the body. -/
-def Shape.arrTo (Φ : TFam.{pu, v} I)
-    (φ : ContinuousMap (Φ.D k) (dG.op.obj Φ.D)) : {x : Φ.X k → G Φ.X // Shape.arrCond k dG Φ.X x} :=
+def FixFunctor.arrTo (Φ : TFam.{pu, v} I)
+    (φ : ContinuousMap (Φ.D k) (dG.op.obj Φ.D)) : {x : Φ.X k → G Φ.X // FixFunctor.arrCond k dG Φ.X x} :=
   let r := dG.conv Φ
   ⟨fun x => (r.toFun ⟨φ x.1, hG _ _ _⟩).1, by
     refine ⟨?_, fun x => (r.toFun _).2⟩
@@ -491,16 +491,16 @@ def Shape.arrTo (Φ : TFam.{pu, v} I)
     exact Cont.comp' (dB := Dom.ofDomain (Φ.D k)) φ.cont (Cont.subtypeVal _)⟩
 
 /-- `X k → G X`: a dictionary binder, whose body is pointed. -/
-def Shape.arr' : ShapeData (fun X => X k → G X) (fun f => Shape.arrCond k dG _ f) where
+def FixFunctor.arr' : ShapeData (fun X => X k → G X) (fun f => FixFunctor.arrCond k dG _ f) where
   op := DomainOperator.arrow (DomainOperator.variable k) dG.op
-  dom := fun X [∀ k, Dom (X k)] => Shape.arrDom k dG X
+  dom := fun X [∀ k, Dom (X k)] => FixFunctor.arrDom k dG X
   cond_sup := fun X [∀ k, Dom (X k)] c h =>
     ⟨Cont.congr' (Cont.supChain' (dD := (inferInstance : Dom (X k))) (dB := dG.dom X)
         (g := fun n d => c n d) (fun n => (h n).1) (fun n d => Dom.step' c n d)) (fun d => rfl),
      fun d => dG.cond_sup X (Dom.mkChain (fun n => c n d) (fun n => Dom.step' c n d)) (fun n => (h n).2 d)⟩
   cond_csup := fun X [∀ k, Dom (X k)] c hc hne hcond s hs =>
     ⟨Cont.of_isSup _ (dG.dom X) (fun f hf => (hcond f hf).1) (Dom.isSup_pi (fun _ => dG.dom X) hc hne hs),
-     fun d => dG.cond_csup X _ (@chain_image _ _ (Shape.arrDom k dG X).po (dG.dom X).po
+     fun d => dG.cond_csup X _ (@chain_image _ _ (FixFunctor.arrDom k dG X).po (dG.dom X).po
         (fun f => f d) (fun _ _ h => h d) c hc) (image_nonempty _ hne)
       (fun _ ⟨f, hf, e⟩ => e ▸ (hcond f hf).2 d) _ (Dom.isSup_pi (fun _ => dG.dom X) hc hne hs d)⟩
   total := fun _ _ _ => True
@@ -511,15 +511,15 @@ def Shape.arr' : ShapeData (fun X => X k → G X) (fun f => Shape.arrCond k dG _
   total_fin := fun _ _ _ _ _ => ⟨0, trivial⟩
   conv Φ :=
     let r := dG.conv Φ
-    { toFun := fun φ => Shape.arrTo k dG hG Φ φ.1
-      invFun := fun f => ⟨Shape.arrExt k dG Φ f, trivial⟩
+    { toFun := fun φ => FixFunctor.arrTo k dG hG Φ φ.1
+      invFun := fun f => ⟨FixFunctor.arrExt k dG Φ f, trivial⟩
       right_inv := fun f => by
         apply Subtype.ext
         funext x
-        show (r.toFun ⟨Shape.arrExt k dG Φ f x.1, _⟩).1 = f.1 x
+        show (r.toFun ⟨FixFunctor.arrExt k dG Φ f x.1, _⟩).1 = f.1 x
         have := congrArg Subtype.val (r.right_inv ⟨f.1 x, f.2.2 x⟩)
         refine Eq.trans ?_ this
-        exact congrArg (fun y => (r.toFun y).1) (Subtype.ext (Shape.arrExt_apply_total k dG Φ f x.1 x.2))
+        exact congrArg (fun y => (r.toFun y).1) (Subtype.ext (FixFunctor.arrExt_apply_total k dG Φ f x.1 x.2))
       cont_toFun := Cont.mk' _
         (fun φ φ' h x => Cont.mono' r.cont_toFun ((ContinuousMap.rel_iff _ _).1 h x.1))
         (fun c => by
@@ -536,18 +536,18 @@ def Shape.arr' : ShapeData (fun X => X k → G X) (fun f => Shape.arrCond k dG _
       cont_invFun := Cont.mk' _
         (fun f f' h => (ContinuousMap.rel_iff _ _).2 fun d => by
           by_cases hd : Φ.T k d
-          · rw [Shape.arrExt_apply_total k dG Φ f d hd, Shape.arrExt_apply_total k dG Φ f' d hd]
+          · rw [FixFunctor.arrExt_apply_total k dG Φ f d hd, FixFunctor.arrExt_apply_total k dG Φ f' d hd]
             exact Cont.mono' r.cont_invFun (h ⟨d, hd⟩)
-          · rw [Shape.arrExt_apply_not k dG Φ f d hd]; exact OmegaComplete.bottom_le _)
+          · rw [FixFunctor.arrExt_apply_not k dG Φ f d hd]; exact OmegaComplete.bottom_le _)
         (fun c => by
           apply Subtype.ext
           apply ContinuousMap.ext
           intro d
-          show Shape.arrExt k dG Φ _ d =
+          show FixFunctor.arrExt k dG Φ _ d =
             OmegaSup.sup (ContinuousMap.evalChain (Dom.vals (Dom.ofDomain (functionSpace (Φ.D k) (dG.op.obj Φ.D))) _) d)
           by_cases hd : Φ.T k d
-          · rw [Shape.arrExt_apply_total k dG Φ _ d hd]
-            have e : (⟨(@Dom.sup _ (Dom.subtype (Shape.arrDom k dG Φ.X) _ _) c).1 ⟨d, hd⟩, _⟩ : {x // cG x}) =
+          · rw [FixFunctor.arrExt_apply_total k dG Φ _ d hd]
+            have e : (⟨(@Dom.sup _ (Dom.subtype (FixFunctor.arrDom k dG Φ.X) _ _) c).1 ⟨d, hd⟩, _⟩ : {x // cG x}) =
                 @Dom.sup _ (Dom.subtype (dG.dom Φ.X) _ ⟨dG.cond_sup Φ.X, dG.cond_csup Φ.X⟩)
                   (Dom.mkChain (fun n => ⟨(c n).1 ⟨d, hd⟩, (c n).2.2 _⟩) (fun n => Dom.step' c n ⟨d, hd⟩)) :=
               Subtype.ext rfl
@@ -556,23 +556,23 @@ def Shape.arr' : ShapeData (fun X => X k → G X) (fun f => Shape.arrCond k dG _
             · apply @Dom.sup_le _ (Dom.ofDomain (dG.op.obj Φ.D)); intro n
               refine PartialOrder.rel_trans ?_ (@Dom.le_sup _ (Dom.ofDomain (dG.op.obj Φ.D))
                 (ContinuousMap.evalChain (Dom.vals (Dom.ofDomain (functionSpace (Φ.D k) (dG.op.obj Φ.D))) _) d) n)
-              show _ ⊑ Shape.arrExt k dG Φ _ d
-              rw [Shape.arrExt_apply_total k dG Φ _ d hd]
+              show _ ⊑ FixFunctor.arrExt k dG Φ _ d
+              rw [FixFunctor.arrExt_apply_total k dG Φ _ d hd]
               exact PartialOrder.rel_refl
             · apply @Dom.sup_le _ (Dom.ofDomain (dG.op.obj Φ.D)); intro n
               refine PartialOrder.rel_trans ?_ (@Dom.le_sup _ (Dom.ofDomain (dG.op.obj Φ.D)) _ n)
-              show Shape.arrExt k dG Φ _ d ⊑ _
-              rw [Shape.arrExt_apply_total k dG Φ _ d hd]
+              show FixFunctor.arrExt k dG Φ _ d ⊑ _
+              rw [FixFunctor.arrExt_apply_total k dG Φ _ d hd]
               exact PartialOrder.rel_refl
-          · rw [Shape.arrExt_apply_not k dG Φ _ d hd]
+          · rw [FixFunctor.arrExt_apply_not k dG Φ _ d hd]
             symm
             refine (@sup_eq_of_attained _ (dG.op.obj Φ.D).order (dG.op.obj Φ.D).complete.toOmegaSup _ 0 ?_).trans ?_
             · intro m
-              have e := fun f => Shape.arrExt_apply_not k dG Φ f d hd
-              show Shape.arrExt k dG Φ _ d ⊑ Shape.arrExt k dG Φ _ d
+              have e := fun f => FixFunctor.arrExt_apply_not k dG Φ f d hd
+              show FixFunctor.arrExt k dG Φ _ d ⊑ FixFunctor.arrExt k dG Φ _ d
               simp only [e]
               exact PartialOrder.rel_refl
-            · exact Shape.arrExt_apply_not k dG Φ _ d hd) }
+            · exact FixFunctor.arrExt_apply_not k dG Φ _ d hd) }
 end Arr
 
 /-! ## The shapes: the model of each piece, for the condition written in `Top` -/
@@ -581,48 +581,48 @@ section Instances
 variable {I : Type pu}
 
 /-! Each of these keeps its `dom` (the `Dom` of the shape) as the term instance search builds for
-the same type (`Dom.pprod`, `Dom.pi`, the given instance), and is reducible, so that `Shape.dom`
+the same type (`Dom.pprod`, `Dom.pi`, the given instance), and is reducible, so that `FixFunctor.dom`
 reaches it in a few steps: comparing it with the `Dom` that instance search finds is then cheap. -/
 
 /-- Data: a plain field of any admissible type (lifted in the model). -/
-@[reducible] def Model.Shape.data (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) :=
-  { Shape.data' A with dom := fun _ _ => ‹Dom A› }
+@[reducible] def Model.FixFunctor.data (A : Type w) [Dom A] : ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) :=
+  { FixFunctor.data' A with dom := fun _ _ => ‹Dom A› }
 /-- Constant: a plain field of a pointed admissible type. -/
-@[reducible] def Model.Shape.const (A : Type w) [Dom A] [NonPos.Pointed A] :
+@[reducible] def Model.FixFunctor.const (A : Type w) [Dom A] [NonPos.Pointed A] :
     ShapeData (fun _ : Fam.{pu, v} I => A) (fun _ => True) :=
-  { Shape.const' A with dom := fun _ _ => ‹Dom A› }
+  { FixFunctor.const' A with dom := fun _ _ => ‹Dom A› }
 /-- A plain field of a structure of the group. -/
-@[reducible] def Model.Shape.var (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) :=
-  { Shape.var' k with dom := fun _ inst => inst k }
+@[reducible] def Model.FixFunctor.var (k : I) : ShapeData (fun X : Fam.{pu, v} I => X k) (fun _ => True) :=
+  { FixFunctor.var' k with dom := fun _ inst => inst k }
 /-- A binder, whose body is pointed. -/
-@[reducible] def Model.Shape.pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)]
-    [∀ t, Shape.Pointed (G t)] :
-    ShapeData (fun X => (t : T) → G t X) (fun f => ∀ t, Model.Shape.cond (F := G t) (f t)) :=
-  { Shape.pi' (fun t => Model.Shape.sd (F := G t)) (fun _ D T y => Shape.Pointed.total D T y) with
-    dom := fun X [∀ k, Dom (X k)] => @Dom.pi T (fun t => G t X) (fun t => Shape.dom (G t) X) }
+@[reducible] def Model.FixFunctor.pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, FixFunctor (G t)]
+    [∀ t, FixFunctor.Methods (G t)] :
+    ShapeData (fun X => (t : T) → G t X) (fun f => ∀ t, Model.FixFunctor.cond (F := G t) (f t)) :=
+  { FixFunctor.pi' (fun t => Model.FixFunctor.sd (F := G t)) (fun _ D T y => FixFunctor.Methods.total D T y) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pi T (fun t => G t X) (fun t => FixFunctor.dom (G t) X) }
 /-- A dictionary binder, whose body is pointed. -/
-@[reducible] def Model.Shape.arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
+@[reducible] def Model.FixFunctor.arr (k : I) (G : Fam.{pu, v} I → Type w) [FixFunctor G] [FixFunctor.Methods G] :
     ShapeData (fun X => X k → G X)
-      (fun f => Cont (inst_1 := Shape.dom (F := G) _) f ∧ ∀ d, Model.Shape.cond (F := G) (f d)) :=
-  { Shape.arr' k (Model.Shape.sd (F := G)) (fun D T y => Shape.Pointed.total D T y) with
-    dom := fun X [∀ k, Dom (X k)] => @Dom.pi (X k) (fun _ => G X) (fun _ => Shape.dom G X) }
+      (fun f => Cont (inst_1 := FixFunctor.dom (F := G) _) f ∧ ∀ d, Model.FixFunctor.cond (F := G) (f d)) :=
+  { FixFunctor.arr' k (Model.FixFunctor.sd (F := G)) (fun D T y => FixFunctor.Methods.total D T y) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pi (X k) (fun _ => G X) (fun _ => FixFunctor.dom G X) }
 /-- Two fields. -/
-@[reducible] def Model.Shape.prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G] :
-    ShapeData (fun X => F X ×' G X) (fun x => Model.Shape.cond (F := F) x.1 ∧ Model.Shape.cond (F := G) x.2) :=
-  { Shape.prod' (Model.Shape.sd (F := F)) (Model.Shape.sd (F := G)) with
-    dom := fun X [∀ k, Dom (X k)] => @Dom.pprod (F X) (G X) (Shape.dom F X) (Shape.dom G X) }
+@[reducible] def Model.FixFunctor.prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [FixFunctor F] [FixFunctor G] :
+    ShapeData (fun X => F X ×' G X) (fun x => Model.FixFunctor.cond (F := F) x.1 ∧ Model.FixFunctor.cond (F := G) x.2) :=
+  { FixFunctor.prod' (Model.FixFunctor.sd (F := F)) (Model.FixFunctor.sd (F := G)) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pprod (F X) (G X) (FixFunctor.dom F X) (FixFunctor.dom G X) }
 
 /-! Pointedness, piece by piece. -/
 
-theorem Model.Shape.pointed_const (A : Type w) [Dom A] [NonPos.Pointed A] :
-    ∀ D T y, (Model.Shape.const.{pu, v} (I := I) A).total D T y := fun _ _ _ => trivial
-theorem Model.Shape.pointed_pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)]
-    [∀ t, Shape.Pointed (G t)] : ∀ D T' y, (Model.Shape.pi T G).total D T' y := fun _ _ _ => trivial
-theorem Model.Shape.pointed_arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
-    ∀ D T y, (Model.Shape.arr k G).total D T y := fun _ _ _ => trivial
-theorem Model.Shape.pointed_prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G]
-    [Shape.Pointed F] [Shape.Pointed G] : ∀ D T y, (Model.Shape.prod F G).total D T y :=
-  fun D T y => ⟨Shape.Pointed.total D T y.1, Shape.Pointed.total D T y.2⟩
+theorem Model.FixFunctor.pointed_const (A : Type w) [Dom A] [NonPos.Pointed A] :
+    ∀ D T y, (Model.FixFunctor.const.{pu, v} (I := I) A).total D T y := fun _ _ _ => trivial
+theorem Model.FixFunctor.pointed_pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, FixFunctor (G t)]
+    [∀ t, FixFunctor.Methods (G t)] : ∀ D T' y, (Model.FixFunctor.pi T G).total D T' y := fun _ _ _ => trivial
+theorem Model.FixFunctor.pointed_arr (k : I) (G : Fam.{pu, v} I → Type w) [FixFunctor G] [FixFunctor.Methods G] :
+    ∀ D T y, (Model.FixFunctor.arr k G).total D T y := fun _ _ _ => trivial
+theorem Model.FixFunctor.pointed_prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [FixFunctor F] [FixFunctor G]
+    [FixFunctor.Methods F] [FixFunctor.Methods G] : ∀ D T y, (Model.FixFunctor.prod F G).total D T y :=
+  fun D T y => ⟨FixFunctor.Methods.total D T y.1, FixFunctor.Methods.total D T y.2⟩
 end Instances
 
 end

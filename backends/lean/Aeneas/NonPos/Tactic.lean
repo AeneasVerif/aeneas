@@ -4,17 +4,16 @@ public import Aeneas.NonPos.FormsProofs
 
 @[expose] public section
 /-!
-# The `nonpos_cont` tactic
+# The forms, and the `nonpos_cont` tactic
 
-Section 0 is read with `Top.lean`: it states the forms of term that satisfy the condition on
-dictionary binders (`Shape.Cont`), which is how one sees that the condition holds of what Aeneas
-outputs.  The rest is not part of the trusted surface: `Command.lean` (section 2) states what it is
-expected to do, and every proof built here is checked by the kernel.  This file contains:
+Section 1 is read with `Top.lean`: it states the forms of term that satisfy the condition on
+dictionary binders (`FixFunctor.Cont`), which is how one sees that the condition holds of what
+Aeneas outputs.  The rest is not part of the trusted surface: `Command.lean` (section 2) states what
+it is expected to do, and every proof built here is checked by the kernel.  This file contains:
 
-0. the forms, on `Shape.Cont`;
-1. the same forms at the orders of the model, which the tactic uses, and the `@[nonpos_continuous]`
-   attribute;
-2. the `nonpos_cont` tactic, a thin wrapper around those theorems;
+1. the forms, on `FixFunctor.Cont`;
+2. the `nonpos_cont` tactic, a thin wrapper around the same forms stated at the orders of the model
+   (`FormsProofs.lean`), and the `@[nonpos_continuous]` attribute;
 3. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
    so that it does not have to prove them again at each use;
 4. the lemmas proved for each structure of a `nonpos_structure` group (`elabGroupLemmas`, which
@@ -28,192 +27,144 @@ noncomputable section
 
 universe pu v u w w₁ w₂ w₃
 
-/-! ## 0. The forms
+/-! ## 1. The forms
 
-`Shape.Cont H f` (`Top.lean`): `f`, from the values of a body `G₁` to those of a body `G₂` over the
-structures of the group `H`, satisfies the condition of a dictionary binder.  It holds of every term
-built from the forms below, where `d` is the varying dictionary (or a value built from it).  A
-definition is unfolded; a `partial_fixpoint` (or loop) is `Lean.Order.fix`.  Each form is proved
-from the model, in `FormsProofs.lean` (`Proofs.ShapeCont`). -/
+`FixFunctor.Cont F f` (section 2 of `Top.lean`) is the condition on a function `f` between two
+bodies over the structures of the group `F`.  The condition of a `mk` asks it of each method, as a
+function of each dictionary of the group that the method takes (`FixFunctor.cond_arr`).  This
+section states that it holds of every term built from the forms below, which are the forms of the
+terms that Aeneas outputs.  In each statement, `d` is the varying value (the dictionary, or a tuple
+that contains it), of type `G₁ (Fix F)`.
+
+* A term that does not mention `d` is `const`, and `d` itself is `id`.
+* `fun t => …` is `lam`.  An application is `app` when its argument does not mention `d`, and `app₂`
+  when its argument is a dictionary that does.
+* A field `e.m` of a dictionary is `unfold`, then `snd` and `fst`; `Bla.mk …` is `fold`, of a tuple
+  built with `pair`.
+* `if` is `ite` or `dite`; `do` notation is `pure` and `bind`.
+* A definition is unfolded; if it is a `partial_fixpoint` (a recursive function, a loop, or an
+  instance that refers to itself), it unfolds to `Lean.Order.fix`, which is `fix`.
+
+`monotone` is not a form: it is what `partial_fixpoint` asks of a definition, and follows from the
+condition.
+
+Each statement is proved from the model, in `FormsProofs.lean`.  The tactic of section 2 does not
+use these statements, but the same forms stated at the orders of the model (also in
+`FormsProofs.lean`); whichever it uses, the proof it builds is checked by the kernel against the
+condition of `Top.lean`. -/
 
 section Forms
-variable {I : Type pu} {H : I → (I → Type v) → Type v} [∀ k, Shape (H k)]
-  {G₁ : (I → Type v) → Type w₁} [Shape G₁]
+variable {I : Type pu} {F : I → (I → Type v) → Type v} [∀ k, FixFunctor (F k)]
+  {G₁ : (I → Type v) → Type w₁} [FixFunctor G₁]
 
 /-- Constants and the identity. -/
-theorem Shape.Cont.const {G : (I → Type v) → Type w₂} [Shape G] (b : G (Fix H)) :
-    Shape.Cont H (G₁ := G₁) (fun _ => b) :=
+theorem FixFunctor.Cont.const {G : (I → Type v) → Type w₂} [FixFunctor G] (b : G (Fix F)) :
+    FixFunctor.Cont F (G₁ := G₁) (fun _ => b) :=
   Proofs.ShapeCont.const b
-theorem Shape.Cont.id : Shape.Cont H (G₁ := G₁) (G₂ := G₁) (fun d => d) :=
+theorem FixFunctor.Cont.id : FixFunctor.Cont F (G₁ := G₁) (G₂ := G₁) (fun d => d) :=
   Proofs.ShapeCont.id
 /-- Lambda (pointwise), and application to an argument not depending on `d`. -/
-theorem Shape.Cont.lam {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
-    {f : G₁ (Fix H) → (t : T) → G t (Fix H)} (h : ∀ t, Shape.Cont H (fun d => f d t)) :
-    Shape.Cont H (G₂ := fun X => (t : T) → G t X) f :=
+theorem FixFunctor.Cont.lam {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, FixFunctor (G t)] [∀ t, FixFunctor.Methods (G t)]
+    {f : G₁ (Fix F) → (t : T) → G t (Fix F)} (h : ∀ t, FixFunctor.Cont F (fun d => f d t)) :
+    FixFunctor.Cont F (G₂ := fun X => (t : T) → G t X) f :=
   Proofs.ShapeCont.lam h
-theorem Shape.Cont.app {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
-    {f : G₁ (Fix H) → (t : T) → G t (Fix H)} (hf : Shape.Cont H (G₂ := fun X => (t : T) → G t X) f) (t : T) :
-    Shape.Cont H (fun d => f d t) :=
+theorem FixFunctor.Cont.app {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, FixFunctor (G t)] [∀ t, FixFunctor.Methods (G t)]
+    {f : G₁ (Fix F) → (t : T) → G t (Fix F)} (hf : FixFunctor.Cont F (G₂ := fun X => (t : T) → G t X) f) (t : T) :
+    FixFunctor.Cont F (fun d => f d t) :=
   Proofs.ShapeCont.app hf t
-/-- Application to a dictionary depending on `d`. -/
-theorem Shape.Cont.app₂ {k : I} {G : (I → Type v) → Type w₂} [Shape G] [Shape.Pointed G]
-    {f : G₁ (Fix H) → Fix H k → G (Fix H)} {a : G₁ (Fix H) → Fix H k}
-    (hf : Shape.Cont H (G₂ := fun X => X k → G X) f) (hc : ∀ d, Shape.Cont H (G₁ := fun X => X k) (f d))
-    (ha : Shape.Cont H (G₂ := fun X => X k) a) : Shape.Cont H (fun d => f d (a d)) :=
+/-- Application to a dictionary depending on `d`.  Its second hypothesis, that `f d` satisfies the
+condition in its dictionary argument, holds of a method of any dictionary: this is `Fix.cond` with
+`FixFunctor.cond_arr` (`Top.lean`). -/
+theorem FixFunctor.Cont.app₂ {k : I} {G : (I → Type v) → Type w₂} [FixFunctor G] [FixFunctor.Methods G]
+    {f : G₁ (Fix F) → Fix F k → G (Fix F)} {a : G₁ (Fix F) → Fix F k}
+    (hf : FixFunctor.Cont F (G₂ := fun X => X k → G X) f) (hc : ∀ d, FixFunctor.Cont F (G₁ := fun X => X k) (f d))
+    (ha : FixFunctor.Cont F (G₂ := fun X => X k) a) : FixFunctor.Cont F (fun d => f d (a d)) :=
   Proofs.ShapeCont.app₂ hf hc ha
 /-- Pairs. -/
-theorem Shape.Cont.pair {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [Shape G] [Shape G']
-    {f : G₁ (Fix H) → G (Fix H)} {g : G₁ (Fix H) → G' (Fix H)} (hf : Shape.Cont H f) (hg : Shape.Cont H g) :
-    Shape.Cont H (G₂ := fun X => G X ×' G' X) (fun d => (⟨f d, g d⟩ : G (Fix H) ×' G' (Fix H))) :=
+theorem FixFunctor.Cont.pair {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [FixFunctor G] [FixFunctor G']
+    {f : G₁ (Fix F) → G (Fix F)} {g : G₁ (Fix F) → G' (Fix F)} (hf : FixFunctor.Cont F f) (hg : FixFunctor.Cont F g) :
+    FixFunctor.Cont F (G₂ := fun X => G X ×' G' X) (fun d => (⟨f d, g d⟩ : G (Fix F) ×' G' (Fix F))) :=
   Proofs.ShapeCont.pair hf hg
-theorem Shape.Cont.fst {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [Shape G] [Shape G']
-    {f : G₁ (Fix H) → G (Fix H) ×' G' (Fix H)}
-    (hf : Shape.Cont H (G₂ := fun X => G X ×' G' X) f) : Shape.Cont H (fun d => (f d).1) :=
+theorem FixFunctor.Cont.fst {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [FixFunctor G] [FixFunctor G']
+    {f : G₁ (Fix F) → G (Fix F) ×' G' (Fix F)}
+    (hf : FixFunctor.Cont F (G₂ := fun X => G X ×' G' X) f) : FixFunctor.Cont F (fun d => (f d).1) :=
   Proofs.ShapeCont.fst hf
-theorem Shape.Cont.snd {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [Shape G] [Shape G']
-    {f : G₁ (Fix H) → G (Fix H) ×' G' (Fix H)}
-    (hf : Shape.Cont H (G₂ := fun X => G X ×' G' X) f) : Shape.Cont H (fun d => (f d).2) :=
+theorem FixFunctor.Cont.snd {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [FixFunctor G] [FixFunctor G']
+    {f : G₁ (Fix F) → G (Fix F) ×' G' (Fix F)}
+    (hf : FixFunctor.Cont F (G₂ := fun X => G X ×' G' X) f) : FixFunctor.Cont F (fun d => (f d).2) :=
   Proofs.ShapeCont.snd hf
-/-- A condition not depending on `d`. -/
-theorem Shape.Cont.ite {G : (I → Type v) → Type w₂} [Shape G] (c : Prop) [Decidable c] {t e : G₁ (Fix H) → G (Fix H)}
-    (ht : Shape.Cont H t) (he : Shape.Cont H e) : Shape.Cont H (fun d => if c then t d else e d) :=
+/-- A test not depending on `d`.  (A `match` on a value not depending on `d` is a case analysis on that
+value, outside of the term.) -/
+theorem FixFunctor.Cont.ite {G : (I → Type v) → Type w₂} [FixFunctor G] (c : Prop) [Decidable c] {t e : G₁ (Fix F) → G (Fix F)}
+    (ht : FixFunctor.Cont F t) (he : FixFunctor.Cont F e) : FixFunctor.Cont F (fun d => if c then t d else e d) :=
   Proofs.ShapeCont.ite c ht he
-theorem Shape.Cont.dite {G : (I → Type v) → Type w₂} [Shape G] (c : Prop) [Decidable c]
-    {t : c → G₁ (Fix H) → G (Fix H)} {e : ¬c → G₁ (Fix H) → G (Fix H)}
-    (ht : ∀ h, Shape.Cont H (t h)) (he : ∀ h, Shape.Cont H (e h)) :
-    Shape.Cont H (fun d => if h : c then t h d else e h d) :=
+theorem FixFunctor.Cont.dite {G : (I → Type v) → Type w₂} [FixFunctor G] (c : Prop) [Decidable c]
+    {t : c → G₁ (Fix F) → G (Fix F)} {e : ¬c → G₁ (Fix F) → G (Fix F)}
+    (ht : ∀ h, FixFunctor.Cont F (t h)) (he : ∀ h, FixFunctor.Cont F (e h)) :
+    FixFunctor.Cont F (fun d => if h : c then t h d else e h d) :=
   Proofs.ShapeCont.dite c ht he
 /-- `pure` and `bind`, for any supported monad. -/
-theorem Shape.Cont.pure {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α : Type u}
-    {a : G₁ (Fix H) → α} (ha : Shape.Cont H (G₂ := fun _ => α) (iG₂ := Shape.data α) a) :
-    Shape.Cont H (G₂ := fun _ => M α) (fun d => (Pure.pure (a d) : M α)) :=
+theorem FixFunctor.Cont.pure {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α : Type u}
+    {a : G₁ (Fix F) → α} (ha : FixFunctor.Cont F (G₂ := fun _ => α) (iG₂ := FixFunctor.data α) a) :
+    FixFunctor.Cont F (G₂ := fun _ => M α) (fun d => (Pure.pure (a d) : M α)) :=
   Proofs.ShapeCont.pure ha
-theorem Shape.Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u}
-    {m : G₁ (Fix H) → M α} {k : G₁ (Fix H) → α → M β}
-    (hm : Shape.Cont H (G₂ := fun _ => M α) m) (hk : ∀ a, Shape.Cont H (G₂ := fun _ => M β) (fun d => k d a)) :
-    Shape.Cont H (G₂ := fun _ => M β) (fun d => m d >>= k d) :=
+theorem FixFunctor.Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u}
+    {m : G₁ (Fix F) → M α} {k : G₁ (Fix F) → α → M β}
+    (hm : FixFunctor.Cont F (G₂ := fun _ => M α) m) (hk : ∀ a, FixFunctor.Cont F (G₂ := fun _ => M β) (fun d => k d a)) :
+    FixFunctor.Cont F (G₂ := fun _ => M β) (fun d => m d >>= k d) :=
   Proofs.ShapeCont.bind hm hk
-/-- The fields of a dictionary depending on `d`, and building one. -/
-theorem Shape.Cont.unfold {k : I} {g : G₁ (Fix H) → Fix H k} (hg : Shape.Cont H (G₂ := fun X => X k) g) :
-    Shape.Cont H (G₂ := H k) (fun d => Fix.unfold H (g d)) :=
+/-- The fields of a dictionary depending on `d` (a projection `e.m` is `(Fix.unfold F e).2. … .1`), and
+`mk` of fields depending on `d` (`Bla.mk f₁ … fₙ h` is `Fix.fold F ⟨f₁, …, fₙ, ⟨⟩⟩ h`). -/
+theorem FixFunctor.Cont.unfold {k : I} {g : G₁ (Fix F) → Fix F k} (hg : FixFunctor.Cont F (G₂ := fun X => X k) g) :
+    FixFunctor.Cont F (G₂ := F k) (fun d => Fix.unfold F (g d)) :=
   Proofs.ShapeCont.unfold hg
-theorem Shape.Cont.fold {k : I} {f : G₁ (Fix H) → H k (Fix H)} (h : ∀ d, Shape.cond H (f d))
-    (hf : Shape.Cont H (G₂ := H k) f) : Shape.Cont H (G₂ := fun X => X k) (fun d => Fix.fold H (f d) (h d)) :=
+theorem FixFunctor.Cont.fold {k : I} {f : G₁ (Fix F) → F k (Fix F)} (h : ∀ d, FixFunctor.cond F (f d))
+    (hf : FixFunctor.Cont F (G₂ := F k) f) : FixFunctor.Cont F (G₂ := fun X => X k) (fun d => Fix.fold F (f d) (h d)) :=
   Proofs.ShapeCont.fold h hf
-/-- Fixed points (`partial_fixpoint`, loops), through a type with `Shape.FixCompat` (below). -/
-theorem Shape.Cont.fix {G : (I → Type v) → Type w₂} [Shape G] [Lean.Order.CCPO (G (Fix H))] [Shape.FixCompat H G]
-    {f : G₁ (Fix H) → G (Fix H) → G (Fix H)} {hm : ∀ d, Lean.Order.monotone (f d)}
-    (hf : Shape.Cont H (G₁ := fun X => G₁ X ×' G X) (fun p => f p.1 p.2)) :
-    Shape.Cont H (fun d => Lean.Order.fix (f d) (hm d)) :=
+/-! Fixed points.  `FixFunctor.LeanOrder F G` says that Lean's `⊑` on the type `G (Fix F)`, which
+`partial_fixpoint` uses, is the one of section 3 of `Top.lean`.  It holds of the types that a
+`partial_fixpoint` is written at: the values of a monad, functions into such types, tuples of them
+(a mutual definition), and the structures that are `Fix.Recursive`. -/
+abbrev FixFunctor.LeanOrder (F : I → (I → Type v) → Type v) [∀ k, FixFunctor (F k)] (G : (I → Type v) → Type w₂)
+    [FixFunctor G] [Lean.Order.PartialOrder (G (Fix F))] : Prop :=
+  ∀ x y : G (Fix F), FixFunctor.Le F x y ↔ Lean.Order.PartialOrder.rel x y
+theorem FixFunctor.LeanOrder.monad (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    FixFunctor.LeanOrder F (fun _ => M α) := fun _ _ => Iff.rfl
+theorem FixFunctor.LeanOrder.var (k : I) [Fix.Recursive F k] : FixFunctor.LeanOrder F (fun X => X k) :=
+  fun _ _ => Iff.rfl
+theorem FixFunctor.LeanOrder.pi {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, FixFunctor (G t)]
+    [∀ t, FixFunctor.Methods (G t)] [∀ t, Lean.Order.PartialOrder (G t (Fix F))]
+    (h : ∀ t, FixFunctor.LeanOrder F (G t)) : FixFunctor.LeanOrder F (fun X => (t : T) → G t X) :=
+  fun f g => forall_congr' fun t => h t (f t) (g t)
+theorem FixFunctor.LeanOrder.prod {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [FixFunctor G]
+    [FixFunctor G'] [Lean.Order.PartialOrder (G (Fix F))] [Lean.Order.PartialOrder (G' (Fix F))]
+    (h : FixFunctor.LeanOrder F G) (h' : FixFunctor.LeanOrder F G') :
+    FixFunctor.LeanOrder F (fun X => G X ×' G' X) :=
+  fun x y => and_congr (h x.1 y.1) (h' x.2 y.2)
+
+/-- A `partial_fixpoint` definition (a recursive function, a loop, an instance that refers to itself)
+is `Lean.Order.fix`. -/
+theorem FixFunctor.Cont.fix {G : (I → Type v) → Type w₂} [FixFunctor G] [Lean.Order.CCPO (G (Fix F))]
+    (hG : FixFunctor.LeanOrder F G) {f : G₁ (Fix F) → G (Fix F) → G (Fix F)} {hm : ∀ d, Lean.Order.monotone (f d)}
+    (hf : FixFunctor.Cont F (G₁ := fun X => G₁ X ×' G X) (fun p => f p.1 p.2)) :
+    FixFunctor.Cont F (fun d => Lean.Order.fix (f d) (hm d)) :=
+  haveI : FixFunctor.FixCompat F G := @FixCompat.mk _ (FixFunctor.dom G (Fix F)) _ hG
   Proofs.ShapeCont.fix hf
-/-- What `partial_fixpoint` asks of a self-referential instance. -/
-theorem Shape.Cont.monotone {G₂ : (I → Type v) → Type w₂} [Shape G₂] [Lean.Order.CCPO (G₁ (Fix H))]
-    [Lean.Order.CCPO (G₂ (Fix H))] [Shape.FixCompat H G₁] [Shape.FixCompat H G₂] {f : G₁ (Fix H) → G₂ (Fix H)}
-    (h : Shape.Cont H f) : Lean.Order.monotone f :=
+/-- What `partial_fixpoint` asks of a definition (`partial_fixpoint monotonicity …`). -/
+theorem FixFunctor.Cont.monotone {G₂ : (I → Type v) → Type w₂} [FixFunctor G₂] [Lean.Order.CCPO (G₁ (Fix F))]
+    [Lean.Order.CCPO (G₂ (Fix F))] (h₁ : FixFunctor.LeanOrder F G₁) (h₂ : FixFunctor.LeanOrder F G₂)
+    {f : G₁ (Fix F) → G₂ (Fix F)} (h : FixFunctor.Cont F f) : Lean.Order.monotone f :=
+  haveI : FixFunctor.FixCompat F G₁ := @FixCompat.mk _ (FixFunctor.dom G₁ (Fix F)) _ h₁
+  haveI : FixFunctor.FixCompat F G₂ := @FixCompat.mk _ (FixFunctor.dom G₂ (Fix F)) _ h₂
   Proofs.ShapeCont.monotone h
-/-! `Shape.FixCompat`: the values of a supported monad, functions into such types, and the
-structures in which `⊥` is total. -/
-instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
-    Shape.FixCompat H (fun _ => M α) := FixCompat.monad α
-instance {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
-    [∀ t, Lean.Order.CCPO (G t (Fix H))] [∀ t, Shape.FixCompat H (G t)] :
-    Shape.FixCompat H (fun X => (t : T) → G t X) :=
-  Proofs.ShapeCont.fixCompat_pi
-instance (k : I) [Fix.BotTotal H k] : Shape.FixCompat H (fun X => X k) := Fix.fixCompat H k
 end Forms
 
-/-! ## 1. The forms, at the orders (used by the tactic)
+/-! ## 2. The tactic
 
-Everything the `nonpos_cont` tactic knows is one of the statements below, all of the shape
-`Cont (fun d => ‹form›)`.  `D` is the type of the varying dictionary (or tuple of dictionaries).
-The list `forms` after the theorems is what the tactic looks up by shape; `const`, `id`, `lam`,
-`app` and `app₂` have no shape to look up and are the tactic's own cases.  Continuity facts proved
-elsewhere (a monad's own operations, helper functions) are added to the same lookup with the
-`@[nonpos_continuous]` attribute, declared at the end of this section. -/
-
-
-section Cont
-variable {D : Type w} [Dom D]
-
-theorem Cont.const {B : Type w₁} [Dom B] (b : B) : Cont (fun _ : D => b) := Proofs.Cont.const b
-theorem Cont.id : Cont (fun d : D => d) := Proofs.Cont.id
-/-- Lambda: pointwise. -/
-theorem Cont.lam {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] {f : D → (t : T) → B t}
-    (h : ∀ t, Cont (fun d => f d t)) : Cont f := Proofs.Cont.lam h
-/-- Application to an argument not depending on `d` (a type, a value, a fixed dictionary, ...). -/
-theorem Cont.app {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] {f : D → (t : T) → B t}
-    (hf : Cont f) (t : T) : Cont (fun d => f d t) := Proofs.Cont.app hf t
-/-- Application to an argument depending on `d`: the function must satisfy the condition. -/
-theorem Cont.app₂ {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A → B} {a : D → A}
-    (hf : Cont f) (hc : ∀ d, Cont (f d)) (ha : Cont a) : Cont (fun d => f d (a d)) := Proofs.Cont.app₂ hf hc ha
-/-- Pairs: the field tuples of a structure, and what a mutual `partial_fixpoint` is packed into. -/
-theorem Cont.pair {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A} {g : D → B}
-    (hf : Cont f) (hg : Cont g) : Cont (fun d => (⟨f d, g d⟩ : A ×' B)) := Proofs.Cont.pair hf hg
-theorem Cont.fst {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A ×' B} (hf : Cont f) :
-    Cont (fun d => (f d).1) := Proofs.Cont.fst hf
-theorem Cont.snd {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] {f : D → A ×' B} (hf : Cont f) :
-    Cont (fun d => (f d).2) := Proofs.Cont.snd hf
-theorem Cont.ite {B : Type w₁} [Dom B] (c : Prop) [Decidable c] {t e : D → B}
-    (ht : Cont t) (he : Cont e) : Cont (fun d => if c then t d else e d) := Proofs.Cont.ite c ht he
-theorem Cont.dite {B : Type w₁} [Dom B] (c : Prop) [Decidable c] {t : c → D → B} {e : ¬c → D → B}
-    (ht : ∀ h, Cont (t h)) (he : ∀ h, Cont (e h)) : Cont (fun d => if h : c then t h d else e h d) :=
-  Proofs.Cont.dite c ht he
-/-- `pure`, `bind`: this is what a supported monad provides. -/
-theorem Cont.pure {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α : Type u} {a : D → α}
-    (ha : Cont (inst_1 := Dom.discrete α) a) : Cont (fun d => (pure (a d) : M α)) := Proofs.Cont.pure ha
-theorem Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u}
-    {m : D → M α} {k : D → α → M β}
-    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) := Proofs.Cont.bind hm hk
-
-variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
-/-- Projections out of a structure, and `mk` of fields depending on `d`. -/
-theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
-    Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d => Fix.unfold F (f d)) := Proofs.Cont.unfold F hf
-theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Shape.cond F (f d))
-    (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) : Cont (fun d => Fix.fold F (f d) (h d)) :=
-  Proofs.Cont.fold F h hf
-
-/-! `Cont.fst`, `Cont.snd` and `Cont.pair` for the field tuple of a structure, at the `Dom` that the
-shape of the tuple gives it (`Shape.dom`, as in `Cont.unfold` and `Cont.fold`), so that a projection
-out of a dictionary, and the tuple of a `mk`, are proved without comparing that `Dom` with the one
-instance search builds for the whole tuple. -/
-section ShapeForms
-variable {G : Fam.{pu, v} I → Type w₁} {H : Fam.{pu, v} I → Type w₂} [Shape G] [Shape H]
-  {X : Fam.{pu, v} I} [∀ k, Dom (X k)]
-theorem Cont.shape_fst {f : D → G X ×' H X} (hf : Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) f) :
-    Cont (inst_1 := Shape.dom G X) (fun d => (f d).1) :=
-  @Proofs.Cont.fst D _ _ _ (Shape.dom G X) (Shape.dom H X) f hf
-theorem Cont.shape_snd {f : D → G X ×' H X} (hf : Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) f) :
-    Cont (inst_1 := Shape.dom H X) (fun d => (f d).2) :=
-  @Proofs.Cont.snd D _ _ _ (Shape.dom G X) (Shape.dom H X) f hf
-theorem Cont.shape_pair {f : D → G X} {g : D → H X}
-    (hf : Cont (inst_1 := Shape.dom G X) f) (hg : Cont (inst_1 := Shape.dom H X) g) :
-    Cont (inst_1 := Shape.dom (fun X => G X ×' H X) X) (fun d => (⟨f d, g d⟩ : G X ×' H X)) :=
-  @Proofs.Cont.pair D _ _ _ (Shape.dom G X) (Shape.dom H X) f g hf hg
-end ShapeForms
-
-/-- Fixed points: `partial_fixpoint` elaborates to `Lean.Order.fix`, for functions and for
-self-referential dictionaries alike. -/
-theorem Cont.fix {α : Type w₁} [Dom α] [Lean.Order.CCPO α] [FixCompat α] {f : D → α → α}
-    {hm : ∀ d, Lean.Order.monotone (f d)}
-    (hf : Cont (fun p : D ×' α => f p.1 p.2)) : Cont (fun d => Lean.Order.fix (f d) (hm d)) := Proofs.Cont.fix hf
-end Cont
-
-/-! `FixCompat α`: the `Dom` and `CCPO` structures on `α` agree.  Holds for `M α`, pointwise, and on
-products: exactly the types `partial_fixpoint` recurses through. -/
-instance {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) : FixCompat (M α) :=
-  FixCompat.monad α
-instance {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] [∀ t, Lean.Order.CCPO (B t)] [∀ t, FixCompat (B t)] :
-    FixCompat ((t : T) → B t) := FixCompat.pi
-instance {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [Lean.Order.CCPO A] [Lean.Order.CCPO B]
-    [FixCompat A] [FixCompat B] : FixCompat (A ×' B) := FixCompat.pprod
-instance {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)] (k : I) [Fix.BotTotal F k] :
-    FixCompat (Fix F k) := Fix.fixCompat F k
-
-/-- `partial_fixpoint`'s monotonicity obligation, from the condition: write a self-referential
-instance as `def inst : Bla Int := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`. -/
-theorem Cont.monotone {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [Lean.Order.CCPO A] [Lean.Order.CCPO B]
-    [FixCompat A] [FixCompat B] {f : A → B} (h : Cont f) : Lean.Order.monotone f := Proofs.Cont.monotone h
+The forms that the tactic applies are the ones of section 1 of `FormsProofs.lean` (`Cont.const`,
+`Cont.bind`, ...): the same as in section 1 above, stated at the orders of the model.  Continuity
+facts proved elsewhere (a monad's own operations, helper functions) are added to the same lookup
+with the `@[nonpos_continuous]` attribute. -/
 
 /-- The forms the tactic looks up by the shape of the body. -/
 meta def forms : List Name :=
@@ -242,7 +193,7 @@ meta initialize registerBuiltinAttribute {
 meta def getContTheorems : MetaM (DiscrTree Name) := do
   forms.foldlM (init := nonposContExt.getState (← getEnv)) fun t n => return t.insertKeyValue (← contKeys n) n
 
-/-! ## 2. The tactic
+/-! ### The loop
 
 `nonpos_cont` on a goal `Cont (fun d => body)` looks up the forms and tagged theorems whose shape is
 that of `body` (`getContTheorems`) and applies the first that fits.  The forms without a
@@ -251,7 +202,7 @@ shape to index are handled directly: a body not depending on `d` is `Cont.const`
 depending on `d`) or `Cont.app₂` (last argument depending on `d`; the function is then a projection
 of a dictionary, whose condition comes from `Fix.cond`, read along the projection's path).  A `match` on a scrutinee not depending on
 `d` is split by `cases`, and a remaining definition is unfolded (`delta`).  Around this, the loop
-introduces binders, turns a `Shape.cond` goal into its conjuncts with `nonpos_cond_dsimp`, splits
+introduces binders, turns a `FixFunctor.cond` goal into its conjuncts with `nonpos_cond_dsimp`, splits
 conjunctions, and closes a goal by a hypothesis when one fits.
 
 For performance:
@@ -268,15 +219,15 @@ For performance:
   definition and the monotonicity goal) are small;
 * `assumption` only compares the goal with the hypotheses of the same head. -/
 
-/-- Inputs an application of `Shape.cond`, and unfolds the functor and Shape instance arguments
+/-- Inputs an application of `FixFunctor.cond`, and unfolds the functor and FixFunctor instance arguments
 so they can be matched against. -/
 meta def normCond (e : Expr) : MetaM Expr := do
   let e ← instantiateMVars e
-  -- `Shape.cond H x` is `Model.Shape.cond` at the order of the dictionaries
-  let e ← if e.isAppOf ``Shape.cond then whnfR e else pure e
-  let_expr Model.Shape.cond I F inst X instX x := e | return e
+  -- `FixFunctor.cond H x` is `Model.FixFunctor.cond` at the order of the dictionaries
+  let e ← if e.isAppOf ``FixFunctor.cond then whnfR e else pure e
+  let_expr Model.FixFunctor.cond I F inst X instX x := e | return e
   let F' ← lambdaTelescope (← whnfR F) fun xs b => do mkLambdaFVars xs (← whnfR b)
-  return mkAppN (.const ``Model.Shape.cond e.getAppFn.constLevels!) #[I, F', ← whnfR inst, X, instX, x]
+  return mkAppN (.const ``Model.FixFunctor.cond e.getAppFn.constLevels!) #[I, F', ← whnfR inst, X, instX, x]
 
 open Tactic in
 elab "nonpos_cond_norm" : tactic => withMainContext do
@@ -284,28 +235,28 @@ elab "nonpos_cond_norm" : tactic => withMainContext do
   g ← g.change (← normCond (← g.getType))
   for d in ← getLCtx do
     let t ← instantiateMVars d.type
-    if !d.isImplementationDetail && (t.isAppOf ``Shape.cond || t.isAppOf ``Model.Shape.cond) then
+    if !d.isImplementationDetail && (t.isAppOf ``FixFunctor.cond || t.isAppOf ``Model.FixFunctor.cond) then
       g ← g.changeLocalDecl d.fvarId (← normCond d.type)
   replaceMainGoal [g]
 
-/-- Simplify `Shape.cond` conditions into a conjunction of `Cont` facts, one for each dictionary
-binder, dropping the clauses that are `True`.  First `nonpos_cond_norm` rewrites every `Shape.cond`
+/-- Simplify `FixFunctor.cond` conditions into a conjunction of `Cont` facts, one for each dictionary
+binder, dropping the clauses that are `True`.  First `nonpos_cond_norm` rewrites every `FixFunctor.cond`
 in the goal and hypotheses (by definitional unfolding, checked by `change`) so that its functor is a
 literal lambda and its instance is built from the pieces of section 2 of `Top.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data, Shape.monad,
-      Shape.unit, Shape.dict, Shape.dictPointed, Shape.var, Shape.prodInst, Shape.piInst, Shape.arrInst,
-      Shape.dataInst, Shape.monadInst, Shape.unitInst, Shape.dictInst, Shape.dictPointedInst, Shape.varInst, true_and, and_true, implies_true, forall_and] $[$loc]?))
+  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, Model.FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr, FixFunctor.data, FixFunctor.monad,
+      FixFunctor.unit, FixFunctor.dict, FixFunctor.dictRec, FixFunctor.var, FixFunctor.prodInst, FixFunctor.piInst, FixFunctor.arrInst,
+      FixFunctor.dataInst, FixFunctor.monadInst, FixFunctor.unitInst, FixFunctor.dictInst, FixFunctor.dictRecInst, FixFunctor.varInst, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
-  `(tactic| (nonpos_cond_norm; dsimp only [Shape.cond, Model.Shape.cond, Shape.prod, Shape.pi, Shape.arr, Shape.data,
-      Shape.monad, Shape.unit, Shape.dict, Shape.dictPointed, Shape.var, Shape.prodInst, Shape.piInst,
-      Shape.arrInst, Shape.dataInst, Shape.monadInst, Shape.unitInst, Shape.dictInst, Shape.dictPointedInst,
-      Shape.varInst]))
+  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, Model.FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr, FixFunctor.data,
+      FixFunctor.monad, FixFunctor.unit, FixFunctor.dict, FixFunctor.dictRec, FixFunctor.var, FixFunctor.prodInst, FixFunctor.piInst,
+      FixFunctor.arrInst, FixFunctor.dataInst, FixFunctor.monadInst, FixFunctor.unitInst, FixFunctor.dictInst, FixFunctor.dictRecInst,
+      FixFunctor.varInst]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
 arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The
@@ -322,7 +273,7 @@ meta def nonposProjCondProof? (fn' : Expr) : MetaM (Option Expr) := do
     path := path.push (e.isAppOf ``PProd.fst)
     e := e.appArg!
   unless e.isAppOfArity ``Fix.unfold 5 do return none
-  -- `.1` or `.2` of a proof of a conjunction (exposed by unfolding the `Shape` instances)
+  -- `.1` or `.2` of a proof of a conjunction (exposed by unfolding the `FixFunctor` instances)
   let part (pf : Expr) (left : Bool) : MetaM Expr := do
     let_expr And a b := (← whnf (← inferType pf)) | throwError "not a conjunction"
     return mkApp3 (mkConst (if left then ``And.left else ``And.right)) a b pf
@@ -337,10 +288,10 @@ meta def nonposProjCondProof? (fn' : Expr) : MetaM (Option Expr) := do
 syntax "nonpos_cont" (num)? : tactic
 syntax "nonpos_cont_peel" : tactic
 
-/-- `#[G, H, iG, iH]` if the `Shape` instance `inst` unfolds to `Shape.prod G H` (with `iG`, `iH`). -/
+/-- `#[G, H, iG, iH]` if the `FixFunctor` instance `inst` unfolds to `FixFunctor.prod G H` (with `iG`, `iH`). -/
 meta partial def shapeProdArgs? (inst : Expr) : MetaM (Option (Array Expr)) := do
   let inst ← whnfCore inst
-  if inst.isAppOfArity ``Shape.prod 5 then return some (inst.getAppArgs.extract 1 5)
+  if inst.isAppOfArity ``FixFunctor.prod 5 then return some (inst.getAppArgs.extract 1 5)
   match ← unfoldDefinition? inst with
   | some e => shapeProdArgs? e
   | none => return none
@@ -381,7 +332,7 @@ meta def unfoldContChain? (goal : MVarId) (D iD : Expr) (n : Name) (dTy gd : Exp
 open Tactic in
 /-- A field of a varying dictionary, `fun d => (Fix.unfold F (g d)).2. … .1`: proved inside out, from
 `Cont.unfold` (at the `Dom` of the shape of the tuple) by `Cont.shape_snd` and `Cont.shape_fst`, with
-the parts read from the `Shape` instances, so that only the field's own `Dom` is
+the parts read from the `FixFunctor` instances, so that only the field's own `Dom` is
 compared with the goal's (comparing the `Dom` of the whole tuple with the one instance search
 builds would go through all the fields).  Leaves the goal `Cont g`.  `false` (and no change) if the
 goal is not of this form. -/
@@ -405,10 +356,10 @@ meta def nonposShapeProj (goal : MVarId) (D iD f : Expr) : TacticM Bool := do
     let gFun := Expr.lam n dTy gd bi
     let hg ← mkFreshExprSyntheticOpaqueMVar (← mkAppOptM ``Cont #[D, none, iD, none, gFun])
     let mut pf ← mkAppOptM ``Cont.unfold #[D, iD, none, F, inst, k, gFun, hg]
-    -- `pf : Cont (inst_1 := Shape.dom (F k) X) …`: the family `X` and its `Dom`s
+    -- `pf : Cont (inst_1 := FixFunctor.dom (F k) X) …`: the family `X` and its `Dom`s
     let some iU := (← inferType pf).getAppArgs[3]? | throwError "unexpected"
     let (X, iX) := (iU.getAppArgs[3]!, iU.getAppArgs[4]!)
-    let mut iP := mkApp inst k  -- the `Shape` instance of the current tuple
+    let mut iP := mkApp inst k  -- the `FixFunctor` instance of the current tuple
     for isFst in path.reverse do
       let some gh ← shapeProdArgs? iP | throwError "not a pair"
       pf ← mkAppOptM (if isFst then ``Cont.shape_fst else ``Cont.shape_snd)
@@ -582,13 +533,13 @@ meta def runContAct : ContAct → TacticM Unit
   | .tac stx => evalTactic stx
 
 open Tactic in
-/-- A tuple `fun d => ⟨a, b⟩` at the `Dom` of a shape, `Shape.dom P X` (the field tuple of a `mk`, as
-`Cont.fold` leaves it): `Cont.shape_pair`, with the parts read from `P`'s `Shape` instance, so that
+/-- A tuple `fun d => ⟨a, b⟩` at the `Dom` of a shape, `FixFunctor.dom P X` (the field tuple of a `mk`, as
+`Cont.fold` leaves it): `Cont.shape_pair`, with the parts read from `P`'s `FixFunctor` instance, so that
 the `Dom` of the tuple is not compared with the one instance search builds (which would go through
 all the fields).  `false` (and no change) if the goal is not of this form. -/
 meta def nonposShapePair (goal : MVarId) (D iD iB f : Expr) : TacticM Bool := do
   let .lam _ _ body _ := f | return false
-  unless body.isAppOfArity ``PProd.mk 4 && iB.isAppOfArity ``Shape.dom 5 do return false
+  unless body.isAppOfArity ``PProd.mk 4 && iB.isAppOfArity ``FixFunctor.dom 5 do return false
   let a := iB.getAppArgs  -- `I P iP X iX`
   let some gh ← shapeProdArgs? a[2]! | return false
   let s ← saveState
@@ -654,16 +605,16 @@ meta def contAssumption (g : MVarId) (f : Expr) : MetaM Bool := g.withContext do
     if ← isDefEq t (← g.getType) then g.assign ld.toExpr; return true
   return false
 
-/-- On a goal `Shape.cond ⟨f₁, …, fₙ⟩` of structure `Bla` (its `F` is `G.F (G.I.Bla …)`), apply
+/-- On a goal `FixFunctor.cond ⟨f₁, …, fₙ⟩` of structure `Bla` (its `F` is `G.F (G.I.Bla …)`), apply
 `Bla.cond_intro` (section 4): the new goals are the conjuncts of the condition.  `none` if there is
 no such lemma or it does not apply. -/
 meta def condIntro? (g : MVarId) (ty : Expr) : MetaM (Option (List MVarId)) := do
-  let_expr Model.Shape.cond _ F _ _ _ _ := ty | return none
+  let_expr Model.FixFunctor.cond _ F _ _ _ _ := ty | return none
   let some ctor := F.appArg!.getAppFn.constName? | return none
   -- `ctor` is `ns.G.I.Bla`
   let lem := ctor.getPrefix.getPrefix.getPrefix ++ Name.mkSimple ctor.getString! ++ `cond_intro
   unless (← getEnv).contains lem do return none
-  let_expr Model.Shape.cond _ _ _ _ _ x := ty | return none
+  let_expr Model.FixFunctor.cond _ _ _ _ _ x := ty | return none
   -- the fields of the tuple `⟨f₁, …, fₙ, ⟨⟩⟩`
   let mut fs := #[]
   let mut x := x
@@ -685,7 +636,7 @@ meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM U
   setGoals [g]
   let ty ← g.withContext do whnfR (← instantiateMVars (← g.getType))
   if ty.isForall then replaceMainGoal [(← g.intro1).2]
-  else if ty.isAppOf ``Model.Shape.cond then
+  else if ty.isAppOf ``Model.FixFunctor.cond then
     match ← condIntro? g ty with
     | some gs => replaceMainGoal gs
     | none => evalTactic (← `(tactic| nonpos_cond_dsimp))
@@ -699,7 +650,7 @@ meta partial def nonposContLoop (tree : DiscrTree Name) (fuel : Nat) : TacticM U
   nonposContLoop tree (fuel - 1)
 
 open Tactic in
-/-- `nonposContLoop` on a goal `Shape.cond …` (the condition of a `mk`), with the proof packaged as an
+/-- `nonposContLoop` on a goal `FixFunctor.cond …` (the condition of a `mk`), with the proof packaged as an
 auxiliary theorem.  `partial_fixpoint` copies the condition of a self-referential definition: into
 the definition, its functional, its `unsafe` version, and the monotonicity goal (whose `mk` takes
 it).  Each copy is then that theorem applied to a few arguments, and the kernel checks the proof
@@ -732,7 +683,7 @@ open Tactic in
 meta def nonposCont (fuel : Nat) : TacticM Unit := do
   let tree ← getContTheorems
   let ty ← whnfR (← instantiateMVars (← (← getMainGoal).getType))
-  if ty.isAppOf ``Model.Shape.cond then nonposCondAux tree fuel else nonposContLoop tree fuel
+  if ty.isAppOf ``Model.FixFunctor.cond then nonposCondAux tree fuel else nonposContLoop tree fuel
 
 elab_rules : tactic
   | `(tactic| nonpos_cont) => nonposCont 300
@@ -805,7 +756,7 @@ the kernel checks quickly.
   `Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
   `@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
   left with one goal per field.
-* `Bla.botTotal`: `Fix.BotTotal` of the structure, as an instance, when instance search finds it at
+* `Bla.recursive`: `Fix.Recursive` of the structure, as an instance, when instance search finds it at
   every value of the parameters (it does not when the structure has a plain field of unpointed
   type).  The `CCPO` instance of the structure, which `partial_fixpoint` and `Cont.monotone` look
   for, then does not re-derive it field by field at each search.
@@ -840,7 +791,7 @@ meta def unfoldContLemma (structName lemName : Name) : TermElabM Unit := do
       let lps := (collectLevelParams (collectLevelParams {} type) value).params.toList
       addDecl (Declaration.thmDecl { name := lemName, levelParams := lps, type, value })
 
-/-- `Bla.mk_cont : ∀ ps {D} [Dom D] (g₁ : D → τ₁) … (gₙ : D → τₙ) (h : ∀ d, Shape.cond ⟨g₁ d, …⟩),
+/-- `Bla.mk_cont : ∀ ps {D} [Dom D] (g₁ : D → τ₁) … (gₙ : D → τₙ) (h : ∀ d, FixFunctor.cond ⟨g₁ d, …⟩),
 Cont g₁ → … → Cont gₙ → Cont (fun d => Bla.mk ps (g₁ d) … (gₙ d) (h d))`, its statement built from
 the type of `mk` (not elaborated from syntax), and proved by `nonpos_cont`. -/
 meta def mkContLemma (mkName lemName : Name) (nf : Nat) : TermElabM Unit := do
@@ -893,7 +844,7 @@ meta partial def conjProof (hs : Array Expr) (e : Expr) (i : Nat) : Expr × Nat 
   else if isForallTrue e then (forallTrueProof e, i)
   else (hs[i]!, i + 1)
 
-/-- `Bla.cond_intro : ∀ params f₁ … fₙ, C₁ → … → Cₘ → Shape.cond ⟨f₁, …, fₙ⟩`, with `C₁ … Cₘ` the
+/-- `Bla.cond_intro : ∀ params f₁ … fₙ, C₁ → … → Cₘ → FixFunctor.cond ⟨f₁, …, fₙ⟩`, with `C₁ … Cₘ` the
 conjuncts that are not `True` in the condition unfolded by `nonpos_cond_dsimp`: proved once per
 structure, so that `nonpos_cont` does not unfold the condition (and the kernel does not check the
 unfolding) in each `mk`. -/
@@ -978,16 +929,16 @@ meta def elabGroupLemmas (structs : Array Name) : CommandElabM Unit := do
       catch e => logWarning m!"nonpos_structure: no `cond_intro` lemma for {bla} ({e.toMessageData})"
       try liftTermElabM (unfoldContLemma bla (bla ++ `unfold_cont))
       catch e => logWarning m!"nonpos_structure: no `unfold_cont` lemma for {bla} ({e.toMessageData})"
-    -- `Bla.botTotal : ∀ ps, Fix.BotTotal F k`: only if instance search finds `Fix.BotTotal` for every
+    -- `Bla.recursive : ∀ ps, Fix.Recursive F k`: only if instance search finds `Fix.Recursive` for every
     -- value of the parameters (declared with the instance found, rather than searched for again)
-    let botName := bla ++ `botTotal
+    let botName := bla ++ `recursive
     let found ← liftTermElabM do
       try
         let some (ty, v) ← forallTelescope blaInfo.type fun xs _ => do
             -- `Bla ps` unfolds to `Fix F k`
             let e ← whnfR (mkAppN (mkConst bla (blaInfo.levelParams.map Level.param)) xs)
             unless e.isAppOfArity ``Fix 4 do return none
-            let b ← mkAppOptM ``Fix.BotTotal (e.getAppArgs.map some)
+            let b ← mkAppOptM ``Fix.Recursive (e.getAppArgs.map some)
             let some i ← synthInstance? b | return none
             return some (← mkForallFVars xs b, ← instantiateMVars (← mkLambdaFVars xs i))
           | return false
@@ -1007,6 +958,12 @@ meta def elabGroupLemmas (structs : Array Name) : CommandElabM Unit := do
 The theorems above, with their proofs, use only the standard axioms.  The build fails if this
 changes. -/
 
+/-- info: 'NonPos.FixFunctor.Cont.fold' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms FixFunctor.Cont.fold
+/-- info: 'NonPos.FixFunctor.Cont.fix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms FixFunctor.Cont.fix
+/-- info: 'NonPos.FixFunctor.Cont.app₂' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms FixFunctor.Cont.app₂
 /-- info: 'NonPos.Cont.fold' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Cont.fold
 /-- info: 'NonPos.Cont.fix' depends on axioms: [propext, Classical.choice, Quot.sound] -/

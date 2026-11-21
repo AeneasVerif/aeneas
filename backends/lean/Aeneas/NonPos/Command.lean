@@ -7,12 +7,12 @@ public import Aeneas.NonPos.Tactic
 /-!
 # `nonpos_structure`: the command
 
-With `Top.lean`, this file is the trusted surface of the library: the `nonpos_structure` command,
-a thin wrapper around `Fix` (section 1), and what the `nonpos_cont` tactic, which proves the
-condition of each structure, is expected to do (section 2).
+With `Top.lean` and section 1 of `Tactic.lean`, this file is the trusted surface of the library:
+the `nonpos_structure` command, a thin wrapper around `Fix` (section 1), and what the `nonpos_cont`
+tactic, which proves the condition of each structure, is expected to do (section 2).
 
-It imports `NonPos/Tactic.lean`, which is not part of the trusted surface and does not need to be
-read: the command uses it only to prove the `simp` lemmas it states (`nonpos_proj_mk`) and, after
+It imports `NonPos/Tactic.lean`, of which only section 1 is part of the trusted surface: the
+command uses the rest only to prove the `simp` lemmas it states (`nonpos_proj_mk`) and, after
 the definitions of a group, to prove lemmas about them for the tactic (`elabGroupLemmas`).  Every
 proof the tactic builds is checked by the kernel.
 -/
@@ -36,13 +36,13 @@ structure:
   the fields *as written*, with the structure names as parameters;
 * `G.F : G.I → Fam G.I → Type 1`, dispatching to the `Fields`;
 * `Bla Self := Fix G.F (.Bla Self)`;
-* `Bla.mk to_num add (h : Shape.cond G.F ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
+* `Bla.mk to_num add (h : FixFunctor.cond G.F ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk` (a projection of `mk` is
   the field), stated here and proved by the tactic `nonpos_proj_mk` of `NonPos/Tactic.lean`;
 * then, by `elabGroupLemmas` (section 2), the lemmas of `NonPos/Tactic.lean` (section 4 there).
 
-The command never inspects the field types: `Shape (G.F k)` is found by instance search, which can
+The command never inspects the field types: `FixFunctor (G.F k)` is found by instance search, which can
 only succeed through the instances of section 2 of `Top.lean`, and the types of `mk` and the
 projections are the user's own, checked by the kernel against `Fix`. -/
 
@@ -127,11 +127,11 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     -- `Example1.F`, `A.F`
   let shapeAlts ← ss.mapM fun s => do
     `(Parser.Term.matchAltExpr| | $(← idxOf s) => inferInstance)
-  elabCommand (← `(@[reducible] noncomputable instance $shapeId:ident : ∀ k, Shape ($fId k) $shapeAlts:matchAlt*))
+  elabCommand (← `(@[reducible] noncomputable instance $shapeId:ident : ∀ k, FixFunctor ($fId k) $shapeAlts:matchAlt*))
     -- `Example1.shape`, `A.shape`
-  -- its runtime implementation, which is never read (assumption 3 of section 3 of `Top.lean`)
+  -- its runtime implementation, which is never read (assumption 3 of section 4 of `Top.lean`)
   let shapeImplId := mkIdentFrom g (g.getId ++ `shapeImpl)
-  elabCommand (← `(@[instance_reducible] unsafe def $shapeImplId : ∀ k, Shape ($fId k) := fun _ => Shape.runtime))
+  elabCommand (← `(@[instance_reducible] unsafe def $shapeImplId : ∀ k, FixFunctor ($fId k) := fun _ => FixFunctor.runtime))
   elabCommand (← `(attribute [implemented_by $shapeImplId] $shapeId))  -- `Example1.shapeImpl`, `A.shapeImpl`
   -- The structures (all of them first: `mk` and the projections of one may mention another)
   for s in ss do
@@ -146,9 +146,9 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let fieldTuple                                              -- `⟨fa, ⟨⟩⟩`             `⟨to_nat, ⟨f, ⟨⟩⟩⟩`
       ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
-    -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 3 of `Top.lean`)
+    -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 4 of `Top.lean`)
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
-        (h : Shape.cond $fId (G := $fId $k) $fieldTuple) : $(s.name):ident $args* :=
+        (h : FixFunctor.cond $fId (G := $fId $k) $fieldTuple) : $(s.name):ident $args* :=
       Fix.fold $fId $fieldTuple h))  -- `Example1.mk`, `A.mk`, `B.mk`
     let fieldArgs ← s.fields.mapM fun (f, _) => `(@$f:ident)
     for (f, τ) in s.fields, j in List.range s.fields.size do
@@ -160,19 +160,20 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
       -- may only add declarations named after its theorem)
       let lemmaId := mkIdentFrom f (s.name.getId ++ f.getId.appendAfter "_mk") -- `A.fa_mk`    `Example1.to_nat_mk`
       elabCommand (← `(set_option Elab.async false in @[simp] theorem $lemmaId $impl* $fieldBinders*
-          (h : Shape.cond $fId (G := $fId $k) $fieldTuple) :
+          (h : FixFunctor.cond $fId (G := $fId $k) $fieldTuple) :
           @$projId $args* ($mkId $fieldArgs* h) = @$f := by nonpos_proj_mk))
 
 /-! ## 2. Continuity, and the `nonpos_cont` tactic
 
-The condition `Shape.cond` of a structure is a conjunction of `Cont` facts, one for each field that
-takes a dictionary of the group (`nonpos_cond_simp`, in `NonPos/Tactic.lean`, unfolds it into
-them).  Aeneas proves the condition of each `mk` it outputs with the tactic `nonpos_cont`, and the
+The condition `FixFunctor.cond` of a structure is a conjunction of `FixFunctor.Cont` facts, one for
+each field that takes a dictionary of the group (section 2 of `Top.lean`).  By definition, these are
+`Cont` facts at the orders of the model, which is how the tactic states them (`nonpos_cond_simp`, in
+`NonPos/Tactic.lean`, unfolds the condition into them).  Aeneas proves the condition of each `mk` it outputs with the tactic `nonpos_cont`, and the
 monotonicity obligation of each self-referential instance with
 `partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`.
 
-The tactic and the continuity theorems it applies are in `NonPos/Tactic.lean`, which is not part of
-the trusted surface: every proof it builds is checked by the kernel, so it cannot make a structure
+The tactic is in `NonPos/Tactic.lean` (from section 2 on) and the continuity theorems it applies in
+`NonPos/FormsProofs.lean`, which are not part of the trusted surface: every proof it builds is checked by the kernel, so it cannot make a structure
 contain anything that does not satisfy the condition.  What it is expected to do, which is checked
 by its tests but not guaranteed by this file, is:
 

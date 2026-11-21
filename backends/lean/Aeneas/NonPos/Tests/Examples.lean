@@ -36,20 +36,20 @@ abbrev Example1.Fields (Example1 : Type) : Type :=
 abbrev Example1.F : Example1.I → Fam Example1.I → Type
   | .Example1, X => Example1.Fields (X .Example1)
 
--- The shape, found by instance search: `Shape.prod (Shape.data Nat) (Shape.prod (Shape.arr …) Shape.unit)`.
-@[reducible] instance Example1.shape : ∀ k, Shape (Example1.F k)
+-- The shape, found by instance search: `FixFunctor.prod (FixFunctor.data Nat) (FixFunctor.prod (FixFunctor.arr …) FixFunctor.unit)`.
+@[reducible] instance Example1.shape : ∀ k, FixFunctor (Example1.F k)
   | .Example1 => inferInstance
--- Its runtime implementation, never read (section 3 of `Top.lean`, assumption 3).
-@[instance_reducible] unsafe def Example1.shapeImpl : ∀ k, Shape (Example1.F k) := fun _ => Shape.runtime
+-- Its runtime implementation, never read (section 4 of `Top.lean`, assumption 3).
+@[instance_reducible] unsafe def Example1.shapeImpl : ∀ k, FixFunctor (Example1.F k) := fun _ => FixFunctor.runtime
 attribute [implemented_by Example1.shapeImpl] Example1.shape
 
 -- The structure.
 abbrev Example1 : Type := Fix Example1.F .Example1
 
 -- `mk`, from the fields and the condition.  `macro_inline`, so that the fields are not evaluated
--- before `fold` delays them (section 3 of `Top.lean`).
+-- before `fold` delays them (section 4 of `Top.lean`).
 @[macro_inline] def Example1.mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
+    (h : FixFunctor.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
   Fix.fold Example1.F ⟨to_nat, f, ⟨⟩⟩ h
 
 -- The projections, with the types as written, and their `simp` lemmas (stated by section 1 of
@@ -58,25 +58,25 @@ abbrev Example1 : Type := Fix Example1.F .Example1
 def Example1.to_nat (d : Example1) : Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold Example1.F d))
 @[simp] theorem Example1.to_nat_mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
+    (h : FixFunctor.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
     Example1.to_nat (Example1.mk to_nat f h) = to_nat := by
   simp only [Example1.to_nat, Example1.mk, Fix.unfold_fold]
 
 def Example1.f (d : Example1) : Example1 → Option Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (@PProd.snd _ _ (Fix.unfold Example1.F d)))
 @[simp] theorem Example1.f_mk (to_nat : Nat) (f : Example1 → Option Nat)
-    (h : Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
+    (h : FixFunctor.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
     Example1.f (Example1.mk to_nat f h) = f := by
   simp only [Example1.f, Example1.mk, Fix.unfold_fold]
 
--- No `Example1.botTotal` (section 4 of `Tactic.lean`): the plain field `to_nat : Nat` has no least
--- element, so `⊥` is not total in `Example1`, which is not a `CCPO` (and cannot be defined by
--- `partial_fixpoint`).
+-- No `Example1.recursive` (section 4 of `Tactic.lean`): the plain field `to_nat : Nat` is data, so
+-- `Example1` is not `Fix.Recursive` (section 3 of `Top.lean`).  It is not a `CCPO`, and no instance of
+-- it can be defined by `partial_fixpoint`.
 
 -- `mk` is continuous in its fields (section 4 of `Tactic.lean`): proved once here, and used by
 -- `nonpos_cont` on any `mk` whose fields vary, instead of going through the tuple of fields.
 theorem Example1.mk_cont {D : Type _} [Dom D] (to_nat : D → Nat) (f : D → Example1 → Option Nat)
-    (h : ∀ d, Shape.cond Example1.F (G := Example1.F Example1.I.Example1) ⟨to_nat d, f d, ⟨⟩⟩)
+    (h : ∀ d, FixFunctor.cond Example1.F (G := Example1.F Example1.I.Example1) ⟨to_nat d, f d, ⟨⟩⟩)
     (_ : Cont to_nat) (_ : Cont f) :
     Cont (fun d => Example1.mk (to_nat d) (f d) (h d)) := by
   nonpos_cont 5000
@@ -86,7 +86,7 @@ attribute [nonpos_continuous] Example1.mk_cont
 -- condition unfolded by `nonpos_cond_dsimp`): `nonpos_cont` applies it to the condition of each `mk`,
 -- instead of unfolding the condition there.  The conjuncts that are `True` are left out.
 theorem Example1.cond_intro (to_nat : Nat) (f : Example1 → Option Nat) (h0 : Cont f) :
-    Shape.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩ :=
+    FixFunctor.cond Example1.F (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩ :=
   ⟨trivial, ⟨h0, fun _ => trivial⟩, trivial⟩
 
 -- `Fix.unfold` is continuous at the `Dom` that instance search builds for the tuple of fields
@@ -121,7 +121,7 @@ nonpos_structure Example2 : Type where
 #check @Example2.mk_cont
 #check @Example2.cond_intro
 #check @Example2.unfold_cont
--- (no `Example2.botTotal`, as for `Example1`)
+-- (no `Example2.recursive`, as for `Example1`)
 
 def ex2 : Example2 := Example2.mk 3 (fun d => d.f d >>= fun n => some (n + 1)) (by nonpos_cont)
 example : ex2.to_nat = 3 := by simp [ex2]
@@ -155,12 +155,12 @@ abbrev A.F : A.I → Fam A.I → Type 1
   | .A Self, X => A.Fields (fun Self => X (.A Self)) (fun Self => X (.B Self)) Self
   | .B Self, X => B.Fields (fun Self => X (.A Self)) (fun Self => X (.B Self)) Self
 
--- Shape of `A.F (.A Self)`: `prod (pi Type (fun O => arr (.B O) (pi Self (pi O (monad Option Nat)))))) unit`.
-@[reducible] instance A.shape : ∀ k, Shape (A.F k)
+-- FixFunctor of `A.F (.A Self)`: `prod (pi Type (fun O => arr (.B O) (pi Self (pi O (monad Option Nat)))))) unit`.
+@[reducible] instance A.shape : ∀ k, FixFunctor (A.F k)
   | .A Self => inferInstance
   | .B Self => inferInstance
--- Its runtime implementation, never read (section 3 of `Top.lean`, assumption 3).
-@[instance_reducible] unsafe def A.shapeImpl : ∀ k, Shape (A.F k) := fun _ => Shape.runtime
+-- Its runtime implementation, never read (section 4 of `Top.lean`, assumption 3).
+@[instance_reducible] unsafe def A.shapeImpl : ∀ k, FixFunctor (A.F k) := fun _ => FixFunctor.runtime
 attribute [implemented_by A.shapeImpl] A.shape
 
 -- Both structures, before any `mk` or projection (those of one mention the other).
@@ -168,45 +168,46 @@ abbrev A (Self : Type) : Type 1 := Fix A.F (.A Self)
 abbrev B (Self : Type) : Type 1 := Fix A.F (.B Self)
 
 @[macro_inline] def A.mk {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
-    (h : Shape.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩) : A Self :=
+    (h : FixFunctor.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩) : A Self :=
   Fix.fold A.F ⟨fa, ⟨⟩⟩ h
 def A.fa {Self : Type} (d : A Self) : ∀ {O : Type} (BInst : B O), Self → O → Option Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold A.F d))
 @[simp] theorem A.fa_mk {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
-    (h : Shape.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩) :
+    (h : FixFunctor.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩) :
     @A.fa Self (A.mk fa h) = @fa := by
   simp only [A.fa, A.mk, Fix.unfold_fold]
 
 @[macro_inline] def B.mk {Self : Type} (fb : ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
-    (h : Shape.cond A.F (G := A.F (.B Self)) ⟨fb, ⟨⟩⟩) : B Self :=
+    (h : FixFunctor.cond A.F (G := A.F (.B Self)) ⟨fb, ⟨⟩⟩) : B Self :=
   Fix.fold A.F ⟨fb, ⟨⟩⟩ h
 def B.fb {Self : Type} (d : B Self) : ∀ {O : Type} (AInst : A O), Self → O → Option Nat :=
   no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold A.F d))
 @[simp] theorem B.fb_mk {Self : Type} (fb : ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
-    (h : Shape.cond A.F (G := A.F (.B Self)) ⟨fb, ⟨⟩⟩) :
+    (h : FixFunctor.cond A.F (G := A.F (.B Self)) ⟨fb, ⟨⟩⟩) :
     @B.fb Self (B.mk fb h) = @fb := by
   simp only [B.fb, B.mk, Fix.unfold_fold]
 
--- `⊥` is total in `A` and in `B`: all their fields are methods (section 4 of `Tactic.lean`).  So both are
--- `CCPO`s, and the instance search for it no longer goes through their fields.
-instance (priority := high) A.botTotal {Self : Type} : Fix.BotTotal A.F (A.I.A Self) := inferInstance
-instance (priority := high) B.botTotal {Self : Type} : Fix.BotTotal A.F (A.I.B Self) := inferInstance
+-- `A` and `B` are `Fix.Recursive` (section 3 of `Top.lean`): all their fields are methods.  So both are
+-- `CCPO`s; with these instances (section 4 of `Tactic.lean`), the instance search for it no longer goes
+-- through their fields.
+instance (priority := high) A.recursive {Self : Type} : Fix.Recursive A.F (A.I.A Self) := inferInstance
+instance (priority := high) B.recursive {Self : Type} : Fix.Recursive A.F (A.I.B Self) := inferInstance
 
 -- `mk` of each structure is continuous in its fields (section 4 of `Tactic.lean`).
 theorem A.mk_cont {Self : Type} {D : Type _} [Dom D] (fa : D → ∀ {O : Type} (BInst : B O), Self → O → Option Nat)
-    (h : ∀ d, Shape.cond A.F (G := A.F (A.I.A Self)) ⟨fa d, ⟨⟩⟩) (_ : Cont fa) :
+    (h : ∀ d, FixFunctor.cond A.F (G := A.F (A.I.A Self)) ⟨fa d, ⟨⟩⟩) (_ : Cont fa) :
     Cont (fun d => A.mk (fa d) (h d)) := by
   nonpos_cont 5000
 attribute [nonpos_continuous] A.mk_cont
 theorem B.mk_cont {Self : Type} {D : Type _} [Dom D] (fb : D → ∀ {O : Type} (AInst : A O), Self → O → Option Nat)
-    (h : ∀ d, Shape.cond A.F (G := A.F (A.I.B Self)) ⟨fb d, ⟨⟩⟩) (_ : Cont fb) :
+    (h : ∀ d, FixFunctor.cond A.F (G := A.F (A.I.B Self)) ⟨fb d, ⟨⟩⟩) (_ : Cont fb) :
     Cont (fun d => B.mk (fb d) (h d)) := by
   nonpos_cont 5000
 attribute [nonpos_continuous] B.mk_cont
 
 -- The condition of `A.mk`, unfolded: `fa` is continuous in its dictionary argument, for every `O`.
 example {Self : Type} (fa : ∀ {O : Type} (BInst : B O), Self → O → Option Nat) :
-    Shape.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩ ↔
+    FixFunctor.cond A.F (G := A.F (.A Self)) ⟨fa, ⟨⟩⟩ ↔
       ∀ O : Type, Cont (fun BInst : B O => (fa BInst : Self → O → Option Nat)) := by
   nonpos_cond_simp
 

@@ -14,32 +14,32 @@ universe pu v u w w₁ w₂
 
 attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod NonPosMonad.dom
 attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO Pointed.monad FixCompat.pointed FixCompat.ofCCPO FixCompat.monad FixCompat.pi FixCompat.prod FixCompat.pprod
-attribute [local instance] Fix.dom Shape.BotTotal.ofPointed Fix.BotTotal.ofShape Fix.pointed
+attribute [local instance] Fix.dom FixFunctor.Recursive.ofMethods Fix.Recursive.ofShape Fix.pointed
 
 
 section Shapes
 variable {I : Type pu}
 
 theorem pointed_const (A : Type w) [Dom A] [Pointed A] :
-    ∀ D T y, (Model.Shape.const.{pu, v} (I := I) A).total D T y := Model.Shape.pointed_const A
-theorem pointed_pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
-    ∀ D T' y, (Model.Shape.pi T G).total D T' y := Model.Shape.pointed_pi T G
-theorem pointed_arr (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
-    ∀ D T y, (Model.Shape.arr k G).total D T y := Model.Shape.pointed_arr k G
-theorem pointed_prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G]
-    [Shape.Pointed F] [Shape.Pointed G] : ∀ D T y, (Model.Shape.prod F G).total D T y := Model.Shape.pointed_prod F G
+    ∀ D T y, (Model.FixFunctor.const.{pu, v} (I := I) A).total D T y := Model.FixFunctor.pointed_const A
+theorem pointed_pi (T : Type w₁) (G : T → Fam.{pu, v} I → Type w₂) [∀ t, FixFunctor (G t)] [∀ t, FixFunctor.Methods (G t)] :
+    ∀ D T' y, (Model.FixFunctor.pi T G).total D T' y := Model.FixFunctor.pointed_pi T G
+theorem pointed_arr (k : I) (G : Fam.{pu, v} I → Type w) [FixFunctor G] [FixFunctor.Methods G] :
+    ∀ D T y, (Model.FixFunctor.arr k G).total D T y := Model.FixFunctor.pointed_arr k G
+theorem pointed_prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [FixFunctor F] [FixFunctor G]
+    [FixFunctor.Methods F] [FixFunctor.Methods G] : ∀ D T y, (Model.FixFunctor.prod F G).total D T y := Model.FixFunctor.pointed_prod F G
 
-variable (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
-theorem botTotal_prod (G₁ : Fam.{pu, v} I → Type w) (G₂ : Fam.{pu, v} I → Type w₁) [Shape G₁] [Shape G₂]
-    [Shape.BotTotal F G₁] [Shape.BotTotal F G₂] :
-    (Model.Shape.prod G₁ G₂).total (Fix.D F) (Fix.T F) NonPos.Domain.OmegaComplete.bottom := Model.Shape.botTotal_prod F G₁ G₂
-theorem botTotal_var (k : I) [Fix.BotTotal F k] :
-    (Model.Shape.var k).total (Fix.D F) (Fix.T F) NonPos.Domain.OmegaComplete.bottom := Model.Shape.botTotal_var F k
+variable (F : I → Fam.{pu, v} I → Type v) [∀ k, FixFunctor (F k)]
+theorem recursive_prod (G₁ : Fam.{pu, v} I → Type w) (G₂ : Fam.{pu, v} I → Type w₁) [FixFunctor G₁] [FixFunctor G₂]
+    [FixFunctor.Recursive F G₁] [FixFunctor.Recursive F G₂] :
+    (Model.FixFunctor.prod G₁ G₂).total (Fix.D F) (Fix.T F) NonPos.Domain.OmegaComplete.bottom := Model.FixFunctor.recursive_prod F G₁ G₂
+theorem recursive_var (k : I) [Fix.Recursive F k] :
+    (Model.FixFunctor.var k).total (Fix.D F) (Fix.T F) NonPos.Domain.OmegaComplete.bottom := Model.FixFunctor.recursive_var F k
 end Shapes
 
 section Fix
-variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
-theorem unfold_fold {k : I} (x : F k (Fix F)) (h : Model.Shape.cond x) :
+variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, FixFunctor (F k)]
+theorem unfold_fold {k : I} (x : F k (Fix F)) (h : Model.FixFunctor.cond x) :
     Model.Fix.unfold F (Model.Fix.fold F x h) = x := Model.Fix.unfold_fold F x h
 end Fix
 
@@ -75,11 +75,11 @@ theorem Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonP
     (hk : ∀ a, Cont (inst_1 := NonPosMonad.dom β) (fun d => k d a)) :
     Cont (inst_1 := NonPosMonad.dom β) (fun d => m d >>= k d) := NonPos.Model.Cont.bind hm hk
 
-variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
+variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, FixFunctor (F k)]
 theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
-    Cont (inst_1 := Shape.dom (F := F k) (Fix F)) (fun d => Model.Fix.unfold F (f d)) := NonPos.Model.Cont.unfold F hf
-theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Model.Shape.cond (f d))
-    (hf : Cont (inst_1 := Shape.dom (F := F k) (Fix F)) f) : Cont (fun d => Model.Fix.fold F (f d) (h d)) :=
+    Cont (inst_1 := FixFunctor.dom (F := F k) (Fix F)) (fun d => Model.Fix.unfold F (f d)) := NonPos.Model.Cont.unfold F hf
+theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, Model.FixFunctor.cond (f d))
+    (hf : Cont (inst_1 := FixFunctor.dom (F := F k) (Fix F)) f) : Cont (fun d => Model.Fix.fold F (f d) (h d)) :=
   NonPos.Model.Cont.fold F h hf
 
 theorem Cont.monotone {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [Lean.Order.CCPO A] [Lean.Order.CCPO B]

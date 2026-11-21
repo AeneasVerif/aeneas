@@ -50,70 +50,72 @@ section Pieces
 variable {I : Type pu}
 
 /-- Data, with the discrete order. -/
-@[reducible] def Shape.dataInst (A : Type w) : Shape (fun _ : (I → Type v) => A) where
+@[reducible] def FixFunctor.dataInst (A : Type w) : FixFunctor (fun _ : (I → Type v) => A) where
   cond _ := True
-  sd := letI : Dom A := Dom.discrete A; Model.Shape.data A
+  sd := letI : Dom A := Dom.discrete A; Model.FixFunctor.data A
 /-- The value of a supported monad, with its order and least element. -/
-@[reducible] def Shape.monadInst (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
-    Shape (fun _ : (I → Type v) => M α) where
+@[reducible] def FixFunctor.monadInst (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    FixFunctor (fun _ : (I → Type v) => M α) where
   cond _ := True
-  sd := Model.Shape.const (M α)
+  sd := Model.FixFunctor.const (M α)
 /-- `PUnit`, with its order and least element. -/
-@[reducible] def Shape.unitInst : Shape (fun _ : (I → Type v) => PUnit.{w+1}) where
+@[reducible] def FixFunctor.unitInst : FixFunctor (fun _ : (I → Type v) => PUnit.{w+1}) where
   cond _ := True
-  sd := Model.Shape.const PUnit
+  sd := Model.FixFunctor.const PUnit
 /-- A dictionary of another group `H'`, with the order of dictionaries. -/
-@[reducible] def Shape.dictInst {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I') :
-    Shape (fun _ : (I → Type v) => Fix H' k) where
+@[reducible] def FixFunctor.dictInst {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, FixFunctor (H' k)] (k : I') :
+    FixFunctor (fun _ : (I → Type v) => Fix H' k) where
   cond _ := True
-  sd := letI := Fix.dom H' k; Model.Shape.data (Fix H' k)
-/-- A dictionary of another group `H'` in which `⊥` is total, with the order of dictionaries and `⊥`. -/
-@[reducible] def Shape.dictPointedInst {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)]
-    (k : I') [Fix.BotTotal H' k] : Shape (fun _ : (I → Type v) => Fix H' k) where
+  sd := letI := Fix.dom H' k; Model.FixFunctor.data (Fix H' k)
+/-- A dictionary of another group `H'` that is `Fix.Recursive` (`⊥` is total in it), with the order of
+dictionaries and `⊥`. -/
+@[reducible] def FixFunctor.dictRecInst {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, FixFunctor (H' k)]
+    (k : I') [Fix.Recursive H' k] : FixFunctor (fun _ : (I → Type v) => Fix H' k) where
   cond _ := True
-  sd := letI := Fix.dom H' k; letI := Fix.pointed (k := k) H'; Model.Shape.const (Fix H' k)
-@[reducible] def Shape.varInst (k : I) : Shape (fun X : (I → Type v) => X k) where
+  sd := letI := Fix.dom H' k; letI := Fix.pointed (k := k) H'; Model.FixFunctor.const (Fix H' k)
+@[reducible] def FixFunctor.varInst (k : I) : FixFunctor (fun X : (I → Type v) => X k) where
   cond _ := True
-  sd := Model.Shape.var k
-@[reducible] def Shape.piInst (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)]
-    [∀ t, Shape.Pointed (G t)] : Shape (fun X => (t : T) → G t X) where
-  cond f := ∀ t, Model.Shape.cond (f t)
-  sd := Model.Shape.pi T G
-@[reducible] def Shape.arrInst (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] :
-    Shape (fun X => X k → G X) where
-  cond {X} _ f := Cont (inst_1 := Shape.dom G X) f ∧ ∀ d, Model.Shape.cond (f d)
-  sd := Model.Shape.arr k G
-@[reducible] def Shape.prodInst (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G] :
-    Shape (fun X => F X ×' G X) where
-  cond x := Model.Shape.cond x.1 ∧ Model.Shape.cond x.2
-  sd := Model.Shape.prod F G
-theorem Shape.monadIsPointed (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
-    @Shape.Pointed _ (fun _ : (I → Type v) => M α) (Shape.monadInst M α) :=
-  @Shape.Pointed.mk _ _ (Shape.monadInst M α) (Proofs.pointed_const (M α))
-theorem Shape.unitIsPointed : @Shape.Pointed _ (fun _ : (I → Type v) => PUnit.{w+1}) Shape.unitInst :=
-  @Shape.Pointed.mk _ _ Shape.unitInst (Proofs.pointed_const PUnit)
-theorem Shape.dictIsPointed {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, Shape (H' k)] (k : I')
-    [Fix.BotTotal H' k] : @Shape.Pointed _ (fun _ : (I → Type v) => Fix H' k) (Shape.dictPointedInst H' k) :=
-  @Shape.Pointed.mk _ _ (Shape.dictPointedInst H' k) (letI := Fix.dom H' k; letI := Fix.pointed (k := k) H'; Proofs.pointed_const (Fix H' k))
+  sd := Model.FixFunctor.var k
+@[reducible] def FixFunctor.piInst (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, FixFunctor (G t)]
+    [∀ t, FixFunctor.Methods (G t)] : FixFunctor (fun X => (t : T) → G t X) where
+  cond f := ∀ t, Model.FixFunctor.cond (f t)
+  sd := Model.FixFunctor.pi T G
+@[reducible] def FixFunctor.arrInst (k : I) (G : (I → Type v) → Type w) [FixFunctor G] [FixFunctor.Methods G] :
+    FixFunctor (fun X => X k → G X) where
+  cond {X} _ f := Cont (inst_1 := FixFunctor.dom G X) f ∧ ∀ d, Model.FixFunctor.cond (f d)
+  sd := Model.FixFunctor.arr k G
+@[reducible] def FixFunctor.prodInst (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [FixFunctor F] [FixFunctor G] :
+    FixFunctor (fun X => F X ×' G X) where
+  cond x := Model.FixFunctor.cond x.1 ∧ Model.FixFunctor.cond x.2
+  sd := Model.FixFunctor.prod F G
+theorem FixFunctor.monadIsMethods (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    @FixFunctor.Methods _ (fun _ : (I → Type v) => M α) (FixFunctor.monadInst M α) :=
+  @FixFunctor.Methods.mk _ _ (FixFunctor.monadInst M α) (Proofs.pointed_const (M α))
+theorem FixFunctor.unitIsMethods : @FixFunctor.Methods _ (fun _ : (I → Type v) => PUnit.{w+1}) FixFunctor.unitInst :=
+  @FixFunctor.Methods.mk _ _ FixFunctor.unitInst (Proofs.pointed_const PUnit)
+theorem FixFunctor.dictIsMethods {I' : Type pu} (H' : I' → (I' → Type v) → Type v) [∀ k, FixFunctor (H' k)] (k : I')
+    [Fix.Recursive H' k] : @FixFunctor.Methods _ (fun _ : (I → Type v) => Fix H' k) (FixFunctor.dictRecInst H' k) :=
+  @FixFunctor.Methods.mk _ _ (FixFunctor.dictRecInst H' k) (letI := Fix.dom H' k; letI := Fix.pointed (k := k) H'; Proofs.pointed_const (Fix H' k))
 end Pieces
 
 /-! ## 3. Continuity at the fixed point of a group -/
 
 section Fix
-variable {I : Type pu} (H : I → (I → Type v) → Type v) [∀ k, Shape (H k)]
+variable {I : Type pu} (H : I → (I → Type v) → Type v) [∀ k, FixFunctor (H k)]
 
 instance (k : I) : Dom (Fix H k) := Fix.dom H k
+instance (k : I) [Fix.Recursive H k] : Pointed (Fix H k) := Fix.pointed H
 
 /-- `f`, between two bodies over the structures of the group `H`, is continuous: for the orders
 that the shapes `G₁` and `G₂` give (on a dictionary, the order of the dictionaries). -/
-abbrev Shape.Cont {G₁ : (I → Type v) → Type w₁} [iG₁ : Shape G₁] {G₂ : (I → Type v) → Type w₂} [iG₂ : Shape G₂]
+abbrev FixFunctor.Cont {G₁ : (I → Type v) → Type w₁} [iG₁ : FixFunctor G₁] {G₂ : (I → Type v) → Type w₂} [iG₂ : FixFunctor G₂]
     (f : G₁ (Fix H) → G₂ (Fix H)) : Prop :=
-  @NonPos.Cont _ _ (Shape.dom G₁ (Fix H)) (Shape.dom G₂ (Fix H)) f
+  @NonPos.Cont _ _ (FixFunctor.dom G₁ (Fix H)) (FixFunctor.dom G₂ (Fix H)) f
 
 /-- The values of `G` over the structures of `H` are a type that `partial_fixpoint` may recurse
 through: its `Lean.Order.CCPO` has the order of the shape. -/
-abbrev Shape.FixCompat (G : (I → Type v) → Type w) [Shape G] [Lean.Order.CCPO (G (Fix H))] : Prop :=
-  @NonPos.FixCompat (G (Fix H)) (Shape.dom G (Fix H)) _
+abbrev FixFunctor.FixCompat (G : (I → Type v) → Type w) [FixFunctor G] [Lean.Order.CCPO (G (Fix H))] : Prop :=
+  @NonPos.FixCompat (G (Fix H)) (FixFunctor.dom G (Fix H)) _
 end Fix
 
 

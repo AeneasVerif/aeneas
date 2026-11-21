@@ -169,7 +169,7 @@ example : Cont (fun inst : Bla Int => (inst.to_num 1).getD 0 + 1) := by nonpos_c
 -- error: nonpos_cont: continuity of Option.rec … is not known
 ```
 and correctly so: the result type `Int` has no undefined value, so a method returning it could
-only be constant (see `Shape.Pointed` in `Top.lean`).  The same body wrapped in the monad,
+only be constant (see `FixFunctor.Methods` in `Top.lean`).  The same body wrapped in the monad,
 `do let i ← inst.to_num 1; pure (i + 1)`, is accepted by part 4. -/
 
 end
