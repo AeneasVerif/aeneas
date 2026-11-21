@@ -1,15 +1,19 @@
 module
 public import Lean
-public import Aeneas.NonPos.Top
+public import Aeneas.NonPos.FormsProofs
 
 @[expose] public section
 /-!
 # The `nonpos_cont` tactic
 
-Not part of the trusted surface: `Command.lean` (section 2) states what this file is expected to
-do, and every proof built here is checked by the kernel.  This file contains:
+Section 0 is read with `Top.lean`: it states the forms of term that satisfy the condition on
+dictionary binders (`Shape.Cont`), which is how one sees that the condition holds of what Aeneas
+outputs.  The rest is not part of the trusted surface: `Command.lean` (section 2) states what it is
+expected to do, and every proof built here is checked by the kernel.  This file contains:
 
-1. the continuity theorems, one per form of term, and the `@[nonpos_continuous]` attribute;
+0. the forms, on `Shape.Cont`;
+1. the same forms at the orders of the model, which the tactic uses, and the `@[nonpos_continuous]`
+   attribute;
 2. the `nonpos_cont` tactic, a thin wrapper around those theorems;
 3. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
    so that it does not have to prove them again at each use;
@@ -22,9 +26,103 @@ namespace NonPos
 open Lean Elab Command Term Meta
 noncomputable section
 
-universe pu v u w w₁ w₂
+universe pu v u w w₁ w₂ w₃
 
-/-! ## 1. The forms
+/-! ## 0. The forms
+
+`Shape.Cont H f` (`Top.lean`): `f`, from the values of a body `G₁` to those of a body `G₂` over the
+structures of the group `H`, satisfies the condition of a dictionary binder.  It holds of every term
+built from the forms below, where `d` is the varying dictionary (or a value built from it).  A
+definition is unfolded; a `partial_fixpoint` (or loop) is `Lean.Order.fix`.  Each form is proved
+from the model, in `FormsProofs.lean` (`Proofs.ShapeCont`). -/
+
+section Forms
+variable {I : Type pu} {H : I → (I → Type v) → Type v} [∀ k, Shape (H k)]
+  {G₁ : (I → Type v) → Type w₁} [Shape G₁]
+
+/-- Constants and the identity. -/
+theorem Shape.Cont.const {G : (I → Type v) → Type w₂} [Shape G] (b : G (Fix H)) :
+    Shape.Cont H (G₁ := G₁) (fun _ => b) :=
+  Proofs.ShapeCont.const b
+theorem Shape.Cont.id : Shape.Cont H (G₁ := G₁) (G₂ := G₁) (fun d => d) :=
+  Proofs.ShapeCont.id
+/-- Lambda (pointwise), and application to an argument not depending on `d`. -/
+theorem Shape.Cont.lam {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
+    {f : G₁ (Fix H) → (t : T) → G t (Fix H)} (h : ∀ t, Shape.Cont H (fun d => f d t)) :
+    Shape.Cont H (G₂ := fun X => (t : T) → G t X) f :=
+  Proofs.ShapeCont.lam h
+theorem Shape.Cont.app {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
+    {f : G₁ (Fix H) → (t : T) → G t (Fix H)} (hf : Shape.Cont H (G₂ := fun X => (t : T) → G t X) f) (t : T) :
+    Shape.Cont H (fun d => f d t) :=
+  Proofs.ShapeCont.app hf t
+/-- Application to a dictionary depending on `d`. -/
+theorem Shape.Cont.app₂ {k : I} {G : (I → Type v) → Type w₂} [Shape G] [Shape.Pointed G]
+    {f : G₁ (Fix H) → Fix H k → G (Fix H)} {a : G₁ (Fix H) → Fix H k}
+    (hf : Shape.Cont H (G₂ := fun X => X k → G X) f) (hc : ∀ d, Shape.Cont H (G₁ := fun X => X k) (f d))
+    (ha : Shape.Cont H (G₂ := fun X => X k) a) : Shape.Cont H (fun d => f d (a d)) :=
+  Proofs.ShapeCont.app₂ hf hc ha
+/-- Pairs. -/
+theorem Shape.Cont.pair {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [Shape G] [Shape G']
+    {f : G₁ (Fix H) → G (Fix H)} {g : G₁ (Fix H) → G' (Fix H)} (hf : Shape.Cont H f) (hg : Shape.Cont H g) :
+    Shape.Cont H (G₂ := fun X => G X ×' G' X) (fun d => (⟨f d, g d⟩ : G (Fix H) ×' G' (Fix H))) :=
+  Proofs.ShapeCont.pair hf hg
+theorem Shape.Cont.fst {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [Shape G] [Shape G']
+    {f : G₁ (Fix H) → G (Fix H) ×' G' (Fix H)}
+    (hf : Shape.Cont H (G₂ := fun X => G X ×' G' X) f) : Shape.Cont H (fun d => (f d).1) :=
+  Proofs.ShapeCont.fst hf
+theorem Shape.Cont.snd {G : (I → Type v) → Type w₂} {G' : (I → Type v) → Type w₃} [Shape G] [Shape G']
+    {f : G₁ (Fix H) → G (Fix H) ×' G' (Fix H)}
+    (hf : Shape.Cont H (G₂ := fun X => G X ×' G' X) f) : Shape.Cont H (fun d => (f d).2) :=
+  Proofs.ShapeCont.snd hf
+/-- A condition not depending on `d`. -/
+theorem Shape.Cont.ite {G : (I → Type v) → Type w₂} [Shape G] (c : Prop) [Decidable c] {t e : G₁ (Fix H) → G (Fix H)}
+    (ht : Shape.Cont H t) (he : Shape.Cont H e) : Shape.Cont H (fun d => if c then t d else e d) :=
+  Proofs.ShapeCont.ite c ht he
+theorem Shape.Cont.dite {G : (I → Type v) → Type w₂} [Shape G] (c : Prop) [Decidable c]
+    {t : c → G₁ (Fix H) → G (Fix H)} {e : ¬c → G₁ (Fix H) → G (Fix H)}
+    (ht : ∀ h, Shape.Cont H (t h)) (he : ∀ h, Shape.Cont H (e h)) :
+    Shape.Cont H (fun d => if h : c then t h d else e h d) :=
+  Proofs.ShapeCont.dite c ht he
+/-- `pure` and `bind`, for any supported monad. -/
+theorem Shape.Cont.pure {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α : Type u}
+    {a : G₁ (Fix H) → α} (ha : Shape.Cont H (G₂ := fun _ => α) (iG₂ := Shape.data α) a) :
+    Shape.Cont H (G₂ := fun _ => M α) (fun d => (Pure.pure (a d) : M α)) :=
+  Proofs.ShapeCont.pure ha
+theorem Shape.Cont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u}
+    {m : G₁ (Fix H) → M α} {k : G₁ (Fix H) → α → M β}
+    (hm : Shape.Cont H (G₂ := fun _ => M α) m) (hk : ∀ a, Shape.Cont H (G₂ := fun _ => M β) (fun d => k d a)) :
+    Shape.Cont H (G₂ := fun _ => M β) (fun d => m d >>= k d) :=
+  Proofs.ShapeCont.bind hm hk
+/-- The fields of a dictionary depending on `d`, and building one. -/
+theorem Shape.Cont.unfold {k : I} {g : G₁ (Fix H) → Fix H k} (hg : Shape.Cont H (G₂ := fun X => X k) g) :
+    Shape.Cont H (G₂ := H k) (fun d => Fix.unfold H (g d)) :=
+  Proofs.ShapeCont.unfold hg
+theorem Shape.Cont.fold {k : I} {f : G₁ (Fix H) → H k (Fix H)} (h : ∀ d, Shape.cond H (f d))
+    (hf : Shape.Cont H (G₂ := H k) f) : Shape.Cont H (G₂ := fun X => X k) (fun d => Fix.fold H (f d) (h d)) :=
+  Proofs.ShapeCont.fold h hf
+/-- Fixed points (`partial_fixpoint`, loops), through a type with `Shape.FixCompat` (below). -/
+theorem Shape.Cont.fix {G : (I → Type v) → Type w₂} [Shape G] [Lean.Order.CCPO (G (Fix H))] [Shape.FixCompat H G]
+    {f : G₁ (Fix H) → G (Fix H) → G (Fix H)} {hm : ∀ d, Lean.Order.monotone (f d)}
+    (hf : Shape.Cont H (G₁ := fun X => G₁ X ×' G X) (fun p => f p.1 p.2)) :
+    Shape.Cont H (fun d => Lean.Order.fix (f d) (hm d)) :=
+  Proofs.ShapeCont.fix hf
+/-- What `partial_fixpoint` asks of a self-referential instance. -/
+theorem Shape.Cont.monotone {G₂ : (I → Type v) → Type w₂} [Shape G₂] [Lean.Order.CCPO (G₁ (Fix H))]
+    [Lean.Order.CCPO (G₂ (Fix H))] [Shape.FixCompat H G₁] [Shape.FixCompat H G₂] {f : G₁ (Fix H) → G₂ (Fix H)}
+    (h : Shape.Cont H f) : Lean.Order.monotone f :=
+  Proofs.ShapeCont.monotone h
+/-! `Shape.FixCompat`: the values of a supported monad, functions into such types, and the
+structures in which `⊥` is total. -/
+instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) :
+    Shape.FixCompat H (fun _ => M α) := FixCompat.monad α
+instance {T : Type w₂} {G : T → (I → Type v) → Type w₃} [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)]
+    [∀ t, Lean.Order.CCPO (G t (Fix H))] [∀ t, Shape.FixCompat H (G t)] :
+    Shape.FixCompat H (fun X => (t : T) → G t X) :=
+  Proofs.ShapeCont.fixCompat_pi
+instance (k : I) [Fix.BotTotal H k] : Shape.FixCompat H (fun X => X k) := Fix.fixCompat H k
+end Forms
+
+/-! ## 1. The forms, at the orders (used by the tactic)
 
 Everything the `nonpos_cont` tactic knows is one of the statements below, all of the shape
 `Cont (fun d => ‹form›)`.  `D` is the type of the varying dictionary (or tuple of dictionaries).

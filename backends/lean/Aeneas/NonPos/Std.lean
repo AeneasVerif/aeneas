@@ -48,4 +48,20 @@ theorem Cont.result_bind {A B : Type u} {m : D → Result A} {k : D → A → Re
 
 end
 
+/-! The same forms on `Shape.Cont` (as in section 0 of `Tactic.lean`). -/
+section
+universe pu v w₁
+variable {I : Type pu} {H : I → (I → Type v) → Type v} [∀ k, Shape (H k)]
+  {G₁ : (I → Type v) → Type w₁} [Shape G₁]
+
+theorem Shape.Cont.result_ok {A : Type u} {a : G₁ (Fix H) → A}
+    (ha : Shape.Cont H (G₂ := fun _ => A) (iG₂ := Shape.data A) a) :
+    Shape.Cont H (G₂ := fun _ => Result A) (fun d => Result.ok (a d)) :=
+  Shape.Cont.pure (M := Result) ha
+theorem Shape.Cont.result_bind {A B : Type u} {m : G₁ (Fix H) → Result A} {k : G₁ (Fix H) → A → Result B}
+    (hm : Shape.Cont H (G₂ := fun _ => Result A) m) (hk : ∀ a, Shape.Cont H (G₂ := fun _ => Result B) (fun d => k d a)) :
+    Shape.Cont H (G₂ := fun _ => Result B) (fun d => Aeneas.Std.bind (m d) (k d)) :=
+  Shape.Cont.bind (M := Result) hm hk
+end
+
 end NonPos.Std

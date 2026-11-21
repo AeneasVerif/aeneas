@@ -42,7 +42,7 @@ variable {I : Type pu}
 /-! `Shape.cond H x` is the condition of a body `x : G (Fix H)` over the structures of the group
 `H`: for `G = H k`, the condition for folding `x` into `Fix H k` (section 2).  After each piece is
 what it requires of a body (by `Iff.rfl`): trivial on plain fields, pointwise through binders,
-componentwise on products, and continuity (`Fix.Cont`) on dictionary binders. -/
+componentwise on products, and continuity (`Shape.Cont`) on dictionary binders. -/
 
 example (H : I → (I → Type v) → Type v) [∀ k, Shape (H k)] (G : (I → Type v) → Type w) [Shape G] :
     G (Fix H) → Prop := Shape.cond H
@@ -86,7 +86,8 @@ theorem Shape.cond_pi (T : Type w₁) (G : T → (I → Type v) → Type w₂) [
 instance Shape.arr (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] :
     Shape (fun X => X k → G X) := Shape.arrInst k G
 theorem Shape.cond_arr (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] (f : Fix H k → G (Fix H)) :
-    Shape.cond H (G := fun X => X k → G X) f ↔ Fix.Cont H f ∧ ∀ d, Shape.cond H (f d) := Iff.rfl
+    Shape.cond H (G := fun X => X k → G X) f ↔ Shape.Cont H (G₁ := fun X => X k) f ∧ ∀ d, Shape.cond H (f d) :=
+  Iff.rfl
 /-- Two fields. -/
 instance Shape.prod (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G] :
     Shape (fun X => F X ×' G X) := Shape.prodInst F G

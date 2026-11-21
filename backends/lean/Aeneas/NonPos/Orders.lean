@@ -104,11 +104,18 @@ variable {I : Type pu} (H : I → (I → Type v) → Type v) [∀ k, Shape (H k)
 
 instance (k : I) : Dom (Fix H k) := Fix.dom H k
 
-/-- `f`, a function of a dictionary of the group `H`, is continuous: for the order of the
-dictionaries, and the order that the shape of `G` gives to its values. -/
-abbrev Fix.Cont {k : I} {G : (I → Type v) → Type w} [Shape G] (f : Fix H k → G (Fix H)) : Prop :=
-  @NonPos.Cont _ _ _ (Shape.dom G (Fix H)) f
+/-- `f`, between two bodies over the structures of the group `H`, is continuous: for the orders
+that the shapes `G₁` and `G₂` give (on a dictionary, the order of the dictionaries). -/
+abbrev Shape.Cont {G₁ : (I → Type v) → Type w₁} [iG₁ : Shape G₁] {G₂ : (I → Type v) → Type w₂} [iG₂ : Shape G₂]
+    (f : G₁ (Fix H) → G₂ (Fix H)) : Prop :=
+  @NonPos.Cont _ _ (Shape.dom G₁ (Fix H)) (Shape.dom G₂ (Fix H)) f
+
+/-- The values of `G` over the structures of `H` are a type that `partial_fixpoint` may recurse
+through: its `Lean.Order.CCPO` has the order of the shape. -/
+abbrev Shape.FixCompat (G : (I → Type v) → Type w) [Shape G] [Lean.Order.CCPO (G (Fix H))] : Prop :=
+  @NonPos.FixCompat (G (Fix H)) (Shape.dom G (Fix H)) _
 end Fix
+
 
 end
 end NonPos
