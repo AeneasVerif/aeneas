@@ -106,6 +106,26 @@ instance (k : I) (G : Fam.{pu, v} I → Type w) [Shape G] [Shape.Pointed G] :
     Shape.Pointed (fun X => X k → G X) := ⟨Proofs.pointed_arr k G⟩
 instance (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G]
     [Shape.Pointed F] [Shape.Pointed G] : Shape.Pointed (fun X => F X ×' G X) := ⟨Proofs.pointed_prod F G⟩
+
+/-! The order of the values of each piece (`Shape.dom`, which the condition and the fixed point are
+built on) is the order of their type: that of section 1 for a plain field, that of the family for a
+recursive occurrence, pointwise through binders and componentwise on products.  Without this, the
+model could order a plain field differently from its type: for example with an answer rather than
+`div` as the least `Result`, so that the least dictionary, which `partial_fixpoint` picks for a
+self-referential instance, would have a method answering where the program loops. -/
+section Orders
+variable (X : (I → Type v)) [iX : ∀ k, Dom (X k)]
+example (A : Type w) [d : Dom A] : @Shape.dom I (fun _ : (I → Type v) => A) (Shape.data A) X _ = d := rfl
+example (A : Type w) [d : Dom A] [Pointed A] : @Shape.dom I (fun _ : (I → Type v) => A) (Shape.const A) X _ = d :=
+  rfl
+example (k : I) : Shape.dom (fun X : (I → Type v) => X k) X = iX k := rfl
+example (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)] [∀ t, Shape.Pointed (G t)] :
+    Shape.dom (fun X => (t : T) → G t X) X = @Dom.pi T (fun t => G t X) (fun t => Shape.dom (G t) X) := rfl
+example (k : I) (G : (I → Type v) → Type w) [Shape G] [Shape.Pointed G] :
+    Shape.dom (fun X => X k → G X) X = @Dom.pi (X k) (fun _ => G X) (fun _ => Shape.dom G X) := rfl
+example (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G] :
+    Shape.dom (fun X => F X ×' G X) X = @Dom.pprod (F X) (G X) (Shape.dom F X) (Shape.dom G X) := rfl
+end Orders
 end Shapes
 
 /-! ## 3. The fixed point
