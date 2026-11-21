@@ -51,8 +51,8 @@ theorem Option.chain_attained (c : Chain (Option α)) : ∃ n, ∀ m, c m ⊑ c 
     rw [hm]; exact FlatOrder.rel.bot
 
 theorem Option.cont_of_mono {B : Type w} [Dom B] {f : Option α → B}
-    (mono : ∀ x y, x ⊑ y → Dom.le (f x) (f y)) : @Cont (Option α) B (Dom.ofCCPO (Option α)) _ f := by
-  refine Cont.mk' _ mono (fun c => ?_)
+    (mono : ∀ x y, x ⊑ y → Dom.le (f x) (f y)) : @DCont (Option α) B (Dom.ofCCPO (Option α)) _ f := by
+  refine DCont.mk' _ mono (fun c => ?_)
   obtain ⟨n, hn⟩ := Option.chain_attained c
   rw [show @Dom.sup _ (Dom.ofCCPO (Option α)) c = c n from
     @sup_eq_of_attained _ (Dom.ofCCPO (Option α)).po (Dom.ofCCPO (Option α)).os c n hn]
@@ -63,14 +63,14 @@ noncomputable instance : NonPosMonad Option where
   bind_cont := fun {α β} => by
     letI : Dom (Option α) := Dom.ofCCPO (Option α)
     letI : Dom (Option β) := Dom.ofCCPO (Option β)
-    refine Cont.puncurry (f := fun (x : Option α) (k : α → Option β) => x >>= k) (fun k => ?_) (fun x => ?_)
+    refine DCont.puncurry (f := fun (x : Option α) (k : α → Option β) => x >>= k) (fun k => ?_) (fun x => ?_)
     · refine Option.cont_of_mono (fun x y h => ?_)
       cases h with
       | bot => exact FlatOrder.rel.bot
       | refl => exact PartialOrder.rel_refl
     · cases x with
-      | none => exact Cont.const none
-      | some a => exact Cont.app (f := fun k : α → Option β => k) Cont.id a
+      | none => exact Proofs.DCont.const none
+      | some a => exact Proofs.DCont.app (f := fun k : α → Option β => k) Proofs.DCont.id a
 end OptionMonad
 
 /-! ## The example of the goal -/
@@ -230,7 +230,7 @@ nonpos_structure Child (Self : Type) : Type 1 where
   parent : Parent Self
   cf : ∀ {O : Type} (inst : Child O), Self → O → Option Nat
 
-example : Pointed (Child Int) := inferInstance
+example : Lean.Order.CCPO (Child Int) := inferInstance
 
 def SymChild : Child Int :=
   Child.mk (Parent.mk (fun _ => some 0) (by nonpos_cont))

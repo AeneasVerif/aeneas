@@ -28,16 +28,16 @@ noncomputable instance : NonPosMonad Result.{u} where
   bind_cont := fun {α β} => by
     letI : Dom (Result α) := Dom.ofCCPO (Result α)
     letI : Dom (Result β) := Dom.ofCCPO (Result β)
-    exact Cont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
+    exact DCont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
 
 /-! The `Result`-specific forms: Aeneas's names for `pure` and `bind`.  `Result.fail` and
 `Result.div` need no form: they never depend on the dictionary, so `nonpos_cont` treats them as
 constants. -/
 section
-variable {D : Type w} [Dom D]
+variable {D : Type w} [Lean.Order.PartialOrder D]
 
 @[nonpos_continuous]
-theorem Cont.result_ok {A : Type u} {a : D → A} (ha : Cont (inst_1 := Dom.discrete A) a) :
+theorem Cont.result_ok {A : Type u} {a : D → A} (ha : Cont (iB := discreteOrder A) a) :
     Cont (fun d => Result.ok (a d)) :=
   Cont.pure (M := Result) ha
 
@@ -46,22 +46,6 @@ theorem Cont.result_bind {A B : Type u} {m : D → Result A} {k : D → A → Re
     (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => Aeneas.Std.bind (m d) (k d)) :=
   Cont.bind (M := Result) hm hk
 
-end
-
-/-! The same forms on `FixFunctor.Cont` (as in section 1 of `Tactic.lean`). -/
-section
-universe pu v w₁
-variable {I : Type pu} {H : I → (I → Type v) → Type v} [∀ k, FixFunctor (H k)]
-  {G₁ : (I → Type v) → Type w₁} [FixFunctor G₁]
-
-theorem FixFunctor.Cont.result_ok {A : Type u} {a : G₁ (Fix H) → A}
-    (ha : FixFunctor.Cont H (G₂ := fun _ => A) (iG₂ := FixFunctor.data A) a) :
-    FixFunctor.Cont H (G₂ := fun _ => Result A) (fun d => Result.ok (a d)) :=
-  FixFunctor.Cont.pure (M := Result) ha
-theorem FixFunctor.Cont.result_bind {A B : Type u} {m : G₁ (Fix H) → Result A} {k : G₁ (Fix H) → A → Result B}
-    (hm : FixFunctor.Cont H (G₂ := fun _ => Result A) m) (hk : ∀ a, FixFunctor.Cont H (G₂ := fun _ => Result B) (fun d => k d a)) :
-    FixFunctor.Cont H (G₂ := fun _ => Result B) (fun d => Aeneas.Std.bind (m d) (k d)) :=
-  FixFunctor.Cont.bind (M := Result) hm hk
 end
 
 end NonPos.Std

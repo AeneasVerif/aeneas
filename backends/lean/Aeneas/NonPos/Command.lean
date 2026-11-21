@@ -34,16 +34,16 @@ structure:
   structure, carrying its parameters;
 * `Bla.Fields (Bla : Type → Type 1) (Self : Type) : Type 1 := (Self → Result I32) ×' (∀ ..., Bla Other → ...) ×' PUnit`:
   the fields *as written*, with the structure names as parameters;
-* `G.F : G.I → Fam G.I → Type 1`, dispatching to the `Fields`;
+* `G.F : G.I → (G.I → Type 1) → Type 1`, dispatching to the `Fields`;
 * `Bla Self := Fix G.F (.Bla Self)`;
-* `Bla.mk to_num add (h : FixFunctor.cond G.F ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
+* `Bla.mk to_num add (h : FixFunctor.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk` (a projection of `mk` is
   the field), stated here and proved by the tactic `nonpos_proj_mk` of `NonPos/Tactic.lean`;
 * then, by `elabGroupLemmas` (section 2), the lemmas of `NonPos/Tactic.lean` (section 4 there).
 
 The command never inspects the field types: `FixFunctor (G.F k)` is found by instance search, which can
-only succeed through the instances of section 2 of `Top.lean`, and the types of `mk` and the
+only succeed through the instances of section 3 of `Top.lean`, and the types of `mk` and the
 projections are the user's own, checked by the kernel against `Fix`. -/
 
 syntax nonposField := ident " : " term
@@ -123,13 +123,13 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let fams ← ss.mapM fun s' => do paramsLam s'.params (← `(X $(← idxOf s')))
     let args := s.params.map (·.1)
     `(Parser.Term.matchAltExpr| | $(← idxOf s), X => $fieldsId $fams* $args*)
-  elabCommand (← `(noncomputable abbrev $fId : $idx → Fam $idx → $univ $fAlts:matchAlt*))
+  elabCommand (← `(noncomputable abbrev $fId : $idx → ($idx → $univ) → $univ $fAlts:matchAlt*))
     -- `Example1.F`, `A.F`
   let shapeAlts ← ss.mapM fun s => do
     `(Parser.Term.matchAltExpr| | $(← idxOf s) => inferInstance)
   elabCommand (← `(@[reducible] noncomputable instance $shapeId:ident : ∀ k, FixFunctor ($fId k) $shapeAlts:matchAlt*))
     -- `Example1.shape`, `A.shape`
-  -- its runtime implementation, which is never read (assumption 3 of section 4 of `Top.lean`)
+  -- its runtime implementation, which is never read (assumption 3 of section 5 of `Top.lean`)
   let shapeImplId := mkIdentFrom g (g.getId ++ `shapeImpl)
   elabCommand (← `(@[instance_reducible] unsafe def $shapeImplId : ∀ k, FixFunctor ($fId k) := fun _ => FixFunctor.runtime))
   elabCommand (← `(attribute [implemented_by $shapeImplId] $shapeId))  -- `Example1.shapeImpl`, `A.shapeImpl`
@@ -146,9 +146,9 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let fieldTuple                                              -- `⟨fa, ⟨⟩⟩`             `⟨to_nat, ⟨f, ⟨⟩⟩⟩`
       ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
-    -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 4 of `Top.lean`)
+    -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 5 of `Top.lean`)
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
-        (h : FixFunctor.cond $fId (G := $fId $k) $fieldTuple) : $(s.name):ident $args* :=
+        (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) : $(s.name):ident $args* :=
       Fix.fold $fId $fieldTuple h))  -- `Example1.mk`, `A.mk`, `B.mk`
     let fieldArgs ← s.fields.mapM fun (f, _) => `(@$f:ident)
     for (f, τ) in s.fields, j in List.range s.fields.size do
@@ -160,20 +160,19 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
       -- may only add declarations named after its theorem)
       let lemmaId := mkIdentFrom f (s.name.getId ++ f.getId.appendAfter "_mk") -- `A.fa_mk`    `Example1.to_nat_mk`
       elabCommand (← `(set_option Elab.async false in @[simp] theorem $lemmaId $impl* $fieldBinders*
-          (h : FixFunctor.cond $fId (G := $fId $k) $fieldTuple) :
+          (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) :
           @$projId $args* ($mkId $fieldArgs* h) = @$f := by nonpos_proj_mk))
 
 /-! ## 2. Continuity, and the `nonpos_cont` tactic
 
-The condition `FixFunctor.cond` of a structure is a conjunction of `FixFunctor.Cont` facts, one for
-each field that takes a dictionary of the group (section 2 of `Top.lean`).  By definition, these are
-`Cont` facts at the orders of the model, which is how the tactic states them (`nonpos_cond_simp`, in
+The condition `FixFunctor.cond` of a structure is a conjunction of `Cont` facts, one for each field
+that takes a dictionary of the group (section 3 of `Top.lean`; `nonpos_cond_simp`, in
 `NonPos/Tactic.lean`, unfolds the condition into them).  Aeneas proves the condition of each `mk` it outputs with the tactic `nonpos_cont`, and the
 monotonicity obligation of each self-referential instance with
 `partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`.
 
-The tactic is in `NonPos/Tactic.lean` (from section 2 on) and the continuity theorems it applies in
-`NonPos/FormsProofs.lean`, which are not part of the trusted surface: every proof it builds is checked by the kernel, so it cannot make a structure
+The tactic is in `NonPos/Tactic.lean` (from section 2 on), which is not part of the trusted surface;
+the theorems it applies are the forms of section 1 there.  Every proof it builds is checked by the kernel, so it cannot make a structure
 contain anything that does not satisfy the condition.  What it is expected to do, which is checked
 by its tests but not guaranteed by this file, is:
 

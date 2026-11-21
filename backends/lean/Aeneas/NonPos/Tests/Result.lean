@@ -47,13 +47,13 @@ noncomputable instance : NonPosMonad Result where
   bind_cont := fun {α β} => by
     letI : Dom (Result α) := Dom.ofCCPO (Result α)
     letI : Dom (Result β) := Dom.ofCCPO (Result β)
-    exact Cont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
+    exact DCont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
 
 /-! The `Result`-specific forms. -/
 section
-variable {D : Type w} [Dom D]
+variable {D : Type w} [PartialOrder D]
 @[nonpos_continuous]
-theorem Cont.rok {A : Type} {a : D → A} (ha : Cont (inst_1 := Dom.discrete A) a) : Cont (fun d => Result.ok (a d)) :=
+theorem Cont.rok {A : Type} {a : D → A} (ha : Cont (iB := discreteOrder A) a) : Cont (fun d => Result.ok (a d)) :=
   Cont.pure (M := Result) ha
 @[nonpos_continuous]
 theorem Cont.rbind {A B : Type} {m : D → Result A} {k : D → A → Result B}
@@ -62,10 +62,11 @@ theorem Cont.rbind {A B : Type} {m : D → Result A} {k : D → A → Result B}
 @[nonpos_continuous]
 theorem Cont.vis {T : Type} (i : Eff.I) {k : D → Eff.O i → Result T}
     (hk : ∀ o, Cont (fun d => k d o)) : Cont (fun d => Result.vis i (k d)) := by
-  letI := (Dom.po : PartialOrder D); letI := (Dom.os : OmegaSup D)
-  have h1 : Continuous (fun k : Eff.O i → Result T => Result.vis i k) := ITree.continuous_vis (E := Eff) (R := T) i
-  have h2 : Continuous (fun d : D => fun o => k d o) := Continuous.pi_lam (fun o => hk o)
-  exact h1.comp h2
+  -- `vis i` satisfies the condition, from the model (`ITree.continuous_vis`); then composition
+  have h1 : Cont (fun k : Eff.O i → Result T => Result.vis i k) :=
+    (Proofs.Cont.iff_model (@Dom.pi (Eff.O i) (fun _ => Result T) (fun _ => Dom.ofCCPO (Result T)))
+      (Dom.ofCCPO (Result T)) _).2 (ITree.continuous_vis (E := Eff) (R := T) i)
+  exact Proofs.Cont.comp h1 (Cont.lam (f := fun d o => k d o) hk)
 @[nonpos_continuous]
 theorem Cont.input {T : Type} {k : D → Nat → Result T}
     (hk : ∀ n, Cont (fun d => k d n)) : Cont (fun d => Result.input (k d)) :=
