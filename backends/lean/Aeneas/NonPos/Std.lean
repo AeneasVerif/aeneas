@@ -28,16 +28,16 @@ noncomputable instance : NonPosMonad Result.{u} where
   bind_cont := fun {α β} => by
     letI : Dom (Result α) := Dom.ofCCPO (Result α)
     letI : Dom (Result β) := Dom.ofCCPO (Result β)
-    exact Cont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
+    exact DCont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
 
 /-! The `Result`-specific forms: Aeneas's names for `pure` and `bind`.  `Result.fail` and
 `Result.div` need no form: they never depend on the dictionary, so `nonpos_cont` treats them as
 constants. -/
 section
-variable {D : Type w} [Dom D]
+variable {D : Type w} [Lean.Order.PartialOrder D]
 
 @[nonpos_continuous]
-theorem Cont.result_ok {A : Type u} {a : D → A} (ha : Cont (inst_1 := Dom.discrete A) a) :
+theorem Cont.result_ok {A : Type u} {a : D → A} (ha : Cont (iB := discreteOrder A) a) :
     Cont (fun d => Result.ok (a d)) :=
   Cont.pure (M := Result) ha
 

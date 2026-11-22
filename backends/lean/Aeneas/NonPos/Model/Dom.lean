@@ -6,7 +6,7 @@ public import Aeneas.NonPos.Domain.Basic
 # Admissible types, the condition, and fixpoints
 
 `Dom A`: a partial order on `A` with suprema of ω-chains (an unpointed ω-cpo).  `Pointed A`: it has a
-least element.  `Cont f`: Scott continuity (`NonPos.Domain.Continuous`) for the orders given by `Dom`.
+least element.  `DCont f`: Scott continuity (`NonPos.Domain.Continuous`) for the orders given by `Dom`.
 -/
 namespace NonPos.Model
 end NonPos.Model
@@ -18,7 +18,7 @@ universe u w w₁ w₂ w₃
 noncomputable section
 set_option warn.classDefReducibility false
 
-/-- Admissible types: a partial order with suprema of ω-chains (used by `Cont`), which also has
+/-- Admissible types: a partial order with suprema of ω-chains (used by `DCont`), which also has
 suprema of all nonempty chains (used to give dictionaries a `CCPO`). -/
 class Dom (A : Type w) where
   po : PartialOrder A
@@ -46,7 +46,7 @@ theorem sup_le (c : Dom.Chain A) (x : A) (h : ∀ n, le (c n) x) : le (sup c) x 
 end Dom
 
 /-- The condition on functions: Scott continuity for the orders of `Dom`. -/
-def Cont {A : Type w₁} {B : Type w₂} [inst : Dom A] [inst_1 : Dom B] (f : A → B) : Prop :=
+def DCont {A : Type w₁} {B : Type w₂} [inst : Dom A] [inst_1 : Dom B] (f : A → B) : Prop :=
   @Continuous A B Dom.po Dom.po Dom.os Dom.os f
 
 /-- `A` has a least element. -/
@@ -149,7 +149,7 @@ class FixCompat (A : Type w) [inst : Dom A] [CCPO A] : Prop where
 uses, and `bind` is continuous for it (`pure` is automatically, since its domain is discrete). -/
 class NonPosMonad (M : Type u → Type u) [∀ α, CCPO (M α)] extends Monad M where
   bind_cont : ∀ {α β : Type u},
-    @Cont (M α ×' (α → M β)) (M β)
+    @DCont (M α ×' (α → M β)) (M β)
       (@Dom.pprod (M α) (α → M β) (Dom.ofCCPO (M α)) (@Dom.pi α (fun _ => M β) (fun _ => Dom.ofCCPO (M β))))
       (Dom.ofCCPO (M β))
       (fun p => p.1 >>= p.2)
