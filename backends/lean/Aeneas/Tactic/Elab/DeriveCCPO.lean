@@ -32,7 +32,7 @@ universe u v
     · simpa only [e.symm_apply_apply] using h _ hb
 
 /-- The proxy type's pairs `(_ : α) × β` are compared componentwise. -/
-noncomputable instance {α : Type u} {β : Type v} [CCPO α] [CCPO β] : CCPO ((_ : α) × β) :=
+instance {α : Type u} {β : Type v} [CCPO α] [CCPO β] : CCPO ((_ : α) × β) :=
   CCPO.ofEquiv (B := α ×' β) ⟨fun p => ⟨p.1, p.2⟩, fun x => ⟨x.1, x.2⟩, fun _ => rfl, fun _ => rfl⟩
 
 meta def mkCCPOInstanceHandler (declNames : Array Name) : CommandElabM Bool := do
@@ -45,7 +45,7 @@ meta def mkCCPOInstanceHandler (declNames : Array Name) : CommandElabM Bool := d
       let target ← Deriving.mkInductiveApp indVal argNames
       -- (a structure with many fields needs a deep instance search)
       `(command| set_option synthInstance.maxSize 4096 in
-        noncomputable instance $(binders.map TSyntax.mk):bracketedBinder* : CCPO $target :=
+        instance $(binders.map TSyntax.mk):bracketedBinder* : CCPO $target :=
           CCPO.ofEquiv (proxy_equiv% $target)))
   return true
 

@@ -238,10 +238,6 @@ Compiled code is correct under these assumptions:
    body is a `mk`, so it too is made by `foldDelayed`.
 2. Compiled code reads a dictionary only through `unfold`.  This holds because the only code that
    uses the model's representation of `Fix F k` is the model, which is never compiled.
-3. Compiled code never reads a `FixFunctor` instance.  This holds because its `order` is read only
-   in statements and proofs, its `cond` is a `Prop`, and its `model` is read only by the model.
-   The command therefore gives each generated `FixFunctor` instance the runtime implementation
-   `FixFunctor.runtime`, which is never inspected.
 Under 1 and 2, the dictionary `unfold` receives is a `Thunk` of the tuple that `foldDelayed` was given,
 and forcing it gives that tuple `x`, which is also the logical value of `unfold (fold x h)` by
 `Fix.unfold_fold`; so compiled projections compute their logical values. -/
@@ -259,10 +255,6 @@ noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : FixFun
 unsafe def Fix.unfoldImpl {k : I} (d : Fix F k) : F k (Fix F) := (unsafeCast d : Thunk (F k (Fix F))).get
 attribute [implemented_by Fix.unfoldImpl] Fix.unfold
 end Running
-
-/-- The runtime value of every generated `FixFunctor` instance (assumption 3 above: it is never read). -/
-@[instance_reducible] unsafe def FixFunctor.runtime {I : Type pu} {G : (I → Type v) → Type w} : FixFunctor G :=
-  unsafeCast ()
 
 /-! ## 6. Axioms
 

@@ -39,9 +39,6 @@ abbrev Example1.F : Example1.I → (Example1.I → Type) → Type
 -- The shape, found by instance search: `FixFunctor.prod (FixFunctor.const (Option Nat)) (FixFunctor.prod (FixFunctor.arr …) FixFunctor.unit)`.
 @[reducible] instance Example1.shape : ∀ k, FixFunctor (Example1.F k)
   | .Example1 => inferInstance
--- Its runtime implementation, never read (section 5 of `Top.lean`, assumption 3).
-@[instance_reducible] unsafe def Example1.shapeImpl : ∀ k, FixFunctor (Example1.F k) := fun _ => FixFunctor.runtime
-attribute [implemented_by Example1.shapeImpl] Example1.shape
 
 -- The structure.
 abbrev Example1 : Type := Fix Example1.F .Example1
@@ -152,9 +149,6 @@ abbrev A.F : A.I → (A.I → Type 1) → Type 1
 @[reducible] instance A.shape : ∀ k, FixFunctor (A.F k)
   | .A Self => inferInstance
   | .B Self => inferInstance
--- Its runtime implementation, never read (section 5 of `Top.lean`, assumption 3).
-@[instance_reducible] unsafe def A.shapeImpl : ∀ k, FixFunctor (A.F k) := fun _ => FixFunctor.runtime
-attribute [implemented_by A.shapeImpl] A.shape
 
 -- Both structures, before any `mk` or projection (those of one mention the other).
 abbrev A (Self : Type) : Type 1 := Fix A.F (.A Self)

@@ -334,7 +334,7 @@ section Order
 open Lean.Order
 
 instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
-noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
+instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : MonoBind Result := instMonoBindITree
 
 @[partial_fixpoint_monotone]

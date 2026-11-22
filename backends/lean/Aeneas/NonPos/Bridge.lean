@@ -230,16 +230,28 @@ structure FixFunctor.Model {I : Type pu} (G : (I → Type v) → Type w)
   cond_iff : ∀ (X : I → Type v) (d : ∀ k, Dom (X k)) (x : G X),
     @Model.Shape.cond _ G shape X d x ↔ @cond X (fun k => (d k).po) x
 
+/-- There is a model of `G` with the order `order` and the condition `cond`.  (A `Prop`, so that a
+`FixFunctor` has no data but its order, and is compiled.) -/
+def FixFunctor.HasModel {I : Type pu} (G : (I → Type v) → Type w)
+    (order : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G X))
+    (cond : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G X → Prop) : Prop :=
+  Nonempty (FixFunctor.Model G order cond)
+
 /-- `FixFunctor G`: the functor `G` is one the library handles.  `order` is the order of its bodies
 (given the order of the structures), `cond` the condition on them; `model` is not read. -/
 class FixFunctor {I : Type pu} (G : (I → Type v) → Type w) where
   order (G) : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G X)
   cond : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G X → Prop
-  model : FixFunctor.Model G order cond
+  model : FixFunctor.HasModel G order cond
+
+/-- The model of a `FixFunctor` (one of them). -/
+def FixFunctor.theModel {I : Type pu} (G : (I → Type v) → Type w) [i : FixFunctor G] :
+    FixFunctor.Model G i.order i.cond :=
+  Classical.choice i.model
 
 /-- The `Shape` of the model, of a `FixFunctor`. -/
-@[reducible] instance FixFunctor.toShape {I : Type pu} {G : (I → Type v) → Type w} [i : FixFunctor G] : Shape G :=
-  i.model.shape
+@[reducible] instance FixFunctor.toShape {I : Type pu} {G : (I → Type v) → Type w} [FixFunctor G] : Shape G :=
+  (FixFunctor.theModel G).shape
 
 /-- The value of a type with a `CCPO`, as a plain field (in the model: with its least element). -/
 @[reducible] def Shape.ccpoInst {I : Type pu} (A : Type w) [CCPO A] : Shape (fun _ : (I → Type v) => A) where
@@ -308,6 +320,41 @@ def prod : Model (fun X => G₁ X ×' G₂ X)
 end Prod
 end FixFunctor.Model
 
+/-! The pieces, as `HasModel` (what `Top.lean` writes as `model := .ccpo A`, ...). -/
+namespace FixFunctor.HasModel
+variable {I : Type pu}
+
+theorem ccpo (A : Type w) [i : CCPO A] : HasModel (fun _ : (I → Type v) => A) (fun _ _ => i.toPartialOrder) (fun _ => True) :=
+  ⟨Model.ccpo A⟩
+theorem unit : HasModel (fun _ : (I → Type v) => PUnit.{w+1}) (fun _ _ => unitOrder) (fun _ => True) :=
+  ⟨Model.unit⟩
+theorem var (k : I) : HasModel (fun X : (I → Type v) => X k) (fun _ i => i k) (fun _ => True) :=
+  ⟨Model.var k⟩
+theorem pi {T : Type w₁} {G : T → (I → Type v) → Type w₂}
+    {o : ∀ t (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G t X)}
+    {c : ∀ t {X : I → Type v} [∀ k, PartialOrder (X k)], G t X → Prop}
+    (m : ∀ t, HasModel (G t) (o t) (c t)) :
+    HasModel (fun X => (t : T) → G t X)
+      (fun X _ => @instOrderPi T (fun t => G t X) (fun t => o t X)) (fun f => ∀ t, c t (f t)) :=
+  ⟨Model.pi fun t => Classical.choice (m t)⟩
+theorem arr (k : I) {G : (I → Type v) → Type w}
+    {o : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G X)}
+    {c : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G X → Prop} (m : HasModel G o c) :
+    HasModel (fun X => X k → G X)
+      (fun X _ => @instOrderPi (X k) (fun _ => G X) (fun _ => o X))
+      (fun {X} [i : ∀ k, PartialOrder (X k)] f => @Cont (X k) (G X) (i k) (o X) f ∧ ∀ d, c (f d)) :=
+  ⟨Model.arr k (Classical.choice m)⟩
+theorem prod {G₁ : (I → Type v) → Type w₁} {G₂ : (I → Type v) → Type w₂}
+    {o₁ : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G₁ X)}
+    {c₁ : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G₁ X → Prop}
+    {o₂ : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G₂ X)}
+    {c₂ : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G₂ X → Prop}
+    (m₁ : HasModel G₁ o₁ c₁) (m₂ : HasModel G₂ o₂ c₂) :
+    HasModel (fun X => G₁ X ×' G₂ X)
+      (fun X _ => @instPartialOrderPProd (G₁ X) (G₂ X) (o₁ X) (o₂ X)) (fun x => c₁ x.1 ∧ c₂ x.2) :=
+  ⟨Model.prod (Classical.choice m₁) (Classical.choice m₂)⟩
+end FixFunctor.HasModel
+
 /-! ## 4. The fixed point -/
 
 section Fix
@@ -317,17 +364,22 @@ variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, FixFunctor 
 def Fix : I → Type v := MFix F
 
 /-- The order of structure `k`. -/
-@[instance_reducible] def Fix.order (k : I) : PartialOrder (Fix F k) := (MFix.dom F k).po
+@[instance_reducible] def Fix.order (k : I) : PartialOrder (Fix F k) where
+  -- (written out, so that it is compiled: its only data is the relation, a `Prop`)
+  rel x y := (MFix.dom F k).po.rel x y
+  rel_refl := (MFix.dom F k).po.rel_refl
+  rel_trans := (MFix.dom F k).po.rel_trans
+  rel_antisymm := (MFix.dom F k).po.rel_antisymm
 
 /-- The condition of the model is the condition of the class. -/
 theorem Proofs.cond_iff {k : I} (x : F k (Fix F)) :
     @Model.Shape.cond _ (F k) _ (MFix F) (MFix.dom F) x ↔ @FixFunctor.cond _ (F k) _ (Fix F) (Fix.order F) x :=
-  (FixFunctor.model (G := F k)).cond_iff (MFix F) (MFix.dom F) x
+  (FixFunctor.theModel (F k)).cond_iff (MFix F) (MFix.dom F) x
 
 /-- The order of the model on the bodies is the order of the class. -/
 theorem Proofs.order_eq (k : I) :
     (@Shape.dom _ (F k) _ (MFix F) (MFix.dom F)).po = @FixFunctor.order _ (F k) _ (Fix F) (Fix.order F) :=
-  (FixFunctor.model (G := F k)).order_eq (MFix F) (MFix.dom F)
+  (FixFunctor.theModel (F k)).order_eq (MFix F) (MFix.dom F)
 
 def Model.Fix.fold {k : I} (x : F k (Fix F)) (h : @FixFunctor.cond _ (F k) _ (Fix F) (Fix.order F) x) : Fix F k :=
   Model.MFix.fold F x ((Proofs.cond_iff F x).2 h)

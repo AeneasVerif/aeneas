@@ -129,12 +129,8 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     -- `Example1.F`, `A.F`
   let shapeAlts ← ss.mapM fun s => do
     `(Parser.Term.matchAltExpr| | $(← idxOf s) => inferInstance)
-  elabCommand (← `(@[reducible] noncomputable instance $shapeId:ident : ∀ k, FixFunctor ($fId k) $shapeAlts:matchAlt*))
+  elabCommand (← `(@[reducible] instance $shapeId:ident : ∀ k, FixFunctor ($fId k) $shapeAlts:matchAlt*))
     -- `Example1.shape`, `A.shape`
-  -- its runtime implementation, which is never read (assumption 3 of section 5 of `Top.lean`)
-  let shapeImplId := mkIdentFrom g (g.getId ++ `shapeImpl)
-  elabCommand (← `(@[instance_reducible] unsafe def $shapeImplId : ∀ k, FixFunctor ($fId k) := fun _ => FixFunctor.runtime))
-  elabCommand (← `(attribute [implemented_by $shapeImplId] $shapeId))  -- `Example1.shapeImpl`, `A.shapeImpl`
   -- The structures (all of them first: `mk` and the projections of one may mention another)
   for s in ss do
     elabCommand (← `(noncomputable abbrev $(s.name):ident $(← explicitBinders s.params)* : $univ :=

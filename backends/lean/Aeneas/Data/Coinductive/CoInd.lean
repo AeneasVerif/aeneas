@@ -570,7 +570,7 @@ theorem CoInd.csup_spec [Inhabited (F PUnit)] {c : CoInd F → Prop}
     · grind [CoInd.csup_eq_bot]
 
 /-- `CoInd F` is a chain-complete partial order (CCPO): every chain has a supremum. -/
-noncomputable instance (priority := default + 100) [Inhabited (F PUnit)] : CCPO (CoInd F) where
+instance (priority := default + 100) [Inhabited (F PUnit)] : CCPO (CoInd F) where
   has_csup {c} ch := .intro (CoInd.csup F c) (CoInd.csup_spec F ch)
 
 section CoIndN_le
