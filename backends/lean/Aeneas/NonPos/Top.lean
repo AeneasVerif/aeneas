@@ -37,6 +37,13 @@ Nothing else needs to be read.  The constants stated here (`Cont`, `FixFunctor`,
 defined in `NonPos/Bridge.lean`, over the model of `NonPos/Model/`, and every statement below is
 proved by a one-line reference to them, or by `Iff.rfl`: whatever those files contain, the
 statements of this file hold of it, and they use no axiom of their own (section 6).
+
+One thing is assumed of the files that are not read, since Lean lets any imported file change how a
+later one is elaborated and compiled: that they do not interfere with the trusted ones.  They
+declare no instance of `FixFunctor` (the instances of section 3 are the only ones, so they are what
+the command finds for a group); no syntax, macro or elaborator that changes what the text of a
+trusted file means; and no compiled implementation (`implemented_by`) of what the command
+generates.  These are properties of the text of those files, and can be checked by searching it.
 -/
 
 namespace NonPos
@@ -100,6 +107,10 @@ variable (F : I → (I → Type v) → Type v) [∀ k, FixFunctor (F k)]
 
 example : I → Type v := Fix F
 instance Fix.instPartialOrder (k : I) : PartialOrder (Fix F k) := Fix.order F k
+
+/-! The statements below write `⊑` on a structure and leave Lean to find the instance.  It finds the
+one above, and not another one declared in a file that this one imports: -/
+example (k : I) : (inferInstance : PartialOrder (Fix F k)) = Fix.instPartialOrder F k := rfl
 
 /-! A body of structure `k` over the structures themselves, satisfying the condition, folds into
 structure `k` (`fold` is the `mk` of the structure), and a structure unfolds into such a body
