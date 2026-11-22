@@ -165,6 +165,7 @@ end
     Visibility: public -/
 structure Counter (Self : Type _) where
   incr : Self → Result (Std.Usize × Self)
+deriving Lean.Order.CCPO
 
 /-- [tutorial::{impl tutorial::Counter for usize}::incr]:
     Source: 'src/lib.rs', lines 110:4-114:5
@@ -438,6 +439,7 @@ def add
     Source: 'src/lib.rs', lines 250:0-252:1 -/
 structure Hash (Self : Type _) where
   hash : Std.U32 → Result Std.U32
+deriving Lean.Order.CCPO
 
 /-- [tutorial::pseudo_random]: loop 0:
     Source: 'src/lib.rs', lines 258:2-260:3

@@ -26,8 +26,8 @@ continuous (`ITree.continuous_bind`). -/
 noncomputable instance : NonPosMonad Result.{u} where
   toMonad := inferInstance
   bind_cont := fun {α β} => by
-    letI : Dom (Result α) := Dom.ofCCPO (Result α)
-    letI : Dom (Result β) := Dom.ofCCPO (Result β)
+    let : Dom (Result α) := Dom.ofCCPO (Result α)
+    let : Dom (Result β) := Dom.ofCCPO (Result β)
     exact DCont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind
 
 /-! The `Result`-specific forms: Aeneas's names for `pure` and `bind`.  `Result.fail` and

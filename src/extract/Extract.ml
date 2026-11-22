@@ -3381,6 +3381,12 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "}");
   F.pp_close_box fmt ();
+  (* Lean: the order of the dictionaries of an ordinary trait, so that they can
+     be plain fields of a [nonpos_structure] (a supertrait, or a bound on an
+     associated type): see [Aeneas/Tactic/Elab/DeriveCCPO.lean]. *)
+  if backend () = Lean && not is_nonpos then (
+    F.pp_force_newline fmt ();
+    F.pp_print_string fmt "deriving Lean.Order.CCPO");
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 

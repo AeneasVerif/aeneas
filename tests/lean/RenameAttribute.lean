@@ -26,6 +26,7 @@ namespace rename_attribute
 structure BoolTest (Self : Type _) where
   getTest : Self → Result Bool
   retTest : Self → Result Bool
+deriving Lean.Order.CCPO
 
 /-- [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5

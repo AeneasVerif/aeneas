@@ -26,6 +26,7 @@ namespace traits
 structure BoolTrait (Self : Type _) where
   get_bool : Self → Result Bool
   ret_true : Self → Result Bool
+deriving Lean.Order.CCPO
 
 /-- [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5
@@ -97,6 +98,7 @@ def test_bool_trait
     Visibility: public -/
 structure ToU64 (Self : Type _) where
   to_u64 : Self → Result Std.U64
+deriving Lean.Order.CCPO
 
 /-- [traits::{impl traits::ToU64 for u64}::to_u64]:
     Source: 'tests/src/traits.rs', lines 46:4-48:5
@@ -189,6 +191,7 @@ def h2
     Visibility: public -/
 structure ToType (Self : Type _) (T : Type _) where
   to_type : Self → Result T
+deriving Lean.Order.CCPO
 
 /-- [traits::{impl traits::ToType<bool> for u64}::to_type]:
     Source: 'tests/src/traits.rs', lines 95:4-97:5
@@ -208,6 +211,7 @@ def U64.Insts.TraitsToTypeBool : ToType Std.U64 Bool := {
     Visibility: public -/
 structure OfType (Self : Type _) where
   of_type : forall {T : Type} (ToTypeInst : ToType T Self), T → Result Self
+deriving Lean.Order.CCPO
 
 /-- [traits::h3]:
     Source: 'tests/src/traits.rs', lines 106:0-108:1
@@ -225,6 +229,7 @@ def h3
 structure OfTypeBis (Self : Type _) (T : Type _) where
   ToTypeInst : ToType T Self
   of_type : T → Result Self
+deriving Lean.Order.CCPO
 
 /-- [traits::h4]:
     Source: 'tests/src/traits.rs', lines 120:0-122:1
@@ -269,6 +274,7 @@ def TestType.test
     Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
 structure TestType.test.TestTrait (Self : Type _) where
   test : Self → Result Bool
+deriving Lean.Order.CCPO
 
 /-- Trait implementation: [traits::{traits::TestType<T>}::test::{impl traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}]
     Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
@@ -310,6 +316,7 @@ structure WithConstTy (Self : Type _) (Self_V : Type _) (Self_W : Type _) (LEN
   LEN2 : Result Std.Usize
   ToU64Inst : ToU64 Self_W
   f : Self_W → Array Std.U8 LEN → Result Self_W
+deriving Lean.Order.CCPO
 
 /-- [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
@@ -395,11 +402,13 @@ def test_where2
 structure ParentTrait0 (Self : Type _) (Self_W : Type _) where
   get_name : Self → Result String
   get_w : Self → Result Self_W
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::ParentTrait1]
     Source: 'tests/src/traits.rs', lines 207:0-207:25
     Visibility: public -/
 structure ParentTrait1 (Self : Type _) where
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::ChildTrait]
     Source: 'tests/src/traits.rs', lines 208:0-208:52
@@ -407,6 +416,7 @@ structure ParentTrait1 (Self : Type _) where
 structure ChildTrait (Self : Type _) (Self_Clause0_W : Type _) where
   ParentTrait0Inst : ParentTrait0 Self Self_Clause0_W
   ParentTrait1Inst : ParentTrait1 Self
+deriving Lean.Order.CCPO
 
 /-- [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1
@@ -443,6 +453,7 @@ def order1
     Visibility: public -/
 structure ChildTrait1 (Self : Type _) where
   ParentTrait1Inst : ParentTrait1 Self
+deriving Lean.Order.CCPO
 
 /-- Trait implementation: [traits::{impl traits::ParentTrait1 for usize}]
     Source: 'tests/src/traits.rs', lines 226:0-226:30 -/
@@ -461,6 +472,7 @@ def Usize.Insts.TraitsChildTrait1 : ChildTrait1 Std.Usize := {
     Source: 'tests/src/traits.rs', lines 231:0-233:1
     Visibility: public -/
 structure Iterator (Self : Type _) (Self_Item : Type _) where
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::IntoIterator]
     Source: 'tests/src/traits.rs', lines 235:0-241:1
@@ -469,20 +481,24 @@ structure IntoIterator (Self : Type _) (Self_Item : Type _) (Self_IntoIter :
   Type _) where
   IteratorInst : Iterator Self_IntoIter Self_Item
   into_iter : Self → Result Self_IntoIter
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::FromResidual]
     Source: 'tests/src/traits.rs', lines 252:0-252:24 -/
 structure FromResidual (Self : Type _) (T : Type _) where
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::Try]
     Source: 'tests/src/traits.rs', lines 248:0-250:1 -/
 structure Try (Self : Type _) (Self_Residual : Type _) where
   FromResidualInst : FromResidual Self Self_Residual
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::WithTarget]
     Source: 'tests/src/traits.rs', lines 254:0-256:1
     Visibility: public -/
 structure WithTarget (Self : Type _) (Self_Target : Type _) where
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::ParentTrait2]
     Source: 'tests/src/traits.rs', lines 258:0-260:1
@@ -490,6 +506,7 @@ structure WithTarget (Self : Type _) (Self_Target : Type _) where
 structure ParentTrait2 (Self : Type _) (Self_U : Type _) (Self_Clause0_Target :
   Type _) where
   WithTargetInst : WithTarget Self_U Self_Clause0_Target
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1
@@ -499,6 +516,7 @@ structure ChildTrait2 (Self : Type _) (Self_Clause0_U : Type _)
   ParentTrait2Inst : ParentTrait2 Self Self_Clause0_U
     Self_Clause0_Clause0_Target
   convert : Self_Clause0_U → Result Self_Clause0_Clause0_Target
+deriving Lean.Order.CCPO
 
 /-- Trait implementation: [traits::{impl traits::WithTarget<u32> for u32}]
     Source: 'tests/src/traits.rs', lines 266:0-268:1 -/
@@ -535,6 +553,7 @@ def U32.Insts.TraitsChildTrait2U32U32 : ChildTrait2 Std.U32 Std.U32 Std.U32
     Visibility: public -/
 structure CFnOnce (Self : Type _) (Args : Type _) (Self_Output : Type _) where
   call_once : Self → Args → Result Self_Output
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::CFnMut]
     Source: 'tests/src/traits.rs', lines 294:0-296:1
@@ -543,6 +562,7 @@ structure CFnMut (Self : Type _) (Args : Type _) (Self_Clause0_Output : Type _)
   where
   CFnOnceInst : CFnOnce Self Args Self_Clause0_Output
   call_mut : Self → Args → Result (Self_Clause0_Output × Self)
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 298:0-300:1
@@ -551,12 +571,14 @@ structure CFn (Self : Type _) (Args : Type _) (Self_Clause0_Clause0_Output :
   Type _) where
   CFnMutInst : CFnMut Self Args Self_Clause0_Clause0_Output
   call : Self → Args → Result Self_Clause0_Clause0_Output
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [traits::GetTrait]
     Source: 'tests/src/traits.rs', lines 302:0-305:1
     Visibility: public -/
 structure GetTrait (Self : Type _) (Self_W : Type _) where
   get_w : Self → Result Self_W
+deriving Lean.Order.CCPO
 
 /-- [traits::test_get_trait]:
     Source: 'tests/src/traits.rs', lines 307:0-309:1
@@ -573,6 +595,7 @@ def test_get_trait
     Visibility: public -/
 structure Trait (Self : Type _) where
   LEN : Result Std.Usize
+deriving Lean.Order.CCPO
 
 /-- [traits::{impl traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25

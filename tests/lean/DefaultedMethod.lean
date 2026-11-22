@@ -25,6 +25,7 @@ namespace defaulted_method
 structure Trait (Self : Type _) where
   provided_method : Self → Result Std.U32
   required_method : Self → Result Std.U32
+deriving Lean.Order.CCPO
 
 /-- [defaulted_method::Trait::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/

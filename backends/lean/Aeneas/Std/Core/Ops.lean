@@ -13,28 +13,34 @@ open Result
 @[rust_trait "core::ops::index::Index"]
 structure core.ops.index.Index (Self Idx Output : Type _) where
   index : Self → Idx → Result Output
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::index::IndexMut" (parentClauses := ["indexInst"])]
 structure core.ops.index.IndexMut (Self Idx Output : Type _) where
   indexInst : Index Self Idx Output
   index_mut : Self → Idx → Result (Output × (Output → Self))
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::deref::Deref"]
 structure core.ops.deref.Deref (Self Target : Type _) where
   deref : Self → Result Target
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::deref::DerefMut" (parentClauses := ["derefInst"])]
 structure core.ops.deref.DerefMut (Self Target : Type _) where
   derefInst : Deref Self Target
   deref_mut : Self → Result (Target × (Target → Self))
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::bit::BitAnd"]
 structure core.ops.bit.BitAnd (Self : Type _) (Rhs : Type _) (Self_Output : Type _) where
   bitand : Self → Rhs → Result Self_Output
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::drop::Drop"]
 structure core.ops.drop.Drop (Self : Type _) where
   drop : Self → Result Self
+deriving Lean.Order.CCPO
 
 @[expose, rust_fun "core::ops::drop::Drop::drop"]
 def core.ops.drop.Drop.drop.default {Self : Type _}
@@ -44,16 +50,19 @@ def core.ops.drop.Drop.drop.default {Self : Type _}
 @[rust_trait "core::ops::function::FnOnce"]
 structure core.ops.function.FnOnce (Self : Type u) (Args : Type v) (Output : Type w) where
   call_once : Self → Args → Result Output
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::function::FnMut" (parentClauses := ["FnOnceInst"])]
 structure core.ops.function.FnMut (Self : Type u) (Args : Type v) (Output : Type w) where
   FnOnceInst : core.ops.function.FnOnce Self Args Output
   call_mut : Self → Args → Result (Output × Self)
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::function::Fn" (parentClauses := ["FnMutInst"])]
 structure core.ops.function.Fn (Self : Type u) (Args : Type v) (Output : Type w) where
   FnMutInst : core.ops.function.FnMut Self Args Output
   call : Self → Args → Result Output
+deriving Lean.Order.CCPO
 
 def BuiltinFnOnce (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnOnce (Inputs → Result Outputs) Inputs Outputs := {
   call_once f x := f x
@@ -74,6 +83,7 @@ def BuiltinFn (Inputs : Type u) (Outputs : Type v) : core.ops.function.Fn (Input
 @[rust_trait "core::ops::try_trait::FromResidual"]
 structure core.ops.try_trait.FromResidual (Self : Type u) (R : Type v) where
   from_residual : R → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_type "core::ops::control_flow::ControlFlow"]
 inductive core.ops.control_flow.ControlFlow (B : Type _) (C : Type _) where
@@ -85,10 +95,12 @@ structure core.ops.try_trait.Try (Self Output Residual : Type _) where
   FromResidualInst : core.ops.try_trait.FromResidual Self Residual
   from_output : Output → Result Self
   branch : Self → Result (core.ops.control_flow.ControlFlow Residual Output)
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::ops::try_trait::Residual" (parentClauses := ["TryInst"])]
 structure core.ops.try_trait.Residual (Self O TryType: Type _) where
   TryInst : core.ops.try_trait.Try TryType O Self
+deriving Lean.Order.CCPO
 
 namespace Std
 

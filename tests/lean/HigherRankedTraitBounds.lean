@@ -24,6 +24,7 @@ namespace higher_ranked_trait_bounds
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 4:0-6:1 -/
 structure RefTrait (Self : Type _) (X : Type _) where
   get : Self → Result X
+deriving Lean.Order.CCPO
 
 /-- [higher_ranked_trait_bounds::use_higher_ranked_trait_bound]:
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 9:0-11:1 -/

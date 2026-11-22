@@ -2982,6 +2982,7 @@ structure ExactSizeIterator (Self : Type _) (Self_Clause0_Item : Type _) where
   IteratorInst : Iterator Self Self_Clause0_Item
   len : Self → Result Std.Usize
   is_empty : Self → Result Bool
+deriving Lean.Order.CCPO
 
 /-- [nonpos_iterator::ExactSizeIterator::len]:
     Source: 'tests/src/nonpos-iterator.rs', lines 1305:4-1313:5

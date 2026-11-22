@@ -45,6 +45,7 @@ def make : Result Inner := do
 /-- Trait declaration: [builtin_auto::SuperPointee]
     Source: 'tests/src/builtin-auto.rs', lines 17:0-17:30 -/
 structure SuperPointee (Self : Type _) where
+deriving Lean.Order.CCPO
 
 /-- Trait implementation: [builtin_auto::{impl builtin_auto::SuperPointee for u32}]
     Source: 'tests/src/builtin-auto.rs', lines 19:0-19:28 -/

@@ -30,6 +30,7 @@ namespace issue_765_hrtb_conditional_negate
 @[rust_trait "core::ops::arith::Neg"]
 structure core.ops.arith.Neg (Self : Type _) (Self_Output : Type _) where
   neg : Self → Result Self_Output
+deriving Lean.Order.CCPO
 
 /-- [issue_765_hrtb_conditional_negate::Choice]
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 13:0-13:22
@@ -64,6 +65,7 @@ structure ConditionallySelectable (Self : Type _) where
   coremarkerCopyInst : core.marker.Copy Self
   conditional_select : Self → Self → Choice → Result Self
   conditional_assign : Self → Self → Choice → Result Self
+deriving Lean.Order.CCPO
 
 /-- [issue_765_hrtb_conditional_negate::ConditionallySelectable::conditional_assign]:
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 18:4-20:5
@@ -148,6 +150,7 @@ axiom ext.ConditionallyNegatable.Blanket.conditional_negate
     Visibility: public -/
 structure local.ConditionallyNegatable (Self : Type _) where
   conditional_negate : Self → Choice → Result Self
+deriving Lean.Order.CCPO
 
 /-- [issue_765_hrtb_conditional_negate::local::{impl issue_765_hrtb_conditional_negate::local::ConditionallyNegatable for T}::conditional_negate]:
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 75:8-78:9

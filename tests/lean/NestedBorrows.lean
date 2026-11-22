@@ -24,6 +24,7 @@ namespace nested_borrows
     Source: 'tests/src/nested-borrows.rs', lines 6:0-8:1 -/
 structure Trait1 (Self : Type _) where
   f : Std.U32 → Result Unit
+deriving Lean.Order.CCPO
 
 /-- [nested_borrows::inner_shared]:
     Source: 'tests/src/nested-borrows.rs', lines 10:0-12:1 -/

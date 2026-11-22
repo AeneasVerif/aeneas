@@ -96,6 +96,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _
   -- `Iterator` to `SimpleIterator`.
   -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- this leads to a circularity
   -- TODO: collect
+deriving Lean.Order.CCPO
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.trait_default
@@ -165,10 +166,12 @@ impl_def core.iter.traits.iterator.IteratorStepBy {I : Type _} {Item : Type _}
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type _) (A : Type _) where
   sum : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::accum::Product"]
 structure core.iter.traits.accum.Product (Self : Type _) (A : Type _) where
   product : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::collect::IntoIterator"
   (parentClauses := ["iteratorInst"])]
@@ -182,6 +185,7 @@ structure core.iter.traits.collect.FromIterator (Self : Type _) (A : Type _) whe
   from_iter : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
     T → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_fun
   "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter",
@@ -213,6 +217,7 @@ def core.iter.traits.iterator.Iterator.collect.default
 structure core.iter.traits.collect.Extend (Self : Type _) (A : Type _) where
   extend : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter), Self → T → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::double_ended::DoubleEndedIterator"
   (parentClauses := ["iteratorInst"])]

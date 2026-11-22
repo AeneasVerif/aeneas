@@ -8,5 +8,6 @@ namespace Aeneas.Std
 structure core.error.Error (Self : Type _) where
   fmtDebugInst : core.fmt.Debug Self
   fmtDisplayInst : core.fmt.Display Self
+deriving Lean.Order.CCPO
 
 end Aeneas.Std

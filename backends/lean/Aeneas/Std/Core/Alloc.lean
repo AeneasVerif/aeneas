@@ -14,5 +14,6 @@ structure core.alloc.layout.Layout where
 structure core.alloc.global.GlobalAlloc (Self : Type _) where
   alloc : Self → core.alloc.layout.Layout → Result (MutRawPtr U8)
   dealloc : Self → MutRawPtr U8 → core.alloc.layout.Layout → Result Unit
+deriving Lean.Order.CCPO
 
 end Aeneas.Std

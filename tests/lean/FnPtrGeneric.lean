@@ -112,6 +112,7 @@ def get_x {T : Type _} (h : Holder T) : Result T := do
     Visibility: public -/
 structure HasOut (Self : Type _) (Self_Out : Type _) where
   get : Self → Result Self_Out
+deriving Lean.Order.CCPO
 
 /-- [fn_ptr_generic::Wrap]
     Source: 'tests/src/fn_ptr_generic.rs', lines 32:0-32:22

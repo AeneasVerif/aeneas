@@ -195,12 +195,14 @@ def count
     Visibility: public -/
 structure Tr (Self : Type _) where
   f : Self → Result Std.U32
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [issue_1436_loop_generics::Wrap]
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 65:0-65:24
     Visibility: public -/
 structure Wrap (Self : Type _) (T : Type _) where
   TrInst : Tr Self
+deriving Lean.Order.CCPO
 
 /-- [issue_1436_loop_generics::loop_wrap]: loop body 0:
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 72:4-75:5
@@ -247,6 +249,7 @@ def loop_wrap
     Visibility: public -/
 structure HasN (Self : Type _) (N : Std.Usize) where
   TrInst : Tr Self
+deriving Lean.Order.CCPO
 
 /-- [issue_1436_loop_generics::loop_const_generic]: loop body 0:
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 86:4-89:5
@@ -293,6 +296,7 @@ def loop_const_generic
     Visibility: public -/
 structure Wrap2 (Self : Type _) (T : Type _) where
   WrapInst : Wrap Self T
+deriving Lean.Order.CCPO
 
 /-- [issue_1436_loop_generics::loop_wrap2]: loop body 0:
     Source: 'tests/src/issue-1436-loop-generics.rs', lines 99:4-102:5

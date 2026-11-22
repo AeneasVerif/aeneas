@@ -18,11 +18,13 @@ namespace core
 @[rust_trait "core::convert::From"]
 structure convert.From (Self T : Type _) where
   «from» : T → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
 structure clone.Clone (Self : Type _) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
+deriving Lean.Order.CCPO
 
 @[expose, trait_default]
 def clone.Clone.clone_from.default {Self : Type _} (CloneInst : core.clone.Clone Self)
@@ -42,6 +44,7 @@ def clone.CloneBool : clone.Clone Bool := {
 @[rust_trait "core::marker::Copy" (parentClauses := ["cloneInst"])]
 structure marker.Copy (Self : Type _) where
   cloneInst : core.clone.Clone Self
+deriving Lean.Order.CCPO
 
 @[expose, reducible, rust_trait_impl "core::marker::Copy<bool>"]
 def marker.CopyBool : core.marker.Copy Bool := {
