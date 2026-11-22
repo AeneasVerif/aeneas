@@ -84,14 +84,16 @@ example {O : Type} (BlaInst : Bla O) (o : O) :
 
 /-! ## 5. Building a dictionary from a varying one: `fold`, `pair`
 
-`Bla.mk f g h` is `Fix.fold Bla.F ⟨f, g, ⟨⟩⟩ h`.  `Cont.fold` asks for the tuple to be continuous in
-`inst`, which `Cont.pair` splits into the fields; a field with binders is `Cont.lam` once per binder.
+`Bla.mk f g h` is `Fix.fold Bla.F ⟨f, g, ⟨⟩⟩ h`, written as `Fix.foldDelayed Bla.F (fun _ => ⟨f, g, ⟨⟩⟩) h`
+(section 5 of `Top.lean`).  `Cont.fold` (here as `Cont.foldDelayed`, the same form for that way of
+writing it) asks for the tuple to be continuous in `inst`, which `Cont.pair` splits into the fields; a
+field with binders is `Cont.lam` once per binder.
 This is the shape of the monotonicity obligation of a self-referential instance
 (`def inst := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`). -/
 
 example : Cont (fun inst : Bla Int =>
     Bla.mk (fun s => some s) (fun {O} (BlaInst : Bla O) o s => BlaInst.add inst s o) (by nonpos_cont)) := by
-  apply Cont.fold
+  apply Cont.foldDelayed
   apply Cont.pair
   · exact Cont.const _                             -- `to_num` does not mention `inst`
   · apply Cont.pair

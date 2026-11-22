@@ -94,7 +94,7 @@ theorem Cont.fix {α : Type w₁} [CCPO α] {f : D → α → α} {hm : ∀ d, L
 
 variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, FixFunctor (F k)]
 /-- The fields of a dictionary depending on `d` (a projection `e.m` is `(Fix.unfold F e).2. … .1`), and
-`mk` of fields depending on `d` (`Bla.mk f₁ … fₙ h` is `Fix.fold F ⟨f₁, …, fₙ, ⟨⟩⟩ h`). -/
+`mk` of fields depending on `d` (`Bla.mk f₁ … fₙ h` is `Fix.fold F ⟨f₁, …, fₙ, ⟨⟩⟩ h`, by definition). -/
 theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
     Cont (iB := FixFunctor.order (F k) (Fix F)) (fun d => Fix.unfold F (f d)) := Proofs.Cont.unfold F hf
 theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, FixFunctor.cond (f d))
@@ -129,10 +129,16 @@ theorem Cont.shape_pair {f : D → G X} {g : D → H X}
   @Proofs.Cont.pair D _ _ _ (FixFunctor.order G X) (FixFunctor.order H X) f g hf hg
 end ShapeForms
 
+/-- `Cont.fold` for `Fix.foldDelayed`, which is what a `mk` unfolds to (section 5 of `Top.lean`). -/
+theorem Cont.foldDelayed {D : Type w} [PartialOrder D] {I : Type pu} (F : I → (I → Type v) → Type v)
+    [∀ k, FixFunctor (F k)] {k : I} {f : D → Unit → F k (Fix F)} (h : ∀ d, FixFunctor.cond (f d ()))
+    (hf : Cont (iB := FixFunctor.order (F k) (Fix F)) (fun d => f d ())) :
+    Cont (fun d => Fix.foldDelayed F (f d) (h d)) := Cont.fold F h hf
+
 /-- The forms the tactic looks up by the shape of the body. -/
 meta def forms : List Name :=
   [``Cont.pair, ``Cont.fst, ``Cont.snd, ``Cont.ite, ``Cont.dite,
-   ``Cont.pure, ``Cont.bind, ``Cont.unfold, ``Cont.fold, ``Cont.fix]
+   ``Cont.pure, ``Cont.bind, ``Cont.unfold, ``Cont.fold, ``Cont.foldDelayed, ``Cont.fix]
 
 /-- Gets a DiscrTree key from a theorem name.
 Works for theormes that return `… → Cont (fun d => body)` -/
@@ -841,11 +847,13 @@ elab_rules : tactic
     let (_, g) ← (← getMainGoal).intros
     g.withContext do
     let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | throwError "nonpos_proj_mk: not an equation"
-    -- `Bla.mk ps f₁ … fₙ h` is `Fix.fold F x h`, with `x = ⟨f₁, …, fₙ, ⟨⟩⟩`
+    -- `Bla.mk ps f₁ … fₙ h` is `Fix.foldDelayed F (fun _ => x) h`, that is `Fix.fold F x h`, with
+    -- `x = ⟨f₁, …, fₙ, ⟨⟩⟩`
     let some fold ← unfoldDefinition? lhs.appArg! | throwError "nonpos_proj_mk: cannot unfold {lhs.appArg!}"
     let fold := fold.headBeta
-    unless fold.isAppOfArity ``Fix.fold 6 do throwError "nonpos_proj_mk: unexpected {fold}"
-    let a := fold.getAppArgs  -- `I F inst k x h`
+    unless fold.isAppOfArity ``Fix.foldDelayed 6 do throwError "nonpos_proj_mk: unexpected {fold}"
+    let .lam _ _ x _ := fold.getAppArgs[4]! | throwError "nonpos_proj_mk: unexpected {fold}"
+    let a := fold.getAppArgs.set! 4 x  -- `I F inst k x h`
     -- `Bla.mk_unfold : ∀ ps f₁ … fₙ h, Fix.unfold F (Bla.mk ps f₁ … fₙ h) = ⟨f₁, …, fₙ, ⟨⟩⟩`, proved
     -- (by `Fix.unfold_fold`) at the first of these lemmas: the kernel checks that the tuple has its
     -- type once per structure, and not once per lemma

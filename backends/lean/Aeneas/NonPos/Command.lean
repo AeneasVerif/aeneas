@@ -36,7 +36,9 @@ structure:
   the fields *as written*, with the structure names as parameters;
 * `G.F : G.I → (G.I → Type 1) → Type 1`, dispatching to the `Fields`;
 * `Bla Self := Fix G.F (.Bla Self)`;
-* `Bla.mk to_num add (h : FixFunctor.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F _ h`;
+* `Bla.mk to_num add (h : FixFunctor.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F ⟨to_num, add, ⟨⟩⟩ h`, written
+  as `Fix.foldDelayed G.F (fun _ => ⟨to_num, add, ⟨⟩⟩) h`, which is the same and is how it runs
+  (section 5 of `Top.lean`);
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk` (a projection of `mk` is
   the field), stated here and proved by the tactic `nonpos_proj_mk` of `NonPos/Tactic.lean`;
@@ -146,10 +148,10 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let fieldTuple                                              -- `⟨fa, ⟨⟩⟩`             `⟨to_nat, ⟨f, ⟨⟩⟩⟩`
       ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
-    -- `macro_inline`, so that the fields are not evaluated before `fold` delays them (section 5 of `Top.lean`)
+    -- `macro_inline`, so that the fields are not evaluated before `foldDelayed` delays them (section 5 of `Top.lean`)
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
         (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) : $(s.name):ident $args* :=
-      Fix.fold $fId $fieldTuple h))  -- `Example1.mk`, `A.mk`, `B.mk`
+      Fix.foldDelayed $fId (fun _ => $fieldTuple) h))  -- `Example1.mk`, `A.mk`, `B.mk`
     let fieldArgs ← s.fields.mapM fun (f, _) => `(@$f:ident)
     for (f, τ) in s.fields, j in List.range s.fields.size do
       let projId := mkIdentFrom f (s.name.getId ++ f.getId)                   -- `A.fa`       `Example1.to_nat`

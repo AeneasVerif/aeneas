@@ -103,12 +103,9 @@ instance Fix.instPartialOrder (k : I) : PartialOrder (Fix F k) := Fix.order F k
 
 /-! A body of structure `k` over the structures themselves, satisfying the condition, folds into
 structure `k` (`fold` is the `mk` of the structure), and a structure unfolds into such a body
-(`unfold` is the tuple of its projections).  (`foldDelayed` is how `fold` runs: section 5.) -/
+(`unfold` is the tuple of its projections).  (How they run is section 5.) -/
 
-noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : FixFunctor.cond (x ())) : Fix F k :=
-  Model.Fix.fold F (x ()) h
-noncomputable def Fix.fold {k : I} (x : F k (Fix F)) (h : FixFunctor.cond x) : Fix F k :=
-  Fix.foldDelayed F (fun _ => x) h
+noncomputable def Fix.fold {k : I} (x : F k (Fix F)) (h : FixFunctor.cond x) : Fix F k := Model.Fix.fold F x h
 noncomputable def Fix.unfold {k : I} (d : Fix F k) : F k (Fix F) := Model.Fix.unfold F d
 theorem Fix.cond {k : I} (d : Fix F k) : FixFunctor.cond (Fix.unfold F d) := Proofs.cond_unfold F d
 
@@ -216,26 +213,26 @@ back the same tuple.
 
 Why delayed: a self-referential dictionary `d := mk … (f d) …` (defined by `partial_fixpoint`) is
 compiled by Lean as a recursive constant, and a field such as `f d` that mentions `d` outside a
-lambda would otherwise be evaluated while `d` is being built, which loops.  `fold` and the
-generated `mk` are `@[macro_inline]`, so at a call site the tuple ends up under the lambda that
-`fold` passes to `foldDelayed`, and is evaluated only when the dictionary is first unfolded.
-(`fold` is declared `noncomputable` in section 2 and made `macro_inline` here: without the
-attribute, no code that uses it compiles.)
+lambda would otherwise be evaluated while `d` is being built, which loops.  So compiled code does
+not call `fold`, which has no compiled code, but `foldDelayed` (below), which is `fold` of a tuple
+given under a lambda.  The generated `mk` is `foldDelayed` of `fun _ => ⟨fields⟩` and is
+`@[macro_inline]`, so at a call site the tuple ends up under that lambda, and is evaluated only
+when the dictionary is first unfolded.
 
 Compiled code is correct under these assumptions:
-1. Every dictionary that exists at runtime was made by `fold`.  This holds because every other
+1. Every dictionary that exists at runtime was made by `foldDelayed`.  This holds because every other
    construction of a value of `Fix F k` (the model's constructions, including what is behind its
    `CCPO`) is noncomputable, so the compiler rejects any program that uses one.  A self-referential
    dictionary defined by `partial_fixpoint` is compiled by Lean as a recursive definition whose
-   body is a `fold`, so it too is made by `fold`.
+   body is a `mk`, so it too is made by `foldDelayed`.
 2. Compiled code reads a dictionary only through `unfold`.  This holds because the only code that
    uses the model's representation of `Fix F k` is the model, which is never compiled.
 3. Compiled code never reads a `FixFunctor` instance.  This holds because its `order` is read only
    in statements and proofs, its `cond` is a `Prop`, and its `model` is read only by the model.
    The command therefore gives each generated `FixFunctor` instance the runtime implementation
    `FixFunctor.runtime`, which is never inspected.
-Under 1 and 2, the dictionary `unfold` receives is a `Thunk` of the tuple `x` that `fold` was given,
-and forcing it gives `x`, which is also the logical value of `unfold (fold x h)` by
+Under 1 and 2, the dictionary `unfold` receives is a `Thunk` of the tuple that `foldDelayed` was given,
+and forcing it gives that tuple `x`, which is also the logical value of `unfold (fold x h)` by
 `Fix.unfold_fold`; so compiled projections compute their logical values. -/
 
 section Running
@@ -243,10 +240,13 @@ variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, FixFunctor 
 
 unsafe def Fix.foldDelayedImpl {k : I} (x : Unit → F k (Fix F)) (_ : FixFunctor.cond (x ())) : Fix F k :=
   unsafeCast (Thunk.mk x)
+/-- `fold` of the tuple `x ()`; at runtime, `x` is stored in a `Thunk` without being called. -/
+@[implemented_by Fix.foldDelayedImpl]
+noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : FixFunctor.cond (x ())) : Fix F k :=
+  Fix.fold F (x ()) h
+
 unsafe def Fix.unfoldImpl {k : I} (d : Fix F k) : F k (Fix F) := (unsafeCast d : Thunk (F k (Fix F))).get
-attribute [implemented_by Fix.foldDelayedImpl] Fix.foldDelayed
 attribute [implemented_by Fix.unfoldImpl] Fix.unfold
-attribute [macro_inline] Fix.fold
 end Running
 
 /-- The runtime value of every generated `FixFunctor` instance (assumption 3 above: it is never read). -/
