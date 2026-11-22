@@ -34,14 +34,6 @@ instance (T : Type w₁) (B : T → Type w₂) [∀ t, Dom (B t)] [∀ t, Pointe
   Pointed.pi T B
 instance (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] [Pointed A] [Pointed B] : Pointed (A ×' B) := Pointed.pprod A B
 
-/-- A supported monad `M` carries the chain-complete order that `partial_fixpoint` uses
-(`Lean.Order.CCPO (M α)`); `NonPosMonad M` says that `bind` is continuous for it. -/
-instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) : Dom (M α) :=
-  NonPosMonad.dom α
-instance (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] (α : Type u) : Pointed (M α) :=
-  Pointed.monad α
-example (M : Type u → Type u) [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u} :
-    DCont (fun p : M α ×' (α → M β) => p.1 >>= p.2) := NonPosMonad.bind_cont
 
 /-! ## 2. The `Shape` of each piece -/
 

@@ -59,8 +59,9 @@ theorem Option.cont_of_mono {B : Type w} [Dom B] {f : Option α → B}
   exact (@sup_eq_of_attained B Dom.po Dom.os (@Chain.map _ _ (Dom.ofCCPO (Option α)).po Dom.po c f mono) n
     (fun m => mono _ _ (hn m))).symm
 
-noncomputable instance : NonPosMonad Option where
-  bind_cont := fun {α β} => by
+/-- `bind` of `Option` satisfies the condition. -/
+theorem Cont.option_bindCont {α β : Type} : Cont (fun p : Option α ×' (α → Option β) => p.1 >>= p.2) :=
+  Proofs.Cont.bind_of_model (by
     letI : Dom (Option α) := Dom.ofCCPO (Option α)
     letI : Dom (Option β) := Dom.ofCCPO (Option β)
     refine DCont.puncurry (f := fun (x : Option α) (k : α → Option β) => x >>= k) (fun k => ?_) (fun x => ?_)
@@ -70,7 +71,13 @@ noncomputable instance : NonPosMonad Option where
       | refl => exact PartialOrder.rel_refl
     · cases x with
       | none => exact Proofs.DCont.const none
-      | some a => exact Proofs.DCont.app (f := fun k : α → Option β => k) Proofs.DCont.id a
+      | some a => exact Proofs.DCont.app (f := fun k : α → Option β => k) Proofs.DCont.id a)
+
+/-- The form of `bind` for `Option`. -/
+@[nonpos_continuous]
+theorem Cont.option_bind {D : Type w} [PartialOrder D] {α β : Type} {m : D → Option α} {k : D → α → Option β}
+    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) :=
+  Cont.bind Cont.option_bindCont hm hk
 end OptionMonad
 
 /-! ## The example of the goal -/

@@ -164,7 +164,7 @@ theorem fix {α : Type w₁} [CCPO α] {f : D → α → α} {hm : ∀ d, Lean.O
     h1.2 _ (fun n => PartialOrder.rel_trans (PartialOrder.rel_of_eq (fix_eq (hm (c n))).symm) (hL.1 n))
   exact PartialOrder.rel_trans (fix_le (hm s) h2) (hL.2 u hu)
 
-theorem pure {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] {α : Type u} {a : D → α}
+theorem pure {M : Type u → Type u} [Pure M] [∀ α, PartialOrder (M α)] {α : Type u} {a : D → α}
     (ha : Cont (iB := discreteOrder α) a) : Cont (fun d => (Pure.pure (a d) : M α)) :=
   ⟨fun x y h => PartialOrder.rel_of_eq (congrArg Pure.pure (discreteOrder.eq (ha.1 x y h))),
    fun _ _ _ hs => ⟨fun n => PartialOrder.rel_of_eq (congrArg Pure.pure (discreteOrder.eq (ha.1 _ _ (hs.1 n)))),
@@ -204,16 +204,22 @@ theorem iff_dom {A : Type w₁} {B : Type w₂} [iA : PartialOrder A] [iB : Part
 section
 variable {D : Type w} [PartialOrder D]
 
-/-- What a supported monad provides. -/
-theorem bindCont {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] {α β : Type u} :
-    Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2) :=
-  (iff_model (@Dom.pprod (M α) (α → M β) (Dom.ofCCPO (M α)) (@Dom.pi α (fun _ => M β) (fun _ => Dom.ofCCPO (M β))))
-    (Dom.ofCCPO (M β)) _).2 NonPosMonad.bind_cont
-
-theorem bind {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] {α β : Type u}
+/-- `bind` of a monad whose `bind` satisfies the condition (`hbind`). -/
+theorem bind {M : Type u → Type u} [Bind M] [∀ α, PartialOrder (M α)] {α β : Type u}
+    (hbind : Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2))
     {m : D → M α} {k : D → α → M β} (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) :
     Cont (fun d => m d >>= k d) :=
-  comp bindCont (pair hm (lam (f := fun d a => k d a) hk))
+  comp hbind (pair hm (lam (f := fun d a => k d a) hk))
+
+/-- `bind` satisfies the condition, from the model's continuity of `bind` (with the `Dom`s of the
+`CCPO`s). -/
+theorem bind_of_model {M : Type u → Type u} [Bind M] [∀ α, CCPO (M α)] {α β : Type u}
+    (h : @DCont (M α ×' (α → M β)) (M β)
+      (@Dom.pprod (M α) (α → M β) (Dom.ofCCPO (M α)) (@Dom.pi α (fun _ => M β) (fun _ => Dom.ofCCPO (M β))))
+      (Dom.ofCCPO (M β)) (fun p => p.1 >>= p.2)) :
+    Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2) :=
+  (iff_model (@Dom.pprod (M α) (α → M β) (Dom.ofCCPO (M α)) (@Dom.pi α (fun _ => M β) (fun _ => Dom.ofCCPO (M β))))
+    (Dom.ofCCPO (M β)) _).2 h
 end
 end Proofs.Cont
 

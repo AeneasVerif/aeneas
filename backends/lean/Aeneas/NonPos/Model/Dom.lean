@@ -143,20 +143,6 @@ def Dom.ofCCPO (A : Type w) [CCPO A] : Dom A where
 class FixCompat (A : Type w) [inst : Dom A] [CCPO A] : Prop where
   le_iff : ∀ x y : A, Dom.le x y ↔ x ⊑ y
 
-/-! ## Monads -/
-
-/-- A monad usable for the function fields: it carries the chain-complete order `partial_fixpoint`
-uses, and `bind` is continuous for it (`pure` is automatically, since its domain is discrete). -/
-class NonPosMonad (M : Type u → Type u) [∀ α, CCPO (M α)] extends Monad M where
-  bind_cont : ∀ {α β : Type u},
-    @DCont (M α ×' (α → M β)) (M β)
-      (@Dom.pprod (M α) (α → M β) (Dom.ofCCPO (M α)) (@Dom.pi α (fun _ => M β) (fun _ => Dom.ofCCPO (M β))))
-      (Dom.ofCCPO (M β))
-      (fun p => p.1 >>= p.2)
-
-@[instance_reducible] def NonPosMonad.dom {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] (α : Type u) : Dom (M α) :=
-  Dom.ofCCPO (M α)
-attribute [local instance] NonPosMonad.dom
 
 end
 end NonPos

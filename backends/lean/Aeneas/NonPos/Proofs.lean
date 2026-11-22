@@ -12,8 +12,8 @@ open NonPos
 
 universe pu v u w w₁ w₂
 
-attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod NonPosMonad.dom
-attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO Pointed.monad FixCompat.pointed FixCompat.ofCCPO FixCompat.monad FixCompat.pi FixCompat.prod FixCompat.pprod
+attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod
+attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO FixCompat.pointed FixCompat.ofCCPO FixCompat.pi FixCompat.prod FixCompat.pprod
 attribute [local instance] MFix.dom MFix.pointed
 
 
@@ -47,14 +47,6 @@ theorem DCont.ite {B : Type w₁} [Dom B] (c : Prop) [Decidable c] {t e : D → 
 theorem DCont.dite {B : Type w₁} [Dom B] (c : Prop) [Decidable c] {t : c → D → B} {e : ¬c → D → B}
     (ht : ∀ h, DCont (t h)) (he : ∀ h, DCont (e h)) : DCont (fun d => if h : c then t h d else e h d) :=
   NonPos.Model.DCont.dite c ht he
-theorem DCont.pure {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α : Type u} {a : D → α}
-    (ha : DCont (inst_1 := Dom.discrete α) a) : DCont (inst_1 := NonPosMonad.dom α) (fun d => (pure (a d) : M α)) :=
-  NonPos.Model.DCont.pure ha
-theorem DCont.bind {M : Type u → Type u} [∀ α, Lean.Order.CCPO (M α)] [NonPosMonad M] {α β : Type u}
-    {m : D → M α} {k : D → α → M β}
-    (hm : DCont (inst_1 := NonPosMonad.dom α) m)
-    (hk : ∀ a, DCont (inst_1 := NonPosMonad.dom β) (fun d => k d a)) :
-    DCont (inst_1 := NonPosMonad.dom β) (fun d => m d >>= k d) := NonPos.Model.DCont.bind hm hk
 
 variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]
 theorem DCont.unfold {k : I} {f : D → MFix F k} (hf : DCont f) :

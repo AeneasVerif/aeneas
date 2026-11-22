@@ -13,7 +13,7 @@ universe u w w₁ w₂ w₃ w₄
 
 noncomputable section
 set_option warn.classDefReducibility false
-attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod NonPosMonad.dom
+attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod
 
 /-- `letDom A, B` puts the `PartialOrder` and `OmegaSup` instances of the `Dom`s of `A`, `B` in scope. -/
 syntax "letDom" term,+ : tactic
@@ -233,9 +233,6 @@ theorem Pointed.ofCCPO (A : Type w) [CCPO A] : @Pointed A (Dom.ofCCPO A) :=
   letI : Dom A := Dom.ofCCPO A
   ⟨⟨Lean.Order.bot, fun x => Lean.Order.bot_le x⟩⟩
 attribute [local instance] Pointed.ofCCPO
-theorem Pointed.monad {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] (α : Type u) : Pointed (M α) :=
-  Pointed.ofCCPO (M α)
-attribute [local instance] Pointed.monad
 
 /-- The least element of a pointed admissible type. -/
 def Dom.bot (A : Type w) [Dom A] [Pointed A] : A := Classical.choose (Pointed.exists_bot (A := A))
@@ -345,9 +342,6 @@ theorem FixCompat.ofCCPO (A : Type w) [CCPO A] : @FixCompat A (Dom.ofCCPO A) _ :
   letI : Dom A := Dom.ofCCPO A
   ⟨fun _ _ => Iff.rfl⟩
 attribute [local instance] FixCompat.ofCCPO
-theorem FixCompat.monad {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] (α : Type u) :
-    FixCompat (M α) := FixCompat.ofCCPO (M α)
-attribute [local instance] FixCompat.monad
 theorem FixCompat.pi {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] [∀ t, CCPO (B t)] [∀ t, FixCompat (B t)] :
     FixCompat ((t : T) → B t) :=
   ⟨fun f g => forall_congr' fun t => FixCompat.le_iff (f t) (g t)⟩
@@ -361,19 +355,6 @@ theorem FixCompat.pprod {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [CCPO A]
   ⟨fun x y => and_congr (FixCompat.le_iff x.1 y.1) (FixCompat.le_iff x.2 y.2)⟩
 attribute [local instance] FixCompat.pprod
 
-/-! ## Monads: `pure` and `bind` -/
-
-section Monad
-variable {D : Type w} [Dom D] {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M]
-
-theorem Model.DCont.pure {α : Type u} {a : D → α} (ha : @DCont D α _ (Dom.discrete α) a) :
-    DCont (fun d => (pure (a d) : M α)) :=
-  @DCont.comp D α (M α) _ (Dom.discrete α) _ _ _ (DCont.ofDiscrete (fun a : α => (Pure.pure a : M α))) ha
-
-theorem Model.DCont.bind {α β : Type u} {m : D → M α} {k : D → α → M β} (hm : DCont m) (hk : ∀ a, DCont (fun d => k d a)) :
-    DCont (fun d => m d >>= k d) :=
-  DCont.comp NonPosMonad.bind_cont (DCont.ppair hm (DCont.lam hk))
-end Monad
 
 end
 end NonPos

@@ -78,15 +78,15 @@ theorem Cont.ite {B : Type w₁} [PartialOrder B] (c : Prop) [Decidable c] {t e 
 theorem Cont.dite {B : Type w₁} [PartialOrder B] (c : Prop) [Decidable c] {t : c → D → B} {e : ¬c → D → B}
     (ht : ∀ h, Cont (t h)) (he : ∀ h, Cont (e h)) : Cont (fun d => if h : c then t h d else e h d) :=
   Proofs.Cont.dite c ht he
-/-- `pure` and `bind`, for a supported monad `M`: one with a `CCPO`, whose `bind` satisfies the
-condition (`NonPosMonad`; the next statement is what it says).  In `pure`, `a d` is plain data. -/
-example {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] {α β : Type u} :
-    Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2) := Proofs.Cont.bindCont
-theorem Cont.pure {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] {α : Type u} {a : D → α}
+/-- `pure`, in any monad (`a d` is plain data), and `bind`, in a monad whose `bind` satisfies the
+condition (`hbind`; each monad states it, and tags its own `bind` form `@[nonpos_continuous]`:
+`Result`'s in `NonPos/Std.lean`). -/
+theorem Cont.pure {M : Type u → Type u} [Pure M] [∀ α, PartialOrder (M α)] {α : Type u} {a : D → α}
     (ha : Cont (iB := discreteOrder α) a) : Cont (fun d => (pure (a d) : M α)) := Proofs.Cont.pure ha
-theorem Cont.bind {M : Type u → Type u} [∀ α, CCPO (M α)] [NonPosMonad M] {α β : Type u}
-    {m : D → M α} {k : D → α → M β}
-    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) := Proofs.Cont.bind hm hk
+theorem Cont.bind {M : Type u → Type u} [Bind M] [∀ α, PartialOrder (M α)] {α β : Type u}
+    (hbind : Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2)) {m : D → M α} {k : D → α → M β}
+    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) :=
+  Proofs.Cont.bind hbind hm hk
 /-- Fixed points: `partial_fixpoint` elaborates to `Lean.Order.fix`, for functions and for
 self-referential dictionaries alike. -/
 theorem Cont.fix {α : Type w₁} [CCPO α] {f : D → α → α} {hm : ∀ d, Lean.Order.monotone (f d)}
@@ -138,7 +138,7 @@ theorem Cont.foldDelayed {D : Type w} [PartialOrder D] {I : Type pu} (F : I → 
 /-- The forms the tactic looks up by the shape of the body. -/
 meta def forms : List Name :=
   [``Cont.pair, ``Cont.fst, ``Cont.snd, ``Cont.ite, ``Cont.dite,
-   ``Cont.pure, ``Cont.bind, ``Cont.unfold, ``Cont.fold, ``Cont.foldDelayed, ``Cont.fix]
+   ``Cont.pure, ``Cont.unfold, ``Cont.fold, ``Cont.foldDelayed, ``Cont.fix]
 
 /-- Gets a DiscrTree key from a theorem name.
 Works for theormes that return `… → Cont (fun d => body)` -/
@@ -915,7 +915,7 @@ changes. -/
 #guard_msgs in #print axioms Cont.fold
 /-- info: 'NonPos.Cont.fix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Cont.fix
-/-- info: 'NonPos.Cont.bind' depends on axioms: [Classical.choice, Quot.sound] -/
+/-- info: 'NonPos.Cont.bind' depends on axioms: [Quot.sound] -/
 #guard_msgs in #print axioms Cont.bind
 /-- info: 'NonPos.Cont.app₂' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Cont.app₂
