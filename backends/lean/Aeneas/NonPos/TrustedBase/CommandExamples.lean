@@ -117,7 +117,7 @@ abbrev A.F : A.I → (A.I → Type 1) → Type 1
   | .A Self, X => A.Fields (fun Self => X (.A Self)) (fun Self => X (.B Self)) Self
   | .B Self, X => B.Fields (fun Self => X (.A Self)) (fun Self => X (.B Self)) Self
 
--- FixFunctor of `A.F (.A Self)`: `prod (pi Type (fun O => arr (.B O) (pi Self (pi O (const (Result Nat))))))) unit`.
+-- FixFunctor of `A.F (.A Self)`: `prod (plain_input Type (fun O => rec_input (.B O) (plain_input Self (plain_input O (base (Result Nat)))))) unit`.
 @[reducible] instance A.shape : ∀ k, FixFunctor (A.F k)
   | .A Self => inferInstance
   | .B Self => inferInstance

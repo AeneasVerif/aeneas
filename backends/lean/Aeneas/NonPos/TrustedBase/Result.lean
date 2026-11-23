@@ -32,4 +32,7 @@ theorem Cont.result_vis {T : Type u} (i : RustEffect.Input) {k : D → RustEffec
     (hk : ∀ o, Cont (fun d => k d o)) : Cont (fun d => Result.vis i (k d)) :=
   Std.result_vis i hk
 
+/-- Rust's `Option` (Lean's `Option`: `Aeneas/Std/Core/Core.lean`) is data, not a computation. -/
+instance {α : Type u} : NonPosIgnoreOrdering (Option α) := ⟨⟩
+
 end NonPos

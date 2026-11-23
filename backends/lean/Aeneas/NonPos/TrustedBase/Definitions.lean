@@ -88,7 +88,7 @@ instance FixFunctor.var (k : I) : FixFunctor (fun X : (I → Type v) => X k) whe
   model := .var k
 
 -- Function binders, used for fields with a function type
-instance FixFunctor.pi (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, FixFunctor (G t)] :
+instance FixFunctor.plain_input (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, FixFunctor (G t)] :
     FixFunctor (fun X => (t : T) → G t X) where
   order := fun X _ => @instOrderPi T (fun t => G t X) (fun t => FixFunctor.order (G t) X)
   cond := fun f => ∀ t, FixFunctor.cond (f t)
@@ -106,9 +106,10 @@ instance FixFunctor.rec_input (k : I) (G : (I → Type v) → Type w) [FixFuncto
 
 /-
 Function binders where the input has an order (a computation, or a structure): the function must be
-continuous in it too, as for a recursive input.  (Chosen over `pi` when the input type has a `CCPO`.)
+continuous in it too, as for a recursive input.  (Chosen over `plain_input` when the input type has a
+`CCPO`, unless the type is declared `NonPosIgnoreOrdering`: see the section `IgnoreOrdering` below.)
 -/
-instance (priority := high) FixFunctor.arg (A : Type w₁) [CCPO A] (G : (I → Type v) → Type w)
+instance (priority := 2000) FixFunctor.ordered_input (A : Type w₁) [CCPO A] (G : (I → Type v) → Type w)
     [FixFunctor G] : FixFunctor (fun X => A → G X) where
   order := fun X _ => @instOrderPi A (fun _ => G X) (fun _ => FixFunctor.order G X)
   cond := fun {X} _ f => Cont (iB := FixFunctor.order G X) f ∧ ∀ a, FixFunctor.cond (f a)
@@ -182,6 +183,24 @@ end Cont
 instance Fix.instCCPO (k : I) : CCPO (Fix F k) where
   toPartialOrder := Fix.instPartialOrder F k
   has_csup := Proofs.has_csup F k
+
+section IgnoreOrdering
+/-
+Some types in lean may have a CCPO instance that does not correctly describe an information
+ordering that you need for a particular application.
+The `NonPosIgnoreOrdering` class lets you declare that a nonpos_structure should consider
+the type to represent plain data even though it has a CCPO instance.
+-/
+class NonPosIgnoreOrdering (A : Type w₁) : Prop
+
+/-- A function binder whose input is declared `NonPosIgnoreOrdering`: as `plain_input` (chosen over `ordered_input`). -/
+instance (priority := 3000) FixFunctor.data_input
+    {I : Type pu} (A : Type w₁) [NonPosIgnoreOrdering A] (G : (I → Type v) → Type w)
+    [FixFunctor G] : FixFunctor (fun X => A → G X) where
+  order := fun X _ => @instOrderPi A (fun _ => G X) (fun _ => FixFunctor.order G X)
+  cond := fun f => ∀ a, FixFunctor.cond (f a)
+  model := .pi (fun _ => FixFunctor.model (G := G))
+end IgnoreOrdering
 
 /-
 In terms of proof checking, the above is all that is needed to specify that the

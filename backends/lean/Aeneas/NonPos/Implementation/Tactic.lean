@@ -149,14 +149,14 @@ in the goal and hypotheses (by definitional unfolding, checked by `change`) so t
 literal lambda and its instance is built from the pieces of the pieces of `TrustedBase/Definitions.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input, FixFunctor.arg, FixFunctor.base,
+  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.plain_input, FixFunctor.rec_input, FixFunctor.ordered_input, FixFunctor.data_input, FixFunctor.base,
       FixFunctor.var, FixFunctor.unit, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
-  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input, FixFunctor.arg,
+  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.plain_input, FixFunctor.rec_input, FixFunctor.ordered_input, FixFunctor.data_input,
       FixFunctor.base, FixFunctor.var, FixFunctor.unit]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
