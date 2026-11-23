@@ -8,6 +8,7 @@ public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.CoreConvertNum
 public import Aeneas.Std.Scalar.Default
 public import Aeneas.Std.Scalar.Display
+public import Aeneas.Std.Scalar.DivCeil
 public import Aeneas.Std.Scalar.EqOrd
 public import Aeneas.Std.Scalar.Fmt
 public import Aeneas.Std.Scalar.LeadingZeros

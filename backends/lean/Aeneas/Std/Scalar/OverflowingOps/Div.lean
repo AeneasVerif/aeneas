@@ -65,7 +65,7 @@ theorem IScalar.overflowing_div_one {ty} (x : IScalar ty) :
   overflowing_div x one = .ok (x, false) := by
   simp [overflowing_div, BitVec.sdiv_one, one_bv, BitVec.sdivOverflow_eq, BitVec.sdivOverflow_eq]
   intro _ _
-  cases ty <;> try simp
+  cases ty <;> simp
   cases System.Platform.numBits_eq <;> rename_i h <;> rw [h] <;> grind
 
 uscalar @[simp]
@@ -92,7 +92,7 @@ theorem IScalar.overflowing_div_self {ty} (x : IScalar ty) (h₁ : x.bv ≠ 0) (
     exact h₂
   simp [overflowing_div, BitVec.sdivOverflow, h₃, h₂]
   simp [←one_bv]
-  cases ty <;> try simp
+  cases ty <;> simp
   cases System.Platform.numBits_eq <;> rename_i h <;> rw [h] <;> simp
 
 uscalar @[simp]

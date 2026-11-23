@@ -2,7 +2,7 @@
     [graphs.rs] file in Charon *)
 
 open Collections
-module SccId = Identifiers.IdGen ()
+module SccId = Identifiers.OrdIdGen ()
 
 (** The local logger *)
 let log = Logging.scc_log

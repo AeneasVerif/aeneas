@@ -350,7 +350,7 @@ let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
 
 (** Evaluate [Box::new] in concrete mode. *)
 let eval_box_new_concrete (config : config) (span : Meta.span)
-    (generics : generic_args) (call : call) : cm_fun =
+    (generics : generic_args) (call : call) (dest : place) : cm_fun =
  fun ctx ->
   (* Check and retrieve the arguments *)
   match
@@ -364,13 +364,13 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
 
       (* Create the new box. We use the type of the destination: this saves us
          from having to look up the id of the declaration of [Box]. *)
-      let box_ty = call.dest.ty in
+      let box_ty = dest.ty in
       [%cassert] span
         (ty_as_opt_box box_ty = Some boxed_ty)
         "The destination of Box::new doesn't have the proper type";
       let box_v = VAdt { variant_id = None; fields = [ v ] } in
       let box_v = mk_tvalue span box_ty box_v in
-      comp cc (assign_to_place config span box_v call.dest ctx)
+      comp cc (assign_to_place config span box_v dest ctx)
   | _ -> [%craise] span "Inconsistent state"
 
 (** Helper
@@ -626,7 +626,16 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       (* The value may contain static borrows (hidden in ADTs, for instance
          [struct S(&'static u8)]): we need to project their loans *)
       let ctx = push_static_loans_proj_for_symbolic_value span ctx sval in
-      let cc = S.synthesize_global_eval gref sval in
+      let cc =
+        match Charon.GAstUtils.init_fun_id_of_global global with
+        | Some _ -> S.synthesize_global_eval gref sval
+        | None ->
+            (* The global has no initializer: its value is a constant *)
+            let value = VLiteral (constant_expr_as_literal global.value) in
+            fun e ->
+              SymbolicAst.IntroSymbolic
+                (ctx, None, sval, VaSingleValue { value; ty }, e)
+      in
       (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
 (** Evaluate a statement. *)
@@ -723,7 +732,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                  reserved borrow, we later can't translate it to pure values...) *)
               let cc =
                 match rvalue with
-                | Len _ -> [%craise] st.span "Len is not handled yet"
                 | Repeat _ ->
                     [%craise] st.span
                       "Repeat should have been removed in a micropass"
@@ -775,8 +783,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Assert (assertion, _on_failure, _) ->
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Call (call, _) -> eval_function_call config st.span call ctx
-  | Panic _ | UnwindTerminate | UndefinedBehavior ->
+  | Call (call, dest, _) -> eval_function_call config st.span call dest ctx
+  | Panic _ | UnwindTerminate _ | UndefinedBehavior ->
       (* Evaluate to a panic only if the execution is concrete, otherwise we stop
          evaluating there and synthesize a [panic] node in the symbolic AST. *)
       if config.mode = ConcreteMode then
@@ -1204,19 +1212,19 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     ([ (joined_ctx, Unit) ], cf))
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
-and eval_function_call (config : config) (span : Meta.span) (call : call) :
-    stl_cm_fun =
+and eval_function_call (config : config) (span : Meta.span) (call : call)
+    (dest : place) : stl_cm_fun =
   (* There are several cases:
      - this is a local function, in which case we execute its body
      - this is an builtin function, in which case there is a special treatment
      - this is a trait method
   *)
   match config.mode with
-  | ConcreteMode -> eval_function_call_concrete config span call
-  | SymbolicMode -> eval_function_call_symbolic config span call
+  | ConcreteMode -> eval_function_call_concrete config span call dest
+  | SymbolicMode -> eval_function_call_symbolic config span call dest
 
 and eval_function_call_concrete (config : config) (span : Meta.span)
-    (call : call) : stl_cm_fun =
+    (call : call) (dest : place) : stl_cm_fun =
  fun ctx ->
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
@@ -1226,14 +1234,16 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
           let def = ctx_lookup_fun_decl span ctx fid in
           if def.item_meta.diagnostic_item = Some "box_new" then
             let ctx, cc =
-              eval_box_new_concrete config span func.generics call ctx
+              eval_box_new_concrete config span func.generics call dest ctx
             in
             ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
-          else eval_non_builtin_function_call_concrete config span fid call ctx
+          else
+            eval_non_builtin_function_call_concrete config span fid call dest
+              ctx
       | TraitMethod _ -> [%craise] span "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)
-    (call : call) : stl_cm_fun =
+    (call : call) (dest : place) : stl_cm_fun =
  fun ctx ->
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
@@ -1248,15 +1258,14 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
         ^ "\n- def.signature:\n"
         ^ fun_sig_to_string ctx call_info.call_sig];
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config call_info call.args
-        call.dest ctx
+      eval_function_call_symbolic_from_inst_sig config call_info call.args dest
+        ctx
 
 (** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
 and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
-    (fid : FunDeclId.id) (call : call) : stl_cm_fun =
+    (fid : FunDeclId.id) (call : call) (dest : place) : stl_cm_fun =
  fun ctx ->
   let args = call.args in
-  let dest = call.dest in
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func ->
@@ -1284,7 +1293,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
         [%add_loc] Subst.make_subst_from_generics (Some span) def.generics
           generics Self
       in
-      let locals, body_st = Subst.expr_body_substitute subst body in
+      let body = Subst.expr_body_substitute subst body in
 
       (* Evaluate the input operands *)
       [%sanity_check] body.span (List.length args = body.locals.arg_count);
@@ -1298,7 +1307,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* Compute the initial values for the local variables *)
       (* 1. Push the return value *)
       let ret_var, locals =
-        match locals with
+        match body.locals.locals with
         | ret_ty :: locals -> (ret_ty, locals)
         | _ -> [%craise] span "Unreachable"
       in
@@ -1320,7 +1329,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       let ctx = push_uninitialized_vars span locals ctx in
 
       (* Execute the function body *)
-      let ctx_resl, cc = comp cc (eval_function_body config body_st ctx) in
+      let ctx_resl, cc = comp cc (eval_function_body config body.body ctx) in
 
       (* Pop the stack frame and move the return value to its destination *)
       let ctx_resl_cfl =

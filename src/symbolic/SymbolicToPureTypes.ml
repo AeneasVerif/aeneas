@@ -806,6 +806,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         [%craise_opt_span] span
           ("Unexpected bound region: "
           ^ Charon.Print.region_db_var_to_pretty_string var)
+    | RLub _ -> [%craise_opt_span] span "Unexpected Lub region"
     | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
     | RVar (Free _) -> (
         match TypesUtils.RegionMap.find_opt r rg_to_gr_id with

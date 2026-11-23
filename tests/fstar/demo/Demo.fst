@@ -17,6 +17,12 @@ assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
     Visibility: public *)
 assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32
 
+(** [core::panicking::panic]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 138:0-138:43
+    Name pattern: [core::panicking::panic]
+    Visibility: public *)
+assume val core_panicking_panic : str -> result never
+
 (** [demo::choose]:
     Source: 'tests/src/demo.rs', lines 8:0-14:1
     Visibility: public *)

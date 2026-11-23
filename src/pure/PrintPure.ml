@@ -948,9 +948,6 @@ let binop_to_string (env : fmt_env) (binop : binop) =
       Print.overflow_mode_to_string om
       ^ ".>>"
       ^ int_tys_to_string int_ty0 int_ty1
-  | AddChecked int_ty -> "checked.+" ^ int_ty_to_string int_ty
-  | SubChecked int_ty -> "checked.-" ^ int_ty_to_string int_ty
-  | MulChecked int_ty -> "checked.*" ^ int_ty_to_string int_ty
   | Cmp int_ty -> "cmp" ^ int_ty_to_string int_ty
   | BoolAnd -> "&&"
   | BoolOr -> "||"

@@ -585,7 +585,7 @@ private theorem move_slots_updated_table_lookup_imp
   cases hTable1Lookup with
   | inl hTable1Lookup =>
     replace hTableLookup := hTableLookup hTable1Lookup
-    cases hTableLookup <;> try simp [*]
+    cases hTableLookup <;> simp [*]
     right
     have := slots_inv_lookup_imp_eq slots hSlotsInv i hi key (by simp_all)
     grind
@@ -837,7 +837,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
           have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
           -- TODO: this should be automated
           have hIneq2 : n2.val ≤ n1.val / hm.2.1.val := by simp [*]
-          rw [Nat.le_div_iff_mul_le] at hIneq2 <;> try simp [*]
+          rw [Nat.le_div_iff_mul_le] at hIneq2 <;> simp [*]
           have : n2.val * 1 ≤ n2.val * hm.max_load_factor.1.val := by
             apply Nat.mul_le_mul <;> scalar_tac
           scalar_tac
@@ -853,7 +853,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
       apply Nat.mul_le_of_le_div at hSmaller
       --
       have : (hm.slots.val.length * hm.2.1.val) * 1 ≤ (hm.slots.val.length * hm.2.1.val) * 2 := by
-        apply Nat.mul_le_mul <;> (try simp [*])
+        apply Nat.mul_le_mul <;> simp [*]
       --
       ring_nf at *
       scalar_tac

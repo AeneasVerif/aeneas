@@ -81,7 +81,7 @@ type decls_ctx = {
 [@@deriving show]
 
 let compute_local_uses_error_message (ctx : decls_ctx) (id : item_id) : string =
-  if not (LlbcAstUtils.AnyDeclIdSet.mem id ctx.graph_of_uses.locals) then
+  if not (Meta.AnyDeclIdSet.mem id ctx.graph_of_uses.locals) then
     let uses = Deps.compute_local_uses ctx.graph_of_uses [ id ] in
     let uses = Deps.ItemInfoSet.to_list uses in
     if uses = [] then ""
@@ -381,14 +381,7 @@ let ctx_lookup_dummy_var (span : Meta.span) (ctx : eval_ctx)
   in
   lookup_var ctx.env
 
-let erase_regions (ty : ty) : ty =
-  let v =
-    object
-      inherit [_] map_ty
-      method! visit_region _ _ = RErased
-    end
-  in
-  v#visit_ty () ty
+let erase_regions = TypesUtils.ty_erase_regions
 
 (** Push an uninitialized variable (which thus maps to
     {!constructor:Values.value.VBottom}) *)

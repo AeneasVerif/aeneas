@@ -96,6 +96,17 @@ theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
 grind_pattern Vec.len_val => v.length
 grind_pattern [agrind] Vec.len_val => v.length
 
+/-- Model of `Vec::is_empty` (<https://doc.rust-lang.org/std/vec/struct.Vec.html#method.is_empty>):
+    `true` iff the vector has no elements. -/
+@[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::is_empty" (keepParams := [true,false])]
+def Vec.is_empty {α : Type u} (v : Vec α) : Result Bool := ok (v.length = 0)
+
+/-- `alloc::vec::Vec::is_empty`: `true` iff the vector has no elements. -/
+@[step]
+theorem Vec.is_empty.spec {α : Type u} (v : Vec α) :
+    Vec.is_empty v ⦃ (b : Bool) => b = (v.length = 0) ⦄ := by
+  simp [is_empty]
+
 instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 

@@ -637,7 +637,7 @@ theorem Int.tmod_ge_of_neg (x y : Int) (hx : x < 0) :
   x ≤ x.tmod y := by
   have : (-x).tmod y = (-x) % y := by
     by_cases hy : 0 ≤ y
-    . rw [Int.tmod_eq_emod]; split <;> try omega
+    . rw [Int.tmod_eq_emod]; split <;> omega
     . have : (-x).tmod y = (-x).tmod (-y) := by simp
       rw [this]
       rw [Int.tmod_eq_emod]; split <;> try omega

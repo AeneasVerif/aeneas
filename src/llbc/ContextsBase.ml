@@ -130,7 +130,7 @@ let reset_global_counters () =
 
     This is particularly useful in combination with `-mark-ids` *)
 module SymbolicExprId =
-Identifiers.IdGen ()
+Identifiers.OrdIdGen ()
 
 type symbolic_expr_id = SymbolicExprId.id [@@deriving show, eq, ord]
 

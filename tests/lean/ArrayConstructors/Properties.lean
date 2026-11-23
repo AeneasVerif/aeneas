@@ -1,0 +1,70 @@
+module
+public import Aeneas
+public import ArrayConstructors.ArrayConstructors
+public section
+
+open Aeneas Aeneas.Std Result
+
+/-! Proofs about the `core::array::from_fn` examples. -/
+
+namespace array_constructors
+
+attribute [local step_simps]
+  identity.closure.Insts.CoreOpsFunctionFnMutTupleUsizeUsize.call_mut
+  double.closure.Insts.CoreOpsFunctionFnMutTupleUsizeUsize.call_mut
+  evens.closure.Insts.CoreOpsFunctionFnMutTupleUsizeBool.call_mut
+  powers_of_two.closure.Insts.CoreOpsFunctionFnMutTupleUsizeI32.call_mut
+  counter.closure.Insts.CoreOpsFunctionFnMutTupleUsizeU32.call_mut
+
+/-- `from_fn(|i| i)` -/
+theorem identity_spec : identity ⦃ a => ∀ j < 5, a[j]!.val = j ⦄ := by
+  unfold identity
+  step with core.array.from_fn.spec_stateless_getElem! _ _ _
+    (fun j (v : Std.Usize) => v.val = j) by (intro i hi; step*)
+  solve_by_elim
+
+/-- `from_fn(|i| i * 2)` -/
+theorem double_spec : double ⦃ a => ∀ j < 8, a[j]!.val = j * 2 ⦄ := by
+  unfold double
+  step with core.array.from_fn.spec_stateless_getElem! _ _ _
+    (fun j (v : Std.Usize) => v.val = j * 2) by (intro i hi; step*)
+  solve_by_elim
+
+/-- `from_fn(|i| i % 2 == 0)`, through the general spec, with the elements read as `a.val[j]`. -/
+theorem evens_spec :
+    evens ⦃ a => ∀ j (hj : j < a.val.length), a.val[j] = decide (j % 2 = 0) ⦄ := by
+  unfold evens
+  step with core.array.from_fn.spec _ _ _ (fun _ _ => True)
+    (fun j (b : Bool) => b = decide (j % 2 = 0)) by (intro i g _ _; step*)
+  solve_by_elim
+
+/-- A closure which owns a state, doubled at each call: before the call on index `i`, the state
+    is `2 ^ i`, and the call returns it. -/
+theorem powers_of_two_spec : powers_of_two ⦃ a => ∀ j < 6, a[j]!.val = 2 ^ j ⦄ := by
+  unfold powers_of_two
+  step with core.array.from_fn.spec_getElem! _ _ _
+    (fun i (g : powers_of_two.closure) => g.val = 2 ^ i)
+    (fun j (v : Std.I32) => v.val = 2 ^ j)
+  · intro i g hi hg
+    -- the bound on the state for the overflow check of `state *= 2`, nonlinear in `i`
+    have : (2 : Int) ^ i.val ≤ 2 ^ 5 := pow_le_pow_right₀ (by norm_num) (by scalar_tac)
+    step*
+  solve_by_elim
+
+/-- A closure which owns a counter: before the call on index `i`, the counter is `i`, and the
+    call returns `(i + 1) * 100 + i`. -/
+theorem counter_spec : counter ⦃ a => ∀ j < 4, a[j]!.val = (j + 1) * 100 + j ⦄ := by
+  unfold counter
+  step with core.array.from_fn.spec_getElem! _ _ _
+    (fun i (g : counter.closure) => g.val = i)
+    (fun j (v : Std.U32) => v.val = (j + 1) * 100 + j) by (intro i g hi hg; step*)
+  solve_by_elim
+
+/-- `from_fn` with a closure which doesn't change its state is also handled by `step*` alone,
+    through the `@[step]` theorem `core.array.from_fn.spec_stateless`, which infers the
+    postcondition from the body of the closure. -/
+theorem double_spec' : double ⦃ a => ∀ j (hj : j < a.val.length), a.val[j].val = j * 2 ⦄ := by
+  unfold double
+  step* +inferPost
+
+end array_constructors

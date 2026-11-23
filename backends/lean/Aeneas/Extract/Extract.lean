@@ -1,5 +1,5 @@
 module
-public import AeneasMeta.Extensions
+public import Lean
 public section
 /-! Helpers to provide informations about the models for the Rust standard library -/
 

@@ -360,7 +360,7 @@ let extract_ty_errors (fmt : F.formatter) : unit =
   | HOL4 -> F.pp_print_string fmt "(* ERROR: could not generate the code *)"
 
 let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (ty : ty) : unit =
+    (no_params_tys : TypeDeclId.TreeSet.t) ~(inside : bool) (ty : ty) : unit =
   [%ldebug "ty: " ^ ty_to_string ctx ty];
   let extract_rec = extract_ty span ctx fmt no_params_tys in
   match ty with
@@ -416,7 +416,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                     (* Start by filtering the types *)
                     let generics, filter_types =
                       match
-                        TypeDeclId.Map.find_opt id
+                        TypeDeclId.TreeMap.find_opt id
                           ctx.types_filter_type_args_map
                       with
                       | None -> (generics, None)
@@ -462,7 +462,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                  for HOL4";
               let print_tys =
                 match type_id with
-                | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
+                | TAdtId id -> not (TypeDeclId.TreeSet.mem id no_params_tys)
                 | TBuiltin _ -> true
                 | _ ->
                     [%save_error] span "Unreachable";
@@ -525,7 +525,8 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref span ctx fmt no_params_tys ~inside:false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
-  | TNever -> F.pp_print_string fmt "Never"
+  | TNever ->
+      F.pp_print_string fmt (if backend () = FStar then "never" else "Never")
   | TError -> extract_ty_errors fmt
   | TDynTrait params -> (
       [%ltrace "dyn trait:\n" ^ dyn_predicate_to_string ctx params];
@@ -549,19 +550,19 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "=>";
           F.pp_print_space fmt ();
-          extract_trait_clause_type span ctx fmt TypeDeclId.Set.empty clause;
+          extract_trait_clause_type span ctx fmt TypeDeclId.TreeSet.empty clause;
           F.pp_print_string fmt ")";
           if inside then F.pp_print_string fmt ")"
       | _ -> [%craise] span "Unsupported use of dyn traits")
 
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t) ~(inside : bool)
     (tr : trait_ref) : unit =
   extract_trait_instance_id span ctx fmt no_params_tys ~inside tr.trait_decl_ref
     tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t) ~(inside : bool)
     (tr : trait_decl_ref) : unit =
   let use_brackets = tr.decl_generics <> empty_generic_args && inside in
   let name = ctx_get_trait_decl span tr.trait_decl_id ctx in
@@ -580,7 +581,7 @@ and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
   if use_brackets then F.pp_print_string fmt ")"
 
 and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t)
     ?(explicit : explicit_info option = None) (generics : generic_args) : unit =
   let { types; const_generics; trait_refs } = generics in
   if backend () <> HOL4 then (
@@ -621,7 +622,7 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
     `<Self as Foo>::foo`). *)
 and extract_trait_instance_id_if_not_self (span : Meta.span)
     (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
+    (no_params_tys : TypeDeclId.TreeSet.t) ~(inside : bool)
     (trait_ref : trait_decl_ref) (id : trait_instance_id) : unit =
   match id with
   | Self ->
@@ -634,7 +635,7 @@ and extract_trait_instance_id_if_not_self (span : Meta.span)
       F.pp_print_string fmt "."
 
 and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t) ~(inside : bool)
     (trait_ref : trait_decl_ref) (id : trait_instance_id) : unit =
   let add_brackets (s : string) =
     if backend () = Coq then "(" ^ s ^ ")" else s
@@ -663,7 +664,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
          Also lookup the information about the explicit/implicit parameters. *)
       let generics, explicit =
         match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
+          TraitImplId.TreeMap.find_opt id ctx.trait_impls_filter_type_args_map
         with
         | None -> (generics, explicit)
         | Some filter ->
@@ -685,7 +686,8 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       in
       let generics =
         match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_trait_clauses_map
+          TraitImplId.TreeMap.find_opt id
+            ctx.trait_impls_filter_trait_clauses_map
         with
         | None -> generics
         | Some filter ->
@@ -762,7 +764,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       [%admit_raise] span "Unexpected" fmt
 
 and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t)
     (clause : trait_param) : unit =
   let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
@@ -786,7 +788,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
         {
           ctx with
           types_filter_type_args_map =
-            TypeDeclId.Map.add def.def_id keep ctx.types_filter_type_args_map;
+            TypeDeclId.TreeMap.add def.def_id keep
+              ctx.types_filter_type_args_map;
         }
     | _ -> ctx
   in
@@ -931,7 +934,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
 
 (** Print the variants *)
 let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (type_decl_group : TypeDeclId.Set.t)
+    (fmt : F.formatter) (type_decl_group : TypeDeclId.TreeSet.t)
     (type_name : string) (type_params : string list) (cg_params : string list)
     (cons_name : string) (fields : field list) : unit =
   F.pp_print_space fmt ();
@@ -1002,8 +1005,8 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
 
 (* TODO: we don' need the [def_name] paramter: it can be retrieved from the context *)
 let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (type_decl_group : TypeDeclId.Set.t) (def : type_decl) (def_name : string)
-    (type_params : string list) (cg_params : string list)
+    (type_decl_group : TypeDeclId.TreeSet.t) (def : type_decl)
+    (def_name : string) (type_params : string list) (cg_params : string list)
     (variants : variant list) : unit =
   (* We want to generate a definition which looks like this (taking F* as example):
      {[
@@ -1073,15 +1076,16 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
         F.pp_print_string fmt sep;
         F.pp_print_space fmt ())
       (fun (f : field) ->
-        extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false f.field_ty)
+        extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false
+          f.field_ty)
       fields;
     (* Close the boxes *)
     F.pp_close_box fmt ())
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
-    (type_params : string list) (cg_params : string list) (fields : field list)
-    : unit =
+    (type_decl_group : TypeDeclId.TreeSet.t) (kind : decl_kind)
+    (def : type_decl) (type_params : string list) (cg_params : string list)
+    (fields : field list) : unit =
   (* We want to generate a definition which looks like this (taking F* as example):
      {[
        type t = { x : int; y : bool; }
@@ -1349,10 +1353,11 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
       extracted as [nonpos_structure]s, whose parameters must be in a fixed
       universe. *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
-    ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
-    ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    ?(poly_types : bool = true) (origin : generic_origin)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.TreeSet.t)
+    ?(use_forall = false) ?(use_fun = false) ?(use_forall_use_sep = true)
+    ?(use_arrows = false) ?(as_implicits : bool = false)
+    ?(space : bool ref option = None) ?(poly_types : bool = true)
+    (origin : generic_origin)
     (generics : generic_params) (explicit : explicit_info option)
     (type_params : string list) (cg_params : string list)
     (trait_clauses : string list) : unit =
@@ -1481,8 +1486,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
 
     See {!extract_type_decl}. *)
 let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
-    (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
-    (extract_body : bool) : unit =
+    (type_decl_group : TypeDeclId.TreeSet.t) (kind : decl_kind)
+    (def : type_decl) (extract_body : bool) : unit =
   let span = def.item_meta.span in
   (* Sanity check *)
   [%sanity_check] span (extract_body || backend () <> HOL4);
@@ -1600,7 +1605,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    (* Compute the [mutRegions] option for the [rust_type] attribute. *)
    let mut_regions_attr =
      match
-       TypeDeclId.Map.find_opt def.def_id ctx.trans_ctx.type_ctx.type_infos
+       TypeDeclId.TreeMap.find_opt def.def_id ctx.trans_ctx.type_ctx.type_infos
      with
      | None -> []
      | Some info ->
@@ -1753,8 +1758,8 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
     This function should be inserted between calls to {!start_type_decl_group}
     and {!end_type_decl_group}. *)
 let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl) :
-    unit =
+    (type_decl_group : TypeDeclId.TreeSet.t) (kind : decl_kind)
+    (def : type_decl) : unit =
   let extract_body =
     match kind with
     | SingleNonRec | SingleRec | MutRecFirst | MutRecInner | MutRecLast -> true
@@ -1928,7 +1933,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (* Print the generics *)
           let as_implicits = true in
           extract_generic_params decl.item_meta.span ctx fmt
-            TypeDeclId.Set.empty Item ~as_implicits decl.generics None
+            TypeDeclId.TreeSet.empty Item ~as_implicits decl.generics None
             type_params cg_params trait_clauses;
 
           (* Print the record parameter as "(x : ADT)" *)
@@ -2115,8 +2120,9 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
           (* Print the generics *)
           let as_implicits = true in
-          extract_generic_params span ctx fmt TypeDeclId.Set.empty ~as_implicits
-            Item decl.generics None type_params cg_params trait_clauses;
+          extract_generic_params span ctx fmt TypeDeclId.TreeSet.empty
+            ~as_implicits Item decl.generics None type_params cg_params
+            trait_clauses;
 
           (* Print the input parameters (the fields) *)
           let print_field (ctx : extraction_ctx) (field_id : FieldId.id)
@@ -2134,7 +2140,7 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
             F.pp_print_space fmt ();
-            extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false
+            extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false
               f.field_ty;
             F.pp_print_string fmt ")";
             (ctx, vname)

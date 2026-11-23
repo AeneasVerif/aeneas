@@ -2251,7 +2251,7 @@ let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
     [struct S { x : &'static mut u32 }] never intersect. *)
 let normalize_proj_ty (regions : region_set) (ty : rty) : rty =
   let visitor =
-    object
+    object (self)
       inherit [_] map_ty
 
       method! visit_region _ r =
@@ -2260,6 +2260,7 @@ let normalize_proj_ty (regions : region_set) (ty : rty) : rty =
             if RegionSet.mem r regions then RVar (Free (RegionId.of_int 0))
             else RErased
         | RVar (Bound _) | RErased -> r
+        | RLub ty -> RLub (self#visit_ty () ty)
         | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
     end
   in
@@ -2304,8 +2305,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
   | ( TFnPtr
         {
           binder_regions = binder_regions1;
-          regions_outlive = regions_outlive1;
-          types_outlive = types_outlive1;
+          outlives = outlives1;
           binder_value =
             {
               is_unsafe = false;
@@ -2318,8 +2318,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       TFnPtr
         {
           binder_regions = binder_regions2;
-          regions_outlive = regions_outlive2;
-          types_outlive = types_outlive2;
+          outlives = outlives2;
           binder_value =
             {
               is_unsafe = false;
@@ -2333,8 +2332,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       (* TODO: general case *)
       [%sanity_check] span (binder_regions1 = []);
       [%sanity_check] span (binder_regions2 = []);
-      [%sanity_check] span (regions_outlive1 = regions_outlive2);
-      [%sanity_check] span (types_outlive1 = types_outlive2);
+      [%sanity_check] span (outlives1 = outlives2);
       let binder_value =
         {
           is_unsafe = false;
@@ -2345,13 +2343,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
           is_variadic = is_variadic1;
         }
       in
-      TFnPtr
-        {
-          binder_regions = [];
-          regions_outlive = regions_outlive1;
-          types_outlive = types_outlive1;
-          binder_value;
-        }
+      TFnPtr { binder_regions = []; outlives = outlives1; binder_value }
   | TArray (ty0, len0, _), TArray (ty1, len1, _) ->
       [%sanity_check] span (len0 = len1);
       TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0, None)
@@ -2407,8 +2399,7 @@ and norm_proj_regions_union (span : Meta.span) ?(strict : bool = true)
 and norm_proj_poly_trait_refs_union (span : Meta.span) (tr1 : poly_trait_ref)
     (tr2 : poly_trait_ref) : poly_trait_ref =
   [%sanity_check] span (tr1.binder_regions = tr2.binder_regions);
-  [%sanity_check] span (tr1.regions_outlive = tr2.regions_outlive);
-  [%sanity_check] span (tr1.types_outlive = tr2.types_outlive);
+  [%sanity_check] span (tr1.outlives = tr2.outlives);
   {
     tr1 with
     binder_value =

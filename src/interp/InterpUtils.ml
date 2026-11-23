@@ -136,7 +136,15 @@ let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
 
 let mk_var (index : LocalId.id) (name : string option) (local_ty : ty)
     (span : Meta.span) : local =
-  { index; name; local_ty; span; drop_flag_for = None }
+  {
+    index;
+    name;
+    local_ty;
+    span;
+    is_mutable = true;
+    borrowck_constraints = [];
+    drop_flag_for = None;
+  }
 
 (** Small helper - TODO: move *)
 let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
@@ -554,9 +562,9 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     compute span-data, to find pretty names. *)
 let rvalue_get_place (rv : rvalue) : place option =
   match rv with
-  | Use ((Copy p | Move p), _) -> Some p
+  | Use ((Copy (p, _) | Read p | Move p), _) -> Some p
   | Use (Constant _, _) -> None
-  | Len (p, _, _) | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
+  | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _
   | UnaryOp _
   | BinaryOp _
@@ -1036,8 +1044,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
         types = _;
         const_generics = _;
         trait_clauses;
-        regions_outlive;
-        types_outlive;
+        outlives;
         trait_type_constraints;
       } =
         generics
@@ -1059,23 +1066,11 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
       let trait_clauses =
         List.map (st_substitute_visitor#visit_trait_param subst) trait_clauses
       in
-      let regions_outlive =
+      let outlives =
         List.map
           (st_substitute_visitor#visit_region_binder
-             (st_substitute_visitor#visit_outlives_pred
-                st_substitute_visitor#visit_region
-                st_substitute_visitor#visit_region)
-             subst)
-          regions_outlive
-      in
-      let types_outlive =
-        List.map
-          (st_substitute_visitor#visit_region_binder
-             (st_substitute_visitor#visit_outlives_pred
-                st_substitute_visitor#visit_ty
-                st_substitute_visitor#visit_region)
-             subst)
-          types_outlive
+             st_substitute_visitor#visit_outlives_pred subst)
+          outlives
       in
       (* For the type variables and const generic variables we simply reuse the
          ones present in the context *)
@@ -1084,8 +1079,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
         types = ctx.type_vars;
         const_generics = ctx.const_generic_vars;
         trait_clauses;
-        regions_outlive;
-        types_outlive;
+        outlives;
         trait_type_constraints;
       }
     in

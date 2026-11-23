@@ -9,6 +9,64 @@ namespace Aeneas.Std
 
 open Result
 
+/-- Model of `Result::map` (<https://doc.rust-lang.org/std/result/enum.Result.html#method.map>).
+The closure is called exactly once on `Ok`, and never on `Err`; `map` itself can't panic, but the closure can. -/
+@[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::map"]
+def core.result.Result.map {T E U F : Type _} (fnOnce : core.ops.function.FnOnce F T U)
+  (x : core.result.Result T E) (f : F) : Std.Result (core.result.Result U E) :=
+  match x with
+  | .Ok value => do
+      let mapped ← fnOnce.call_once f value
+      ok (.Ok mapped)
+  | .Err error => ok (.Err error)
+
+@[simp]
+theorem core.result.Result.map_Ok
+  {T E U F : Type _} (fnOnce : core.ops.function.FnOnce F T U) (value : T) (f : F) :
+  core.result.Result.map fnOnce (.Ok value : core.result.Result T E) f = (do
+    let mapped ← fnOnce.call_once f value
+    ok (core.result.Result.Ok mapped : core.result.Result U E)) := rfl
+
+@[simp]
+theorem core.result.Result.map_Err
+  {T E U F : Type _} (fnOnce : core.ops.function.FnOnce F T U) (error : E) (f : F) :
+  core.result.Result.map fnOnce (.Err error : core.result.Result T E) f =
+    ok (core.result.Result.Err error : core.result.Result U E) := rfl
+
+/-- `core::result::Result::map` on `Ok value`: the result is `Ok` of the closure's result. `post` is
+the postcondition of the closure, which `step` can infer with `+inferPost`. -/
+@[step]
+theorem core.result.Result.map.spec_Ok {T E U F : Type _}
+    (fnOnce : core.ops.function.FnOnce F T U) (value : T) (f : F) {post : T → U → Prop}
+    (hf : fnOnce.call_once f value ⦃ post value ⦄) :
+    core.result.Result.map fnOnce (.Ok value : core.result.Result T E) f ⦃ y =>
+      ∃ mapped, y = .Ok mapped ∧ post value mapped ⦄ := by
+  apply WP.spec_bind hf
+  intro mapped h
+  simp [h]
+
+/-- `core::result::Result::map` on `Err error`: result is `Err error`, the closure is not called. -/
+@[step]
+theorem core.result.Result.map.spec_Err {T E U F : Type _}
+    (fnOnce : core.ops.function.FnOnce F T U) (error : E) (f : F) :
+    core.result.Result.map fnOnce (.Err error : core.result.Result T E) f ⦃ y =>
+      y = (.Err error : core.result.Result U E) ⦄ := by
+  simp
+
+/-- `core::result::Result::map`**, for any `x`: an `Ok value` becomes `Ok` of the closure's result,
+and an `Err` is left untouched. -/
+theorem core.result.Result.map.spec {T E U F : Type _}
+    (fnOnce : core.ops.function.FnOnce F T U) (x : core.result.Result T E) (f : F)
+    {post : T → U → Prop}
+    (hf : ∀ value, x = .Ok value → fnOnce.call_once f value ⦃ post value ⦄) :
+    core.result.Result.map fnOnce x f ⦃ (y : core.result.Result U E) =>
+      (∀ value, x = .Ok value → ∃ mapped, y = .Ok mapped ∧ post value mapped) ∧
+      (∀ error, x = .Err error → y = .Err error) ⦄ := by
+  cases x
+  · apply WP.spec_bind (hf _ rfl)
+    grind
+  · simp
+
 /-- Pure model of `Result::map_err`: leaves `Ok` untouched and maps the payload
     of `Err` through `fnOnce`. -/
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::map_err"]

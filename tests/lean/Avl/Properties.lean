@@ -340,7 +340,7 @@ theorem Node.rotate_left_spec
     split_conjs
     . -- Partial invariant for the final tree starting at z
       simp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega)
+      split_conjs <;> omega
     . -- Partial invariant for the subtree x
       simp [Node.invAux, balanceFactor, *]
       split_conjs <;> (try omega) <;> simp_all
@@ -376,7 +376,7 @@ theorem Node.rotate_left_spec
     split_conjs
     . -- Invariant for whole tree (starting at z)
       simp [invAux, balanceFactor]
-      split_conjs <;> (try omega)
+      split_conjs <;> omega
     . -- Invariant for subtree x
       simp [invAux, balanceFactor]
       split_conjs <;> (try omega) <;> simp_all
@@ -453,7 +453,7 @@ theorem Node.rotate_right_spec
     split_conjs
     . -- Partial invariant for the final tree starting at z
       simp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega)
+      split_conjs <;> omega
     . -- Partial invariant for the subtree x
       simp [Node.invAux, balanceFactor, *]
       split_conjs <;> (try omega) <;> simp_all
@@ -489,7 +489,7 @@ theorem Node.rotate_right_spec
     split_conjs
     . -- Invariant for whole tree (starting at z)
       simp [invAux, balanceFactor]
-      split_conjs <;> (try omega)
+      split_conjs <;> omega
     . -- Invariant for subtree x
       simp [invAux, balanceFactor]
       split_conjs <;> (try omega) <;> simp_all
@@ -589,11 +589,11 @@ theorem Node.rotate_left_right_spec
     simp [balanceFactor] at *
     split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
     . -- invAux for y
-      split_conjs <;> (try omega)
+      split_conjs <;> omega
     . -- invAux for z
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> scalar_tac
     . -- invAux for x
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> scalar_tac
     . -- The sets are the same
       apply Set.ext; simp [tree, z_tree, y_tree]; tauto
     . -- Height
@@ -604,11 +604,11 @@ theorem Node.rotate_left_right_spec
       simp [balanceFactor] at *
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega)
+        split_conjs <;> omega
       . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -617,11 +617,11 @@ theorem Node.rotate_left_right_spec
       have : bf_y.val = 1 := by simp [Node.invAux] at *; omega
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega)
+        split_conjs <;> omega
       . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -716,11 +716,11 @@ theorem Node.rotate_right_left_spec
     simp [balanceFactor] at *
     split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
     . -- invAux for y
-      split_conjs <;> (try omega)
+      split_conjs <;> omega
     . -- invAux for z
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> scalar_tac
     . -- invAux for x
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> scalar_tac
     . -- The sets are the same
       apply Set.ext; simp [tree, z_tree, y_tree]; tauto
     . -- Height
@@ -731,11 +731,11 @@ theorem Node.rotate_right_left_spec
       simp [balanceFactor] at *
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega)
+        split_conjs <;> omega
       . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -744,11 +744,11 @@ theorem Node.rotate_right_left_spec
       have : bf_y.val = -1 := by simp [Node.invAux] at *; omega
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega)
+        split_conjs <;> omega
       . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> scalar_tac
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height

@@ -1,4 +1,4 @@
-import Aeneas
+import Lean
 
 /-!
 # Extract Lean keywords

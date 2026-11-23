@@ -21,7 +21,7 @@ type type_ctx = {
           then contains all the translated types when we translate the
           functions. *)
   type_infos : type_infos;
-  recursive_decls : T.TypeDeclId.Set.t;
+  recursive_decls : T.TypeDeclId.TreeSet.t;
 }
 [@@deriving show]
 

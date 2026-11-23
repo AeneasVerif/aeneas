@@ -32,6 +32,25 @@ namespace nonpos_iterator
 @[rust_type "core::array::iter::IntoIter"]
 axiom core.array.iter.IntoIter (T : Type _) (N : Std.Usize) : Type
 
+/-- [core::option::{impl core::fmt::Debug for core::option::Option<T>}::fmt]:
+    Source: '/rustc/library/core/src/option.rs', lines 592:15-592:20
+    Name pattern: [core::option::{core::fmt::Debug<core::option::Option<@T>>}::fmt]
+    Visibility: public -/
+@[rust_fun "core::option::{core::fmt::Debug<core::option::Option<@T>>}::fmt"]
+axiom core.option.Option.Insts.CoreFmtDebug.fmt
+  {T : Type _} (fmtDebugInst : core.fmt.Debug T) :
+  Option T → core.fmt.Formatter → Result ((core.result.Result Unit
+    core.fmt.Error) × core.fmt.Formatter)
+
+/-- Trait implementation: [core::option::{impl core::fmt::Debug for core::option::Option<T>}]
+    Source: '/rustc/library/core/src/option.rs', lines 592:15-592:20
+    Name pattern: [core::fmt::Debug<core::option::Option<@T>>] -/
+@[reducible, rust_trait_impl "core::fmt::Debug<core::option::Option<@T>>"]
+def core.option.Option.Insts.CoreFmtDebug {T : Type _} (fmtDebugInst :
+  core.fmt.Debug T) : core.fmt.Debug (Option T) := {
+  fmt := core.option.Option.Insts.CoreFmtDebug.fmt fmtDebugInst
+}
+
 /-- [core::option::{impl core::cmp::PartialEq<core::option::Option<T>> for core::option::Option<T>}::eq]:
     Source: '/rustc/library/core/src/option.rs', lines 2441:4-2441:38
     Name pattern: [core::option::{core::cmp::PartialEq<core::option::Option<@T>, core::option::Option<@T>>}::eq]
