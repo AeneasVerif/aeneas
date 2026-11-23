@@ -112,9 +112,9 @@ def core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
   (r : core.result.Result Never E) : Std.Result (core.result.Result T F) :=
   match r with
   | .Ok x => x.casesOn
-  | .Err e => do
-      let v ← convertFromInst.from e
-      .ok (.Err v)
+  -- `Std.bind` rather than `do`: the monadic bind would force `F` to live in
+  -- the same universe as `Result T F`
+  | .Err e => Std.bind (convertFromInst.from e) fun v => .ok (.Err v)
 
 /-- Step spec for `Result::is_ok`: returns `true` iff the input is `Ok`. -/
 @[step]
