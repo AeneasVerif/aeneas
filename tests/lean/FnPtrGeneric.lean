@@ -38,23 +38,23 @@ def incr (x : Std.U8) : Result Std.U8 := do
 /-- [fn_ptr_generic::{impl core::ops::function::Fn<(u8,), u8> for fn_ptr_generic::incr}::call]:
     Source: 'tests/src/fn_ptr_generic.rs', lines 7:0-9:1 -/
 def P.Insts.CoreOpsFunctionFnTupleU8U8.call
-  (state : Std.U8 → Result Std.U8) (args : Std.U8) : Result Std.U8 := do
-  incr args
+  (f : Std.U8 → Result Std.U8) (i : Std.U8) : Result Std.U8 := do
+  incr i
 
 /-- [fn_ptr_generic::{impl core::ops::function::FnMut<(u8,), u8> for fn_ptr_generic::incr}::call_mut]:
     Source: 'tests/src/fn_ptr_generic.rs', lines 7:0-9:1 -/
 def P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
-  (state : Std.U8 → Result Std.U8) (args : Std.U8) :
+  (f : Std.U8 → Result Std.U8) (i : Std.U8) :
   Result (Std.U8 × (Std.U8 → Result Std.U8))
   := do
-  let i ← incr args
-  ok (i, state)
+  let i1 ← incr i
+  ok (i1, f)
 
 /-- [fn_ptr_generic::{impl core::ops::function::FnOnce<(u8,), u8> for fn_ptr_generic::incr}::call_once]:
     Source: 'tests/src/fn_ptr_generic.rs', lines 7:0-9:1 -/
 def P.Insts.CoreOpsFunctionFnOnceTupleU8U8.call_once
-  (state : Std.U8 → Result Std.U8) (args : Std.U8) : Result Std.U8 := do
-  incr args
+  (f : Std.U8 → Result Std.U8) (i : Std.U8) : Result Std.U8 := do
+  incr i
 
 /-- Trait implementation: [fn_ptr_generic::{impl core::ops::function::FnOnce<(u8,), u8> for fn_ptr_generic::incr}]
     Source: 'tests/src/fn_ptr_generic.rs', lines 7:0-9:1 -/
