@@ -66,7 +66,7 @@ example {O : Type} (BlaInst : Bla O) (o : Int) (s : O) : Cont (fun inst : Bla In
 
 `do let i ← m; k i` is `m >>= fun i => k i`, so a `do` block is nested `Cont.bind`s (here `Cont.option_bind`, the form for `Option`).  Each `bind`
 asks for the first action and, for every value `i` of the bound variable, the rest.  The final
-`pure (i + j)` is `Cont.pure` of something not mentioning `inst`, hence `Cont.const`. -/
+`pure (i + j)` does not mention `inst`, hence `Cont.const`. -/
 
 example {O : Type} (BlaInst : Bla O) (o : O) :
     Cont (fun inst : Bla Int => do let i ← BlaInst.to_num o; let j ← inst.to_num 1; pure (i + j)) := by
@@ -76,7 +76,7 @@ example {O : Type} (BlaInst : Bla O) (o : O) :
     apply Cont.option_bind
     · exact Cont.app (f := fun d : Bla Int => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) 1
     · intro j
-      exact Cont.pure (Cont.const _)
+      exact Cont.const _
 
 example {O : Type} (BlaInst : Bla O) (o : O) :
     Cont (fun inst : Bla Int => do let i ← BlaInst.to_num o; let j ← inst.to_num 1; pure (i + j)) := by
@@ -120,7 +120,7 @@ example {O : Type} (b : Bool) (o : O) :
   · delta helper                                   -- unfold, then it is a `do` block as in part 4
     apply Cont.option_bind
     · exact Cont.app (f := fun d : Bla O => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) o
-    · intro i; exact Cont.pure (Cont.const _)
+    · intro i; exact Cont.const _
   · cases b                                        -- the scrutinee `b` does not mention `inst`
     · exact Cont.app (f := fun d : Bla O => d.to_num) (Cont.fst (Cont.unfold Bla.F Cont.id)) o
     · exact Cont.const _

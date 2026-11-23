@@ -9,7 +9,7 @@ public import Aeneas.NonPos.TrustedBase.Command
 `Result T = ITree Eff T`, as in Aeneas, but with an effect that has a continuation (`input`), so
 that the order on `Result` is not flat.  `partial_fixpoint` works on it through the `CCPO` instance of
 `Coinductive`.  The continuity facts specific to `Result` (its own `bind`, `ok`, and `vis`) are tagged
-`@[nonpos_continuous]`; the generic `Cont.bind`/`Cont.pure` cover `do` notation.
+`@[nonpos_continuous]`; `ok` is covered by `Cont.const`.
 -/
 namespace NonPos.Tests
 open NonPos Aeneas.Data.Coinductive NonPos.Domain Lean.Order
@@ -52,9 +52,6 @@ theorem Cont.rbindCont {α β : Type} : Cont (fun p : Result α ×' (α → Resu
 /-! The `Result`-specific forms. -/
 section
 variable {D : Type w} [PartialOrder D]
-@[nonpos_continuous]
-theorem Cont.rok {A : Type} {a : D → A} (ha : Cont (iB := discreteOrder A) a) : Cont (fun d => Result.ok (a d)) :=
-  Cont.pure (M := Result) ha
 @[nonpos_continuous]
 theorem Cont.rbind {A B : Type} {m : D → Result A} {k : D → A → Result B}
     (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => Result.bind (m d) (k d)) :=

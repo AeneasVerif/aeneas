@@ -10,7 +10,7 @@ public import Aeneas.Std.Primitives
 `Aeneas.Std.Result α` is `ITree RustEffect α`, ordered by the `CCPO` that `partial_fixpoint` uses.
 Its values can be fields of `nonpos_structure`s (the methods of a trait compiled by Aeneas) through
 its `CCPO`.  This file proves that its `bind` satisfies the condition (`ITree.continuous_bind`), and
-tags the forms of `ok` and `bind` (as `>>=`, from `do` notation, and as `Aeneas.Std.bind`)
+tags the forms of `bind` (as `>>=`, from `do` notation, and as `Aeneas.Std.bind`)
 `@[nonpos_continuous]`, so that `nonpos_cont` can see through them.
 -/
 namespace NonPos.Std
@@ -27,16 +27,11 @@ theorem Cont.result_bindCont {α β : Type u} : Cont (fun p : Result α ×' (α 
     let : Dom (Result β) := Dom.ofCCPO (Result β)
     exact DCont.toPProd (g := fun x k => x >>= k) ITree.continuous_bind)
 
-/-! The `Result`-specific forms: Aeneas's names for `pure` and `bind`.  `Result.fail` and
-`Result.div` need no form: they never depend on the dictionary, so `nonpos_cont` treats them as
-constants. -/
+/-! The `Result`-specific forms of `bind`: as `Aeneas.Std.bind` and as `>>=`.  `Result.ok x`,
+`Result.fail` and `Result.div` need no form: they never depend on the dictionary (a dictionary has no
+field of plain data), so `nonpos_cont` treats them as constants. -/
 section
 variable {D : Type w} [Lean.Order.PartialOrder D]
-
-@[nonpos_continuous]
-theorem Cont.result_ok {A : Type u} {a : D → A} (ha : Cont (iB := discreteOrder A) a) :
-    Cont (fun d => Result.ok (a d)) :=
-  Cont.pure (M := Result) ha
 
 @[nonpos_continuous]
 theorem Cont.result_bind {A B : Type u} {m : D → Result A} {k : D → A → Result B}

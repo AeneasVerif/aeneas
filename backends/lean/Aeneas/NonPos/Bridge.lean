@@ -35,9 +35,6 @@ def Cont {A : Type w₁} {B : Type w₂} [iA : PartialOrder A] [iB : PartialOrde
   (∀ x y, x ⊑ y → f x ⊑ f y) ∧
     ∀ c : Nat → A, (∀ n, c n ⊑ c (n + 1)) → ∀ s, IsLub c s → IsLub (fun n => f (c n)) (f s)
 
-/-- The order of plain data: equality. -/
-@[instance_reducible] def discreteOrder (A : Type w) : PartialOrder A := (Dom.discrete A).po
-theorem discreteOrder.eq {A : Type w} {x y : A} (h : (discreteOrder A).rel x y) : x = y := h
 /-- The order of `PUnit`. -/
 @[instance_reducible] def unitOrder : PartialOrder PUnit.{w+1} := Dom.unit.po
 
@@ -163,13 +160,6 @@ theorem fix {α : Type w₁} [CCPO α] {f : D → α → α} {hm : ∀ d, Lean.O
   have h2 : f s (CCPO.csup hch) ⊑ CCPO.csup hch :=
     h1.2 _ (fun n => PartialOrder.rel_trans (PartialOrder.rel_of_eq (fix_eq (hm (c n))).symm) (hL.1 n))
   exact PartialOrder.rel_trans (fix_le (hm s) h2) (hL.2 u hu)
-
-theorem pure {M : Type u → Type u} [Pure M] [∀ α, PartialOrder (M α)] {α : Type u} {a : D → α}
-    (ha : Cont (iB := discreteOrder α) a) : Cont (fun d => (Pure.pure (a d) : M α)) :=
-  ⟨fun x y h => PartialOrder.rel_of_eq (congrArg Pure.pure (discreteOrder.eq (ha.1 x y h))),
-   fun _ _ _ hs => ⟨fun n => PartialOrder.rel_of_eq (congrArg Pure.pure (discreteOrder.eq (ha.1 _ _ (hs.1 n)))),
-     fun _ hu => PartialOrder.rel_trans
-       (PartialOrder.rel_of_eq (congrArg Pure.pure (discreteOrder.eq (ha.1 _ _ (hs.1 0))).symm)) (hu 0)⟩⟩
 
 end
 

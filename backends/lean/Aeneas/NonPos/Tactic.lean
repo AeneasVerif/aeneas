@@ -30,12 +30,20 @@ universe pu v u w w₁ w₂
 /-! ## 1. The forms
 
 The forms (`Cont.const`, `Cont.lam`, ..., `Cont.fold`, `Cont.fix`) are stated in
-`TrustedBase/Definitions.lean`.  Here is only how `partial_fixpoint`'s obligation follows from them. -/
+`TrustedBase/Definitions.lean`.  Here are only how `partial_fixpoint`'s obligation follows from them, and the proof step of
+the `bind` form of each monad. -/
 
 /-- `partial_fixpoint`'s monotonicity obligation, from the condition: write a self-referential
 instance as `def inst : Bla Int := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`. -/
 theorem Cont.monotone {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] {f : A → B} (h : Cont f) :
     Lean.Order.monotone f := Proofs.Cont.monotone h
+
+/-- `bind`, in a monad whose `bind` satisfies the condition (`hbind`): the proof of the `bind` form of
+each monad, which that monad tags `@[nonpos_continuous]` (`Result`'s in `NonPos/Std.lean`). -/
+theorem Cont.bind {D : Type w} [PartialOrder D] {M : Type u → Type u} [Bind M] [∀ α, PartialOrder (M α)]
+    {α β : Type u} (hbind : Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2)) {m : D → M α} {k : D → α → M β}
+    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) :=
+  Proofs.Cont.bind hbind hm hk
 
 /-! ## 2. The tactic
 
@@ -68,7 +76,7 @@ theorem Cont.foldDelayed {D : Type w} [PartialOrder D] {I : Type pu} (F : I → 
 /-- The forms the tactic looks up by the shape of the body. -/
 meta def forms : List Name :=
   [``Cont.pair, ``Cont.fst, ``Cont.snd, ``Cont.ite, ``Cont.dite,
-   ``Cont.pure, ``Cont.unfold, ``Cont.fold, ``Cont.foldDelayed, ``Cont.fix]
+   ``Cont.unfold, ``Cont.fold, ``Cont.foldDelayed, ``Cont.fix]
 
 /-- Gets a DiscrTree key from a theorem name.
 Works for theormes that return `… → Cont (fun d => body)` -/
