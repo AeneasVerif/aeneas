@@ -5,7 +5,7 @@ public import Aeneas.NonPos.Model.Fix
 /-!
 # Proofs
 
-Every theorem stated in `Top.lean` and `Tactic.lean` is proved here, about the definitions of `NonPos/Model/*`.
+Every theorem stated in `TrustedBase/Definitions.lean` is proved here, about the definitions of `NonPos/Model/*`.
 -/
 namespace NonPos.Proofs
 open NonPos

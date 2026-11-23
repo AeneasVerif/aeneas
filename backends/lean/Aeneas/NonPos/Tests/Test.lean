@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Command
+public import Aeneas.NonPos.TrustedBase.Command
 
 @[expose] public section
 -- as in the files Aeneas generates: the named instance binders of trait methods are unused
@@ -291,7 +291,7 @@ example {O : Type} (o : O) : Cont (fun BlaInst : Bla O => oddC BlaInst o) := by 
 /-! ## Compiled evaluation
 
 The definitions above are not `noncomputable`: dictionaries are compiled as their tuples of fields
-(section 3 of `Top.lean`).  `#guard` evaluates with the compiled code and fails the build on a wrong
+(the pieces of `TrustedBase/Definitions.lean`).  `#guard` evaluates with the compiled code and fails the build on a wrong
 result.  This includes the self-referential `SymBla` and `SymChild`, defined by `partial_fixpoint`. -/
 
 def StrBla : Bla String :=
@@ -387,7 +387,7 @@ nonpos_structure Real2 (Self : Type) : Type 1 where
 end
 
 /-! The impls are then mutual self-referential instances, as `natA2`/`natB2` above.  Every structure
-has a `CCPO` (section 4 of `Top.lean`), including those of a group with a cycle of plain dictionary
+has a `CCPO` (`Fix.instCCPO`, in `TrustedBase/Definitions.lean`), including those of a group with a cycle of plain dictionary
 fields, so `partial_fixpoint` defines them. -/
 
 mutual

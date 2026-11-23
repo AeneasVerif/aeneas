@@ -4,16 +4,16 @@ import all Init.Internal.Order.Basic
 
 @[expose] public section
 /-!
-# From the model to the statements of `Top.lean`
+# From the model to the statements of `TrustedBase/Definitions.lean`
 
 Not part of the trusted surface.  The model (`NonPos/Model/`) is stated on its own classes (`Dom`, an
-order with its suprema; `DCont`; `Shape`; `MFix`).  `Top.lean` and section 1 of `Tactic.lean` are
+order with its suprema; `DCont`; `Shape`; `MFix`).  `TrustedBase/Definitions.lean` is
 stated on Lean's `Lean.Order.PartialOrder` alone.  This file has what is in between:
 
 1. `Cont`, defined from `⊑` only, and the proofs of its forms, which hold for any partial orders;
 2. `Cont` and the model's `DCont` agree, where the model has a `Dom`;
 3. the class `FixFunctor` (an order and a condition on the bodies of a functor, with their model),
-   and the model of each piece of `Top.lean`;
+   and the model of each piece of `TrustedBase/Definitions.lean`;
 4. the fixed point `Fix`, with `fold` and `unfold`.
 -/
 
@@ -326,7 +326,7 @@ def prod : Model (fun X => G₁ X ×' G₂ X)
 end Prod
 end FixFunctor.Model
 
-/-! The pieces, as `HasModel` (what `Top.lean` writes as `model := .ccpo A`, ...). -/
+/-! The pieces, as `HasModel` (what `TrustedBase/Definitions.lean` writes as `model := .ccpo A`, ...). -/
 namespace FixFunctor.HasModel
 variable {I : Type pu}
 

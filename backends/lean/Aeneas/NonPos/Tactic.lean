@@ -1,17 +1,16 @@
 module
 public import Lean
-public import Aeneas.NonPos.Top
+public import Aeneas.NonPos.TrustedBase.Definitions
 
 @[expose] public section
 /-!
 # The forms, and the `nonpos_cont` tactic
 
-Section 1 is read with `Top.lean`: it states the forms of term that satisfy the condition `Cont`,
-which is how one sees that the condition holds of what Aeneas outputs.  The rest is not part of the
-trusted surface: `Command.lean` (section 2) states what it is expected to do, and every proof built
-here is checked by the kernel.  This file contains:
+The forms of term that satisfy the condition `Cont` are stated in `TrustedBase/Definitions.lean`.
+Nothing here is part of the trusted base: `TrustedBase/Command.lean` states what it is expected to
+do, and every proof built here is checked by the kernel.  This file contains:
 
-1. the forms;
+1. `Cont.monotone` (the forms themselves are in `TrustedBase/Definitions.lean`);
 2. the `nonpos_cont` tactic, a thin wrapper around the forms, and the `@[nonpos_continuous]`
    attribute;
 3. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
@@ -30,77 +29,8 @@ universe pu v u w w₁ w₂
 
 /-! ## 1. The forms
 
-`Cont f` (section 1 of `Top.lean`) is the condition on a function `f` between two types with `⊑`.
-The condition of a `mk` asks it of each method, as a function of each dictionary of the group that
-the method takes (`FixFunctor.arr`).  This section states that it holds of every term built from the
-forms below, which are the forms of the terms that Aeneas outputs.  In each statement, `d` is the
-varying value (the dictionary, or a tuple that contains it), of type `D`; the types are any types
-with `⊑`, and each `⊑` is the one that Lean finds for the type (`Top.lean`, section 1).
-
-* A term that does not mention `d` is `const`, and `d` itself is `id`.
-* `fun t => …` is `lam`.  An application is `app` when its argument does not mention `d`, and `app₂`
-  when it does; `app₂` asks that the function satisfy the condition in that argument, which a method
-  of a dictionary does, in a dictionary it takes: this is `Fix.cond` (`Top.lean`).
-* A field `e.m` of a dictionary is `unfold`, then `snd` and `fst`; `Bla.mk …` is `fold`, of a tuple
-  built with `pair`.
-* `if` is `ite` or `dite`, and a `match` on a value that does not mention `d` is a case analysis on
-  that value, outside of the term; `do` notation is `pure` and `bind`.
-* A definition is unfolded; if it is a `partial_fixpoint` (a recursive function, a loop, or an
-  instance that refers to itself), it unfolds to `Lean.Order.fix`, which is `fix`.
-
-`monotone` is not a form: it is what `partial_fixpoint` asks of a definition, and follows from the
-condition.  These are the statements that the tactic of section 2 applies. -/
-
-section Cont
-variable {D : Type w} [PartialOrder D]
-
-/-- (For any `⊑` on `B`: it is not searched for, but taken from where the statement is used.) -/
-theorem Cont.const {B : Type w₁} {iB : PartialOrder B} (b : B) : Cont (fun _ : D => b) := Proofs.Cont.const b
-theorem Cont.id : Cont (fun d : D => d) := Proofs.Cont.id
-/-- Lambda: pointwise. -/
-theorem Cont.lam {T : Type w₁} {B : T → Type w₂} [∀ t, PartialOrder (B t)] {f : D → (t : T) → B t}
-    (h : ∀ t, Cont (fun d => f d t)) : Cont f := Proofs.Cont.lam h
-/-- Application to an argument not depending on `d` (a type, a value, a fixed dictionary, ...). -/
-theorem Cont.app {T : Type w₁} {B : T → Type w₂} [∀ t, PartialOrder (B t)] {f : D → (t : T) → B t}
-    (hf : Cont f) (t : T) : Cont (fun d => f d t) := Proofs.Cont.app hf t
-/-- Application to an argument depending on `d`: the function must satisfy the condition. -/
-theorem Cont.app₂ {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] {f : D → A → B} {a : D → A}
-    (hf : Cont f) (hc : ∀ d, Cont (f d)) (ha : Cont a) : Cont (fun d => f d (a d)) := Proofs.Cont.app₂ hf hc ha
-/-- Pairs: the field tuples of a structure, and what a mutual `partial_fixpoint` is packed into. -/
-theorem Cont.pair {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] {f : D → A} {g : D → B}
-    (hf : Cont f) (hg : Cont g) : Cont (fun d => (⟨f d, g d⟩ : A ×' B)) := Proofs.Cont.pair hf hg
-theorem Cont.fst {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] {f : D → A ×' B} (hf : Cont f) :
-    Cont (fun d => (f d).1) := Proofs.Cont.fst hf
-theorem Cont.snd {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] {f : D → A ×' B} (hf : Cont f) :
-    Cont (fun d => (f d).2) := Proofs.Cont.snd hf
-theorem Cont.ite {B : Type w₁} [PartialOrder B] (c : Prop) [Decidable c] {t e : D → B}
-    (ht : Cont t) (he : Cont e) : Cont (fun d => if c then t d else e d) := Proofs.Cont.ite c ht he
-theorem Cont.dite {B : Type w₁} [PartialOrder B] (c : Prop) [Decidable c] {t : c → D → B} {e : ¬c → D → B}
-    (ht : ∀ h, Cont (t h)) (he : ∀ h, Cont (e h)) : Cont (fun d => if h : c then t h d else e h d) :=
-  Proofs.Cont.dite c ht he
-/-- `pure`, in any monad (`a d` is plain data), and `bind`, in a monad whose `bind` satisfies the
-condition (`hbind`; each monad states it, and tags its own `bind` form `@[nonpos_continuous]`:
-`Result`'s in `NonPos/Std.lean`). -/
-theorem Cont.pure {M : Type u → Type u} [Pure M] [∀ α, PartialOrder (M α)] {α : Type u} {a : D → α}
-    (ha : Cont (iB := discreteOrder α) a) : Cont (fun d => (pure (a d) : M α)) := Proofs.Cont.pure ha
-theorem Cont.bind {M : Type u → Type u} [Bind M] [∀ α, PartialOrder (M α)] {α β : Type u}
-    (hbind : Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2)) {m : D → M α} {k : D → α → M β}
-    (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) :=
-  Proofs.Cont.bind hbind hm hk
-/-- Fixed points: `partial_fixpoint` elaborates to `Lean.Order.fix`, for functions and for
-self-referential dictionaries alike. -/
-theorem Cont.fix {α : Type w₁} [CCPO α] {f : D → α → α} {hm : ∀ d, Lean.Order.monotone (f d)}
-    (hf : Cont (fun p : D ×' α => f p.1 p.2)) : Cont (fun d => Lean.Order.fix (f d) (hm d)) := Proofs.Cont.fix hf
-
-variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, FixFunctor (F k)]
-/-- The fields of a dictionary depending on `d` (a projection `e.m` is `(Fix.unfold F e).2. … .1`), and
-`mk` of fields depending on `d` (`Bla.mk f₁ … fₙ h` is `Fix.fold F ⟨f₁, …, fₙ, ⟨⟩⟩ h`, by definition). -/
-theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
-    Cont (iB := FixFunctor.order (F k) (Fix F)) (fun d => Fix.unfold F (f d)) := Proofs.Cont.unfold F hf
-theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, FixFunctor.cond (f d))
-    (hf : Cont (iB := FixFunctor.order (F k) (Fix F)) f) : Cont (fun d => Fix.fold F (f d) (h d)) :=
-  Proofs.Cont.fold F h hf
-end Cont
+The forms (`Cont.const`, `Cont.lam`, ..., `Cont.fold`, `Cont.fix`) are stated in
+`TrustedBase/Definitions.lean`.  Here is only how `partial_fixpoint`'s obligation follows from them. -/
 
 /-- `partial_fixpoint`'s monotonicity obligation, from the condition: write a self-referential
 instance as `def inst : Bla Int := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`. -/
@@ -129,7 +59,7 @@ theorem Cont.shape_pair {f : D → G X} {g : D → H X}
   @Proofs.Cont.pair D _ _ _ (FixFunctor.order G X) (FixFunctor.order H X) f g hf hg
 end ShapeForms
 
-/-- `Cont.fold` for `Fix.foldDelayed`, which is what a `mk` unfolds to (section 5 of `Top.lean`). -/
+/-- `Cont.fold` for `Fix.foldDelayed`, which is what a `mk` unfolds to (`TrustedBase/Definitions.lean`, where `foldDelayed` is). -/
 theorem Cont.foldDelayed {D : Type w} [PartialOrder D] {I : Type pu} (F : I → (I → Type v) → Type v)
     [∀ k, FixFunctor (F k)] {k : I} {f : D → Unit → F k (Fix F)} (h : ∀ d, FixFunctor.cond (f d ()))
     (hf : Cont (iB := FixFunctor.order (F k) (Fix F)) (fun d => f d ())) :
@@ -208,18 +138,18 @@ elab "nonpos_cond_norm" : tactic => withMainContext do
 /-- Simplify `FixFunctor.cond` conditions into a conjunction of `Cont` facts, one for each dictionary
 binder, dropping the clauses that are `True`.  First `nonpos_cond_norm` rewrites every `FixFunctor.cond`
 in the goal and hypotheses (by definitional unfolding, checked by `change`) so that its functor is a
-literal lambda and its instance is built from the pieces of section 2 of `Top.lean`; then `simp` unfolds the `cond`
+literal lambda and its instance is built from the pieces of the pieces of `TrustedBase/Definitions.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr, FixFunctor.const,
+  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input, FixFunctor.base,
       FixFunctor.var, FixFunctor.unit, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
-  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.arr,
-      FixFunctor.const, FixFunctor.var, FixFunctor.unit]))
+  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input,
+      FixFunctor.base, FixFunctor.var, FixFunctor.unit]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
 arguments `t₁ … tₖ` that do not depend on `d`: `fn'` is `(Fix.unfold F e).2. … .1 t₁ … tₖ`.  The

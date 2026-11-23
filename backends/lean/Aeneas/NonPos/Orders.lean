@@ -8,7 +8,7 @@ public import Aeneas.NonPos.Proofs
 
 The orders of the model (`Dom`) of each type (section 1), the `Shape` of each piece (section 2), and
 the order of the fixed point of a group (section 3).  Not part of the trusted surface: `Bridge.lean`
-relates these to Lean's `⊑`, on which `Top.lean` is stated.
+relates these to Lean's `⊑`, on which `TrustedBase/Definitions.lean` is stated.
 -/
 
 namespace NonPos

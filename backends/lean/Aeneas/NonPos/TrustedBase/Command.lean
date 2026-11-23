@@ -1,17 +1,17 @@
 module
 public import Lean
-public import Aeneas.NonPos.Top
+public import Aeneas.NonPos.TrustedBase.Definitions
 public import Aeneas.NonPos.Tactic
 
 @[expose] public section
 /-!
 # `nonpos_structure`: the command
 
-With `Top.lean` and section 1 of `Tactic.lean`, this file is the trusted surface of the library:
+With `TrustedBase/Definitions.lean`, this file is the trusted surface of the library:
 the `nonpos_structure` command, a thin wrapper around `Fix` (section 1), and what the `nonpos_cont`
 tactic, which proves the condition of each structure, is expected to do (section 2).
 
-It imports `NonPos/Tactic.lean`, of which only section 1 is part of the trusted surface: the
+It imports `NonPos/Tactic.lean`, which is not part of the trusted surface: the
 command uses the rest only to prove the `simp` lemmas it states (`nonpos_proj_mk`) and, after
 the definitions of a group, to prove lemmas about them for the tactic (`elabGroupLemmas`).  Every
 proof the tactic builds is checked by the kernel.
@@ -38,14 +38,14 @@ structure:
 * `Bla Self := Fix G.F (.Bla Self)`;
 * `Bla.mk to_num add (h : FixFunctor.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F ⟨to_num, add, ⟨⟩⟩ h`, written
   as `Fix.foldDelayed G.F (fun _ => ⟨to_num, add, ⟨⟩⟩) h`, which is the same and is how it runs
-  (section 5 of `Top.lean`);
+  (`TrustedBase/Definitions.lean`, where `foldDelayed` is);
 * `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
   type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk` (a projection of `mk` is
   the field), stated here and proved by the tactic `nonpos_proj_mk` of `NonPos/Tactic.lean`;
 * then, by `elabGroupLemmas` (section 2), the lemmas of `NonPos/Tactic.lean` (section 4 there).
 
 The command never inspects the field types: `FixFunctor (G.F k)` is found by instance search, which can
-only succeed through the instances of section 3 of `Top.lean`, and the types of `mk` and the
+only succeed through the instances of the pieces of `TrustedBase/Definitions.lean`, and the types of `mk` and the
 projections are the user's own, checked by the kernel against `Fix`. -/
 
 syntax nonposField := ident " : " term
@@ -144,7 +144,7 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let fieldTuple                                              -- `⟨fa, ⟨⟩⟩`             `⟨to_nat, ⟨f, ⟨⟩⟩⟩`
       ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
     let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
-    -- `macro_inline`, so that the fields are not evaluated before `foldDelayed` delays them (section 5 of `Top.lean`)
+    -- `macro_inline`, so that the fields are not evaluated before `foldDelayed` delays them (`TrustedBase/Definitions.lean`, where `foldDelayed` is)
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
         (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) : $(s.name):ident $args* :=
       Fix.foldDelayed $fId (fun _ => $fieldTuple) h))  -- `Example1.mk`, `A.mk`, `B.mk`
@@ -164,7 +164,7 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
 /-! ## 2. Continuity, and the `nonpos_cont` tactic
 
 The condition `FixFunctor.cond` of a structure is a conjunction of `Cont` facts, one for each field
-that takes a dictionary of the group (section 3 of `Top.lean`; `nonpos_cond_simp`, in
+that takes a dictionary of the group (the pieces of `TrustedBase/Definitions.lean`; `nonpos_cond_simp`, in
 `NonPos/Tactic.lean`, unfolds the condition into them).  Aeneas proves the condition of each `mk` it outputs with the tactic `nonpos_cont`, and the
 monotonicity obligation of each self-referential instance with
 `partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`.

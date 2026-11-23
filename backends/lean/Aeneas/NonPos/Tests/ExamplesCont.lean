@@ -1,13 +1,13 @@
 module
 public import Aeneas.NonPos.Tests.Test
-public import Aeneas.NonPos.Command
+public import Aeneas.NonPos.TrustedBase.Command
 
 @[expose] public section
 /-!
 # The forms and the tactic, by example
 
 How `nonpos_cont` (section 2 of `Tactic.lean`) proves a body continuous, shown by proving the same
-goals by hand with the forms of section 1 of `Tactic.lean`.  Each hand proof lists, in order, the
+goals by hand with the forms of `TrustedBase/Definitions.lean`.  Each hand proof lists, in order, the
 forms the tactic applies; `nonpos_cont` then does the same goal in one call.  `Bla` is the structure
 of `Test.lean` over `Option`:
 ```
@@ -85,7 +85,7 @@ example {O : Type} (BlaInst : Bla O) (o : O) :
 /-! ## 5. Building a dictionary from a varying one: `fold`, `pair`
 
 `Bla.mk f g h` is `Fix.fold Bla.F ⟨f, g, ⟨⟩⟩ h`, written as `Fix.foldDelayed Bla.F (fun _ => ⟨f, g, ⟨⟩⟩) h`
-(section 5 of `Top.lean`).  `Cont.fold` (here as `Cont.foldDelayed`, the same form for that way of
+(`TrustedBase/Definitions.lean`, where `foldDelayed` is).  `Cont.fold` (here as `Cont.foldDelayed`, the same form for that way of
 writing it) asks for the tuple to be continuous in `inst`, which `Cont.pair` splits into the fields; a
 field with binders is `Cont.lam` once per binder.
 This is the shape of the monotonicity obligation of a self-referential instance
@@ -171,7 +171,7 @@ example : Cont (fun inst : Bla Int => (inst.to_num 1).getD 0 + 1) := by nonpos_c
 -- error: nonpos_cont: continuity of Option.rec … is not known
 ```
 and correctly so: the result type `Int` has no undefined value, so a method returning it could
-only be constant (which is also why a structure has no field of plain data: section 3 of `Top.lean`).  The same body wrapped in the monad,
+only be constant (which is also why a structure has no field of plain data: the pieces of `TrustedBase/Definitions.lean`).  The same body wrapped in the monad,
 `do let i ← inst.to_num 1; pure (i + 1)`, is accepted by part 4. -/
 
 end

@@ -36,7 +36,7 @@ abbrev Example1.Fields (Example1 : Type) : Type :=
 abbrev Example1.F : Example1.I → (Example1.I → Type) → Type
   | .Example1, X => Example1.Fields (X .Example1)
 
--- The shape, found by instance search: `FixFunctor.prod (FixFunctor.const (Option Nat)) (FixFunctor.prod (FixFunctor.arr …) FixFunctor.unit)`.
+-- The shape, found by instance search: `FixFunctor.prod (FixFunctor.base (Option Nat)) (FixFunctor.prod (FixFunctor.rec_input …) FixFunctor.unit)`.
 @[reducible] instance Example1.shape : ∀ k, FixFunctor (Example1.F k)
   | .Example1 => inferInstance
 
@@ -44,7 +44,7 @@ abbrev Example1.F : Example1.I → (Example1.I → Type) → Type
 abbrev Example1 : Type := Fix Example1.F .Example1
 
 -- `mk`, from the fields and the condition.  `macro_inline`, so that the fields are not evaluated
--- before `foldDelayed` delays them (section 5 of `Top.lean`).
+-- before `foldDelayed` delays them (`TrustedBase/Definitions.lean`, where `foldDelayed` is).
 @[macro_inline] def Example1.mk (to_nat : Option Nat) (f : Example1 → Option Nat)
     (h : FixFunctor.cond (X := Fix Example1.F) (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
   Fix.foldDelayed Example1.F (fun _ => ⟨to_nat, f, ⟨⟩⟩) h

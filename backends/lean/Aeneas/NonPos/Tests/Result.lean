@@ -1,6 +1,6 @@
 module
 public import Aeneas.NonPos.Domain.ITree
-public import Aeneas.NonPos.Command
+public import Aeneas.NonPos.TrustedBase.Command
 
 @[expose] public section
 /-!
