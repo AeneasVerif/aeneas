@@ -1,4 +1,4 @@
 module
 public import Aeneas.NonPos.TrustedBase.Command
-public import Aeneas.NonPos.Std
+public import Aeneas.NonPos.TrustedBase.Result
 import Aeneas.NonPos.Tests
