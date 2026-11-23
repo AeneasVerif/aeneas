@@ -924,7 +924,8 @@ pub const trait Iterator {
     }
     */
 
-    // NOT SUPPORTED: its closure captures `&mut compare`, and Aeneas generates an ill-typed `call_mut` for it.
+    // NOT SUPPORTED: its closure calls `cmp::max_by` with `&mut compare`, and Aeneas translates a generic
+    // function (and `FnOnce for &mut F`) used at a mutable reference ill-typed, aeneas#1215.
     /*
     fn max_by<F>(self, compare: F) -> Option<Self::Item>
     where
@@ -970,7 +971,8 @@ pub const trait Iterator {
     }
     */
 
-    // NOT SUPPORTED: its closure captures `&mut compare`, and Aeneas generates an ill-typed `call_mut` for it.
+    // NOT SUPPORTED: its closure calls `cmp::min_by` with `&mut compare`, and Aeneas translates a generic
+    // function (and `FnOnce for &mut F`) used at a mutable reference ill-typed, aeneas#1215.
     /*
     fn min_by<F>(self, compare: F) -> Option<Self::Item>
     where
@@ -1316,7 +1318,8 @@ pub const trait DoubleEndedIterator: [const] Iterator {
         crate::array::iter_next_chunk_back(self)
     }
 
-    // NOT SUPPORTED: `NonZero`'s trait `ZeroablePrimitive` gets two Lean fields named `markerCopyInst`.
+    // NOT SUPPORTED: it returns a `NonZero`, whose trait `ZeroablePrimitive` requires `Copy` twice (for two
+    // types), and Aeneas names both Lean fields `markerCopyInst`, aeneas#1051.
     /*
     fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
     where
