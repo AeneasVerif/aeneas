@@ -1,4 +1,5 @@
 module
 public import Aeneas.NonPos.TrustedBase.Command
 public import Aeneas.NonPos.TrustedBase.Result
-import Aeneas.NonPos.Tests
+-- built with the library, but not exported
+import Aeneas.NonPos.TrustedBase.CommandExamples

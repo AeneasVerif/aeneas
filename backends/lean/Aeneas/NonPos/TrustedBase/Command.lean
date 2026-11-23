@@ -10,7 +10,7 @@ open Lean Elab Command Term Meta
 /-!
 This file defines the `nonpos_structure` command.
 
-See ../Tests/CommandExamples.lean for examples of the definitions that this command produces
+See CommandExamples.lean for examples of the definitions that this command produces
 for example inputs.
 
 The command works by translating the given `nonpos_structure` syntax into the definitions in that
