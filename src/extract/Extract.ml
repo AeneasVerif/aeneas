@@ -2984,16 +2984,24 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
 
 (** Small helper.
 
-    The type `ty` is to be understood in a very general sense. *)
-let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
-    (item_name : string) (separator : string) (ty : unit -> unit) : unit =
+    The type `ty` is to be understood in a very general sense.
+
+    - [as_named_arg]: print the item as a named argument [(item_name := ...)]
+      rather than as a structure field. We use this for the implementations of
+      the traits extracted as [nonpos_structure]s (Lean only), which are built
+      with the constructor function rather than with the [{ ... }] notation. *)
+let extract_trait_item ?(as_named_arg : bool = false) (ctx : extraction_ctx)
+    (fmt : F.formatter) (item_name : string) (separator : string)
+    (ty : unit -> unit) : unit =
   F.pp_print_space fmt ();
   F.pp_open_hovbox fmt ctx.indent_incr;
+  if as_named_arg then F.pp_print_string fmt "(";
   F.pp_print_string fmt item_name;
   F.pp_print_space fmt ();
   (* ":" or "=" *)
   F.pp_print_string fmt separator;
   ty ();
+  if as_named_arg then F.pp_print_string fmt ")";
   (match backend () with
   | Lean -> ()
   | _ -> F.pp_print_string fmt ";");
@@ -3003,14 +3011,15 @@ let extract_trait_decl_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (ty : unit -> unit) : unit =
   extract_trait_item ctx fmt item_name ":" ty
 
-let extract_trait_impl_item (ctx : extraction_ctx) (fmt : F.formatter)
-    (item_name : string) (ty : unit -> unit) : unit =
+let extract_trait_impl_item ?(as_named_arg : bool = false)
+    (ctx : extraction_ctx) (fmt : F.formatter) (item_name : string)
+    (ty : unit -> unit) : unit =
   let assign =
     match backend () with
     | Lean | Coq -> ":="
     | _ -> "="
   in
-  extract_trait_item ctx fmt item_name assign ty
+  extract_trait_item ~as_named_arg ctx fmt item_name assign ty
 
 (** Small helper - TODO: move *)
 let generic_params_drop_prefix ~(drop_trait_clauses : bool)
@@ -3081,6 +3090,67 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
+
+(** Should the trait declaration [id] be extracted as a [nonpos_structure] (Lean
+    backend only)?
+
+    This is the case for the traits which break positivity, and thus can't be
+    modelled by an ordinary structure:
+    - the traits of a group of (at least two) mutually recursive traits, e.g.,
+      [Iterator] and [FromIterator]. Charon computes these groups
+      ([TraitDeclGroup (RecGroup ids)]); we collect their traits once, in
+      [ctx.rec_group_trait_decls];
+    - the traits which refer to themselves in the trait clauses of a method
+      (e.g., [fn add<Other: Bla>(...)] in trait [Bla]) or in a parent clause. We
+      need this second check because Charon never puts a single trait in a
+      recursive group (almost all traits refer to [Self]).
+
+    The builtin traits (e.g., the std [Iterator] family, which Charon also puts
+    in a recursive group) are never extracted as [nonpos_structure]s: their
+    models are written by hand in the Lean library. *)
+let trait_decl_is_nonpos (ctx : extraction_ctx) (id : trait_decl_id) : bool =
+  backend () = Lean
+  &&
+  match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+  | None -> false (* The declaration might be missing if there was an error *)
+  | Some decl ->
+      decl.builtin_info = None
+      && (TraitDeclId.TreeSet.mem id ctx.rec_group_trait_decls
+         ||
+         let is_self (clause : trait_param) = clause.trait_id = id in
+         List.exists is_self decl.parent_clauses
+         || List.exists
+              (fun (meth : trait_method) ->
+                List.exists is_self meth.signature.generics.trait_clauses)
+              decl.methods)
+
+(** Values for fuel for proving continuity, and typeclass instance search, for
+    files with nonpositive structures..*)
+let nonpos_cont_fuel = 5000
+
+let nonpos_synth_instance_max_size = 4096
+
+(** Print [nonpos_continuity f] (Lean only) after a function [f] which takes a
+    dictionary of a trait extracted as a [nonpos_structure]: this command
+    proves, once, the continuity of [f] in its dictionary arguments, which
+    [nonpos_cont] otherwise proves again each time it meets [f] (see the Lean
+    file [Aeneas/NonPos/Tactic.lean]). Opaque functions are skipped: they have
+    no body to prove their continuity from. *)
+let extract_nonpos_continuity (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : fun_decl) : unit =
+  if
+    Option.is_some def.body
+    && List.exists
+         (fun (clause : trait_param) ->
+           trait_decl_is_nonpos ctx clause.trait_id)
+         def.signature.generics.trait_clauses
+  then (
+    (* Only Lean has [nonpos_structure]s (see [trait_decl_is_nonpos]) *)
+    [%sanity_check] def.item_meta.span (backend () = Lean);
+    F.pp_print_string fmt
+      ("nonpos_continuity "
+      ^ ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx);
+    F.pp_print_break fmt 0 0)
 
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
@@ -3159,9 +3229,13 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `struct Trait (....) =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
+  let is_nonpos = trait_decl_is_nonpos ctx decl.def_id in
   let qualif =
-    Option.get
-      (type_decl_kind_to_qualif decl.item_meta.span SingleNonRec (Some Struct))
+    if is_nonpos then "nonpos_structure"
+      (* TODO: should we organize this using a per backend function? *)
+    else
+      Option.get
+        (type_decl_kind_to_qualif decl.item_meta.span SingleNonRec (Some Struct))
   in
   let is_empty = trait_decl_is_empty decl in
   if backend () = FStar && not is_empty then (
@@ -3206,7 +3280,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
       decl.llbc_generics generics ctx
   in
   extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.TreeSet.empty
-    Item generics (Some decl.explicit_info) type_params cg_params trait_clauses;
+    ~poly_types:(not is_nonpos) Item generics (Some decl.explicit_info)
+    type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
   if is_empty && backend () = FStar then (
@@ -3221,7 +3296,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ())
   else (
     (match backend () with
-    | Lean -> F.pp_print_string fmt "where"
+    | Lean ->
+        (* A [nonpos_structure] needs its universe to be written explicitly *)
+        if is_nonpos then F.pp_print_string fmt ": Type 1 where"
+        else F.pp_print_string fmt "where"
     | FStar -> F.pp_print_string fmt "= {"
     | Coq ->
         let cons =
@@ -3300,6 +3378,12 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "}");
   F.pp_close_box fmt ();
+  (* In lean, traits need to derive CCPO so they can be used as fields
+     of nonpositive traits. Happens for supertraits, and bounds on an
+     associated type. See [Aeneas/Tactic/Elab/DeriveCCPO.lean]. *)
+  if backend () = Lean && not is_nonpos then (
+    F.pp_force_newline fmt ();
+    F.pp_print_string fmt "deriving Lean.Order.CCPO");
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
@@ -3380,9 +3464,9 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
 (** Small helper.
 
     Extract the items for a method in a trait impl. *)
-let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
-    (fmt : F.formatter) (impl : trait_impl) (method_id : trait_method_id)
-    (fn : fun_decl_ref binder) : unit =
+let extract_trait_impl_method_items_aux ~(as_named_arg : bool)
+    (ctx : extraction_ctx) (fmt : F.formatter) (impl : trait_impl)
+    (method_id : trait_method_id) (fn : fun_decl_ref binder) : unit =
   let span = impl.item_meta.span in
   let trait_decl_id = impl.impl_trait.trait_decl_id in
   let method_decl_id = fn.binder_value.fun_id in
@@ -3423,12 +3507,13 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
       fn.binder_value.fun_generics
   in
 
-  extract_trait_impl_item ctx fmt fun_name ty
+  extract_trait_impl_item ~as_named_arg ctx fmt fun_name ty
 
-let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) (method_id : trait_method_id) (fn : fun_decl_ref binder)
-    : unit =
-  try extract_trait_impl_method_items_aux ctx fmt impl method_id fn
+let extract_trait_impl_method_items ~(as_named_arg : bool)
+    (ctx : extraction_ctx) (fmt : F.formatter) (impl : trait_impl)
+    (method_id : trait_method_id) (fn : fun_decl_ref binder) : unit =
+  try
+    extract_trait_impl_method_items_aux ~as_named_arg ctx fmt impl method_id fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3440,8 +3525,20 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   let span = impl.item_meta.span in
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl span impl.def_id ctx in
+  (* If the trait is extracted as a [nonpos_structure], we build the impl with
+     its constructor function and named arguments rather than as a structure. *)
+  let is_nonpos = trait_decl_is_nonpos ctx impl.impl_trait.trait_decl_id in
+  (* An impl of a [nonpos_structure] which refers to itself (e.g., through a
+     provided method) is defined with [partial_fixpoint], not [impl_def] *)
+  let is_fixpoint = is_rec && is_nonpos in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
+  (* Without this option, a [by] proof in the body is abstracted into an
+     auxiliary theorem, and [partial_fixpoint] then fails to see that the
+     parameters of a generic impl are fixed *)
+  if is_fixpoint then (
+    F.pp_print_string fmt "set_option backward.proofsInPublic true in";
+    F.pp_print_break fmt 0 0);
   (* Print a comment to link the extracted type to its original rust definition *)
   begin
     let decl_id = impl.impl_trait.trait_decl_id in
@@ -3500,7 +3597,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Lean only: we have a special elaboration if the impl is recursive *)
-  (if is_rec then (
+  (if is_rec && not is_nonpos then (
      F.pp_print_string fmt "impl_def";
      F.pp_print_space fmt ())
    else
@@ -3567,7 +3664,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Outer box *)
     F.pp_close_box fmt ())
   else (
-    if backend () = Lean then F.pp_print_string fmt ":= {"
+    if is_nonpos then
+      F.pp_print_string fmt
+        (":= "
+        ^ ctx_get_trait_constructor span impl.impl_trait.trait_decl_id ctx)
+    else if backend () = Lean then F.pp_print_string fmt ":= {"
     else if backend () = Coq then F.pp_print_string fmt ":= {|"
     else F.pp_print_string fmt "= {";
 
@@ -3625,7 +3726,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           if needs_brackets then F.pp_print_string fmt ")"
         in
 
-        extract_trait_impl_item ctx fmt item_name ty)
+        extract_trait_impl_item ~as_named_arg:is_nonpos ctx fmt item_name ty)
       impl.consts;
 
     (* The types *)
@@ -3637,7 +3738,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           extract_ty span ctx fmt TypeDeclId.TreeSet.empty ~inside:false ty
         in
-        extract_trait_impl_item ctx fmt item_name ty)
+        extract_trait_impl_item ~as_named_arg:is_nonpos ctx fmt item_name ty)
       impl.types;
 
     (* The parent clauses *)
@@ -3651,7 +3752,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           extract_trait_ref span ctx fmt TypeDeclId.TreeSet.empty ~inside:false
             trait_ref
         in
-        extract_trait_impl_item ctx fmt item_name ty)
+        extract_trait_impl_item ~as_named_arg:is_nonpos ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
     (* The methods.
@@ -3677,18 +3778,35 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (method_id, name, bound_fn) ->
         if keep_method name then
-          extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
+          extract_trait_impl_method_items ~as_named_arg:is_nonpos ctx fmt impl
+            method_id bound_fn)
       impl.methods;
 
+    (* For a [nonpos_structure], the last argument of the constructor is the
+       proof of its condition. We print it before closing the box, so that it
+       is indented like the other arguments. *)
+    if is_nonpos then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt
+        ("(by nonpos_cont " ^ string_of_int nonpos_cont_fuel ^ ")"));
     (* Close the outer boxes for the definition, as well as the brackets *)
     F.pp_close_box fmt ();
     if backend () = Coq then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "|}.")
+    else if is_nonpos then ()
     else if (not (backend () = FStar)) || not is_empty then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "}"));
   F.pp_close_box fmt ();
+  (* The impl is the least fixed point of its body; the [monotonicity] proof
+     comes from the continuity of the body *)
+  if is_fixpoint then (
+    F.pp_print_break fmt 0 0;
+    F.pp_print_string fmt
+      ("partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont "
+      ^ string_of_int nonpos_cont_fuel
+      ^ ")"));
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 

@@ -12,6 +12,7 @@ open Result
 @[rust_trait "core::borrow::Borrow"]
 structure core.borrow.Borrow (Self : Type _) (Borrowed : Type _) where
   borrow : Self → Result Borrowed
+deriving Lean.Order.CCPO
 
 /-- Model of the blanket `impl<T: ?Sized> Borrow<T> for T`: the identity. -/
 @[expose, rust_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow"]

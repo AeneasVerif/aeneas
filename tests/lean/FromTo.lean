@@ -24,11 +24,13 @@ namespace from_to
     Source: 'tests/src/from_to.rs', lines 3:0-5:1 -/
 structure From (Self : Type _) (T : Type _) where
   «from» : T → Result Self
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [from_to::To]
     Source: 'tests/src/from_to.rs', lines 7:0-11:1 -/
 structure To (Self : Type _) where
   «to» : forall {T : Type} (FromInst : From T Self), Self → Result T
+deriving Lean.Order.CCPO
 
 /-- [from_to::{impl from_to::From<u32> for u32}::from]:
     Source: 'tests/src/from_to.rs', lines 14:4-16:5 -/

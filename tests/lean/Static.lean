@@ -25,6 +25,7 @@ namespace static
     Visibility: public -/
 structure WithSlice (Self : Type _) where
   SLICE : Result (Slice Std.U16)
+deriving Lean.Order.CCPO
 
 /-- [static::read]:
     Source: 'tests/src/static.rs', lines 27:0-29:1 -/

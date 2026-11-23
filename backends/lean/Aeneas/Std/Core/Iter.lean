@@ -28,6 +28,7 @@ structure core.iter.range.Step (Self : Type _) where
   steps_between : Self → Self → Result (Usize × (Option Usize))
   forward_checked : Self → Usize → Result (Option Self)
   backward_checked : Self → Usize → Result (Option Self)
+deriving Lean.Order.CCPO
 
 open Result
 
@@ -103,6 +104,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _
   -- `Iterator` to `SimpleIterator`.
   -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- this leads to a circularity
   -- TODO: collect
+deriving Lean.Order.CCPO
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.trait_default
@@ -172,10 +174,12 @@ impl_def core.iter.traits.iterator.IteratorStepBy {I : Type _} {Item : Type _}
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type _) (A : Type _) where
   sum : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::accum::Product"]
 structure core.iter.traits.accum.Product (Self : Type _) (A : Type _) where
   product : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::collect::IntoIterator"
   (parentClauses := ["iteratorInst"])]
@@ -183,12 +187,14 @@ structure core.iter.traits.collect.IntoIterator (Self : Type _) (Item :
   Type _) (IntoIter : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator IntoIter Item
   into_iter : Self → Result IntoIter
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::collect::FromIterator"]
 structure core.iter.traits.collect.FromIterator (Self : Type _) (A : Type _) where
   from_iter : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
     T → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_fun
   "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter",
@@ -220,17 +226,20 @@ def core.iter.traits.iterator.Iterator.collect.default
 structure core.iter.traits.collect.Extend (Self : Type _) (A : Type _) where
   extend : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter), Self → T → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::double_ended::DoubleEndedIterator"
   (parentClauses := ["iteratorInst"])]
 structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
   next_back : Self → Result ((Option Item) × Self)
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::exact_size::ExactSizeIterator"
   (parentClauses := ["iteratorInst"])]
 structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
+deriving Lean.Order.CCPO
 
 -- ============================================================================
 -- Generic Step operations for UScalar types

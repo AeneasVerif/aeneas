@@ -9,9 +9,11 @@ namespace Aeneas.Std
 structure core.hash.Hasher (Self : Type _) where
   finish : Self → Result U64
   write : Self → Slice U8 → Result Self
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::hash::Hash"]
 structure core.hash.Hash (Self : Type _) where
   hash : forall {H : Type}, core.hash.Hasher H → Self → H → Result H
+deriving Lean.Order.CCPO
 
 end Aeneas.Std

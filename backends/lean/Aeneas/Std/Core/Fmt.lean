@@ -17,6 +17,7 @@ noncomputable opaque core.fmt.Formatter : Type
 @[rust_trait "core::fmt::Debug"]
 structure core.fmt.Debug (T : Type u) where
   fmt : T → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
+deriving Lean.Order.CCPO
 
 -- TODO: move?
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
@@ -70,10 +71,12 @@ def core.fmt.rt.Argument.new_debug
 @[rust_trait "core::fmt::Display"]
 structure core.fmt.Display (Self : Type _) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::fmt::LowerHex"]
 structure core.fmt.LowerHex (Self : Type _) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
+deriving Lean.Order.CCPO
 
 @[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_lower_hex"]
 def core.fmt.rt.Argument.new_lower_hex

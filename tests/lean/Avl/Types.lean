@@ -34,6 +34,7 @@ inductive Ordering where
     Visibility: public -/
 structure Ord (Self : Type _) where
   cmp : Self → Self → Result Ordering
+deriving Lean.Order.CCPO
 
 /-- [avl::Node]
     Source: 'src/avl.rs', lines 28:0-33:1 -/

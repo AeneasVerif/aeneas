@@ -25,6 +25,7 @@ namespace const_shadow
 structure HasConst (Self : Type _) (N1 : Std.Usize) where
   N : Result Std.Usize
   get : Self → Result (Array Std.U8 N1)
+deriving Lean.Order.CCPO
 
 /-- [const_shadow::Foo]
     Source: 'tests/src/const-shadow.rs', lines 18:0-18:11 -/

@@ -1,0 +1,279 @@
+module
+public import Aeneas.NonPos.Implementation.Model.Dom
+import all Init.Internal.Order.Basic
+
+@[expose] public section
+/-!
+# Continuity lemmas, least elements, fixpoints
+-/
+namespace NonPos
+open NonPos.Domain NonPos.Model Lean.Order
+
+universe u w w₁ w₂ w₃ w₄
+
+noncomputable section
+set_option warn.classDefReducibility false
+attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod
+
+/-- `letDom A, B` puts the `PartialOrder` and `OmegaSup` instances of the `Dom`s of `A`, `B` in scope. -/
+syntax "letDom" term,+ : tactic
+macro_rules
+  | `(tactic| letDom $t:term) => `(tactic| (letI := (Dom.po : PartialOrder $t); letI := (Dom.os : OmegaSup $t)))
+  | `(tactic| letDom $t:term, $ts:term,*) => `(tactic| (letDom $t; letDom $ts,*))
+
+section Lemmas
+variable {D : Type w} {A : Type w₁} {B : Type w₂} {C : Type w₃} [Dom D] [Dom A] [Dom B] [Dom C]
+
+theorem DCont.mono {f : D → B} (h : DCont f) {x y : D} (hxy : Dom.le x y) : Dom.le (f x) (f y) :=
+  @Continuous.mono D B Dom.po Dom.po Dom.os Dom.os f h x y hxy
+theorem DCont.monoFn {f : D → B} (h : DCont f) : ∀ x y, Dom.le x y → Dom.le (f x) (f y) :=
+  fun _ _ hxy => h.mono hxy
+/-- `DCont.mono` and `DCont.sup_eq` with the `Dom`s taken from the hypothesis (no instance search). -/
+theorem DCont.mono' {A : Type w₃} {B : Type w₄} {dA : Dom A} {dB : Dom B} {f : A → B} (h : @DCont A B dA dB f)
+    {x y : A} (hxy : @Dom.le A dA x y) : @Dom.le B dB (f x) (f y) :=
+  @Continuous.mono A B dA.po dB.po dA.os dB.os f h x y hxy
+theorem DCont.sup_eq' {A : Type w₃} {B : Type w₄} {dA : Dom A} {dB : Dom B} {f : A → B} (h : @DCont A B dA dB f)
+    (c : @Dom.Chain A dA) :
+    f (@Dom.sup A dA c) = @Dom.sup B dB (@Chain.map A B dA.po dB.po c f (@Continuous.mono A B dA.po dB.po dA.os dB.os f h)) :=
+  @Continuous.sup_eq A B dA.po dB.po dA.os dB.os f h c
+
+theorem DCont.comp' {A : Type w₁} {B : Type w₂} {C : Type w₃} {dA : Dom A} {dB : Dom B} {dC : Dom C}
+    {g : B → C} {f : A → B} (hg : @DCont B C dB dC g) (hf : @DCont A B dA dB f) : @DCont A C dA dC (fun a => g (f a)) :=
+  @Continuous.comp A B C dA.po dB.po dC.po dA.os dB.os dC.os g f hg hf
+theorem DCont.const' {A : Type w₁} {B : Type w₂} {dA : Dom A} {dB : Dom B} (b : B) : @DCont A B dA dB (fun _ => b) :=
+  @Continuous.const A B dA.po dB.po dA.os dB.os b
+theorem DCont.congr' {A : Type w₁} {B : Type w₂} {dA : Dom A} {dB : Dom B} {f g : A → B} (hf : @DCont A B dA dB f)
+    (h : ∀ a, f a = g a) : @DCont A B dA dB g := by
+  have : f = g := funext h
+  subst this; exact hf
+
+theorem DCont.supChain' {D : Type w₁} {B : Type w₂} {dD : Dom D} {dB : Dom B} {g : Nat → D → B}
+    (hg : ∀ n, @DCont D B dD dB (g n)) (hstep : ∀ n d, @Dom.le B dB (g n d) (g (n + 1) d)) :
+    @DCont D B dD dB (fun d => @Dom.sup B dB (@Chain.mk B dB.po (fun n => g n d) (fun n => hstep n d))) := by
+  refine @Continuous.of_le D B dD.po dB.po dD.os dB.os _ (fun x y hxy => ?_) (fun c => ?_)
+  · exact @Dom.sup_le B dB _ _ fun n => @Dom.le_trans B dB _ _ _ (DCont.mono' (hg n) hxy)
+      (@Dom.le_sup B dB (@Chain.mk B dB.po (fun n => g n y) (fun n => hstep n y)) n)
+  · apply @Dom.sup_le B dB
+    intro n
+    show @Dom.le B dB (g n (@Dom.sup D dD c)) _
+    rw [DCont.sup_eq' (hg n) c]
+    apply @Dom.sup_le B dB
+    intro m
+    refine @Dom.le_trans B dB _ _ _ ?_ (@Dom.le_sup B dB _ m)
+    exact @Dom.le_sup B dB (@Chain.mk B dB.po (fun n => g n (c m)) (fun n => hstep n (c m))) n
+
+/-- Build a continuity proof with the `Dom` instances taken from the expected type (no instance search). -/
+theorem DCont.mk' {A : Type w₃} {B : Type w₄} {dA : Dom A} {dB : Dom B} (f : A → B)
+    (mono : ∀ x y, @Dom.le A dA x y → @Dom.le B dB (f x) (f y))
+    (sup : ∀ c : @Dom.Chain A dA, f (@Dom.sup A dA c) = @Dom.sup B dB (@Chain.map A B dA.po dB.po c f mono)) :
+    @DCont A B dA dB f :=
+  @Continuous.mk A B dA.po dB.po dA.os dB.os f mono sup
+
+theorem Dom.step {A : Type w₄} [Dom A] (c : Dom.Chain A) (n : Nat) : Dom.le (c n) (c (n + 1)) :=
+  @Chain.step A Dom.po c n
+theorem Dom.step' {A : Type w₄} {d : Dom A} (c : @Dom.Chain A d) (n : Nat) : @Dom.le A d (c n) (c (n + 1)) :=
+  @Chain.step A d.po c n
+/-- A chain, with the `Dom` taken from the expected type. -/
+def Dom.mkChain {A : Type w₄} {d : Dom A} (f : Nat → A) (h : ∀ n, @Dom.le A d (f n) (f (n + 1))) : @Dom.Chain A d :=
+  @Chain.mk A d.po f h
+theorem Dom.chain_le {A : Type w₄} [Dom A] (c : Dom.Chain A) {n m : Nat} (h : n ≤ m) : Dom.le (c n) (c m) :=
+  @Chain.le A Dom.po c n m h
+theorem Dom.chain_le' {A : Type w₄} {d : Dom A} (c : @Dom.Chain A d) {n m : Nat} (h : n ≤ m) : @Dom.le A d (c n) (c m) :=
+  @Chain.le A d.po c n m h
+
+theorem DCont.sup_eq {f : D → B} (h : DCont f) (c : Dom.Chain D) :
+    f (Dom.sup c) = Dom.sup (@Chain.map D B Dom.po Dom.po c f (@Continuous.mono D B Dom.po Dom.po Dom.os Dom.os f h)) :=
+  @Continuous.sup_eq D B Dom.po Dom.po Dom.os Dom.os f h c
+
+theorem Model.DCont.const (b : B) : DCont (fun _ : D => b) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.po : PartialOrder B)
+  letI := (Dom.os : OmegaSup D); letI := (Dom.os : OmegaSup B)
+  Continuous.const b
+
+theorem Model.DCont.id : DCont (fun d : D => d) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.os : OmegaSup D)
+  Continuous.id
+
+theorem DCont.comp {g : B → C} {f : D → B} (hg : DCont g) (hf : DCont f) : DCont (fun d => g (f d)) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.po : PartialOrder B); letI := (Dom.po : PartialOrder C)
+  letI := (Dom.os : OmegaSup D); letI := (Dom.os : OmegaSup B); letI := (Dom.os : OmegaSup C)
+  Continuous.comp hg hf
+
+theorem DCont.congr {f g : D → B} (hf : DCont f) (h : ∀ d, f d = g d) : DCont g := by
+  have : f = g := funext h
+  subst this; exact hf
+
+theorem Model.DCont.lam {T : Type w₃} {B : T → Type w₄} [∀ t, Dom (B t)] {f : D → (t : T) → B t}
+    (h : ∀ t, DCont (fun d => f d t)) : DCont f :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.os : OmegaSup D)
+  letI : ∀ t, PartialOrder (B t) := fun _ => Dom.po; letI : ∀ t, OmegaSup (B t) := fun _ => Dom.os
+  Continuous.pi_lam h
+
+theorem Model.DCont.app {T : Type w₃} {B : T → Type w₄} [∀ t, Dom (B t)] {f : D → (t : T) → B t}
+    (hf : DCont f) (t : T) : DCont (fun d => f d t) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.os : OmegaSup D)
+  letI : ∀ t, PartialOrder (B t) := fun _ => Dom.po; letI : ∀ t, OmegaSup (B t) := fun _ => Dom.os
+  Continuous.pi_app hf t
+
+theorem Model.DCont.pair {f : D → A} {g : D → B} (hf : DCont f) (hg : DCont g) : DCont (fun d => (f d, g d)) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.po : PartialOrder A); letI := (Dom.po : PartialOrder B)
+  letI := (Dom.os : OmegaSup D); letI := (Dom.os : OmegaSup A); letI := (Dom.os : OmegaSup B)
+  Continuous.prod_mk hf hg
+
+theorem Model.DCont.fst {f : D → A × B} (hf : DCont f) : DCont (fun d => (f d).1) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.po : PartialOrder A); letI := (Dom.po : PartialOrder B)
+  letI := (Dom.os : OmegaSup D); letI := (Dom.os : OmegaSup A); letI := (Dom.os : OmegaSup B)
+  Continuous.prod_fst hf
+
+theorem Model.DCont.snd {f : D → A × B} (hf : DCont f) : DCont (fun d => (f d).2) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.po : PartialOrder A); letI := (Dom.po : PartialOrder B)
+  letI := (Dom.os : OmegaSup D); letI := (Dom.os : OmegaSup A); letI := (Dom.os : OmegaSup B)
+  Continuous.prod_snd hf
+
+/-- Joint continuity from separate continuity. -/
+theorem DCont.uncurry {f : D → A → B} (h₁ : ∀ a, DCont (fun d => f d a)) (h₂ : ∀ d, DCont (f d)) :
+    DCont (fun p : D × A => f p.1 p.2) :=
+  letI := (Dom.po : PartialOrder D); letI := (Dom.po : PartialOrder A); letI := (Dom.po : PartialOrder B)
+  letI := (Dom.os : OmegaSup D); letI := (Dom.os : OmegaSup A); letI := (Dom.os : OmegaSup B)
+  Continuous.of_separate h₁ h₂
+
+theorem Model.DCont.app₂ {f : D → A → B} {a : D → A} (hf : DCont f) (hc : ∀ d, DCont (f d)) (ha : DCont a) :
+    DCont (fun d => f d (a d)) :=
+  DCont.comp (DCont.uncurry (fun x => DCont.app hf x) hc) (DCont.pair DCont.id ha)
+
+theorem Model.DCont.ite (c : Prop) [Decidable c] {t e : D → B} (ht : DCont t) (he : DCont e) :
+    DCont (fun d => if c then t d else e d) := by
+  by_cases h : c
+  · simp only [h, ite_true]; exact ht
+  · simp only [h, ite_false]; exact he
+
+theorem Model.DCont.dite (c : Prop) [Decidable c] {t : c → D → B} {e : ¬c → D → B}
+    (ht : ∀ h, DCont (t h)) (he : ∀ h, DCont (e h)) : DCont (fun d => if h : c then t h d else e h d) := by
+  by_cases h : c
+  · simp only [h, dite_true]; exact ht h
+  · simp only [h, dite_false]; exact he h
+
+/-- `PProd` -/
+theorem Model.DCont.ppair {f : D → A} {g : D → B} (hf : DCont f) (hg : DCont g) :
+    DCont (fun d => (⟨f d, g d⟩ : A ×' B)) := by
+  letDom D, A, B, (A ×' B)
+  refine ⟨fun x y h => ⟨hf.mono h, hg.mono h⟩, fun c => ?_⟩
+  show (⟨f (OmegaSup.sup c), g (OmegaSup.sup c)⟩ : A ×' B) = ⟨_, _⟩
+  rw [hf.sup_eq c, hg.sup_eq c]; rfl
+
+theorem Model.DCont.pfst {f : D → A ×' B} (hf : DCont f) : DCont (fun d => (f d).1) := by
+  letDom D, A, B, (A ×' B)
+  refine ⟨fun x y h => (hf.mono h).1, fun c => ?_⟩
+  show (f (OmegaSup.sup c)).1 = _
+  rw [hf.sup_eq c]; rfl
+
+theorem Model.DCont.psnd {f : D → A ×' B} (hf : DCont f) : DCont (fun d => (f d).2) := by
+  letDom D, A, B, (A ×' B)
+  refine ⟨fun x y h => (hf.mono h).2, fun c => ?_⟩
+  show (f (OmegaSup.sup c)).2 = _
+  rw [hf.sup_eq c]; rfl
+
+/-- Joint continuity through `×` and through `×'` are interchangeable. -/
+theorem DCont.toPProd {g : A → B → C} (h : DCont (fun p : A × B => g p.1 p.2)) : DCont (fun p : A ×' B => g p.1 p.2) :=
+  DCont.congr (DCont.comp (g := fun p : A × B => g p.1 p.2) (f := fun p : A ×' B => (p.1, p.2)) h
+    (DCont.pair (DCont.pfst DCont.id) (DCont.psnd DCont.id))) (fun _ => rfl)
+theorem DCont.ofPProd {g : A → B → C} (h : DCont (fun p : A ×' B => g p.1 p.2)) : DCont (fun p : A × B => g p.1 p.2) :=
+  DCont.congr (DCont.comp (g := fun p : A ×' B => g p.1 p.2) (f := fun p : A × B => ⟨p.1, p.2⟩) h
+    (DCont.ppair (DCont.fst DCont.id) (DCont.snd DCont.id))) (fun _ => rfl)
+
+omit [Dom A] in
+/-- Every function out of a discrete type is continuous. -/
+theorem DCont.ofDiscrete (f : A → B) : @DCont A B (Dom.discrete A) _ f := by
+  letI dA : Dom A := Dom.discrete A
+  letI := (dA.po : PartialOrder A); letI := (dA.os : OmegaSup A)
+  letDom B
+  refine ⟨fun x y h => h ▸ PartialOrder.rel_refl, fun c => ?_⟩
+  have hc : ∀ n, c n = c 0 := fun n => OmegaSup.le_sup c n
+  apply PartialOrder.rel_antisymm
+  · exact OmegaSup.le_sup (c.map f _) 0
+  · exact OmegaSup.sup_le _ _ (fun n => by show f (c n) ⊑ f (c 0); rw [hc n])
+
+/-- The supremum of a chain of continuous functions is continuous. -/
+theorem DCont.supChain {g : Nat → D → B} (hg : ∀ n, DCont (g n)) (hstep : ∀ n d, Dom.le (g n d) (g (n + 1) d)) :
+    DCont (fun d => Dom.sup (A := B) (@Chain.mk B Dom.po (fun n => g n d) (fun n => hstep n d))) := by
+  refine @Continuous.of_le D B Dom.po Dom.po Dom.os Dom.os _ (fun x y hxy => ?_) (fun c => ?_)
+  · exact Dom.sup_le _ _ fun n => Dom.le_trans ((hg n).mono hxy)
+      (Dom.le_sup (@Chain.mk B Dom.po (fun n => g n y) (fun n => hstep n y)) n)
+  · apply Dom.sup_le
+    intro n
+    show Dom.le (g n (Dom.sup c)) _
+    rw [(hg n).sup_eq c]
+    apply Dom.sup_le
+    intro m
+    refine Dom.le_trans ?_ (Dom.le_sup _ m)
+    exact Dom.le_sup (@Chain.mk B Dom.po (fun n => g n (c m)) (fun n => hstep n (c m))) n
+theorem DCont.puncurry {f : D → A → B} (h₁ : ∀ a, DCont (fun d => f d a)) (h₂ : ∀ d, DCont (f d)) :
+    DCont (fun p : D ×' A => f p.1 p.2) :=
+  DCont.toPProd (DCont.uncurry h₁ h₂)
+end Lemmas
+
+/-! ## Least elements -/
+
+theorem Pointed.unit : Pointed PUnit.{w+1} := ⟨⟨PUnit.unit, fun _ => trivial⟩⟩
+attribute [local instance] Pointed.unit
+theorem Pointed.prod (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] [Pointed A] [Pointed B] : Pointed (A × B) :=
+  let ⟨a, ha⟩ := Pointed.exists_bot (A := A); let ⟨b, hb⟩ := Pointed.exists_bot (A := B)
+  ⟨⟨(a, b), fun x => ⟨ha x.1, hb x.2⟩⟩⟩
+attribute [local instance] Pointed.prod
+theorem Pointed.pprod (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] [Pointed A] [Pointed B] : Pointed (A ×' B) :=
+  let ⟨a, ha⟩ := Pointed.exists_bot (A := A); let ⟨b, hb⟩ := Pointed.exists_bot (A := B)
+  ⟨⟨⟨a, b⟩, fun x => ⟨ha x.1, hb x.2⟩⟩⟩
+attribute [local instance] Pointed.pprod
+theorem Pointed.pi (T : Type w₁) (B : T → Type w₂) [∀ t, Dom (B t)] [∀ t, Pointed (B t)] :
+    Pointed ((t : T) → B t) :=
+  ⟨⟨fun t => Classical.choose (Pointed.exists_bot (A := B t)),
+    fun f t => Classical.choose_spec (Pointed.exists_bot (A := B t)) (f t)⟩⟩
+attribute [local instance] Pointed.pi
+theorem Pointed.ofCCPO (A : Type w) [CCPO A] : @Pointed A (Dom.ofCCPO A) :=
+  letI : Dom A := Dom.ofCCPO A
+  ⟨⟨Lean.Order.bot, fun x => Lean.Order.bot_le x⟩⟩
+attribute [local instance] Pointed.ofCCPO
+
+/-- The least element of a pointed admissible type. -/
+def Dom.bot (A : Type w) [Dom A] [Pointed A] : A := Classical.choose (Pointed.exists_bot (A := A))
+theorem Dom.bot_le {A : Type w} [Dom A] [Pointed A] (x : A) : Dom.le (Dom.bot A) x :=
+  Classical.choose_spec (Pointed.exists_bot (A := A)) x
+
+/-! ## Fixpoints -/
+
+section MFix
+variable {D : Type w} {A : Type w₁} [Dom D] [Dom A] [Pointed A]
+
+/-- `f` iterated `n` times. -/
+def Dom.iterate (f : A → A) : Nat → A → A
+  | 0, a => a
+  | n + 1, a => f (Dom.iterate f n a)
+
+/-- The iterates of `f` from the least element. -/
+def Dom.iter (f : A → A) (hf : ∀ x y, Dom.le x y → Dom.le (f x) (f y)) : Dom.Chain A :=
+  @Chain.mk A Dom.po (fun n => Dom.iterate f n (Dom.bot A)) fun n => by
+    induction n with
+    | zero => exact Dom.bot_le _
+    | succ n ih => exact hf _ _ ih
+
+theorem Dom.iter_succ (f : A → A) (hf) (n : Nat) : Dom.iter f hf (n + 1) = f (Dom.iter f hf n) := rfl
+
+/-- Iterating a jointly continuous family, with the parameter varying, and taking suprema is continuous. -/
+theorem DCont.iterSup {f : D → A → A} (hf : DCont (fun p : D × A => f p.1 p.2)) (hc : ∀ d, DCont (f d)) :
+    DCont (fun d => Dom.sup (A := A) (Dom.iter (f d) (hc d).monoFn)) := by
+  have hn : ∀ n, DCont (fun d => (Dom.iter (f d) (hc d).monoFn : Dom.Chain A) n) := by
+    intro n
+    induction n with
+    | zero => exact DCont.const _
+    | succ n ih =>
+      refine DCont.congr (DCont.comp hf (DCont.pair DCont.id ih)) fun d => ?_
+      exact (Dom.iter_succ (f d) _ n).symm
+  exact DCont.supChain (g := fun n d => (Dom.iter (f d) (hc d).monoFn : Dom.Chain A) n) hn
+    (fun n d => Dom.step (Dom.iter (f d) (hc d).monoFn) n)
+
+end MFix
+
+
+
+end
+end NonPos

@@ -12,6 +12,7 @@ open Result
 @[rust_trait "core::convert::Into"]
 structure core.convert.Into (Self : Type _) (T : Type _) where
   into : Self → Result T
+deriving Lean.Order.CCPO
 
 @[expose, reducible, simp, step_simps, rust_fun "core::convert::{core::convert::Into<@T, @U>}::into"]
 def core.convert.IntoFrom.into {T : Type _} {U : Type _}
@@ -27,6 +28,7 @@ def core.convert.IntoFrom {T : Type _} {U : Type _} (fromInst : core.convert.Fro
 @[rust_trait "core::convert::AsRef"]
 structure core.convert.AsRef (Self : Type _) (T : Type _) where
   as_ref : Self → Result T
+deriving Lean.Order.CCPO
 
 @[expose, simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
 def core.convert.FromSame.from {T : Type _} (x : T) : T := x
@@ -39,6 +41,7 @@ def core.convert.FromSame (T : Type _) : core.convert.From T T := {
 @[rust_trait "core::convert::TryFrom"]
 structure core.convert.TryFrom (Self T Error : Type _) where
   try_from : T → Result (core.result.Result Self Error)
+deriving Lean.Order.CCPO
 
 @[expose, rust_fun "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"]
 def core.convert.TryInto.Blanket.try_into
@@ -49,6 +52,7 @@ def core.convert.TryInto.Blanket.try_into
 @[rust_trait "core::convert::TryInto"]
 structure core.convert.TryInto (Self T Error : Type _) where
   try_into : Self → Result (core.result.Result T Error)
+deriving Lean.Order.CCPO
 
 @[expose, reducible, simp]
 def core.convert.TryIntoFrom.try_into {T U Error : Type _} (fromInst : core.convert.TryFrom U T Error)
@@ -71,6 +75,7 @@ def core.convert.TryInto.Blanket {T U E : Type _}
 @[rust_trait "core::convert::AsMut"]
 structure core.convert.AsMut (Self : Type _) (T : Type _) where
   as_mut : Self → Result (T × (T → Self))
+deriving Lean.Order.CCPO
 
 /-- `Result::is_ok`: `true` on `Ok`, `false` on `Err`. -/
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::is_ok"]

@@ -167,6 +167,8 @@ let lean_keywords : string list =
     "nofun";
     "nomatch";
     "noncomputable";
+    "nonpos_continuity";
+    "nonpos_structure";
     "nonrec";
     "norm_cast_add_elim";
     "notation";

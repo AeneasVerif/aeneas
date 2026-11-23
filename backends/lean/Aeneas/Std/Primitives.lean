@@ -3,6 +3,7 @@ public import Lean
 public meta import Aeneas.Std.Global
 public import Aeneas.Extract
 public import AeneasMeta.BvEnumToBitVec
+public import Aeneas.Tactic.Elab.DeriveCCPO
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
 public section
@@ -333,7 +334,7 @@ section Order
 open Lean.Order
 
 instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
-noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
+instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : MonoBind Result := instMonoBindITree
 
 @[partial_fixpoint_monotone]

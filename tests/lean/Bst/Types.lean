@@ -33,6 +33,7 @@ inductive Ordering where
     Source: 'src/bst.rs', lines 11:0-13:1 -/
 structure Ord (Self : Type _) where
   cmp : Self → Self → Result Ordering
+deriving Lean.Order.CCPO
 
 /-- [bst::Node]
     Source: 'src/bst.rs', lines 15:0-19:1 -/

@@ -24,6 +24,7 @@ namespace dyn
     Source: 'tests/src/dyn.rs', lines 3:0-5:1 -/
 structure Trait (Self : Type _) where
   get : Self → Result Std.U32
+deriving Lean.Order.CCPO
 
 /-- [dyn::{impl dyn::Trait for u32}::get]:
     Source: 'tests/src/dyn.rs', lines 8:4-10:5 -/
@@ -65,6 +66,7 @@ def mk_trait (b : Bool) : Result (Dyn (fun _dyn => Trait _dyn)) := do
     Source: 'tests/src/dyn.rs', lines 31:0-33:1 -/
 structure Into (Self : Type _) (T : Type _) where
   into : Self → Result T
+deriving Lean.Order.CCPO
 
 /-- [dyn::mk_into]:
     Source: 'tests/src/dyn.rs', lines 36:0-46:1 -/
@@ -80,6 +82,7 @@ def mk_into
 /-- Trait declaration: [dyn::Trivial]
     Source: 'tests/src/dyn.rs', lines 48:0-48:16 -/
 structure Trivial (Self : Type _) where
+deriving Lean.Order.CCPO
 
 /-- [dyn::dyn_closure::{closure}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/

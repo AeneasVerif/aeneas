@@ -28,6 +28,7 @@ namespace multi_target
 structure SimdTrait (Self : Type _) (Self_Vec : Type _) where
   coremarkerCopyInst : core.marker.Copy Self_Vec
   add : Self_Vec → Self_Vec → Result Self_Vec
+deriving Lean.Order.CCPO
 
 /-- [multi_target::x86::Sse2]
     Source: 'tests/src/multi-target.rs', lines 14:4-14:20

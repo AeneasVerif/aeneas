@@ -14,11 +14,13 @@ open Result
 structure core.cmp.PartialEq (Self : Type _) (Rhs : Type _) where
   eq : Self → Rhs → Result Bool
   ne : Self → Rhs → Result Bool := fun self other => do ok (not (← eq self other))
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"])]
 structure core.cmp.Eq (Self : Type _) where
   partialEqInst : core.cmp.PartialEq Self Self
   assert_fields_are_eq (_ : Self) : Result Unit := .ok ()
+deriving Lean.Order.CCPO
 
 @[expose, simp, trait_default, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
 def core.cmp.Eq.assert_fields_are_eq.default
@@ -96,6 +98,7 @@ structure core.cmp.PartialOrd (Self : Type _) (Rhs : Type _) where
   le : Self → Rhs → Result Bool := core.cmp.PartialOrd.le_body partial_cmp
   gt : Self → Rhs → Result Bool := core.cmp.PartialOrd.gt_body partial_cmp
   ge : Self → Rhs → Result Bool := core.cmp.PartialOrd.ge_body partial_cmp
+deriving Lean.Order.CCPO
 
 /- Default method -/
 @[expose] def core.cmp.PartialOrd.lt.default {Self Rhs : Type _}
@@ -173,6 +176,7 @@ structure core.cmp.Ord (Self : Type _) where
     core.cmp.Ord.min_body partialOrdInst.lt
   clamp : Self → Self → Self → Result Self :=
     core.cmp.Ord.clamp_body partialOrdInst.le partialOrdInst.lt partialOrdInst.gt
+deriving Lean.Order.CCPO
 
 /- Default method -/
 @[expose] def core.cmp.Ord.max.default {Self : Type _} (lt : Self → Self → Result Bool)

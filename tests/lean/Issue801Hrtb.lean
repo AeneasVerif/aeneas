@@ -24,6 +24,7 @@ namespace issue_801_hrtb
     Source: 'tests/src/issue-801-hrtb.rs', lines 4:0-6:1 -/
 structure T (Self : Type _) (X : Type _) where
   dummy : Result X
+deriving Lean.Order.CCPO
 
 /-- [issue_801_hrtb::test]:
     Source: 'tests/src/issue-801-hrtb.rs', lines 8:0-10:1 -/

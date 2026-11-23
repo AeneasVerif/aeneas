@@ -23,11 +23,13 @@ namespace blanket_impl
 /-- Trait declaration: [blanket_impl::Trait1]
     Source: 'tests/src/blanket_impl.rs', lines 3:0-3:15 -/
 structure Trait1 (Self : Type _) where
+deriving Lean.Order.CCPO
 
 /-- Trait declaration: [blanket_impl::Trait2]
     Source: 'tests/src/blanket_impl.rs', lines 4:0-6:1 -/
 structure Trait2 (Self : Type _) where
   foo : Result Unit
+deriving Lean.Order.CCPO
 
 /-- [blanket_impl::Trait2::foo]:
     Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 -/

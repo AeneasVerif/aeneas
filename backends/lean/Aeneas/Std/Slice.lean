@@ -351,6 +351,7 @@ structure core.slice.index.SliceIndex (Self T Output : Type _) where
   get_unchecked_mut : Self → MutRawPtr T → Result (MutRawPtr Output)
   index : Self → T → Result Output
   index_mut : Self → T → Result (Output × (Output → T))
+deriving Lean.Order.CCPO
 
 @[expose, rust_fun "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"]
 def core.slice.index.Slice.index

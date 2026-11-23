@@ -157,6 +157,7 @@ partial_fixpoint
     Visibility: public -/
 structure Counter (Self : Type _) where
   incr : Self → Result (Std.Usize × Self)
+deriving Lean.Order.CCPO
 
 /-- [demo::{impl demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5

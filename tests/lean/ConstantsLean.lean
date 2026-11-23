@@ -25,6 +25,7 @@ namespace constants_lean
 structure Params (Self : Type _) where
   N : Result Std.Usize
   M : Result Std.Usize
+deriving Lean.Order.CCPO
 
 /-- [constants_lean::use_params]:
     Source: 'tests/src/constants-lean.rs', lines 8:0-10:1 -/
@@ -61,6 +62,7 @@ def Wrapper.NM (N1 : Std.Usize) (M1 : Std.Usize) : Result Std.Usize := N1 * M1
     Source: 'tests/src/constants-lean.rs', lines 22:0-24:1 -/
 structure Trait (Self : Type _) where
   NM : Result Std.Usize
+deriving Lean.Order.CCPO
 
 /-- [constants_lean::{impl constants_lean::Trait for constants_lean::Wrapper<N, M>}::NM]
     Source: 'tests/src/constants-lean.rs', lines 27:4-27:28 -/
@@ -83,6 +85,7 @@ structure Trait1 (Self : Type _) where
   N : Result Std.Usize
   M : Result Std.Usize
   NM : Result Std.Usize
+deriving Lean.Order.CCPO
 
 /-- [constants_lean::Trait1::NM]
     Source: 'tests/src/constants-lean.rs', lines 33:4-33:40 -/
@@ -119,6 +122,7 @@ structure Params1 (Self : Type _) where
   LOGQ : Result Std.Usize
   PACKED_LEN : Result Std.Usize
   CT1_LEN : Result Std.Usize
+deriving Lean.Order.CCPO
 
 /-- [constants_lean::Params1::PACKED_LEN]
     Source: 'tests/src/constants-lean.rs', lines 45:4-45:57 -/
@@ -207,6 +211,7 @@ def get_static_str_name : Result Str := do
     Visibility: public -/
 structure HasStaticRef (Self : Type _) where
   C : Result StaticRef
+deriving Lean.Order.CCPO
 
 /-- [constants_lean::read_trait_static_ref]:
     Source: 'tests/src/constants-lean.rs', lines 92:0-94:1
