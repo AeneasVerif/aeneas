@@ -82,41 +82,41 @@ end OptionMonad
 
 /-! ## The example of the goal -/
 
-nonpos_structure Example1 : Type where
+nonpos_structure SimpleNonpos : Type where
   to_nat : Option Nat
-  f : Example1 → Option Nat
+  f : SimpleNonpos → Option Nat
 
-#check @Example1.mk
-#check @Example1.to_nat
-#check @Example1.f
-#check @Example1.f_mk
+#check @SimpleNonpos.mk
+#check @SimpleNonpos.to_nat
+#check @SimpleNonpos.f
+#check @SimpleNonpos.f_mk
 
 /-- A method applied to the dictionary being varied itself. -/
-example : Cont (fun d : Example1 => d.f d) := by nonpos_cont
+example : Cont (fun d : SimpleNonpos => d.f d) := by nonpos_cont
 
-/-! ## `Bla`, with `Option` in place of `Result` -/
+/-! ## `Measure`, with `Option` in place of `Result` -/
 
-nonpos_structure Bla (Self : Type) : Type 1 where
-  to_num : Self → Option Int
-  add : ∀ {Other : Type} (BlaInst : Bla Other), Other → Self → Option Int
+nonpos_structure Measure (Self : Type) : Type 1 where
+  size : Self → Option Int
+  combine : ∀ {Other : Type} (MeasureInst : Measure Other), Other → Self → Option Int
 
-#check @Bla.mk
-#check @Bla.add
+#check @Measure.mk
+#check @Measure.combine
 
 /-- The method bodies, as Aeneas would generate them. -/
-def IntBla.to_num (self : Int) : Option Int := some self
-def IntBla.add {Other : Type} (BlaInst : Bla Other) (o : Other) (s : Int) : Option Int := do
-  let i ← BlaInst.to_num o
-  let i1 ← IntBla.to_num s
+def IntMeasure.size (self : Int) : Option Int := some self
+def IntMeasure.combine {Other : Type} (MeasureInst : Measure Other) (o : Other) (s : Int) : Option Int := do
+  let i ← MeasureInst.size o
+  let i1 ← IntMeasure.size s
   pure (i + i1)
 
 /-- The instance: the condition is discharged by the tactic. -/
-def IntBla : Bla Int :=
-  Bla.mk IntBla.to_num (fun {Other} (BlaInst : Bla Other) => IntBla.add BlaInst) (by nonpos_cont)
+def IntMeasure : Measure Int :=
+  Measure.mk IntMeasure.size (fun {Other} (MeasureInst : Measure Other) => IntMeasure.combine MeasureInst) (by nonpos_cont)
 
-example (x : Int) : Bla.to_num IntBla x = some x := by simp [IntBla, IntBla.to_num]
-example {O : Type} (inst : Bla O) (o : O) (s : Int) : Bla.add IntBla inst o s = IntBla.add inst o s := by
-  simp [IntBla]
+example (x : Int) : Measure.size IntMeasure x = some x := by simp [IntMeasure, IntMeasure.size]
+example {O : Type} (inst : Measure O) (o : O) (s : Int) : Measure.combine IntMeasure inst o s = IntMeasure.combine inst o s := by
+  simp [IntMeasure]
 /-! ## A mutual group -/
 
 mutual
@@ -165,52 +165,52 @@ open NonPos
 structure Wrapper (T : Type) where
   x : T
 
-def WrapperBla.to_num {T : Type} (BlaInst : Bla T) (self : Wrapper T) : Option Int :=
-  BlaInst.to_num self.x
-def WrapperBla.add {T Other : Type} (BlaInst : Bla T) (BlaInst1 : Bla Other) (o : Other) (s : Wrapper T) :
+def WrapperMeasure.size {T : Type} (MeasureInst : Measure T) (self : Wrapper T) : Option Int :=
+  MeasureInst.size self.x
+def WrapperMeasure.combine {T Other : Type} (MeasureInst : Measure T) (MeasureInst1 : Measure Other) (o : Other) (s : Wrapper T) :
     Option Int :=
-  BlaInst.add BlaInst1 o s.x
+  MeasureInst.combine MeasureInst1 o s.x
 
-def WrapperBla {T : Type} (BlaInst : Bla T) : Bla (Wrapper T) :=
-  Bla.mk (WrapperBla.to_num BlaInst) (fun {Other} (BlaInst1 : Bla Other) => WrapperBla.add BlaInst BlaInst1)
+def WrapperMeasure {T : Type} (MeasureInst : Measure T) : Measure (Wrapper T) :=
+  Measure.mk (WrapperMeasure.size MeasureInst) (fun {Other} (MeasureInst1 : Measure Other) => WrapperMeasure.combine MeasureInst MeasureInst1)
     (by nonpos_cont)
 
 /-- The generic instance is itself continuous (as Aeneas's `use_wrapper` needs). -/
-example {T : Type} : Cont (fun BlaInst : Bla T => WrapperBla BlaInst) := by nonpos_cont
+example {T : Type} : Cont (fun MeasureInst : Measure T => WrapperMeasure MeasureInst) := by nonpos_cont
 
 /-! ## Bodies with `match`, `if`, and a helper -/
 
-def helper {O : Type} (BlaInst : Bla O) (o : O) : Option Int := do
-  let i ← BlaInst.to_num o
+def helper {O : Type} (MeasureInst : Measure O) (o : O) : Option Int := do
+  let i ← MeasureInst.size o
   pure (i * 2)
 
-def Forms.add {Other : Type} (BlaInst : Bla Other) (o : Other) (s : Int) : Option Int := do
-  let n ← helper BlaInst o
+def Forms.combine {Other : Type} (MeasureInst : Measure Other) (o : Other) (s : Int) : Option Int := do
+  let n ← helper MeasureInst o
   match (n > 10 : Bool) with
   | true => none
   | false =>
-    if s < 0 then BlaInst.to_num o
+    if s < 0 then MeasureInst.size o
     else pure (n + s)
 
-example {Other : Type} : Cont (fun BlaInst : Bla Other => Forms.add BlaInst) := by nonpos_cont
+example {Other : Type} : Cont (fun MeasureInst : Measure Other => Forms.combine MeasureInst) := by nonpos_cont
 
 /-! ## A self-referential instance (`Sym`): the method passes its own instance along -/
 
-def SymBla : Bla Int :=
-  Bla.mk (fun s => some s) (fun {Other} (BlaInst : Bla Other) o s => BlaInst.add SymBla s o) (by nonpos_cont)
+def SymMeasure : Measure Int :=
+  Measure.mk (fun s => some s) (fun {Other} (MeasureInst : Measure Other) o s => MeasureInst.combine SymMeasure s o) (by nonpos_cont)
 partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)
 
-example {O : Type} (inst : Bla O) (o : O) (s : Int) : Bla.add SymBla inst o s = inst.add SymBla s o := by
-  conv => lhs; rw [SymBla.eq_1]
+example {O : Type} (inst : Measure O) (o : O) (s : Int) : Measure.combine SymMeasure inst o s = inst.combine SymMeasure s o := by
+  conv => lhs; rw [SymMeasure.eq_1]
   simp
 
 /-- A generic self-referential instance: depends on a dictionary parameter, and is itself continuous
 in it (covered by `Cont.fix`, since `partial_fixpoint` elaborates to `Lean.Order.fix`). -/
-def SymWrap {T : Type} (b : Bla T) : Bla (Wrapper T) :=
-  Bla.mk (fun w => b.to_num w.x) (fun {O} (i : Bla O) o w => i.add (SymWrap b) w o) (by nonpos_cont)
+def SymWrap {T : Type} (b : Measure T) : Measure (Wrapper T) :=
+  Measure.mk (fun w => b.size w.x) (fun {O} (i : Measure O) o w => i.combine (SymWrap b) w o) (by nonpos_cont)
 partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)
 
-example {T : Type} : Cont (fun b : Bla T => SymWrap b) := by nonpos_cont
+example {T : Type} : Cont (fun b : Measure T => SymWrap b) := by nonpos_cont
 
 /-! Mutually recursive self-referential instances of the mutual pair `A`/`B`. -/
 mutual
@@ -260,63 +260,63 @@ example : Cont (fun m : Mixed Int => m.mf) := by nonpos_cont
 
 /-! ## `partial_fixpoint` with a dictionary parameter -/
 
-def countdown {O : Type} (BlaInst : Bla O) (o : O) (n : Nat) : Option Int :=
+def countdown {O : Type} (MeasureInst : Measure O) (o : O) (n : Nat) : Option Int :=
   match n with
-  | 0 => BlaInst.to_num o
+  | 0 => MeasureInst.size o
   | n + 1 => do
-    let _ ← BlaInst.to_num o
-    countdown BlaInst o n
+    let _ ← MeasureInst.size o
+    countdown MeasureInst o n
 partial_fixpoint
 
-example {O : Type} (o : O) : Cont (fun BlaInst : Bla O => countdown BlaInst o) := by nonpos_cont
+example {O : Type} (o : O) : Cont (fun MeasureInst : Measure O => countdown MeasureInst o) := by nonpos_cont
 
 /-! ## A mutual `partial_fixpoint`, packed into a `PProd` -/
 
 mutual
-def evenC {O : Type} (BlaInst : Bla O) (o : O) (n : Nat) : Option Int :=
+def evenC {O : Type} (MeasureInst : Measure O) (o : O) (n : Nat) : Option Int :=
   match n with
-  | 0 => BlaInst.to_num o
-  | n + 1 => do let _ ← BlaInst.to_num o; oddC BlaInst o n
+  | 0 => MeasureInst.size o
+  | n + 1 => do let _ ← MeasureInst.size o; oddC MeasureInst o n
 partial_fixpoint
-def oddC {O : Type} (BlaInst : Bla O) (o : O) (n : Nat) : Option Int :=
+def oddC {O : Type} (MeasureInst : Measure O) (o : O) (n : Nat) : Option Int :=
   match n with
   | 0 => pure 1
-  | n + 1 => evenC BlaInst o n
+  | n + 1 => evenC MeasureInst o n
 partial_fixpoint
 end
 
-example {O : Type} (o : O) : Cont (fun BlaInst : Bla O => evenC BlaInst o) := by nonpos_cont
-example {O : Type} (o : O) : Cont (fun BlaInst : Bla O => oddC BlaInst o) := by nonpos_cont
+example {O : Type} (o : O) : Cont (fun MeasureInst : Measure O => evenC MeasureInst o) := by nonpos_cont
+example {O : Type} (o : O) : Cont (fun MeasureInst : Measure O => oddC MeasureInst o) := by nonpos_cont
 
 /-! ## Compiled evaluation
 
 The definitions above are not `noncomputable`: dictionaries are compiled as their tuples of fields
 (the pieces of `TrustedBase/Definitions.lean`).  `#guard` evaluates with the compiled code and fails the build on a wrong
-result.  This includes the self-referential `SymBla` and `SymChild`, defined by `partial_fixpoint`. -/
+result.  This includes the self-referential `SymMeasure` and `SymChild`, defined by `partial_fixpoint`. -/
 
-def StrBla : Bla String :=
-  Bla.mk (fun s => some s.length) (fun {Other} (_ : Bla Other) _ s => some (2 * s.length)) (by nonpos_cont)
+def StrMeasure : Measure String :=
+  Measure.mk (fun s => some s.length) (fun {Other} (_ : Measure Other) _ s => some (2 * s.length)) (by nonpos_cont)
 
-#guard Bla.to_num IntBla 7 = some 7
-#guard Bla.add IntBla StrBla "hello" 10 = some 15        -- `IntBla.add` calls the other dictionary's `to_num`
-#guard Bla.add IntBla IntBla 2 3 = some 5
-#guard Bla.to_num (WrapperBla StrBla) ⟨"abc"⟩ = some 3    -- a generic instance
-#guard Forms.add StrBla "abcdef" 4 = none                -- `match` in the body: `n = 12 > 10`
-#guard Forms.add StrBla "ab" 4 = some 8
-#guard countdown StrBla "xyz" 5 = some 3                 -- `partial_fixpoint`
-#guard evenC StrBla "xy" 3 = some 1                      -- mutual `partial_fixpoint`
+#guard Measure.size IntMeasure 7 = some 7
+#guard Measure.combine IntMeasure StrMeasure "hello" 10 = some 15        -- `IntMeasure.combine` calls the other dictionary's `size`
+#guard Measure.combine IntMeasure IntMeasure 2 3 = some 5
+#guard Measure.size (WrapperMeasure StrMeasure) ⟨"abc"⟩ = some 3    -- a generic instance
+#guard Forms.combine StrMeasure "abcdef" 4 = none                -- `match` in the body: `n = 12 > 10`
+#guard Forms.combine StrMeasure "ab" 4 = some 8
+#guard countdown StrMeasure "xyz" 5 = some 3                 -- `partial_fixpoint`
+#guard evenC StrMeasure "xy" 3 = some 1                      -- mutual `partial_fixpoint`
 
--- self-referential instances: `SymBla.add inst o s = inst.add SymBla s o`
-#guard Bla.add SymBla IntBla 2 3 = some 5                -- `IntBla.add SymBla 3 2 = SymBla.to_num 3 + 2`
-#guard Bla.add SymBla StrBla "hello" 2 = some 10         -- `StrBla.add SymBla 2 "hello" = 2 * 5`
+-- self-referential instances: `SymMeasure.combine inst o s = inst.combine SymMeasure s o`
+#guard Measure.combine SymMeasure IntMeasure 2 3 = some 5                -- `IntMeasure.combine SymMeasure 3 2 = SymMeasure.size 3 + 2`
+#guard Measure.combine SymMeasure StrMeasure "hello" 2 = some 10         -- `StrMeasure.combine SymMeasure 2 "hello" = 2 * 5`
 
 def NatChild : Child Nat :=
   Child.mk (Parent.mk (fun n => some n) (by nonpos_cont)) (fun {O} (_ : Child O) s _ => some s) (by nonpos_cont)
 
 #guard Parent.pf (Child.parent SymChild) 3 = some 0
 #guard Child.cf SymChild NatChild 7 4 = some 4           -- `NatChild.cf SymChild 4 7 = some 4`
-#guard Bla.to_num (SymWrap IntBla) ⟨6⟩ = some 6
-#guard Bla.add (SymWrap IntBla) IntBla 1 ⟨2⟩ = some 3      -- `IntBla.add (SymWrap IntBla) ⟨2⟩ 1`
+#guard Measure.size (SymWrap IntMeasure) ⟨6⟩ = some 6
+#guard Measure.combine (SymWrap IntMeasure) IntMeasure 1 ⟨2⟩ = some 3      -- `IntMeasure.combine (SymWrap IntMeasure) ⟨2⟩ 1`
 #guard A.fa natA2 natB2 4 7 = some 5                     -- `natB2.fb natA2 5 5 = some 5`
 
 /-! ## A cycle closed by an `= Self` equation (simba's `ComplexField`/`RealField`, ark-ff's `Field`/`PrimeField`)

@@ -16,7 +16,7 @@ do, and every proof built here is checked by the kernel.  This file contains:
 3. the `nonpos_continuity` command, which proves continuity theorems of functions with that tactic,
    so that it does not have to prove them again at each use;
 4. the lemmas proved for each structure of a `nonpos_structure` group (`elabGroupLemmas`, which
-   `Command.lean` calls), lemmas used by the tactic; and the proofs of the `simp` lemmas `Bla.f_mk`
+   `Command.lean` calls), lemmas used by the tactic; and the proofs of the `simp` lemmas `Measure.f_mk`
    that `Command.lean` states (`nonpos_proj_mk`).
 -/
 
@@ -34,7 +34,7 @@ The forms (`Cont.const`, `Cont.lam`, ..., `Cont.fold`, `Cont.fix`) are stated in
 the `bind` form of each monad. -/
 
 /-- `partial_fixpoint`'s monotonicity obligation, from the condition: write a self-referential
-instance as `def inst : Bla Int := Bla.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`. -/
+instance as `def inst : Measure Int := Measure.mk … partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`. -/
 theorem Cont.monotone {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialOrder B] {f : A → B} (h : Cont f) :
     Lean.Order.monotone f := Proofs.Cont.monotone h
 
@@ -114,13 +114,13 @@ conjunctions, and closes a goal by a hypothesis when one fits.
 
 For performance:
 * each step builds its proof term directly (`MVarId.apply`, `applyNamed`), not through tactic
-  syntax; `Cont.lam`, `Bla.mk_cont` and `Bla.cond_intro` with their arguments read off the goal
+  syntax; `Cont.lam`, `Measure.mk_cont` and `Measure.cond_intro` with their arguments read off the goal
   (`applyWith?`), without unifying them with it;
 * the field tuple of a structure, and the projections out of it, are proved with the forms at the
   order of its shape (`nonposShapePair`, `nonposShapeProj`), and not compared with the order that
   instance search builds for the whole tuple;
 * a lambda that is a tagged theorem's shape up to eta is proved by that theorem in one step;
-* a condition is split into its conjuncts by `Bla.cond_intro` (section 4), or else unfolded by
+* a condition is split into its conjuncts by `Measure.cond_intro` (section 4), or else unfolded by
   `dsimp` (no proof term); and its proof is an auxiliary theorem (`nonposCondAux`), so that the
   copies `partial_fixpoint` makes of it (in the definition, the functional, the `unsafe`
   definition and the monotonicity goal) are small;
@@ -207,7 +207,7 @@ meta partial def pprodDomArgs? (inst : Expr) (fuel : Nat := 8) : MetaM (Option (
   | none => return none
 
 /-- The projection `fun d => (Fix.unfold F (g d)).2. … .1` (with `path`, outermost first, `true` for
-`.1`) of structure `k`, from `Bla.unfold_cont` (section 4): `Cont.fst` and `Cont.snd`, with the parts
+`.1`) of structure `k`, from `Measure.unfold_cont` (section 4): `Cont.fst` and `Cont.snd`, with the parts
 of the instance `Lean.Order.instPartialOrderPProd …` of the tuple.  The goal `Cont g`, or `none` (on any failure). -/
 meta def unfoldContChain? (goal : MVarId) (D iD : Expr) (n : Name) (dTy gd : Expr) (bi : BinderInfo)
     (k : Expr) (path : Array Bool) : MetaM (Option MVarId) := do
@@ -249,7 +249,7 @@ meta def nonposShapeProj (goal : MVarId) (D iD f : Expr) : TacticM Bool := do
   let (F, inst, k, gd) := (args[1]!, args[2]!, args[3]!, args[4]!)
   if F.hasLooseBVars || inst.hasLooseBVars || k.hasLooseBVars then return false
   let s ← saveState
-  -- with `Bla.unfold_cont`: the chain at the order that instance search builds for the tuple
+  -- with `Measure.unfold_cont`: the chain at the order that instance search builds for the tuple
   if let some r ← unfoldContChain? goal D iD n dTy gd bi k path then
     replaceMainGoal [r]; return true
   s.restore
@@ -395,7 +395,7 @@ meta def lamDirect? (g : MVarId) : MetaM (Option (List MVarId)) := do
   let a := iB.getAppArgs  -- `T B iB'`
   applyWith? g ``Cont.lam #[D, iD, a[0]!, a[1]!, a[2]!, f, none]
 
-/-- `Bla.mk_cont` (the theorem `n`) on a goal `Cont (fun d => Bla.mk ps (f₁ d) … (fₙ d) (h d))`, from
+/-- `Measure.mk_cont` (the theorem `n`) on a goal `Cont (fun d => Measure.mk ps (f₁ d) … (fₙ d) (h d))`, from
 the pieces of the goal. -/
 meta def mkContDirect? (g : MVarId) (n : Name) : MetaM (Option (List MVarId)) := do
   let ty ← instantiateMVars (← g.getType)
@@ -494,7 +494,7 @@ elab_rules : tactic
   | `(tactic| nonpos_cont_peel) => do replaceMainGoal (← nonposContPeel (← getMainGoal))
 
 /-- `assumption` on a goal `Cont f`, trying only the hypotheses `Cont g` where `g` has the head of `f`
-(`funHead`): with many hypotheses (`Bla.mk_cont` has one per field), comparing the goal with each is
+(`funHead`): with many hypotheses (`Measure.mk_cont` has one per field), comparing the goal with each is
 the cost. -/
 meta def contAssumption (g : MVarId) (f : Expr) : MetaM Bool := g.withContext do
   let hf := funHead (← instantiateMVars f)
@@ -506,13 +506,13 @@ meta def contAssumption (g : MVarId) (f : Expr) : MetaM Bool := g.withContext do
     if ← isDefEq t (← g.getType) then g.assign ld.toExpr; return true
   return false
 
-/-- On a goal `FixFunctor.cond ⟨f₁, …, fₙ⟩` of structure `Bla` (its `F` is `G.F (G.I.Bla …)`), apply
-`Bla.cond_intro` (section 4): the new goals are the conjuncts of the condition.  `none` if there is
+/-- On a goal `FixFunctor.cond ⟨f₁, …, fₙ⟩` of structure `Measure` (its `F` is `G.F (G.I.Measure …)`), apply
+`Measure.cond_intro` (section 4): the new goals are the conjuncts of the condition.  `none` if there is
 no such lemma or it does not apply. -/
 meta def condIntro? (g : MVarId) (ty : Expr) : MetaM (Option (List MVarId)) := do
   let_expr FixFunctor.cond _ F _ _ _ _ := ty | return none
   let some ctor := F.appArg!.getAppFn.constName? | return none
-  -- `ctor` is `ns.G.I.Bla`
+  -- `ctor` is `ns.G.I.Measure`
   let lem := ctor.getPrefix.getPrefix.getPrefix ++ Name.mkSimple ctor.getString! ++ `cond_intro
   unless (← getEnv).contains lem do return none
   let_expr FixFunctor.cond _ _ _ _ _ x := ty | return none
@@ -640,26 +640,26 @@ elab "nonpos_continuity " id:ident : command => do
 /-! ## 4. The lemmas of each structure
 
 `nonpos_structure` (`Command.lean`) also proves, by calling `elabGroupLemmas` (below), once for
-each structure `Bla`, these facts.  (This section also implements `nonpos_proj_mk`, the tactic that
-proves the `simp` lemmas `Bla.f_mk` stated by `Command.lean`, from a lemma
-`Bla.mk_unfold : Fix.unfold F (Bla.mk f₁ … fₙ h) = ⟨f₁, …, fₙ⟩` that it proves once per structure.)
+each structure `Measure`, these facts.  (This section also implements `nonpos_proj_mk`, the tactic that
+proves the `simp` lemmas `Measure.f_mk` stated by `Command.lean`, from a lemma
+`Measure.mk_unfold : Fix.unfold F (Measure.mk f₁ … fₙ h) = ⟨f₁, …, fₙ⟩` that it proves once per structure.)
 They are all for performance: each would otherwise be derived from the whole tuple of fields at
 each use.  The ones built as terms (rather than elaborated from syntax) are built so to avoid
 re-elaborating the tuple for each lemma, or a slow comparison by the elaborator of two orders which
 the kernel checks quickly.
-* `Bla.cond_intro`: the condition of `mk` from its conjuncts (`condIntroLemma`), so that
+* `Measure.cond_intro`: the condition of `mk` from its conjuncts (`condIntroLemma`), so that
   `nonpos_cont` does not unfold the condition of each `mk` (and the kernel does not check that
   unfolding again and again).
-* `Bla.unfold_cont`: `Fix.unfold` is continuous at the order that instance search builds for the
+* `Measure.unfold_cont`: `Fix.unfold` is continuous at the order that instance search builds for the
   tuple (`unfoldContLemma`), so that a projection out of a varying dictionary is proved by
   `Cont.fst` and `Cont.snd` with the parts of that instance.
-* `Bla.mk_cont`: `mk` is continuous in its fields.  From `Cont f₁`, ..., `Cont fₙ` it gives
-  `Cont (fun d => Bla.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
+* `Measure.mk_cont`: `mk` is continuous in its fields.  From `Cont f₁`, ..., `Cont fₙ` it gives
+  `Cont (fun d => Measure.mk (f₁ d) ... (fₙ d) (h d))`.  It is proved with `nonpos_cont` and tagged
   `@[nonpos_continuous]`, so that on a `mk` (the body of a self-referential instance) the tactic is
   left with one goal per field.
 -/
 
-/-- `Bla.unfold_cont : ∀ params {D} [PartialOrder D] (g : D → Bla params), Cont g → Cont (fun d => Fix.unfold F (g d))`,
+/-- `Measure.unfold_cont : ∀ params {D} [PartialOrder D] (g : D → Measure params), Cont g → Cont (fun d => Fix.unfold F (g d))`,
 at the order that instance search builds for the tuple of fields (`Lean.Order.instPartialOrderPProd …`), rather than at
 the order of its shape as in `Cont.unfold`.  A projection out of a varying dictionary is then
 proved by `Cont.fst` and `Cont.snd` with the parts of that instance (`nonposShapeProj`).  The two
@@ -688,8 +688,8 @@ meta def unfoldContLemma (structName lemName : Name) : TermElabM Unit := do
       let lps := (collectLevelParams (collectLevelParams {} type) value).params.toList
       addDecl (Declaration.thmDecl { name := lemName, levelParams := lps, type, value })
 
-/-- `Bla.mk_cont : ∀ ps {D} [PartialOrder D] (g₁ : D → τ₁) … (gₙ : D → τₙ) (h : ∀ d, FixFunctor.cond ⟨g₁ d, …⟩),
-Cont g₁ → … → Cont gₙ → Cont (fun d => Bla.mk ps (g₁ d) … (gₙ d) (h d))`, its statement built from
+/-- `Measure.mk_cont : ∀ ps {D} [PartialOrder D] (g₁ : D → τ₁) … (gₙ : D → τₙ) (h : ∀ d, FixFunctor.cond ⟨g₁ d, …⟩),
+Cont g₁ → … → Cont gₙ → Cont (fun d => Measure.mk ps (g₁ d) … (gₙ d) (h d))`, its statement built from
 the type of `mk` (not elaborated from syntax), and proved by `nonpos_cont`. -/
 meta def mkContLemma (mkName lemName : Name) (nf : Nat) : TermElabM Unit := do
   let info ← getConstInfo mkName
@@ -752,7 +752,7 @@ meta partial def conjProof (hs : Array Expr) (e : Expr) (i : Nat) : Expr × Nat 
   else if isForallTrue e then (forallTrueProof e, i)
   else (hs[i]!, i + 1)
 
-/-- `Bla.cond_intro : ∀ params f₁ … fₙ, C₁ → … → Cₘ → FixFunctor.cond ⟨f₁, …, fₙ⟩`, with `C₁ … Cₘ` the
+/-- `Measure.cond_intro : ∀ params f₁ … fₙ, C₁ → … → Cₘ → FixFunctor.cond ⟨f₁, …, fₙ⟩`, with `C₁ … Cₘ` the
 conjuncts that are not `True` in the condition unfolded by `nonpos_cond_dsimp`: proved once per
 structure, so that `nonpos_cont` does not unfold the condition (and the kernel does not check the
 unfolding) in each `mk`. -/
@@ -773,11 +773,11 @@ meta def condIntroLemma (mkName lemName : Name) : TermElabM Unit := do
       let value ← instantiateMVars (← mkLambdaFVars (vs ++ hs) g)
       addDecl (Declaration.thmDecl { name := lemName, levelParams := info.levelParams, type, value })
 
-/-- Proves the `simp` lemmas `Bla.f_mk` of the projections, which `Command.lean` states. -/
+/-- Proves the `simp` lemmas `Measure.f_mk` of the projections, which `Command.lean` states. -/
 syntax "nonpos_proj_mk" : tactic
 
 open Tactic in
-/-- The proof of `Bla.f_mk : ∀ ps f₁ … fₙ h, Bla.f ps (Bla.mk ps f₁ … fₙ h) = fⱼ` (stated by `Command.lean`):
+/-- The proof of `Measure.f_mk : ∀ ps f₁ … fₙ h, Measure.f ps (Measure.mk ps f₁ … fₙ h) = fⱼ` (stated by `Command.lean`):
 `congrArg` of the `j`-th component of the tuple on `Fix.unfold_fold`, built as a term (no `simp`,
 which goes through the whole tuple). -/
 elab_rules : tactic
@@ -785,14 +785,14 @@ elab_rules : tactic
     let (_, g) ← (← getMainGoal).intros
     g.withContext do
     let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | throwError "nonpos_proj_mk: not an equation"
-    -- `Bla.mk ps f₁ … fₙ h` is `Fix.foldDelayed F (fun _ => x) h`, that is `Fix.fold F x h`, with
+    -- `Measure.mk ps f₁ … fₙ h` is `Fix.foldDelayed F (fun _ => x) h`, that is `Fix.fold F x h`, with
     -- `x = ⟨f₁, …, fₙ, ⟨⟩⟩`
     let some fold ← unfoldDefinition? lhs.appArg! | throwError "nonpos_proj_mk: cannot unfold {lhs.appArg!}"
     let fold := fold.headBeta
     unless fold.isAppOfArity ``Fix.foldDelayed 6 do throwError "nonpos_proj_mk: unexpected {fold}"
     let .lam _ _ x _ := fold.getAppArgs[4]! | throwError "nonpos_proj_mk: unexpected {fold}"
     let a := fold.getAppArgs.set! 4 x  -- `I F inst k x h`
-    -- `Bla.mk_unfold : ∀ ps f₁ … fₙ h, Fix.unfold F (Bla.mk ps f₁ … fₙ h) = ⟨f₁, …, fₙ, ⟨⟩⟩`, proved
+    -- `Measure.mk_unfold : ∀ ps f₁ … fₙ h, Fix.unfold F (Measure.mk ps f₁ … fₙ h) = ⟨f₁, …, fₙ, ⟨⟩⟩`, proved
     -- (by `Fix.unfold_fold`) at the first of these lemmas: the kernel checks that the tuple has its
     -- type once per structure, and not once per lemma
     let mkApp := lhs.appArg!
@@ -833,13 +833,13 @@ meta def elabGroupLemmas (structs : Array Name) : CommandElabM Unit := do
     -- the number of fields: the arguments of `mk` after the parameters, but the condition
     let np := forallArity blaInfo.type
     let nf := forallArity mkInfo.type - np - 1
-    -- `Bla.cond_intro`, `Bla.unfold_cont`
+    -- `Measure.cond_intro`, `Measure.unfold_cont`
     if nf > 0 then
       try liftTermElabM (condIntroLemma (bla ++ `mk) (bla ++ `cond_intro))
       catch e => logWarning m!"nonpos_structure: no `cond_intro` lemma for {bla} ({e.toMessageData})"
       try liftTermElabM (unfoldContLemma bla (bla ++ `unfold_cont))
       catch _ => pure ()  -- no order for instance search to find for the tuple: `Cont.unfold` is used
-    -- `Bla.mk_cont`
+    -- `Measure.mk_cont`
     if nf == 0 then continue
     liftTermElabM <| mkContLemma (bla ++ `mk) (bla ++ `mk_cont) nf
     elabCommand (← `(attribute [nonpos_continuous] $(mkIdent (`_root_ ++ bla ++ `mk_cont))))

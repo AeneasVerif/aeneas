@@ -12,14 +12,14 @@ This is the top level specification of the definitions behind the library.
 
 Nonpositive sturctures are represented as functors. For example,
 ```
-nonpos_structure Measure (A : Type) : Type 1 where
-  size : A → Option Nat
-  larger : ∀ B, Measure B → A → B → Option Bool
+nonpos_structure Measure (Self : Type) : Type 1 where
+  size : Self → Option Int
+  combine : ∀ {Other : Type} (MeasureInst : Measure Other), Other → Self → Option Int
 ```
 
 As a simplified example, we could represent this as a functor:
-abbrev MeasureF (A : Type) (Measure : Type → Type 1) : Type 1 :=
-  (A → Option Nat) ×' (∀ B, Measure B → A → B → Option Bool) ×' PUnit.{2}
+abbrev MeasureF (Self : Type) (Measure : Type → Type 1) : Type 1 :=
+  (Self → Option Int) ×' (∀ {Other : Type}, Measure Other → Other → Self → Option Int) ×' PUnit.{2}
 
 The set of functors for which we can take a fixpoint and get the structure type
 are described by a typeclass `FixFunctor`:
@@ -160,7 +160,7 @@ theorem Cont.fix {α : Type w₁} [CCPO α] {f : D → α → α} {hm : ∀ d, L
 
 variable {I : Type pu} (F : I → (I → Type v) → Type v) [∀ k, FixFunctor (F k)]
 /-- The fields of a dictionary depending on `d` (a projection `e.m` is `(Fix.unfold F e).2. … .1`), and
-`mk` of fields depending on `d` (`Bla.mk f₁ … fₙ h` is `Fix.fold F ⟨f₁, …, fₙ, ⟨⟩⟩ h`, by definition). -/
+`mk` of fields depending on `d` (`Measure.mk f₁ … fₙ h` is `Fix.fold F ⟨f₁, …, fₙ, ⟨⟩⟩ h`, by definition). -/
 theorem Cont.unfold {k : I} {f : D → Fix F k} (hf : Cont f) :
     Cont (iB := FixFunctor.order (F k) (Fix F)) (fun d => Fix.unfold F (f d)) := Proofs.Cont.unfold F hf
 theorem Cont.fold {k : I} {f : D → F k (Fix F)} (h : ∀ d, FixFunctor.cond (f d))

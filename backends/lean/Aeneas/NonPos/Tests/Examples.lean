@@ -18,77 +18,77 @@ set_option linter.unusedVariables false
 /-! ## 1. A single structure
 
 ```
-nonpos_structure Example1 : Type where
+nonpos_structure SimpleNonpos : Type where
   to_nat : Option Nat
-  f : Example1 → Option Nat
+  f : SimpleNonpos → Option Nat
 ```
 -/
 
 -- `I`: one constructor per structure of the group, taking its parameters (here: none).
-inductive Example1.I where
-  | Example1
+inductive SimpleNonpos.I where
+  | SimpleNonpos
 
 -- The field types as written, with the structure names of the group as parameters.
-abbrev Example1.Fields (Example1 : Type) : Type :=
-  Option Nat ×' (Example1 → Option Nat) ×' PUnit.{1}
+abbrev SimpleNonpos.Fields (SimpleNonpos : Type) : Type :=
+  Option Nat ×' (SimpleNonpos → Option Nat) ×' PUnit.{1}
 
 -- `F`: the body of each structure, with the structures replaced by the family `X`.
-abbrev Example1.F : Example1.I → (Example1.I → Type) → Type
-  | .Example1, X => Example1.Fields (X .Example1)
+abbrev SimpleNonpos.F : SimpleNonpos.I → (SimpleNonpos.I → Type) → Type
+  | .SimpleNonpos, X => SimpleNonpos.Fields (X .SimpleNonpos)
 
 -- The shape, found by instance search: `FixFunctor.prod (FixFunctor.base (Option Nat)) (FixFunctor.prod (FixFunctor.rec_input …) FixFunctor.unit)`.
-@[reducible] instance Example1.shape : ∀ k, FixFunctor (Example1.F k)
-  | .Example1 => inferInstance
+@[reducible] instance SimpleNonpos.shape : ∀ k, FixFunctor (SimpleNonpos.F k)
+  | .SimpleNonpos => inferInstance
 
 -- The structure.
-abbrev Example1 : Type := Fix Example1.F .Example1
+abbrev SimpleNonpos : Type := Fix SimpleNonpos.F .SimpleNonpos
 
 -- `mk`, from the fields and the condition.  `macro_inline`, so that the fields are not evaluated
 -- before `foldDelayed` delays them (`TrustedBase/Definitions.lean`, where `foldDelayed` is).
-@[macro_inline] def Example1.mk (to_nat : Option Nat) (f : Example1 → Option Nat)
-    (h : FixFunctor.cond (X := Fix Example1.F) (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) : Example1 :=
-  Fix.foldDelayed Example1.F (fun _ => ⟨to_nat, f, ⟨⟩⟩) h
+@[macro_inline] def SimpleNonpos.mk (to_nat : Option Nat) (f : SimpleNonpos → Option Nat)
+    (h : FixFunctor.cond (X := Fix SimpleNonpos.F) (G := SimpleNonpos.F .SimpleNonpos) ⟨to_nat, f, ⟨⟩⟩) : SimpleNonpos :=
+  Fix.foldDelayed SimpleNonpos.F (fun _ => ⟨to_nat, f, ⟨⟩⟩) h
 
 -- The projections, with the types as written, and their `simp` lemmas (stated by section 1 of
 -- `Command.lean`; there proved by `nonpos_proj_mk`, of `Tactic.lean`: `congrArg` of the projection on
 -- `Fix.unfold_fold`).
-def Example1.to_nat (d : Example1) : Option Nat :=
-  no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold Example1.F d))
-@[simp] theorem Example1.to_nat_mk (to_nat : Option Nat) (f : Example1 → Option Nat)
-    (h : FixFunctor.cond (X := Fix Example1.F) (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
-    Example1.to_nat (Example1.mk to_nat f h) = to_nat := by
-  simp only [Example1.to_nat, Example1.mk, Fix.foldDelayed, Fix.unfold_fold]
+def SimpleNonpos.to_nat (d : SimpleNonpos) : Option Nat :=
+  no_implicit_lambda% (@PProd.fst _ _ (Fix.unfold SimpleNonpos.F d))
+@[simp] theorem SimpleNonpos.to_nat_mk (to_nat : Option Nat) (f : SimpleNonpos → Option Nat)
+    (h : FixFunctor.cond (X := Fix SimpleNonpos.F) (G := SimpleNonpos.F .SimpleNonpos) ⟨to_nat, f, ⟨⟩⟩) :
+    SimpleNonpos.to_nat (SimpleNonpos.mk to_nat f h) = to_nat := by
+  simp only [SimpleNonpos.to_nat, SimpleNonpos.mk, Fix.foldDelayed, Fix.unfold_fold]
 
-def Example1.f (d : Example1) : Example1 → Option Nat :=
-  no_implicit_lambda% (@PProd.fst _ _ (@PProd.snd _ _ (Fix.unfold Example1.F d)))
-@[simp] theorem Example1.f_mk (to_nat : Option Nat) (f : Example1 → Option Nat)
-    (h : FixFunctor.cond (X := Fix Example1.F) (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩) :
-    Example1.f (Example1.mk to_nat f h) = f := by
-  simp only [Example1.f, Example1.mk, Fix.foldDelayed, Fix.unfold_fold]
+def SimpleNonpos.f (d : SimpleNonpos) : SimpleNonpos → Option Nat :=
+  no_implicit_lambda% (@PProd.fst _ _ (@PProd.snd _ _ (Fix.unfold SimpleNonpos.F d)))
+@[simp] theorem SimpleNonpos.f_mk (to_nat : Option Nat) (f : SimpleNonpos → Option Nat)
+    (h : FixFunctor.cond (X := Fix SimpleNonpos.F) (G := SimpleNonpos.F .SimpleNonpos) ⟨to_nat, f, ⟨⟩⟩) :
+    SimpleNonpos.f (SimpleNonpos.mk to_nat f h) = f := by
+  simp only [SimpleNonpos.f, SimpleNonpos.mk, Fix.foldDelayed, Fix.unfold_fold]
 
 -- `mk` is continuous in its fields (section 4 of `Tactic.lean`): proved once here, and used by
 -- `nonpos_cont` on any `mk` whose fields vary, instead of going through the tuple of fields.
-theorem Example1.mk_cont {D : Type _} [Lean.Order.PartialOrder D] (to_nat : D → Option Nat) (f : D → Example1 → Option Nat)
-    (h : ∀ d, FixFunctor.cond (X := Fix Example1.F) (G := Example1.F Example1.I.Example1) ⟨to_nat d, f d, ⟨⟩⟩)
+theorem SimpleNonpos.mk_cont {D : Type _} [Lean.Order.PartialOrder D] (to_nat : D → Option Nat) (f : D → SimpleNonpos → Option Nat)
+    (h : ∀ d, FixFunctor.cond (X := Fix SimpleNonpos.F) (G := SimpleNonpos.F SimpleNonpos.I.SimpleNonpos) ⟨to_nat d, f d, ⟨⟩⟩)
     (_ : Cont to_nat) (_ : Cont f) :
-    Cont (fun d => Example1.mk (to_nat d) (f d) (h d)) := by
+    Cont (fun d => SimpleNonpos.mk (to_nat d) (f d) (h d)) := by
   nonpos_cont 5000
-attribute [nonpos_continuous] Example1.mk_cont
+attribute [nonpos_continuous] SimpleNonpos.mk_cont
 
 -- The condition of `mk` from its conjuncts (section 4 of `Tactic.lean`; there built from the
 -- condition unfolded by `nonpos_cond_dsimp`): `nonpos_cont` applies it to the condition of each `mk`,
 -- instead of unfolding the condition there.  The conjuncts that are `True` are left out.
-theorem Example1.cond_intro (to_nat : Option Nat) (f : Example1 → Option Nat) (h0 : Cont f) :
-    FixFunctor.cond (X := Fix Example1.F) (G := Example1.F .Example1) ⟨to_nat, f, ⟨⟩⟩ :=
+theorem SimpleNonpos.cond_intro (to_nat : Option Nat) (f : SimpleNonpos → Option Nat) (h0 : Cont f) :
+    FixFunctor.cond (X := Fix SimpleNonpos.F) (G := SimpleNonpos.F .SimpleNonpos) ⟨to_nat, f, ⟨⟩⟩ :=
   ⟨trivial, ⟨h0, fun _ => trivial⟩, trivial⟩
 
 -- `Fix.unfold` satisfies the condition, at the order of the tuple of fields.
-theorem Example1.unfold_cont {D : Type _} [Lean.Order.PartialOrder D] (g : D → Example1) (hg : Cont g) :
-    Cont (iB := FixFunctor.order (Example1.F .Example1) (Fix Example1.F)) (fun d => Fix.unfold Example1.F (g d)) :=
-  Cont.unfold Example1.F hg
+theorem SimpleNonpos.unfold_cont {D : Type _} [Lean.Order.PartialOrder D] (g : D → SimpleNonpos) (hg : Cont g) :
+    Cont (iB := FixFunctor.order (SimpleNonpos.F .SimpleNonpos) (Fix SimpleNonpos.F)) (fun d => Fix.unfold SimpleNonpos.F (g d)) :=
+  Cont.unfold SimpleNonpos.F hg
 
 -- Using it: the condition is `Cont f`, which `nonpos_cont` proves.
-def ex1 : Example1 := Example1.mk (some 3) (fun d => d.f d >>= fun n => some (n + 1)) (by nonpos_cont)
+def ex1 : SimpleNonpos := SimpleNonpos.mk (some 3) (fun d => d.f d >>= fun n => some (n + 1)) (by nonpos_cont)
 example : ex1.to_nat = some 3 := by simp [ex1]
 
 /-! ## 2. The same structure, through the command

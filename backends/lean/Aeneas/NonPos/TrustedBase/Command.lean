@@ -3,50 +3,20 @@ public import Lean
 public import Aeneas.NonPos.TrustedBase.Definitions
 public import Aeneas.NonPos.Tactic
 
+
 @[expose] public section
-/-!
-# `nonpos_structure`: the command
-
-With `TrustedBase/Definitions.lean`, this file is the trusted surface of the library:
-the `nonpos_structure` command, a thin wrapper around `Fix` (section 1), and what the `nonpos_cont`
-tactic, which proves the condition of each structure, is expected to do (section 2).
-
-It imports `NonPos/Tactic.lean`, which is not part of the trusted surface: the
-command uses the rest only to prove the `simp` lemmas it states (`nonpos_proj_mk`) and, after
-the definitions of a group, to prove lemmas about them for the tactic (`elabGroupLemmas`).  Every
-proof the tactic builds is checked by the kernel.
--/
-
 namespace NonPos
 open Lean Elab Command Term Meta
+/-!
+This file defines the `nonpos_structure` command.
 
-/-! ## 1. The `nonpos_structure` command
+See ../Tests/Examples.lean for examples of the definitions that this command produces
+for example inputs.
 
-```
-nonpos_structure Bla (Self : Type) : Type 1 where
-  to_num : Self → Result I32
-  add : ∀ {Other : Type} (inst : Bla Other), Other → Self → Result I32
-```
-(and `mutual ... end` around several of them) produces, for a group `G` named after its first
-structure:
-
-* `G.I`, the index type of the group: an inductive with one constructor `G.I.Bla (Self : Type)` per
-  structure, carrying its parameters;
-* `Bla.Fields (Bla : Type → Type 1) (Self : Type) : Type 1 := (Self → Result I32) ×' (∀ ..., Bla Other → ...) ×' PUnit`:
-  the fields *as written*, with the structure names as parameters;
-* `G.F : G.I → (G.I → Type 1) → Type 1`, dispatching to the `Fields`;
-* `Bla Self := Fix G.F (.Bla Self)`;
-* `Bla.mk to_num add (h : FixFunctor.cond ⟨to_num, add, ⟨⟩⟩) := Fix.fold G.F ⟨to_num, add, ⟨⟩⟩ h`, written
-  as `Fix.foldDelayed G.F (fun _ => ⟨to_num, add, ⟨⟩⟩) h`, which is the same and is how it runs
-  (`TrustedBase/Definitions.lean`, where `foldDelayed` is);
-* `Bla.to_num d := (Fix.unfold G.F d).1`, `Bla.add d := (Fix.unfold G.F d).2.1`, each with the
-  type as written, and the `simp` lemmas `Bla.to_num_mk`, `Bla.add_mk` (a projection of `mk` is
-  the field), stated here and proved by the tactic `nonpos_proj_mk` of `NonPos/Tactic.lean`;
-* then, by `elabGroupLemmas` (section 2), the lemmas of `NonPos/Tactic.lean` (section 4 there).
-
-The command never inspects the field types: `FixFunctor (G.F k)` is found by instance search, which can
-only succeed through the instances of the pieces of `TrustedBase/Definitions.lean`, and the types of `mk` and the
-projections are the user's own, checked by the kernel against `Fix`. -/
+The command works by translating the given `nonpos_structure` syntax into the definitions in that
+file. It never needs to inspect the actual types of the fields - the instances in Definitions.lean
+already handle that.
+-/
 
 syntax nonposField := ident " : " term
 syntax nonposStructureCore :=
@@ -97,7 +67,7 @@ meta def projN (t : Term) : Nat → CommandElabM Term
   | 0 => `(@PProd.fst _ _ $t)
   | j + 1 => do projN (← `(@PProd.snd _ _ $t)) j
 
-/-- See Examples.lean for examples of what this command produces for the `Example1` and `A`/`B` examples.
+/-- See Examples.lean for examples of what this command produces for the `SimpleNonpos` and `A`/`B` examples.
 Comments throughout point to the corresponding definitions in that file. -/
 meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
   let g := ss[0]!.name -- Name the group after the first structure
@@ -106,19 +76,19 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
   let fId := mkIdentFrom g (g.getId ++ `F)
   let shapeId := mkIdentFrom g (g.getId ++ `shape)
   let univ := ss[0]!.univ
-  let ctor (s : StructStx) : Term := ⟨mkNode ``Parser.Term.dotIdent #[mkAtom ".", s.name]⟩ -- helper function for names: `.Bla`
-  -- the index `.Bla x₁ ... xₙ` of a structure at its parameters (used as a pattern and as a term)
+  let ctor (s : StructStx) : Term := ⟨mkNode ``Parser.Term.dotIdent #[mkAtom ".", s.name]⟩ -- helper function for names: `.Measure`
+  -- the index `.Measure x₁ ... xₙ` of a structure at its parameters (used as a pattern and as a term)
   let idxOf (s : StructStx) : CommandElabM Term := `($(ctor s) $(s.params.map (·.1))*)
   -- I
   let ctors ← ss.mapM fun s => do `(Parser.Command.ctor| | $(s.name):ident $(← explicitBinders s.params)*)
-  elabCommand (← `(inductive $idx where $ctors*))  -- `Example1.I`, `A.I`: an inductive with one ctr for each structure, taking its parameters
+  elabCommand (← `(inductive $idx where $ctors*))  -- `SimpleNonpos.I`, `A.I`: an inductive with one ctr for each structure, taking its parameters
   -- Fields of each structure, with the structures of the group as parameters
   for s in ss do
     let fieldsId := mkIdentFrom s.name (s.name.getId ++ `Fields)
     let famBinders ← ss.mapM fun s' => do `(bracketedBinder| ($(s'.name):ident : $(← paramsPi s'.params univ)))
     let body ← s.fields.foldrM (init := ← punitAt univ) fun (_, τ) acc => `($τ ×' $acc)
     elabCommand (← `(noncomputable abbrev $fieldsId $famBinders* $(← explicitBinders s.params)* : $univ := $body))
-      -- `Example1.Fields`, `A.Fields`, `B.Fields`
+      -- `SimpleNonpos.Fields`, `A.Fields`, `B.Fields`
   -- The functor of the group and its shape
   let fAlts ← ss.mapM fun s => do
     let fieldsId := mkIdentFrom s.name (s.name.getId ++ `Fields)
@@ -126,67 +96,40 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
     let args := s.params.map (·.1)
     `(Parser.Term.matchAltExpr| | $(← idxOf s), X => $fieldsId $fams* $args*)
   elabCommand (← `(noncomputable abbrev $fId : $idx → ($idx → $univ) → $univ $fAlts:matchAlt*))
-    -- `Example1.F`, `A.F`
+    -- `SimpleNonpos.F`, `A.F`
   let shapeAlts ← ss.mapM fun s => do
     `(Parser.Term.matchAltExpr| | $(← idxOf s) => inferInstance)
   elabCommand (← `(@[reducible] instance $shapeId:ident : ∀ k, FixFunctor ($fId k) $shapeAlts:matchAlt*))
-    -- `Example1.shape`, `A.shape`
+    -- `SimpleNonpos.shape`, `A.shape`
   -- The structures (all of them first: `mk` and the projections of one may mention another)
   for s in ss do
     elabCommand (← `(noncomputable abbrev $(s.name):ident $(← explicitBinders s.params)* : $univ :=
-      Fix $fId $(← idxOf s)))  -- `Example1`, `A`, `B`
+      Fix $fId $(← idxOf s)))  -- `SimpleNonpos`, `A`, `B`
   -- `mk` and the projections
-  for s in ss do                                            -- for `A (Self : Type)`     `Example1`:
-    let k ← idxOf s                                             -- `.A Self`              `.Example1`
+  for s in ss do                                            -- for `A (Self : Type)`     `SimpleNonpos`:
+    let k ← idxOf s                                             -- `.A Self`              `.SimpleNonpos`
     let impl ← implicitBinders s.params                         -- `{Self : Type}`        nothing
     let args := s.params.map (·.1)                              -- `Self`                 nothing
-    let fieldBinders ← explicitBinders s.fields                 -- `(fa : ∀ {O} …)`      `(to_nat : Nat) (f : Example1 → Option Nat)`
+    let fieldBinders ← explicitBinders s.fields                 -- `(fa : ∀ {O} …)`      `(to_nat : Nat) (f : SimpleNonpos → Option Nat)`
     let fieldTuple                                              -- `⟨fa, ⟨⟩⟩`             `⟨to_nat, ⟨f, ⟨⟩⟩⟩`
       ← s.fields.foldrM (init := ← `(⟨⟩)) fun (f, _) acc => `(⟨$f:ident, $acc⟩)
-    let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `Example1.mk`
+    let mkId := mkIdentFrom s.name (s.name.getId ++ `mk)        -- `A.mk`                 `SimpleNonpos.mk`
     -- `macro_inline`, so that the fields are not evaluated before `foldDelayed` delays them (`TrustedBase/Definitions.lean`, where `foldDelayed` is)
     elabCommand (← `(@[macro_inline] def $mkId $impl* $fieldBinders*
         (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) : $(s.name):ident $args* :=
-      Fix.foldDelayed $fId (fun _ => $fieldTuple) h))  -- `Example1.mk`, `A.mk`, `B.mk`
+      Fix.foldDelayed $fId (fun _ => $fieldTuple) h))  -- `SimpleNonpos.mk`, `A.mk`, `B.mk`
     let fieldArgs ← s.fields.mapM fun (f, _) => `(@$f:ident)
     for (f, τ) in s.fields, j in List.range s.fields.size do
-      let projId := mkIdentFrom f (s.name.getId ++ f.getId)                   -- `A.fa`       `Example1.to_nat`
+      let projId := mkIdentFrom f (s.name.getId ++ f.getId)                   -- `A.fa`       `SimpleNonpos.to_nat`
       elabCommand (← `(def $projId $impl* (d : $(s.name):ident $args*) : $τ :=
-        no_implicit_lambda% $(← projN (← `(Fix.unfold $fId d)) j)))  -- `Example1.to_nat`, `Example1.f`, `A.fa`, `B.fb`
+        no_implicit_lambda% $(← projN (← `(Fix.unfold $fId d)) j)))  -- `SimpleNonpos.to_nat`, `SimpleNonpos.f`, `A.fa`, `B.fb`
       -- its `simp` lemma: the projection of `mk` is the field (proved by `nonpos_proj_mk`, which
-      -- adds a lemma `Bla.mk_unfold` the first time: so not elaborated asynchronously, where a proof
+      -- adds a lemma `Measure.mk_unfold` the first time: so not elaborated asynchronously, where a proof
       -- may only add declarations named after its theorem)
-      let lemmaId := mkIdentFrom f (s.name.getId ++ f.getId.appendAfter "_mk") -- `A.fa_mk`    `Example1.to_nat_mk`
+      let lemmaId := mkIdentFrom f (s.name.getId ++ f.getId.appendAfter "_mk") -- `A.fa_mk`    `SimpleNonpos.to_nat_mk`
       elabCommand (← `(set_option Elab.async false in @[simp] theorem $lemmaId $impl* $fieldBinders*
           (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) :
           @$projId $args* ($mkId $fieldArgs* h) = @$f := by nonpos_proj_mk))
-
-/-! ## 2. Continuity, and the `nonpos_cont` tactic
-
-The condition `FixFunctor.cond` of a structure is a conjunction of `Cont` facts, one for each field
-that takes a dictionary of the group (the pieces of `TrustedBase/Definitions.lean`; `nonpos_cond_simp`, in
-`NonPos/Tactic.lean`, unfolds the condition into them).  Aeneas proves the condition of each `mk` it outputs with the tactic `nonpos_cont`, and the
-monotonicity obligation of each self-referential instance with
-`partial_fixpoint monotonicity Cont.monotone (by nonpos_cont)`.
-
-The tactic is in `NonPos/Tactic.lean` (from section 2 on), which is not part of the trusted surface;
-the theorems it applies are the forms of section 1 there.  Every proof it builds is checked by the kernel, so it cannot make a structure
-contain anything that does not satisfy the condition.  What it is expected to do, which is checked
-by its tests but not guaranteed by this file, is:
-
-* **Completeness:** `nonpos_cont` proves `Cont f` for every function `f` that Aeneas outputs (that
-  is, the conditions above), in reasonable time.
-* **Lemmas:** a theorem `… → Cont (fun d => body)` tagged `@[nonpos_continuous]` is applied by
-  `nonpos_cont` to any goal of the shape of `body`, instead of proving it again from the definitions
-  in `body`.  Lemmas are tagged by `nonpos_continuity f` (which Aeneas outputs after each function
-  `f` taking a dictionary, and which proves the continuity of `f` in that dictionary), by
-  `elabGroupLemmas` (below), and by hand (the operations of a monad).
-
-After the definitions of a group, `nonpos_structure` calls `elabGroupLemmas` of
-`NonPos/Tactic.lean` on the same structures, which proves lemmas about them (section 4 there), so
-that `nonpos_cont` does not derive them at each use.  It runs after every definition of the group
-is made, so it can only add facts about them: theorems, and instances of classes that are
-`Prop`s. -/
 
 /-- Elaborate a group, then prove the lemmas of `NonPos/Tactic.lean` about it. -/
 meta def elabGroupAndLemmas (stxs : Array Syntax) : CommandElabM Unit := do
