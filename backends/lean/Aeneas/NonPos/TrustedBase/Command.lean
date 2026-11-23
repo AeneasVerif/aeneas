@@ -10,7 +10,7 @@ open Lean Elab Command Term Meta
 /-!
 This file defines the `nonpos_structure` command.
 
-See ../Tests/Examples.lean for examples of the definitions that this command produces
+See ../Tests/CommandExamples.lean for examples of the definitions that this command produces
 for example inputs.
 
 The command works by translating the given `nonpos_structure` syntax into the definitions in that
@@ -67,7 +67,7 @@ meta def projN (t : Term) : Nat → CommandElabM Term
   | 0 => `(@PProd.fst _ _ $t)
   | j + 1 => do projN (← `(@PProd.snd _ _ $t)) j
 
-/-- See Examples.lean for examples of what this command produces for the `SimpleNonpos` and `A`/`B` examples.
+/-- See CommandExamples.lean for examples of what this command produces for the `SimpleNonpos` and `A`/`B` examples.
 Comments throughout point to the corresponding definitions in that file. -/
 meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
   let g := ss[0]!.name -- Name the group after the first structure

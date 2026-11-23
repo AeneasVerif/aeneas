@@ -17,9 +17,11 @@ condition on functions like larger, that restricts how it can use its recursive 
 
 This library was implemented by ai. In order to preserve human verifiability, there is a minimal
 trusted base with top level statements in the TrustedBase folder.
+
 The `Definitions.lean` file contains statements that pin down the definitions that are used
 to implement `nonpos_structure`s, as well as a list of lemmas about continuity which cover
 all code that Aeneas can output.
+
 The `Command.lean` file contains the `nonpos_structure` command.
 From this trusted base, it is possible to verify that the command will always succeed and
 exactly what object the resulting type will represent. It is also possible to verify the
@@ -28,3 +30,6 @@ The tactic `nonpos_cont`, which automatically proves continuity, as well as the
 `@[nonpos_continuous]` attribute, which adds continuity theorems to be used by the tactic,
 are not in the trusted base. However, the Lean kernel will check that their output does
 in fact prove continuity, and the tests show empirically that Aeneas output is covered.
+
+The `Result.lean` file contains theorems showing that Result can be used with
+nonpositive structures.
