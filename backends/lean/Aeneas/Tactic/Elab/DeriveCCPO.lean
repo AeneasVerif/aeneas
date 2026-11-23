@@ -38,7 +38,7 @@ instance {α : Type u} {β : Type v} [CCPO α] [CCPO β] : CCPO ((_ : α) × β)
 meta def mkCCPOInstanceHandler (declNames : Array Name) : CommandElabM Bool := do
   unless declNames.all (isStructure (← getEnv)) do return false
   for S in declNames do
-    elabCommand (← liftTermElabM do
+    let cmd ← liftTermElabM do
       let indVal ← getConstInfoInduct S
       let argNames ← Deriving.mkInductArgNames indVal
       let binders ← Deriving.mkImplicitBinders argNames
@@ -46,7 +46,15 @@ meta def mkCCPOInstanceHandler (declNames : Array Name) : CommandElabM Bool := d
       -- (a structure with many fields needs a deep instance search)
       `(command| set_option synthInstance.maxSize 4096 in
         instance $(binders.map TSyntax.mk):bracketedBinder* : CCPO $target :=
-          CCPO.ofEquiv (proxy_equiv% $target)))
+          CCPO.ofEquiv (proxy_equiv% $target))
+    let env ← getEnv
+    let saved := (← get).messages
+    modify ({ · with messages := {} }); elabCommand cmd
+    let msgs := (← get).messages
+    if msgs.hasErrors then
+      modify ({ · with env, messages := saved })  -- drop the `sorry` instance
+      logWarning m!"could not derive `Lean.Order.CCPO` for `{S}`: it cannot be a plain field of a `nonpos_structure`"
+    else modify ({ · with messages := saved ++ msgs })
   return true
 
 meta initialize registerDerivingHandler ``Lean.Order.CCPO mkCCPOInstanceHandler

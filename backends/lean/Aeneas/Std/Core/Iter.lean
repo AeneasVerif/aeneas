@@ -28,6 +28,7 @@ structure core.iter.range.Step (Self : Type _) where
   steps_between : Self → Self → Result (Usize × (Option Usize))
   forward_checked : Self → Usize → Result (Option Self)
   backward_checked : Self → Usize → Result (Option Self)
+deriving Lean.Order.CCPO
 
 open Result
 
@@ -186,6 +187,7 @@ structure core.iter.traits.collect.IntoIterator (Self : Type _) (Item :
   Type _) (IntoIter : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator IntoIter Item
   into_iter : Self → Result IntoIter
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::collect::FromIterator"]
 structure core.iter.traits.collect.FromIterator (Self : Type _) (A : Type _) where
@@ -231,11 +233,13 @@ deriving Lean.Order.CCPO
 structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
   next_back : Self → Result ((Option Item) × Self)
+deriving Lean.Order.CCPO
 
 @[rust_trait "core::iter::traits::exact_size::ExactSizeIterator"
   (parentClauses := ["iteratorInst"])]
 structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
+deriving Lean.Order.CCPO
 
 -- ============================================================================
 -- Generic Step operations for UScalar types
