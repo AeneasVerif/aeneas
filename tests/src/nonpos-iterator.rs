@@ -14,14 +14,14 @@
 //! `Destruct`, `TrustedRandomAccessNoCoerce`) are std's own, not copies, except
 //! `ChangeOutputType`, which std keeps crate-private (copied verbatim below).
 //!
-//! Where std's default method body calls a crate-private std function (`array::iter_next_chunk`,
-//! `iter_compare`, …), the body is std's own, and the function is a stub at the top of this file,
-//! with std's type and a dummy body. The adapter types keep std's names, parameters and bounds, and
-//! have std's (crate-private) `new`; their fields and `Iterator` impls are simple. The other default
-//! method bodies are written as simple loops that behave like std's, or are std's own when they
-//! only use accessible APIs.
+//! The default method bodies are std's own, verbatim. Where one uses a crate-private std item
+//! (`array::iter_next_chunk`, `iter_compare`, `try_process`, …), the item is a stub at the top of
+//! this file, with std's type and a dummy body, or a copy (`ChangeOutputType`, `KeyAndValue`).
+//! The adapter types keep std's names, parameters and bounds, and have std's (crate-private) `new`;
+//! their fields and `Iterator` impls are simple.
 //!
-//! A method that does not work is commented out, with the reason.
+//! A method that does not work is commented out (`/* … */`, so that its text is std's), with the
+//! reason; so is a method whose body calls one that is commented out.
 #![allow(dead_code, unused_variables, unused_mut, internal_features, unused_features)]
 #![feature(
     const_trait_impl,
@@ -36,21 +36,78 @@
     try_trait_v2_residual,
     trusted_random_access,
     array_into_iter_constructors,
-    maybe_uninit_array_assume_init
+    maybe_uninit_array_assume_init,
+    const_closures,
+    try_blocks,
+    specialization,
+    const_iter,
+    const_control_flow,
+    const_result_trait_fn,
+    // std's method bodies contain stability attributes, which need these two
+    staged_api
 )]
-use core::cmp::Ordering;
+#![unstable(feature = "nonpos_iterator", issue = "none")]
+use core::cmp::{self, Ordering};
 use core::iter::TrustedRandomAccessNoCoerce;
 use core::marker::Destruct;
-use core::ops::ControlFlow;
-// use core::num::NonZero;  // only used by `advance_by`/`advance_back_by`, not supported
-// Used by the methods that are commented out below (they mention `Try`; see `try_fold` for why):
-// use core::ops::{FromResidual, Residual, Try};
-//
-// /// `core::ops::ChangeOutputType`, which is crate-private in std; copied from
-// /// core/src/ops/try_trait.rs.
-// #[allow(type_alias_bounds)]
-// pub(crate) type ChangeOutputType<T: Try<Residual: Residual<V>>, V> =
-//     <T::Residual as Residual<V>>::TryType;
+use core::mem;
+use core::num::NonZero;
+use core::ops::{ControlFlow, FromResidual, Residual, Try};
+
+// Used only by the methods that mention `Try`, which are commented out (see `try_fold`).
+/*
+/// `core::ops::ChangeOutputType`, which is crate-private in std; copied from
+/// core/src/ops/try_trait.rs.
+#[allow(type_alias_bounds)]
+pub(crate) type ChangeOutputType<T: Try<Residual: Residual<V>>, V> =
+    <T::Residual as Residual<V>>::TryType;
+*/
+
+/// `core::cmp::KeyAndValue`, which is crate-private in std; copied from core/src/cmp.rs.
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct KeyAndValue<K, V> {
+    pub key: K,
+    pub value: V,
+}
+impl<K: PartialEq, V> PartialEq for KeyAndValue<K, V> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+    #[inline]
+    fn ne(&self, other: &Self) -> bool {
+        self.key != other.key
+    }
+}
+impl<K: Eq, V> Eq for KeyAndValue<K, V> {}
+impl<K: PartialOrd, V> PartialOrd for KeyAndValue<K, V> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&self.key, &other.key)
+    }
+    #[inline]
+    fn lt(&self, other: &Self) -> bool {
+        self.key < other.key
+    }
+    #[inline]
+    fn le(&self, other: &Self) -> bool {
+        self.key <= other.key
+    }
+    #[inline]
+    fn gt(&self, other: &Self) -> bool {
+        self.key > other.key
+    }
+    #[inline]
+    fn ge(&self, other: &Self) -> bool {
+        self.key >= other.key
+    }
+}
+impl<K: Ord, V> Ord for KeyAndValue<K, V> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        Ord::cmp(&self.key, &other.key)
+    }
+}
 
 // ---------------------------------------------------------------------------------------------
 // Stubs for the crate-private std helpers that std's default method bodies call
@@ -90,30 +147,46 @@ where
     unimplemented!()
 }
 
-// NOT SUPPORTED: its two `Iterator` clauses both become a Lean field named `IteratorInst`,
-// aeneas#1051 (so `Iterator::eq_by`, which calls it, is too).
-// /// Stub for `core::iter::traits::iterator::SpecIterEq` (declaration copied verbatim), called by
-// /// `Iterator::eq_by`. std has a default impl for all iterators and a specialized one for
-// /// `TrustedLen`; the stub has only the first.
-// trait SpecIterEq<B: Iterator>: Iterator {
-//     fn spec_iter_eq<F>(self, b: B, f: F) -> bool
-//     where
-//         F: FnMut(Self::Item, <B as Iterator>::Item) -> ControlFlow<()>;
-// }
-//
-// impl<A: Iterator, B: Iterator> SpecIterEq<B> for A {
-//     fn spec_iter_eq<F>(self, b: B, f: F) -> bool
-//     where
-//         F: FnMut(Self::Item, <B as Iterator>::Item) -> ControlFlow<()>,
-//     {
-//         unimplemented!()
-//     }
-// }
+// Used only by `Iterator::try_collect`, which is commented out.
+/*
+/// Stub for `core::iter::adapters::try_process` (signature copied verbatim), called by
+/// `Iterator::try_collect`.
+pub(crate) fn try_process<I, T, R, F, U>(iter: I, mut f: F) -> ChangeOutputType<I::Item, U>
+where
+    I: Iterator<Item: Try<Output = T, Residual = R>>,
+    for<'a> F: FnMut(GenericShunt<'a, I, R>) -> U,
+    R: Residual<U>,
+{
+    unimplemented!()
+}
+*/
+
+// Used only by `Iterator::eq_by`, which is commented out.
+/*
+/// Stub for `core::iter::traits::iterator::SpecIterEq` (declaration copied verbatim), called by
+/// `Iterator::eq_by`. std has a default impl for all iterators and a specialized one for
+/// `TrustedLen`; the stub has only the first.
+trait SpecIterEq<B: Iterator>: Iterator {
+    fn spec_iter_eq<F>(self, b: B, f: F) -> bool
+    where
+        F: FnMut(Self::Item, <B as Iterator>::Item) -> ControlFlow<()>;
+}
+
+impl<A: Iterator, B: Iterator> SpecIterEq<B> for A {
+    fn spec_iter_eq<F>(self, b: B, f: F) -> bool
+    where
+        F: FnMut(Self::Item, <B as Iterator>::Item) -> ControlFlow<()>,
+    {
+        unimplemented!()
+    }
+}
+*/
 
 // ---------------------------------------------------------------------------------------------
 // `Iterator` (core/src/iter/traits/iterator.rs)
 // ---------------------------------------------------------------------------------------------
 
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 pub const trait Iterator {
     type Item;
 
@@ -137,57 +210,96 @@ pub const trait Iterator {
         Self: Sized + [const] Destruct,
         Self::Item: [const] Destruct,
     {
-        let mut s = self;
-        let mut n = 0;
-        while let Some(_) = s.next() {
-            n += 1;
-        }
-        n
+        self.fold(
+            0,
+            #[rustc_inherit_overflow_checks]
+            const |accum, _elem| accum + 1,
+        )
     }
 
+    // NOT SUPPORTED: its body defines a function named `some`, which in Lean shadows `Option.some`, so the
+    // generated code does not type-check.
+    /*
     fn last(self) -> Option<Self::Item>
     where
         Self: Sized + [const] Destruct,
         Self::Item: [const] Destruct,
     {
-        let mut s = self;
-        let mut l = None;
-        while let Some(x) = s.next() {
-            l = Some(x);
+        #[inline]
+        #[rustc_const_unstable(feature = "const_destruct", issue = "133214")]
+        const fn some<T>(_: Option<T>, x: T) -> Option<T>
+        where
+            T: [const] Destruct,
+        {
+            Some(x)
         }
-        l
+
+        self.fold(None, some)
     }
+    */
 
-    // NOT SUPPORTED: `NonZero`'s trait `ZeroablePrimitive` gets two Lean fields named `markerCopyInst`.
-    // fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
-    // where
-    //     Self::Item: [const] Destruct,
-    // {
-    //     let mut i = 0;
-    //     while i < n {
-    //         if let None = self.next() {
-    //             // SAFETY: `i < n`
-    //             return Err(unsafe { NonZero::new_unchecked(n - i) });
-    //         }
-    //         i += 1;
-    //     }
-    //     Ok(())
-    // }
+    // NOT SUPPORTED: its body calls `try_fold`, which is commented out.
+    /*
+    fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
+    where
+        Self::Item: [const] Destruct,
+    {
+        /// Helper trait to specialize `advance_by` via `try_fold` for `Sized` iterators.
 
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const trait SpecAdvanceBy {
+            fn spec_advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>>;
+        }
+
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const impl<I: [const] Iterator + ?Sized> SpecAdvanceBy for I
+        where
+            I::Item: [const] Destruct,
+        {
+            default fn spec_advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+                for i in 0..n {
+                    if self.next().is_none() {
+                        // SAFETY: `i` is always less than `n`.
+                        return Err(unsafe { NonZero::new_unchecked(n - i) });
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const impl<I: [const] Iterator> SpecAdvanceBy for I
+        where
+            I::Item: [const] Destruct,
+        {
+            fn spec_advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
+                let Some(n) = NonZero::new(n) else {
+                    return Ok(());
+                };
+
+                let res = self.try_fold(n, const |n, _| NonZero::new(n.get() - 1));
+
+                match res {
+                    None => Ok(()),
+                    Some(n) => Err(n),
+                }
+            }
+        }
+
+        self.spec_advance_by(n)
+    }
+    */
+
+    // NOT SUPPORTED: its body calls `advance_by`, which is commented out.
+    /*
     fn nth(&mut self, n: usize) -> Option<Self::Item>
     where
         Self::Item: [const] Destruct,
     {
-        let mut i = 0;
-        while i < n {
-            match self.next() {
-                Some(_) => {}
-                None => return None,
-            }
-            i += 1;
-        }
+        self.advance_by(n).ok()?;
         self.next()
     }
+    */
 
     #[rustc_non_const_trait_method]
     fn step_by(self, step: usize) -> StepBy<Self>
@@ -238,18 +350,23 @@ pub const trait Iterator {
         Map::new(self, f)
     }
 
+    // NOT SUPPORTED: its closure returns `()`, and Aeneas generates an ill-typed `call_mut` for it (the
+    // unit output is dropped).
+    /*
     #[rustc_non_const_trait_method]
     fn for_each<F>(self, f: F)
     where
         Self: Sized,
         F: FnMut(Self::Item),
     {
-        let mut s = self;
-        let mut f = f;
-        while let Some(x) = s.next() {
-            f(x);
+        #[inline]
+        fn call<T>(mut f: impl FnMut(T)) -> impl FnMut((), T) {
+            move |(), item| f(item)
         }
+
+        self.fold((), call(f));
     }
+    */
 
     fn filter<P>(self, predicate: P) -> Filter<Self, P>
     where
@@ -378,29 +495,40 @@ pub const trait Iterator {
         self
     }
 
+    // NOT SUPPORTED: its body calls `Option::is_none_or`, which Aeneas does not model (an axiom), with a
+    // closure that carries the dictionary, so its continuity cannot be proved.
+    /*
     #[rustc_non_const_trait_method]
     fn collect<B: FromIterator<Self::Item>>(self) -> B
     where
         Self: Sized,
     {
-        B::from_iter(self)
-    }
+        // This is too aggressive to turn on for everything all the time, but PR#137908
+        // accidentally noticed that some rustc iterators had malformed `size_hint`s,
+        // so this will help catch such things in debug-assertions-std runners,
+        // even if users won't actually ever see it.
+        if cfg!(debug_assertions) {
+            let hint = self.size_hint();
+            assert!(hint.1.is_none_or(|high| high >= hint.0), "Malformed size_hint {hint:?}");
+        }
 
-    // NOT SUPPORTED: needs `GenericShunt`, whose impl is mutually recursive with this method, aeneas#1264.
-    // #[rustc_non_const_trait_method]
-    // fn try_collect<B>(&mut self) -> ChangeOutputType<Self::Item, B>
-    // where
-    //     Self: Sized,
-    //     Self::Item: Try<Residual: Residual<B>>,
-    //     B: FromIterator<<Self::Item as Try>::Output>,
-    // {
-    //     let mut residual = None;
-    //     let b = B::from_iter(GenericShunt { iter: self, residual: &mut residual });
-    //     match residual {
-    //         Some(r) => FromResidual::from_residual(r),
-    //         None => Try::from_output(b),
-    //     }
-    // }
+        FromIterator::from_iter(self)
+    }
+    */
+
+    // NOT SUPPORTED: its body uses `GenericShunt` and `ByRefSized`, whose `Iterator` impls are then mutually
+    // recursive with this method, aeneas#1264.
+    /*
+    #[rustc_non_const_trait_method]
+    fn try_collect<B>(&mut self) -> ChangeOutputType<Self::Item, B>
+    where
+        Self: Sized,
+        Self::Item: Try<Residual: Residual<B>>,
+        B: FromIterator<<Self::Item as Try>::Output>,
+    {
+        try_process(ByRefSized(self), |i| i.collect())
+    }
+    */
 
     #[rustc_non_const_trait_method]
     fn collect_into<E: Extend<Self::Item>>(self, collection: &mut E) -> &mut E
@@ -411,6 +539,9 @@ pub const trait Iterator {
         collection
     }
 
+    // NOT SUPPORTED: its closure captures `&mut` variables, and Aeneas generates an ill-typed
+    // `call_mut`/`call_once` for it.
+    /*
     #[rustc_non_const_trait_method]
     fn partition<B, F>(self, f: F) -> (B, B)
     where
@@ -418,115 +549,123 @@ pub const trait Iterator {
         B: Default + Extend<Self::Item>,
         F: FnMut(&Self::Item) -> bool,
     {
-        let mut left: B = Default::default();
-        let mut right: B = Default::default();
-        let mut s = self;
-        let mut f = f;
-        while let Some(x) = s.next() {
-            if f(&x) {
-                left.extend_one(x)
-            } else {
-                right.extend_one(x)
+        #[inline]
+        fn extend<'a, T, B: Extend<T>>(
+            mut f: impl FnMut(&T) -> bool + 'a,
+            left: &'a mut B,
+            right: &'a mut B,
+        ) -> impl FnMut((), T) + 'a {
+            move |(), x| {
+                if f(&x) {
+                    left.extend_one(x);
+                } else {
+                    right.extend_one(x);
+                }
             }
         }
+
+        let mut left: B = Default::default();
+        let mut right: B = Default::default();
+
+        self.fold((), extend(f, &mut left, &mut right));
+
         (left, right)
     }
+    */
 
-    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
-    // (`DoubleEndedIterator<Item = &'a mut T>`), aeneas#1493; the body also uses `continue 'outer`.
-    // #[rustc_non_const_trait_method]
-    // fn partition_in_place<'a, T: 'a, P>(mut self, ref mut predicate: P) -> usize
-    // where
-    //     Self: Sized + DoubleEndedIterator<Item = &'a mut T>,
-    //     P: FnMut(&T) -> bool,
-    // {
-    //     // Repeatedly find the first `false` and swap it with the last `true`.
-    //     let mut true_count = 0;
-    //     'outer: loop {
-    //         let head = loop {
-    //             match self.next() {
-    //                 None => break 'outer,
-    //                 Some(x) => {
-    //                     if predicate(&*x) {
-    //                         true_count += 1;
-    //                     } else {
-    //                         break x;
-    //                     }
-    //                 }
-    //             }
-    //         };
-    //         let tail = loop {
-    //             match self.next_back() {
-    //                 None => break 'outer,
-    //                 Some(x) => {
-    //                     if predicate(&*x) {
-    //                         break x;
-    //                     }
-    //                 }
-    //             }
-    //         };
-    //         core::mem::swap(head, tail);
-    //         true_count += 1;
-    //     }
-    //     true_count
-    // }
+    // NOT SUPPORTED: its body calls `find` and `rfind`, which are commented out.
+    /*
+    #[rustc_non_const_trait_method]
+    fn partition_in_place<'a, T: 'a, P>(mut self, ref mut predicate: P) -> usize
+    where
+        Self: Sized + DoubleEndedIterator<Item = &'a mut T>,
+        P: FnMut(&T) -> bool,
+    {
+        // FIXME: should we worry about the count overflowing? The only way to have more than
+        // `usize::MAX` mutable references is with ZSTs, which aren't useful to partition...
 
+        // These closure "factory" functions exist to avoid genericity in `Self`.
+
+        #[inline]
+        fn is_false<'a, T>(
+            predicate: &'a mut impl FnMut(&T) -> bool,
+            true_count: &'a mut usize,
+        ) -> impl FnMut(&&mut T) -> bool + 'a {
+            move |x| {
+                let p = predicate(&**x);
+                *true_count += p as usize;
+                !p
+            }
+        }
+
+        #[inline]
+        fn is_true<T>(predicate: &mut impl FnMut(&T) -> bool) -> impl FnMut(&&mut T) -> bool + '_ {
+            move |x| predicate(&**x)
+        }
+
+        // Repeatedly find the first `false` and swap it with the last `true`.
+        let mut true_count = 0;
+        while let Some(head) = self.find(is_false(predicate, &mut true_count)) {
+            if let Some(tail) = self.rfind(is_true(predicate)) {
+                crate::mem::swap(head, tail);
+                true_count += 1;
+            } else {
+                break;
+            }
+        }
+        true_count
+    }
+    */
+
+    // NOT SUPPORTED: its body calls `all` and `any`, which are commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn is_partitioned<P>(mut self, mut predicate: P) -> bool
     where
         Self: Sized,
         P: FnMut(Self::Item) -> bool,
     {
-        // Either all items test `true`, or the first `false` is followed by no more `true` items.
-        let mut seen_false = false;
-        while let Some(x) = self.next() {
-            if predicate(x) {
-                if seen_false {
-                    return false;
-                }
-            } else {
-                seen_false = true;
-            }
-        }
-        true
+        // Either all items test `true`, or the first clause stops at `false`
+        // and we check that there are no more `true` items after that.
+        self.all(&mut predicate) || !self.any(predicate)
     }
+    */
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
     // aeneas#1493.
-    // fn try_fold<B, F, R>(&mut self, init: B, mut f: F) -> R
-    // where
-    //     Self: Sized,
-    //     F: [const] FnMut(B, Self::Item) -> R + [const] Destruct,
-    //     R: [const] Try<Output = B>,
-    // {
-    //     let mut accum = init;
-    //     while let Some(x) = self.next() {
-    //         match f(accum, x).branch() {
-    //             ControlFlow::Continue(c) => accum = c,
-    //             ControlFlow::Break(r) => return FromResidual::from_residual(r),
-    //         }
-    //     }
-    //     Try::from_output(accum)
-    // }
+    /*
+    fn try_fold<B, F, R>(&mut self, init: B, mut f: F) -> R
+    where
+        Self: Sized,
+        F: [const] FnMut(B, Self::Item) -> R + [const] Destruct,
+        R: [const] Try<Output = B>,
+    {
+        let mut accum = init;
+        while let Some(x) = self.next() {
+            accum = f(accum, x)?;
+        }
+        try { accum }
+    }
+    */
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
     // aeneas#1493.
-    // #[rustc_non_const_trait_method]
-    // fn try_for_each<F, R>(&mut self, f: F) -> R
-    // where
-    //     Self: Sized,
-    //     F: FnMut(Self::Item) -> R,
-    //     R: Try<Output = ()>,
-    // {
-    //     let mut f = f;
-    //     while let Some(x) = self.next() {
-    //         match f(x).branch() {
-    //             ControlFlow::Continue(()) => {}
-    //             ControlFlow::Break(r) => return FromResidual::from_residual(r),
-    //         }
-    //     }
-    //     Try::from_output(())
-    // }
+    /*
+    #[rustc_non_const_trait_method]
+    fn try_for_each<F, R>(&mut self, f: F) -> R
+    where
+        Self: Sized,
+        F: FnMut(Self::Item) -> R,
+        R: Try<Output = ()>,
+    {
+        #[inline]
+        fn call<T, R>(mut f: impl FnMut(T) -> R) -> impl FnMut((), T) -> R {
+            move |(), x| f(x)
+        }
+
+        self.try_fold((), call(f))
+    }
+    */
 
     fn fold<B, F>(mut self, init: B, mut f: F) -> B
     where
@@ -545,283 +684,314 @@ pub const trait Iterator {
         Self: Sized + [const] Destruct,
         F: [const] FnMut(Self::Item, Self::Item) -> Self::Item + [const] Destruct,
     {
-        let first = match self.next() {
-            Some(x) => x,
-            None => return None,
-        };
+        let first = self.next()?;
         Some(self.fold(first, f))
     }
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
     // aeneas#1493.
-    // fn try_reduce<R>(
-    //     &mut self,
-    //     f: impl [const] FnMut(Self::Item, Self::Item) -> R + [const] Destruct,
-    // ) -> ChangeOutputType<R, Option<R::Output>>
-    // where
-    //     Self: Sized,
-    //     R: [const] Try<Output = Self::Item, Residual: [const] Residual<Option<Self::Item>>>,
-    // {
-    //     let first = match self.next() {
-    //         Some(i) => i,
-    //         None => return Try::from_output(None),
-    //     };
-    //
-    //     match self.try_fold(first, f).branch() {
-    //         ControlFlow::Break(r) => FromResidual::from_residual(r),
-    //         ControlFlow::Continue(i) => Try::from_output(Some(i)),
-    //     }
-    // }
+    /*
+    fn try_reduce<R>(
+        &mut self,
+        f: impl [const] FnMut(Self::Item, Self::Item) -> R + [const] Destruct,
+    ) -> ChangeOutputType<R, Option<R::Output>>
+    where
+        Self: Sized,
+        R: [const] Try<Output = Self::Item, Residual: [const] Residual<Option<Self::Item>>>,
+    {
+        let first = match self.next() {
+            Some(i) => i,
+            None => return Try::from_output(None),
+        };
 
+        match self.try_fold(first, f).branch() {
+            ControlFlow::Break(r) => FromResidual::from_residual(r),
+            ControlFlow::Continue(i) => Try::from_output(Some(i)),
+        }
+    }
+    */
+
+    // NOT SUPPORTED: its body calls `try_fold`, which is commented out.
+    /*
     fn all<F>(&mut self, f: F) -> bool
     where
         Self: Sized,
         F: [const] FnMut(Self::Item) -> bool + [const] Destruct,
     {
-        let mut f = f;
-        while let Some(x) = self.next() {
-            if !f(x) {
-                return false;
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        #[inline]
+        const fn check<T>(
+            mut f: impl [const] FnMut(T) -> bool + [const] Destruct,
+        ) -> impl [const] FnMut((), T) -> ControlFlow<()> + [const] Destruct {
+            const move |(), x| {
+                if f(x) { ControlFlow::Continue(()) } else { ControlFlow::Break(()) }
             }
         }
-        true
+        self.try_fold((), check(f)) == ControlFlow::Continue(())
     }
+    */
 
+    // NOT SUPPORTED: its body calls `try_fold`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn any<F>(&mut self, f: F) -> bool
     where
         Self: Sized,
         F: FnMut(Self::Item) -> bool,
     {
-        let mut f = f;
-        while let Some(x) = self.next() {
-            if f(x) {
-                return true;
+        #[inline]
+        fn check<T>(mut f: impl FnMut(T) -> bool) -> impl FnMut((), T) -> ControlFlow<()> {
+            move |(), x| {
+                if f(x) { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
             }
         }
-        false
-    }
 
+        self.try_fold((), check(f)) == ControlFlow::Break(())
+    }
+    */
+
+    // NOT SUPPORTED: its body calls `try_fold`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn find<P>(&mut self, predicate: P) -> Option<Self::Item>
     where
         Self: Sized,
         P: FnMut(&Self::Item) -> bool,
     {
-        let mut predicate = predicate;
-        while let Some(x) = self.next() {
-            if predicate(&x) {
-                return Some(x);
+        #[inline]
+        fn check<T>(mut predicate: impl FnMut(&T) -> bool) -> impl FnMut((), T) -> ControlFlow<T> {
+            move |(), x| {
+                if predicate(&x) { ControlFlow::Break(x) } else { ControlFlow::Continue(()) }
             }
         }
-        None
-    }
 
+        self.try_fold((), check(predicate)).break_value()
+    }
+    */
+
+    // NOT SUPPORTED: its body calls `try_fold`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn find_map<B, F>(&mut self, f: F) -> Option<B>
     where
         Self: Sized,
         F: FnMut(Self::Item) -> Option<B>,
     {
-        let mut f = f;
-        while let Some(x) = self.next() {
-            match f(x) {
-                Some(b) => return Some(b),
-                None => {}
+        #[inline]
+        fn check<T, B>(mut f: impl FnMut(T) -> Option<B>) -> impl FnMut((), T) -> ControlFlow<B> {
+            move |(), x| match f(x) {
+                Some(x) => ControlFlow::Break(x),
+                None => ControlFlow::Continue(()),
             }
         }
-        None
+
+        self.try_fold((), check(f)).break_value()
     }
+    */
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
     // aeneas#1493.
-    // #[rustc_non_const_trait_method]
-    // fn try_find<R>(
-    //     &mut self,
-    //     f: impl FnMut(&Self::Item) -> R,
-    // ) -> ChangeOutputType<R, Option<Self::Item>>
-    // where
-    //     Self: Sized,
-    //     R: Try<Output = bool, Residual: Residual<Option<Self::Item>>>,
-    // {
-    //     let mut f = f;
-    //     while let Some(x) = self.next() {
-    //         match f(&x).branch() {
-    //             ControlFlow::Continue(false) => {}
-    //             ControlFlow::Continue(true) => return Try::from_output(Some(x)),
-    //             ControlFlow::Break(r) => return FromResidual::from_residual(r),
-    //         }
-    //     }
-    //     Try::from_output(None)
-    // }
+    /*
+    #[rustc_non_const_trait_method]
+    fn try_find<R>(
+        &mut self,
+        f: impl FnMut(&Self::Item) -> R,
+    ) -> ChangeOutputType<R, Option<Self::Item>>
+    where
+        Self: Sized,
+        R: Try<Output = bool, Residual: Residual<Option<Self::Item>>>,
+    {
+        #[inline]
+        fn check<I, V, R>(
+            mut f: impl FnMut(&I) -> V,
+        ) -> impl FnMut((), I) -> ControlFlow<R::TryType>
+        where
+            V: Try<Output = bool, Residual = R>,
+            R: Residual<Option<I>>,
+        {
+            move |(), x| match f(&x).branch() {
+                ControlFlow::Continue(false) => ControlFlow::Continue(()),
+                ControlFlow::Continue(true) => ControlFlow::Break(Try::from_output(Some(x))),
+                ControlFlow::Break(r) => ControlFlow::Break(FromResidual::from_residual(r)),
+            }
+        }
 
+        match self.try_fold((), check(f)) {
+            ControlFlow::Break(x) => x,
+            ControlFlow::Continue(()) => Try::from_output(None),
+        }
+    }
+    */
+
+    // NOT SUPPORTED: its body calls `try_fold`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn position<P>(&mut self, predicate: P) -> Option<usize>
     where
         Self: Sized,
         P: FnMut(Self::Item) -> bool,
     {
-        let mut predicate = predicate;
-        let mut i = 0;
-        while let Some(x) = self.next() {
-            if predicate(x) {
-                return Some(i);
+        #[inline]
+        fn check<'a, T>(
+            mut predicate: impl FnMut(T) -> bool + 'a,
+            acc: &'a mut usize,
+        ) -> impl FnMut((), T) -> ControlFlow<usize, ()> + 'a {
+            #[rustc_inherit_overflow_checks]
+            move |_, x| {
+                if predicate(x) {
+                    ControlFlow::Break(*acc)
+                } else {
+                    *acc += 1;
+                    ControlFlow::Continue(())
+                }
             }
-            i += 1;
         }
-        None
+
+        let mut acc = 0;
+        self.try_fold((), check(predicate, &mut acc)).break_value()
     }
+    */
 
-    // NOT SUPPORTED: `next_back`, through `Self: DoubleEndedIterator`, gets an `Item` unrelated to
-    // `Self::Item`, charon#1580.
-    // #[rustc_non_const_trait_method]
-    // fn rposition<P>(&mut self, predicate: P) -> Option<usize>
-    // where
-    //     P: FnMut(Self::Item) -> bool,
-    //     Self: Sized + ExactSizeIterator + DoubleEndedIterator,
-    // {
-    //     let mut predicate = predicate;
-    //     let mut i = self.len();
-    //     while let Some(x) = self.next_back() {
-    //         i -= 1;
-    //         if predicate(x) {
-    //             return Some(i);
-    //         }
-    //     }
-    //     None
-    // }
+    // NOT SUPPORTED: its body calls `try_rfold`, which is commented out.
+    /*
+    #[rustc_non_const_trait_method]
+    fn rposition<P>(&mut self, predicate: P) -> Option<usize>
+    where
+        P: FnMut(Self::Item) -> bool,
+        Self: Sized + ExactSizeIterator + DoubleEndedIterator,
+    {
+        // No need for an overflow check here, because `ExactSizeIterator`
+        // implies that the number of elements fits into a `usize`.
+        #[inline]
+        fn check<T>(
+            mut predicate: impl FnMut(T) -> bool,
+        ) -> impl FnMut(usize, T) -> ControlFlow<usize, usize> {
+            move |i, x| {
+                let i = i - 1;
+                if predicate(x) { ControlFlow::Break(i) } else { ControlFlow::Continue(i) }
+            }
+        }
 
+        let n = self.len();
+        self.try_rfold(n, check(predicate)).break_value()
+    }
+    */
+
+    // NOT SUPPORTED: its body passes `Ord::max` as a closure, and Aeneas cannot translate the `FnMut` impl of
+    // a trait method ("Unimplemented").
+    /*
     fn max(self) -> Option<Self::Item>
     where
         Self: Sized + [const] Destruct,
         Self::Item: [const] Ord + [const] Destruct,
     {
-        let mut s = self;
-        let mut m: Option<Self::Item> = None;
-        while let Some(x) = s.next() {
-            m = match m {
-                None => Some(x),
-                // the last maximum
-                Some(y) => Some(if x >= y { x } else { y }),
-            };
-        }
-        m
+        self.reduce(Ord::max)
     }
+    */
 
+    // NOT SUPPORTED: its body passes `Ord::min` as a closure, and Aeneas cannot translate the `FnMut` impl of
+    // a trait method ("Unimplemented").
+    /*
     fn min(self) -> Option<Self::Item>
     where
         Self: Sized + [const] Destruct,
         Self::Item: [const] Ord + [const] Destruct,
     {
-        let mut s = self;
-        let mut m: Option<Self::Item> = None;
-        while let Some(x) = s.next() {
-            m = match m {
-                None => Some(x),
-                // the first minimum
-                Some(y) => Some(if x < y { x } else { y }),
-            };
-        }
-        m
+        self.reduce(Ord::min)
     }
+    */
 
+    // NOT SUPPORTED: its body uses `map`, whose `Iterator` impl is then mutually recursive with this method,
+    // aeneas#1264.
+    /*
     #[rustc_non_const_trait_method]
     fn max_by_key<B: Ord, F>(self, f: F) -> Option<Self::Item>
     where
         Self: Sized,
         F: FnMut(&Self::Item) -> B,
     {
-        let mut s = self;
-        let mut f = f;
-        let mut best: Option<(B, Self::Item)> = None;
-        while let Some(x) = s.next() {
-            let k = f(&x);
-            best = match best {
-                None => Some((k, x)),
-                Some((bk, bx)) => {
-                    if k >= bk {
-                        Some((k, x))
-                    } else {
-                        Some((bk, bx))
-                    }
-                }
-            };
-        }
-        match best {
-            Some((_, x)) => Some(x),
-            None => None,
-        }
-    }
+        // If we implemented this via `max_by` that would force it to use `B::cmp`.
+        // By using `max` over `KeyAndValue`, it instead ends up calling `B::lt`
+        // (via `KeyAndValue::max`), which is often overridden more efficiently.
 
+        #[inline]
+        fn key<T, B>(mut f: impl FnMut(&T) -> B) -> impl FnMut(T) -> KeyAndValue<B, T> {
+            move |value| KeyAndValue { key: f(&value), value }
+        }
+
+        let KeyAndValue { value, .. } = self.map(key(f)).max()?;
+        Some(value)
+    }
+    */
+
+    // NOT SUPPORTED: its closure captures `&mut compare`, and Aeneas generates an ill-typed `call_mut` for it.
+    /*
     fn max_by<F>(self, compare: F) -> Option<Self::Item>
     where
         Self: Sized + [const] Destruct,
         Self::Item: [const] Destruct,
         F: [const] FnMut(&Self::Item, &Self::Item) -> Ordering + [const] Destruct,
     {
-        let mut s = self;
-        let mut compare = compare;
-        let mut m: Option<Self::Item> = None;
-        while let Some(x) = s.next() {
-            m = match m {
-                None => Some(x),
-                Some(y) => match compare(&y, &x) {
-                    Ordering::Greater => Some(y),
-                    _ => Some(x),
-                },
-            };
+        #[inline]
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const fn fold<T>(
+            mut compare: impl [const] FnMut(&T, &T) -> Ordering + [const] Destruct,
+        ) -> impl [const] FnMut(T, T) -> T + [const] Destruct
+        where
+            T: [const] Destruct,
+        {
+            const move |x, y| cmp::max_by(x, y, &mut compare)
         }
-        m
-    }
 
+        self.reduce(fold(compare))
+    }
+    */
+
+    // NOT SUPPORTED: its body uses `map`, whose `Iterator` impl is then mutually recursive with this method,
+    // aeneas#1264.
+    /*
     #[rustc_non_const_trait_method]
     fn min_by_key<B: Ord, F>(self, f: F) -> Option<Self::Item>
     where
         Self: Sized,
         F: FnMut(&Self::Item) -> B,
     {
-        let mut s = self;
-        let mut f = f;
-        let mut best: Option<(B, Self::Item)> = None;
-        while let Some(x) = s.next() {
-            let k = f(&x);
-            best = match best {
-                None => Some((k, x)),
-                Some((bk, bx)) => {
-                    if k < bk {
-                        Some((k, x))
-                    } else {
-                        Some((bk, bx))
-                    }
-                }
-            };
-        }
-        match best {
-            Some((_, x)) => Some(x),
-            None => None,
-        }
-    }
+        // If we implemented this via `min_by` that would force it to use `B::cmp`.
+        // By using `min` over `KeyAndValue`, it instead ends up calling `B::lt`
+        // (via `KeyAndValue::min`), which is often overridden more efficiently.
 
+        #[inline]
+        fn key<T, B>(mut f: impl FnMut(&T) -> B) -> impl FnMut(T) -> KeyAndValue<B, T> {
+            move |value| KeyAndValue { key: f(&value), value }
+        }
+
+        let KeyAndValue { value, .. } = self.map(key(f)).min()?;
+        Some(value)
+    }
+    */
+
+    // NOT SUPPORTED: its closure captures `&mut compare`, and Aeneas generates an ill-typed `call_mut` for it.
+    /*
     fn min_by<F>(self, compare: F) -> Option<Self::Item>
     where
         Self: Sized + [const] Destruct,
         F: [const] FnMut(&Self::Item, &Self::Item) -> Ordering + [const] Destruct,
         Self::Item: [const] Destruct,
     {
-        let mut s = self;
-        let mut compare = compare;
-        let mut m: Option<Self::Item> = None;
-        while let Some(x) = s.next() {
-            m = match m {
-                None => Some(x),
-                Some(y) => match compare(&y, &x) {
-                    Ordering::Greater => Some(x),
-                    _ => Some(y),
-                },
-            };
+        #[inline]
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const fn fold<T>(
+            mut compare: impl [const] FnMut(&T, &T) -> Ordering + [const] Destruct,
+        ) -> impl [const] FnMut(T, T) -> T + [const] Destruct
+        where
+            T: [const] Destruct,
+        {
+            const move |x, y| cmp::min_by(x, y, &mut compare)
         }
-        m
+
+        self.reduce(fold(compare))
     }
+    */
 
     fn rev(self) -> Rev<Self>
     where
@@ -832,42 +1002,43 @@ pub const trait Iterator {
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
     // (`Self: Iterator<Item = …>`), aeneas#1493, #1491.
-    // #[rustc_non_const_trait_method]
-    // fn unzip<A, B, FromA, FromB>(self) -> (FromA, FromB)
-    // where
-    //     FromA: Default + Extend<A>,
-    //     FromB: Default + Extend<B>,
-    //     Self: Sized + Iterator<Item = (A, B)>,
-    // {
-    //     let mut a: FromA = Default::default();
-    //     let mut b: FromB = Default::default();
-    //     let mut s = self;
-    //     while let Some((x, y)) = s.next() {
-    //         a.extend_one(x);
-    //         b.extend_one(y);
-    //     }
-    //     (a, b)
-    // }
+    /*
+    #[rustc_non_const_trait_method]
+    fn unzip<A, B, FromA, FromB>(self) -> (FromA, FromB)
+    where
+        FromA: Default + Extend<A>,
+        FromB: Default + Extend<B>,
+        Self: Sized + Iterator<Item = (A, B)>,
+    {
+        let mut unzipped: (FromA, FromB) = Default::default();
+        unzipped.extend(self);
+        unzipped
+    }
+    */
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
     // (`Self: Iterator<Item = …>`), aeneas#1493, #1491.
-    // fn copied<'a, T>(self) -> Copied<Self>
-    // where
-    //     T: Copy + 'a,
-    //     Self: Sized + Iterator<Item = &'a T>,
-    // {
-    //     Copied { it: self }
-    // }
+    /*
+    fn copied<'a, T>(self) -> Copied<Self>
+    where
+        T: Copy + 'a,
+        Self: Sized + Iterator<Item = &'a T>,
+    {
+        Copied::new(self)
+    }
+    */
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
     // (`Self: Iterator<Item = …>`), aeneas#1493, #1491.
-    // fn cloned<'a, T>(self) -> Cloned<Self>
-    // where
-    //     T: Clone + 'a,
-    //     Self: Sized + Iterator<Item = &'a T>,
-    // {
-    //     Cloned { it: self }
-    // }
+    /*
+    fn cloned<'a, T>(self) -> Cloned<Self>
+    where
+        T: Clone + 'a,
+        Self: Sized + Iterator<Item = &'a T>,
+    {
+        Cloned::new(self)
+    }
+    */
 
     fn cycle(self) -> Cycle<Self>
     where
@@ -899,6 +1070,9 @@ pub const trait Iterator {
         Product::product(self)
     }
 
+    // NOT SUPPORTED: its closure is given the dictionary (Aeneas gives a closure its method's generics), and is
+    // passed to `cmp_by` as a plain `FnMut` argument, in which `cmp_by` is not known to be continuous.
+    /*
     #[rustc_non_const_trait_method]
     fn cmp<I>(self, other: I) -> Ordering
     where
@@ -906,26 +1080,9 @@ pub const trait Iterator {
         Self::Item: Ord,
         Self: Sized,
     {
-        let mut a = self;
-        let mut b = other.into_iter();
-        loop {
-            match a.next() {
-                None => {
-                    return match b.next() {
-                        None => Ordering::Equal,
-                        Some(_) => Ordering::Less,
-                    }
-                }
-                Some(x) => match b.next() {
-                    None => return Ordering::Greater,
-                    Some(y) => match x.cmp(&y) {
-                        Ordering::Equal => {}
-                        non_eq => return non_eq,
-                    },
-                },
-            }
-        }
+        self.cmp_by(other, |x, y| x.cmp(&y))
     }
+    */
 
     #[rustc_non_const_trait_method]
     fn cmp_by<I, F>(self, other: I, cmp: F) -> Ordering
@@ -951,6 +1108,9 @@ pub const trait Iterator {
         }
     }
 
+    // NOT SUPPORTED: its closure is given the dictionary (Aeneas gives a closure its method's generics), and is
+    // passed to `partial_cmp_by` as a plain `FnMut` argument, in which `partial_cmp_by` is not known to be continuous.
+    /*
     #[rustc_non_const_trait_method]
     fn partial_cmp<I>(self, other: I) -> Option<Ordering>
     where
@@ -958,26 +1118,9 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        let mut a = self;
-        let mut b = other.into_iter();
-        loop {
-            match a.next() {
-                None => {
-                    return match b.next() {
-                        None => Some(Ordering::Equal),
-                        Some(_) => Some(Ordering::Less),
-                    }
-                }
-                Some(x) => match b.next() {
-                    None => return Some(Ordering::Greater),
-                    Some(y) => match x.partial_cmp(&y) {
-                        Some(Ordering::Equal) => {}
-                        non_eq => return non_eq,
-                    },
-                },
-            }
-        }
+        self.partial_cmp_by(other, |x, y| x.partial_cmp(&y))
     }
+    */
 
     #[rustc_non_const_trait_method]
     fn partial_cmp_by<I, F>(self, other: I, partial_cmp: F) -> Option<Ordering>
@@ -1003,6 +1146,8 @@ pub const trait Iterator {
         }
     }
 
+    // NOT SUPPORTED: its body calls `eq_by`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn eq<I>(self, other: I) -> bool
     where
@@ -1010,50 +1155,36 @@ pub const trait Iterator {
         Self::Item: PartialEq<I::Item>,
         Self: Sized,
     {
-        let mut a = self;
-        let mut b = other.into_iter();
-        loop {
-            match a.next() {
-                None => {
-                    return match b.next() {
-                        None => true,
-                        Some(_) => false,
-                    }
-                }
-                Some(x) => match b.next() {
-                    None => return false,
-                    Some(y) => {
-                        if !(x == y) {
-                            return false;
-                        }
-                    }
-                },
+        self.eq_by(other, |x, y| x == y)
+    }
+    */
+
+    // NOT SUPPORTED: calls `SpecIterEq` (stubbed at the top of the file), whose two `Iterator` clauses both
+    // become a Lean field named `IteratorInst`, aeneas#1051.
+    /*
+    #[rustc_non_const_trait_method]
+    fn eq_by<I, F>(self, other: I, eq: F) -> bool
+    where
+        Self: Sized,
+        I: IntoIterator,
+        F: FnMut(Self::Item, I::Item) -> bool,
+    {
+        #[inline]
+        fn compare<X, Y, F>(mut eq: F) -> impl FnMut(X, Y) -> ControlFlow<()>
+        where
+            F: FnMut(X, Y) -> bool,
+        {
+            move |x, y| {
+                if eq(x, y) { ControlFlow::Continue(()) } else { ControlFlow::Break(()) }
             }
         }
+
+        SpecIterEq::spec_iter_eq(self, other.into_iter(), compare(eq))
     }
+    */
 
-    // NOT SUPPORTED: calls `SpecIterEq` (stubbed at the top of the file), whose two `Iterator`
-    // clauses both become a Lean field named `IteratorInst`, aeneas#1051.
-    // #[rustc_non_const_trait_method]
-    // fn eq_by<I, F>(self, other: I, eq: F) -> bool
-    // where
-    //     Self: Sized,
-    //     I: IntoIterator,
-    //     F: FnMut(Self::Item, I::Item) -> bool,
-    // {
-    //     #[inline]
-    //     fn compare<X, Y, F>(mut eq: F) -> impl FnMut(X, Y) -> ControlFlow<()>
-    //     where
-    //         F: FnMut(X, Y) -> bool,
-    //     {
-    //         move |x, y| {
-    //             if eq(x, y) { ControlFlow::Continue(()) } else { ControlFlow::Break(()) }
-    //         }
-    //     }
-    //
-    //     SpecIterEq::spec_iter_eq(self, other.into_iter(), compare(eq))
-    // }
-
+    // NOT SUPPORTED: its body calls `eq`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn ne<I>(self, other: I) -> bool
     where
@@ -1063,7 +1194,10 @@ pub const trait Iterator {
     {
         !self.eq(other)
     }
+    */
 
+    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn lt<I>(self, other: I) -> bool
     where
@@ -1071,12 +1205,12 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        match self.partial_cmp(other) {
-            Some(Ordering::Less) => true,
-            _ => false,
-        }
+        self.partial_cmp(other) == Some(Ordering::Less)
     }
+    */
 
+    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn le<I>(self, other: I) -> bool
     where
@@ -1084,12 +1218,12 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        match self.partial_cmp(other) {
-            Some(Ordering::Less | Ordering::Equal) => true,
-            _ => false,
-        }
+        matches!(self.partial_cmp(other), Some(Ordering::Less | Ordering::Equal))
     }
+    */
 
+    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn gt<I>(self, other: I) -> bool
     where
@@ -1097,12 +1231,12 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        match self.partial_cmp(other) {
-            Some(Ordering::Greater) => true,
-            _ => false,
-        }
+        self.partial_cmp(other) == Some(Ordering::Greater)
     }
+    */
 
+    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
+    /*
     #[rustc_non_const_trait_method]
     fn ge<I>(self, other: I) -> bool
     where
@@ -1110,51 +1244,59 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        match self.partial_cmp(other) {
-            Some(Ordering::Greater | Ordering::Equal) => true,
-            _ => false,
-        }
+        matches!(self.partial_cmp(other), Some(Ordering::Greater | Ordering::Equal))
     }
+    */
 
+    // NOT SUPPORTED: its body calls `is_sorted_by`, which is commented out.
+    /*
     fn is_sorted(self) -> bool
     where
         Self: Sized + [const] Destruct,
         Self::Item: [const] PartialOrd + [const] Destruct,
     {
-        let mut s = self;
-        let mut last = match s.next() {
-            Some(e) => e,
-            None => return true,
-        };
-        while let Some(curr) = s.next() {
-            if !(last <= curr) {
-                return false;
-            }
-            last = curr;
-        }
-        true
+        self.is_sorted_by(const |a, b| a <= b)
     }
+    */
 
+    // NOT SUPPORTED: its body calls `all`, which is commented out.
+    /*
     fn is_sorted_by<F>(mut self, compare: F) -> bool
     where
         Self: Sized + [const] Destruct,
         Self::Item: [const] Destruct,
         F: [const] FnMut(&Self::Item, &Self::Item) -> bool + [const] Destruct,
     {
-        let mut compare = compare;
+        #[inline]
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const fn check<'a, T>(
+            last: &'a mut T,
+            mut compare: impl [const] FnMut(&T, &T) -> bool + 'a + [const] Destruct,
+        ) -> impl [const] FnMut(T) -> bool + 'a + [const] Destruct
+        where
+            T: [const] Destruct,
+        {
+            const move |curr| {
+                if !compare(last, &curr) {
+                    return false;
+                }
+                *last = curr;
+                true
+            }
+        }
+
         let mut last = match self.next() {
             Some(e) => e,
             None => return true,
         };
-        while let Some(curr) = self.next() {
-            if !compare(&last, &curr) {
-                return false;
-            }
-            last = curr;
-        }
-        true
-    }
 
+        self.all(check(&mut last, compare))
+    }
+    */
+
+    // NOT SUPPORTED: its body uses `map`, whose `Iterator` impl is then mutually recursive with this method,
+    // aeneas#1264.
+    /*
     #[rustc_non_const_trait_method]
     fn is_sorted_by_key<F, K>(self, f: F) -> bool
     where
@@ -1162,29 +1304,17 @@ pub const trait Iterator {
         F: FnMut(Self::Item) -> K,
         K: PartialOrd,
     {
-        let mut s = self;
-        let mut f = f;
-        let mut last = match s.next() {
-            Some(e) => f(e),
-            None => return true,
-        };
-        while let Some(x) = s.next() {
-            let curr = f(x);
-            if !(last <= curr) {
-                return false;
-            }
-            last = curr;
-        }
-        true
+        self.map(f).is_sorted()
     }
+    */
 
     #[doc(hidden)]
     unsafe fn __iterator_get_unchecked(&mut self, _idx: usize) -> Self::Item
     where
         Self: TrustedRandomAccessNoCoerce,
     {
-        // std: `unreachable!("Always specialized")`, which is const only inside `core`
-        panic!("internal error: entered unreachable code: Always specialized");
+        // Always specialized
+        unreachable!();
     }
 }
 
@@ -1192,6 +1322,7 @@ pub const trait Iterator {
 // `DoubleEndedIterator` (core/src/iter/traits/double_ended.rs)
 // ---------------------------------------------------------------------------------------------
 
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 pub const trait DoubleEndedIterator: [const] Iterator {
     fn next_back(&mut self) -> Option<Self::Item>;
 
@@ -1206,53 +1337,50 @@ pub const trait DoubleEndedIterator: [const] Iterator {
     }
 
     // NOT SUPPORTED: `NonZero`'s trait `ZeroablePrimitive` gets two Lean fields named `markerCopyInst`.
-    // fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
-    // where
-    //     Self::Item: [const] Destruct,
-    // {
-    //     let mut i = 0;
-    //     while i < n {
-    //         if let None = self.next_back() {
-    //             // SAFETY: `i < n`
-    //             return Err(unsafe { NonZero::new_unchecked(n - i) });
-    //         }
-    //         i += 1;
-    //     }
-    //     Ok(())
-    // }
+    /*
+    fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
+    where
+        Self::Item: [const] Destruct,
+    {
+        for i in 0..n {
+            if self.next_back().is_none() {
+                // SAFETY: `i` is always less than `n`.
+                return Err(unsafe { NonZero::new_unchecked(n - i) });
+            }
+        }
+        Ok(())
+    }
+    */
 
+    // NOT SUPPORTED: its body calls `advance_back_by`, which is commented out.
+    /*
     fn nth_back(&mut self, n: usize) -> Option<Self::Item>
     where
         Self::Item: [const] Destruct,
     {
-        let mut i = 0;
-        while i < n {
-            match self.next_back() {
-                Some(_) => {}
-                None => return None,
-            }
-            i += 1;
+        if self.advance_back_by(n).is_err() {
+            return None;
         }
         self.next_back()
     }
+    */
 
     // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
     // aeneas#1493.
-    // fn try_rfold<B, F, R>(&mut self, init: B, mut f: F) -> R
-    // where
-    //     Self: Sized,
-    //     F: [const] FnMut(B, Self::Item) -> R + [const] Destruct,
-    //     R: [const] Try<Output = B>,
-    // {
-    //     let mut accum = init;
-    //     while let Some(x) = self.next_back() {
-    //         match f(accum, x).branch() {
-    //             ControlFlow::Continue(c) => accum = c,
-    //             ControlFlow::Break(r) => return FromResidual::from_residual(r),
-    //         }
-    //     }
-    //     Try::from_output(accum)
-    // }
+    /*
+    fn try_rfold<B, F, R>(&mut self, init: B, mut f: F) -> R
+    where
+        Self: Sized,
+        F: [const] FnMut(B, Self::Item) -> R + [const] Destruct,
+        R: [const] Try<Output = B>,
+    {
+        let mut accum = init;
+        while let Some(x) = self.next_back() {
+            accum = f(accum, x)?;
+        }
+        try { accum }
+    }
+    */
 
     fn rfold<B, F>(mut self, init: B, mut f: F) -> B
     where
@@ -1266,20 +1394,30 @@ pub const trait DoubleEndedIterator: [const] Iterator {
         accum
     }
 
+    // NOT SUPPORTED: its body calls `try_rfold`, which is commented out.
+    /*
     fn rfind<P>(&mut self, predicate: P) -> Option<Self::Item>
     where
         Self: Sized,
         P: [const] FnMut(&Self::Item) -> bool + [const] Destruct,
         Self::Item: [const] Destruct,
     {
-        let mut predicate = predicate;
-        while let Some(x) = self.next_back() {
-            if predicate(&x) {
-                return Some(x);
+        #[inline]
+        #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
+        const fn check<T>(
+            mut predicate: impl [const] FnMut(&T) -> bool + [const] Destruct,
+        ) -> impl [const] FnMut((), T) -> ControlFlow<T> + [const] Destruct
+        where
+            T: [const] Destruct,
+        {
+            const move |(), x| {
+                if predicate(&x) { ControlFlow::Break(x) } else { ControlFlow::Continue(()) }
             }
         }
-        None
+
+        self.try_rfold((), check(predicate)).break_value()
     }
+    */
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1306,6 +1444,7 @@ pub trait ExactSizeIterator: Iterator {
 // `IntoIterator`, `FromIterator`, `Extend` (core/src/iter/traits/collect.rs)
 // ---------------------------------------------------------------------------------------------
 
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 pub const trait IntoIterator {
     type Item;
     type IntoIter: Iterator<Item = Self::Item>;
@@ -1316,6 +1455,7 @@ pub trait FromIterator<T>: Sized {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self;
 }
 
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 const impl<I: [const] Iterator> IntoIterator for I {
     type Item = I::Item;
     type IntoIter = I;
@@ -1346,14 +1486,28 @@ pub trait Extend<T> {
     }
 }
 
+// `Extend` for pairs, which `Iterator::unzip` uses (std implements it with a macro and private
+// helpers, core/src/iter/traits/collect.rs).
+impl<A, B, ExtendA: Extend<A>, ExtendB: Extend<B>> Extend<(A, B)> for (ExtendA, ExtendB) {
+    fn extend<T: IntoIterator<Item = (A, B)>>(&mut self, into_iter: T) {
+        let mut iter = into_iter.into_iter();
+        while let Some((a, b)) = iter.next() {
+            self.0.extend_one(a);
+            self.1.extend_one(b);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // `Sum`, `Product` (core/src/iter/traits/accum.rs)
 // ---------------------------------------------------------------------------------------------
 
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 pub const trait Sum<A = Self>: Sized {
     fn sum<I: Iterator<Item = A>>(iter: I) -> Self;
 }
 
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 pub const trait Product<A = Self>: Sized {
     fn product<I: Iterator<Item = A>>(iter: I) -> Self;
 }
@@ -1384,30 +1538,41 @@ impl<T> IntoIterator for Option<T> {
 // The adapters (core/src/iter/adapters), with std's names, parameters and bounds
 // ---------------------------------------------------------------------------------------------
 
-// Not used: `try_collect` (its only user) is not supported.
-// /// The iterator `try_collect` collects from: the outputs, until the first residual.
-// pub struct GenericShunt<'a, I, R> {
-//     iter: &'a mut I,
-//     residual: &'a mut Option<R>,
-// }
-// impl<'a, I: Iterator, R> Iterator for GenericShunt<'a, I, R>
-// where
-//     I::Item: Try<Residual = R>,
-// {
-//     type Item = <I::Item as Try>::Output;
-//     fn next(&mut self) -> Option<Self::Item> {
-//         match self.iter.next() {
-//             None => None,
-//             Some(x) => match x.branch() {
-//                 ControlFlow::Continue(o) => Some(o),
-//                 ControlFlow::Break(r) => {
-//                     *self.residual = Some(r);
-//                     None
-//                 }
-//             },
-//         }
-//     }
-// }
+// Used only by `Iterator::try_collect`, which is commented out.
+/*
+/// The iterator `try_collect` collects from: the outputs, until the first residual.
+pub struct GenericShunt<'a, I, R> {
+    iter: I,
+    residual: &'a mut Option<R>,
+}
+impl<'a, I: Iterator, R> Iterator for GenericShunt<'a, I, R>
+where
+    I::Item: Try<Residual = R>,
+{
+    type Item = <I::Item as Try>::Output;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iter.next() {
+            None => None,
+            Some(x) => match x.branch() {
+                ControlFlow::Continue(o) => Some(o),
+                ControlFlow::Break(r) => {
+                    *self.residual = Some(r);
+                    None
+                }
+            },
+        }
+    }
+}
+
+/// Like `by_ref`, but requiring `Sized` (core/src/iter/adapters/by_ref_sized.rs).
+pub struct ByRefSized<'a, I>(pub &'a mut I);
+impl<I: Iterator> Iterator for ByRefSized<'_, I> {
+    type Item = I::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        I::next(self.0)
+    }
+}
+*/
 
 pub struct StepBy<I> {
     iter: I,
@@ -1428,7 +1593,13 @@ impl<I: Iterator> Iterator for StepBy<I> {
             self.first_take = false;
             self.iter.next()
         } else {
-            self.iter.nth(self.step_minus_one)
+            // skips `step_minus_one` items (not with `nth`, which is commented out)
+            let mut i = 0;
+            while i < self.step_minus_one {
+                let _ = self.iter.next();
+                i += 1;
+            }
+            self.iter.next()
         }
     }
 }
@@ -1808,15 +1979,17 @@ impl<I, St, F> Scan<I, St, F> {
 }
 // NOT SUPPORTED: the closure takes `&mut St`, which `FnMut::call_mut` cannot hand back, aeneas#961,
 // #1215. (`Iterator::scan` itself is fine.)
-// impl<B, I: Iterator, St, F: FnMut(&mut St, I::Item) -> Option<B>> Iterator for Scan<I, St, F> {
-//     type Item = B;
-//     fn next(&mut self) -> Option<B> {
-//         match self.iter.next() {
-//             Some(a) => (self.f)(&mut self.state, a),
-//             None => None,
-//         }
-//     }
-// }
+/*
+impl<B, I: Iterator, St, F: FnMut(&mut St, I::Item) -> Option<B>> Iterator for Scan<I, St, F> {
+    type Item = B;
+    fn next(&mut self) -> Option<B> {
+        match self.iter.next() {
+            Some(a) => (self.f)(&mut self.state, a),
+            None => None,
+        }
+    }
+}
+*/
 
 pub struct FlatMap<I, U: IntoIterator, F> {
     iter: I,
@@ -1956,6 +2129,12 @@ impl<I: DoubleEndedIterator> Iterator for Rev<I> {
 pub struct Copied<I> {
     it: I,
 }
+// std's `new` (crate-private there), with the fields above.
+impl<I> Copied<I> {
+    pub(crate) const fn new(it: I) -> Copied<I> {
+        Copied { it }
+    }
+}
 impl<'a, I: Iterator<Item = &'a T>, T: 'a + Copy> Iterator for Copied<I> {
     type Item = T;
     fn next(&mut self) -> Option<T> {
@@ -1968,6 +2147,12 @@ impl<'a, I: Iterator<Item = &'a T>, T: 'a + Copy> Iterator for Copied<I> {
 
 pub struct Cloned<I> {
     it: I,
+}
+// std's `new` (crate-private there), with the fields above.
+impl<I> Cloned<I> {
+    pub(crate) const fn new(it: I) -> Cloned<I> {
+        Cloned { it }
+    }
 }
 impl<'a, I: Iterator<Item = &'a T>, T: 'a + Clone> Iterator for Cloned<I> {
     type Item = T;
@@ -1984,6 +2169,7 @@ pub struct Cycle<I> {
     iter: I,
 }
 // std's `new` (crate-private there), with the fields above.
+#[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 const impl<I: [const] Clone> Cycle<I> {
     pub(crate) fn new(iter: I) -> Cycle<I> {
         Cycle { orig: iter.clone(), iter }
@@ -2069,5 +2255,6 @@ impl Sum<u32> for u32 {
     }
 }
 pub fn use_collect() -> u32 {
-    Count { n: 4 }.collect()
+    // (not `collect`, which is commented out)
+    <u32 as FromIterator<u32>>::from_iter(Count { n: 4 })
 }

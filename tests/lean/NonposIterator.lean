@@ -61,8 +61,215 @@ axiom core.option.Option.Insts.CoreCmpPartialEqOption.eq
   {T : Type _} (cmpPartialEqInst : core.cmp.PartialEq T T) :
   Option T → Option T → Result Bool
 
+/-- [core::option::{impl core::ops::try_trait::Try for core::option::Option<T>}::branch]:
+    Source: '/rustc/library/core/src/option.rs', lines 2875:4-2875:64
+    Name pattern: [core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch]
+    Visibility: public -/
+@[rust_fun
+  "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"]
+axiom core.option.Option.Insts.CoreOpsTry_traitTry.branch
+  {T : Type _} :
+  Option T → Result (core.ops.control_flow.ControlFlow (Option Never) T)
+
+/-- [core::option::{impl core::ops::try_trait::FromResidual<core::option::Option<!>> for core::option::Option<T>}::from_residual]:
+    Source: '/rustc/library/core/src/option.rs', lines 2889:4-2889:49
+    Name pattern: [core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual]
+    Visibility: public -/
+@[rust_fun
+  "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual"]
+axiom
+  core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual
+  (T : Type _) : Option Never → Result (Option T)
+
+/-- [nonpos_iterator::KeyAndValue]
+    Source: 'tests/src/nonpos-iterator.rs', lines 68:0-71:1 -/
+structure KeyAndValue (K : Type _) (V : Type _) where
+  key : K
+  value : V
+
+/-- [nonpos_iterator::{impl core::fmt::Debug for nonpos_iterator::KeyAndValue<K, V>}::fmt]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 67:9-67:14
+    Visibility: public -/
+def KeyAndValue.Insts.CoreFmtDebug.fmt
+  {K : Type _} {V : Type _} (corefmtDebugInst : core.fmt.Debug K)
+  (corefmtDebugInst1 : core.fmt.Debug V) (self : KeyAndValue K V)
+  (f : core.fmt.Formatter) :
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
+  := do
+  let dyn := Dyn.mk _ corefmtDebugInst self.key
+  let dyn1 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst1) self.value
+  core.fmt.Formatter.debug_struct_field2_finish f (toStr "KeyAndValue") (toStr
+    "key") dyn (toStr "value") dyn1
+
+/-- Trait implementation: [nonpos_iterator::{impl core::fmt::Debug for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 67:9-67:14 -/
+@[reducible]
+def KeyAndValue.Insts.CoreFmtDebug {K : Type _} {V : Type _} (corefmtDebugInst
+  : core.fmt.Debug K) (corefmtDebugInst1 : core.fmt.Debug V) : core.fmt.Debug
+  (KeyAndValue K V) := {
+  fmt := KeyAndValue.Insts.CoreFmtDebug.fmt corefmtDebugInst corefmtDebugInst1
+}
+
+/-- [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::KeyAndValue<K, V>}::clone]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 67:22-67:27
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCloneClone.clone
+  {K : Type _} {V : Type _} (corecloneCloneInst : core.clone.Clone K)
+  (corecloneCloneInst1 : core.clone.Clone V) (self : KeyAndValue K V) :
+  Result (KeyAndValue K V)
+  := do
+  let t ← corecloneCloneInst.clone self.key
+  let t1 ← corecloneCloneInst1.clone self.value
+  ok { key := t, value := t1 }
+
+/-- Trait implementation: [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 67:22-67:27 -/
+@[reducible]
+def KeyAndValue.Insts.CoreCloneClone {K : Type _} {V : Type _}
+  (corecloneCloneInst : core.clone.Clone K) (corecloneCloneInst1 :
+  core.clone.Clone V) : core.clone.Clone (KeyAndValue K V) := {
+  clone := KeyAndValue.Insts.CoreCloneClone.clone corecloneCloneInst
+    corecloneCloneInst1
+}
+
+/-- Trait implementation: [nonpos_iterator::{impl core::marker::Copy for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 67:16-67:20 -/
+@[reducible]
+def KeyAndValue.Insts.CoreMarkerCopy {K : Type _} {V : Type _}
+  (coremarkerCopyInst : core.marker.Copy K) (coremarkerCopyInst1 :
+  core.marker.Copy V) : core.marker.Copy (KeyAndValue K V) := {
+  cloneInst := KeyAndValue.Insts.CoreCloneClone coremarkerCopyInst.cloneInst
+    coremarkerCopyInst1.cloneInst
+}
+
+/-- [nonpos_iterator::{impl core::cmp::PartialEq<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::ne]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 78:4-80:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.ne
+  {K : Type _} {V : Type _} (corecmpPartialEqInst : core.cmp.PartialEq K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Bool
+  := do
+  corecmpPartialEqInst.ne self.key other.key
+
+/-- [nonpos_iterator::{impl core::cmp::PartialEq<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::eq]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 74:4-76:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.eq
+  {K : Type _} {V : Type _} (corecmpPartialEqInst : core.cmp.PartialEq K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Bool
+  := do
+  corecmpPartialEqInst.eq self.key other.key
+
+/-- Trait implementation: [nonpos_iterator::{impl core::cmp::PartialEq<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 72:0-81:1 -/
+@[reducible]
+def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue {K : Type _} (V : Type _)
+  (corecmpPartialEqInst : core.cmp.PartialEq K K) : core.cmp.PartialEq
+  (KeyAndValue K V) (KeyAndValue K V) := {
+  eq := KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.eq corecmpPartialEqInst
+  ne := KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.ne corecmpPartialEqInst
+}
+
+/-- Trait implementation: [nonpos_iterator::{impl core::cmp::Eq for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 82:0-82:42 -/
+@[reducible]
+def KeyAndValue.Insts.CoreCmpEq {K : Type _} (V : Type _) (corecmpEqInst :
+  core.cmp.Eq K) : core.cmp.Eq (KeyAndValue K V) := {
+  partialEqInst := KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue V
+    corecmpEqInst.partialEqInst
+}
+
+/-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::ge]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 101:4-103:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.ge
+  {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Bool
+  := do
+  corecmpPartialOrdInst.ge self.key other.key
+
+/-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::gt]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 97:4-99:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.gt
+  {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Bool
+  := do
+  corecmpPartialOrdInst.gt self.key other.key
+
+/-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::le]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 93:4-95:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.le
+  {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Bool
+  := do
+  corecmpPartialOrdInst.le self.key other.key
+
+/-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::lt]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 89:4-91:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.lt
+  {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Bool
+  := do
+  corecmpPartialOrdInst.lt self.key other.key
+
+/-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::partial_cmp]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 85:4-87:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.partial_cmp
+  {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result (Option Ordering)
+  := do
+  corecmpPartialOrdInst.partial_cmp self.key other.key
+
+/-- Trait implementation: [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 83:0-104:1 -/
+@[reducible]
+def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue {K : Type _} (V : Type _)
+  (corecmpPartialOrdInst : core.cmp.PartialOrd K K) : core.cmp.PartialOrd
+  (KeyAndValue K V) (KeyAndValue K V) := {
+  partialEqInst := KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue V
+    corecmpPartialOrdInst.partialEqInst
+  partial_cmp := KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.partial_cmp
+    corecmpPartialOrdInst
+  lt := KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.lt corecmpPartialOrdInst
+  le := KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.le corecmpPartialOrdInst
+  gt := KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.gt corecmpPartialOrdInst
+  ge := KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.ge corecmpPartialOrdInst
+}
+
+/-- [nonpos_iterator::{impl core::cmp::Ord for nonpos_iterator::KeyAndValue<K, V>}::cmp]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 107:4-109:5
+    Visibility: public -/
+def KeyAndValue.Insts.CoreCmpOrd.cmp
+  {K : Type _} {V : Type _} (corecmpOrdInst : core.cmp.Ord K)
+  (self : KeyAndValue K V) (other : KeyAndValue K V) :
+  Result Ordering
+  := do
+  corecmpOrdInst.cmp self.key other.key
+
+/-- Trait implementation: [nonpos_iterator::{impl core::cmp::Ord for nonpos_iterator::KeyAndValue<K, V>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 105:0-110:1 -/
+@[reducible]
+def KeyAndValue.Insts.CoreCmpOrd {K : Type _} (V : Type _) (corecmpOrdInst :
+  core.cmp.Ord K) : core.cmp.Ord (KeyAndValue K V) := {
+  eqInst := KeyAndValue.Insts.CoreCmpEq V corecmpOrdInst.eqInst
+  partialOrdInst := KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue V
+    corecmpOrdInst.partialOrdInst
+  cmp := KeyAndValue.Insts.CoreCmpOrd.cmp corecmpOrdInst
+}
+
 /-- [nonpos_iterator::ArrayChunks]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2006:0-2009:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2192:0-2195:1
     Visibility: public -/
 structure ArrayChunks (I : Type _) (Clause0_Item : Type _) (N : Std.Usize)
   where
@@ -70,33 +277,33 @@ structure ArrayChunks (I : Type _) (Clause0_Item : Type _) (N : Std.Usize)
   remainder : Option (core.array.iter.IntoIter Clause0_Item N)
 
 /-- [nonpos_iterator::Cycle]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1982:0-1985:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2167:0-2170:1
     Visibility: public -/
 structure Cycle (I : Type _) where
   orig : I
   iter : I
 
 /-- [nonpos_iterator::Rev]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1940:0-1942:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2113:0-2115:1
     Visibility: public -/
 structure Rev (T : Type _) where
   iter : T
 
 /-- [nonpos_iterator::Inspect]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1917:0-1920:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2090:0-2093:1
     Visibility: public -/
 structure Inspect (I : Type _) (F : Type _) where
   iter : I
   f : F
 
 /-- [nonpos_iterator::Fuse]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1892:0-1894:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2065:0-2067:1
     Visibility: public -/
 structure Fuse (I : Type _) where
   iter : Option I
 
 /-- [nonpos_iterator::MapWindows]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1879:0-1883:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2052:0-2056:1
     Visibility: public -/
 structure MapWindows (I : Type _) (F : Type _) (Clause0_Item : Type _) (N :
   Std.Usize) where
@@ -105,7 +312,7 @@ structure MapWindows (I : Type _) (F : Type _) (Clause0_Item : Type _) (N :
   buffer : Option (Array Clause0_Item N)
 
 /-- [nonpos_iterator::Flatten]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1850:0-1853:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2023:0-2026:1
     Visibility: public -/
 structure Flatten (I : Type _) (Clause0_Item : Type _) (Clause1_Item : Type _)
   (Clause1_IntoIter : Type _) where
@@ -113,7 +320,7 @@ structure Flatten (I : Type _) (Clause0_Item : Type _) (Clause1_Item : Type _)
   frontiter : Option Clause1_IntoIter
 
 /-- [nonpos_iterator::FlatMap]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1821:0-1825:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1994:0-1998:1
     Visibility: public -/
 structure FlatMap (I : Type _) (U : Type _) (F : Type _) (Clause0_Item :
   Type _) (Clause0_IntoIter : Type _) where
@@ -122,7 +329,7 @@ structure FlatMap (I : Type _) (U : Type _) (F : Type _) (Clause0_Item :
   frontiter : Option Clause0_IntoIter
 
 /-- [nonpos_iterator::Scan]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1798:0-1802:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1969:0-1973:1
     Visibility: public -/
 structure Scan (I : Type _) (St : Type _) (F : Type _) where
   iter : I
@@ -130,28 +337,28 @@ structure Scan (I : Type _) (St : Type _) (F : Type _) where
   state : St
 
 /-- [nonpos_iterator::Take]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1776:0-1779:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1947:0-1950:1
     Visibility: public -/
 structure Take (I : Type _) where
   iter : I
   n : Std.Usize
 
 /-- [nonpos_iterator::Skip]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1752:0-1755:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1923:0-1926:1
     Visibility: public -/
 structure Skip (I : Type _) where
   iter : I
   n : Std.Usize
 
 /-- [nonpos_iterator::MapWhile]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1732:0-1735:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1903:0-1906:1
     Visibility: public -/
 structure MapWhile (I : Type _) (P : Type _) where
   iter : I
   predicate : P
 
 /-- [nonpos_iterator::TakeWhile]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1701:0-1705:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1872:0-1876:1
     Visibility: public -/
 structure TakeWhile (I : Type _) (P : Type _) where
   iter : I
@@ -159,7 +366,7 @@ structure TakeWhile (I : Type _) (P : Type _) where
   predicate : P
 
 /-- [nonpos_iterator::SkipWhile]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1677:0-1681:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1848:0-1852:1
     Visibility: public -/
 structure SkipWhile (I : Type _) (P : Type _) where
   iter : I
@@ -167,42 +374,42 @@ structure SkipWhile (I : Type _) (P : Type _) where
   predicate : P
 
 /-- [nonpos_iterator::Peekable]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1657:0-1660:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1828:0-1831:1
     Visibility: public -/
 structure Peekable (I : Type _) (Clause0_Item : Type _) where
   iter : I
   peeked : Option (Option Clause0_Item)
 
 /-- [nonpos_iterator::Enumerate]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1634:0-1637:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1805:0-1808:1
     Visibility: public -/
 structure Enumerate (I : Type _) where
   iter : I
   count : Std.Usize
 
 /-- [nonpos_iterator::FilterMap]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1611:0-1614:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1782:0-1785:1
     Visibility: public -/
 structure FilterMap (I : Type _) (F : Type _) where
   iter : I
   f : F
 
 /-- [nonpos_iterator::Filter]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1589:0-1592:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1760:0-1763:1
     Visibility: public -/
 structure Filter (I : Type _) (P : Type _) where
   iter : I
   predicate : P
 
 /-- [nonpos_iterator::Map]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1569:0-1572:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1740:0-1743:1
     Visibility: public -/
 structure Map (I : Type _) (F : Type _) where
   iter : I
   f : F
 
 /-- [nonpos_iterator::IntersperseWith]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1529:0-1537:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1700:0-1708:1
     Visibility: public -/
 structure IntersperseWith (I : Type _) (G : Type _) (Clause0_Item : Type _)
   where
@@ -212,7 +419,7 @@ structure IntersperseWith (I : Type _) (G : Type _) (Clause0_Item : Type _)
   iter : I
 
 /-- [nonpos_iterator::Intersperse]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1487:0-1495:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1658:0-1666:1
     Visibility: public -/
 structure Intersperse (I : Type _) (Clause0_Item : Type _) where
   started : Bool
@@ -221,21 +428,21 @@ structure Intersperse (I : Type _) (Clause0_Item : Type _) where
   iter : I
 
 /-- [nonpos_iterator::Zip]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1462:0-1465:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1633:0-1636:1
     Visibility: public -/
 structure Zip (A : Type _) (B : Type _) where
   a : A
   b : B
 
 /-- [nonpos_iterator::Chain]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1436:0-1439:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1607:0-1610:1
     Visibility: public -/
 structure Chain (A : Type _) (B : Type _) where
   a : Option A
   b : Option B
 
 /-- [nonpos_iterator::StepBy]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1412:0-1416:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1577:0-1581:1
     Visibility: public -/
 structure StepBy (I : Type _) where
   iter : I
@@ -245,7 +452,7 @@ structure StepBy (I : Type _) where
 mutual
 
 /-- Trait declaration: [nonpos_iterator::Iterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 117:0-1189:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 190:0-1319:1
     Visibility: public -/
 nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
   next : Self → Result ((Option Self_Item) × Self)
@@ -253,8 +460,6 @@ nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
     (Array Self_Item N) (core.array.iter.IntoIter Self_Item N)) × Self)
   size_hint : Self → Result (Std.Usize × (Option Std.Usize))
   count : Self → Result Std.Usize
-  last : Self → Result (Option Self_Item)
-  nth : Self → Std.Usize → Result ((Option Self_Item) × Self)
   step_by : Self → Std.Usize → Result (StepBy Self)
   chain : forall {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Self_Item Clause0_IntoIter), Self → U → Result (Chain
@@ -269,8 +474,6 @@ nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
     (IntersperseWith Self G Self_Item)
   map : forall {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Self_Item B), Self → F → Result (Map Self F)
-  for_each : forall {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Self_Item Unit), Self → F → Result Unit
   filter : forall {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Self_Item Bool), Self → P → Result (Filter
     Self P)
@@ -310,54 +513,13 @@ nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
     core.ops.function.FnMut F Self_Item Unit), Self → F → Result (Inspect
     Self F)
   by_ref : Self → Result (Self × (Self → Self))
-  collect : forall {B : Type} (FromIteratorInst : FromIterator B Self_Item),
-    Self → Result B
   collect_into : forall {E : Type} (ExtendInst : Extend E Self_Item), Self →
     E → Result (E × (E → E))
-  partition : forall {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Self_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Self_Item Bool), Self → F → Result (B × B)
-  is_partitioned : forall {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Self_Item Bool), Self → P → Result Bool
   fold : forall {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Self_Item) B), Self → B → F → Result
     B
   reduce : forall {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (Self_Item × Self_Item) Self_Item), Self → F
-    → Result (Option Self_Item)
-  all : forall {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Self_Item Bool), Self → F → Result (Bool ×
-    Self)
-  any : forall {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Self_Item Bool), Self → F → Result (Bool ×
-    Self)
-  find : forall {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Self_Item Bool), Self → P → Result ((Option
-    Self_Item) × Self)
-  find_map : forall {B : Type} {F : Type}
-    (coreopsfunctionFnMutPTupleFOptionInst : core.ops.function.FnMut F
-    Self_Item (Option B)), Self → F → Result ((Option B) × Self)
-  position : forall {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Self_Item Bool), Self → P → Result ((Option
-    Std.Usize) × Self)
-  max : forall (corecmpOrdInst : core.cmp.Ord Self_Item), Self → Result
-    (Option Self_Item)
-  min : forall (corecmpOrdInst : core.cmp.Ord Self_Item), Self → Result
-    (Option Self_Item)
-  max_by_key : forall {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Self_Item B), Self → F → Result (Option Self_Item)
-  max_by : forall {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Self_Item × Self_Item) Ordering), Self → F
-    → Result (Option Self_Item)
-  min_by_key : forall {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Self_Item B), Self → F → Result (Option Self_Item)
-  min_by : forall {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Self_Item × Self_Item) Ordering), Self → F
     → Result (Option Self_Item)
   rev : forall {Clause0_Clause0_Item : Type} (DoubleEndedIteratorInst :
     DoubleEndedIterator Self Clause0_Clause0_Item), Self → Result (Rev Self)
@@ -368,62 +530,22 @@ nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
   sum : forall {S : Type} (SumInst : Sum S Self_Item), Self → Result S
   product : forall {P : Type} (ProductInst : Product P Self_Item), Self →
     Result P
-  cmp : forall {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I Self_Item Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord
-    Self_Item), Self → I → Result Ordering
   cmp_by : forall {I : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F
     (Self_Item × Clause0_Item) Ordering), Self → I → F → Result Ordering
-  partial_cmp : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Self_Item Clause0_Item), Self
-    → I → Result (Option Ordering)
   partial_cmp_by : forall {I : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
     core.ops.function.FnMut F (Self_Item × Clause0_Item) (Option Ordering)),
     Self → I → F → Result (Option Ordering)
-  eq : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Self_Item Clause0_Item), Self
-    → I → Result Bool
-  ne : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Self_Item Clause0_Item), Self
-    → I → Result Bool
-  lt : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Self_Item Clause0_Item), Self
-    → I → Result Bool
-  le : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Self_Item Clause0_Item), Self
-    → I → Result Bool
-  gt : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Self_Item Clause0_Item), Self
-    → I → Result Bool
-  ge : forall {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Self_Item Clause0_Item), Self
-    → I → Result Bool
-  is_sorted : forall (corecmpPartialOrdInst : core.cmp.PartialOrd Self_Item
-    Self_Item), Self → Result Bool
-  is_sorted_by : forall {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Self_Item × Self_Item) Bool), Self → F → Result Bool
-  is_sorted_by_key : forall {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Self_Item K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K), Self → F → Result
-    Bool
   __iterator_get_unchecked : forall
     (coreiteradapterszipTrustedRandomAccessNoCoerceInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce Self), Self →
     Std.Usize → Result (Self_Item × Self)
 
 /-- Trait declaration: [nonpos_iterator::DoubleEndedIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1195:0-1283:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1326:0-1421:1
     Visibility: public -/
 nonpos_structure DoubleEndedIterator (Self : Type) (Self_Clause0_Item : Type)
   : Type 1 where
@@ -432,31 +554,20 @@ nonpos_structure DoubleEndedIterator (Self : Type) (Self_Clause0_Item : Type)
   next_chunk_back : forall (N : Std.Usize), Self → Result
     ((core.result.Result (Array Self_Clause0_Item N) (core.array.iter.IntoIter
     Self_Clause0_Item N)) × Self)
-  nth_back : Self → Std.Usize → Result ((Option Self_Clause0_Item) × Self)
   rfold : forall {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Self_Clause0_Item) B), Self → B → F →
     Result B
-  rfind : forall {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Self_Clause0_Item Bool), Self → P → Result
-    ((Option Self_Clause0_Item) × Self)
 
 /-- Trait declaration: [nonpos_iterator::IntoIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1309:0-1313:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1448:0-1452:1
     Visibility: public -/
 nonpos_structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter :
   Type) : Type 1 where
   IteratorInst : Iterator Self_IntoIter Self_Item
   into_iter : Self → Result Self_IntoIter
 
-/-- Trait declaration: [nonpos_iterator::FromIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1315:0-1317:1
-    Visibility: public -/
-nonpos_structure FromIterator (Self : Type) (T : Type) : Type 1 where
-  from_iter : forall {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I T Clause0_IntoIter), I → Result Self
-
 /-- Trait declaration: [nonpos_iterator::Extend]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1329:0-1347:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1469:0-1487:1
     Visibility: public -/
 nonpos_structure Extend (Self : Type) (T : Type) : Type 1 where
   extend : forall {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -466,13 +577,13 @@ nonpos_structure Extend (Self : Type) (T : Type) : Type 1 where
   extend_one_unchecked : Self → T → Result Self
 
 /-- Trait declaration: [nonpos_iterator::Sum]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1353:0-1355:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1506:0-1508:1
     Visibility: public -/
 nonpos_structure Sum (Self : Type) (A : Type) : Type 1 where
   sum : forall {I : Type} (IteratorInst : Iterator I A), I → Result Self
 
 /-- Trait declaration: [nonpos_iterator::Product]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1357:0-1359:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1511:0-1513:1
     Visibility: public -/
 nonpos_structure Product (Self : Type) (A : Type) : Type 1 where
   product : forall {I : Type} (IteratorInst : Iterator I A), I → Result Self
@@ -480,7 +591,7 @@ nonpos_structure Product (Self : Type) (A : Type) : Type 1 where
 end
 
 /-- [nonpos_iterator::array::iter_next_chunk]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 68:4-72:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 125:4-129:5 -/
 def array.iter_next_chunk
   {T : Type _} {T2 : Type _} (N : Std.Usize) (IteratorInst : Iterator T2 T)
   (iter : T2) :
@@ -491,7 +602,7 @@ def array.iter_next_chunk
 nonpos_continuity array.iter_next_chunk
 
 /-- [nonpos_iterator::array::iter_next_chunk_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 75:4-79:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 132:4-136:5 -/
 def array.iter_next_chunk_back
   {T : Type _} {T2 : Type _} (N : Std.Usize) (DoubleEndedIteratorInst :
   DoubleEndedIterator T2 T) (iter : T2) :
@@ -502,7 +613,7 @@ def array.iter_next_chunk_back
 nonpos_continuity array.iter_next_chunk_back
 
 /-- [nonpos_iterator::iter_compare]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 84:0-91:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 141:0-148:1 -/
 def iter_compare
   {A : Type _} {B : Type _} {F : Type _} {T : Type _} {Clause0_Item : Type _}
   {Clause1_Item : Type _} (IteratorInst : Iterator A Clause0_Item)
@@ -516,7 +627,7 @@ def iter_compare
 nonpos_continuity iter_compare
 
 /-- [nonpos_iterator::Iterator::next_chunk]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 122:4-129:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 195:4-202:5
     Visibility: public -/
 @[trait_default]
 def Iterator.next_chunk.default
@@ -529,7 +640,7 @@ def Iterator.next_chunk.default
 nonpos_continuity Iterator.next_chunk.default
 
 /-- [nonpos_iterator::Iterator::size_hint]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 131:4-133:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 204:4-206:5
     Visibility: public -/
 @[trait_default]
 def Iterator.size_hint.default
@@ -538,137 +649,80 @@ def Iterator.size_hint.default
   := do
   ok (0#usize, none)
 
-/-- [nonpos_iterator::Iterator::count]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 142:8-144:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.count.default_loop.body
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (s : Self) (n : Std.Usize) :
-  Result (ControlFlow (Self × Std.Usize) Std.Usize)
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done n)
-  | some _ => let n1 ← n + 1#usize
-              ok (cont (s1, n1))
-nonpos_continuity Iterator.count.default_loop.body
+/-- [nonpos_iterator::Iterator::count::{closure}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+@[reducible]
+def Iterator.count.closure (Self : Type _) (Clause0_Item : Type _) := Unit
 
-/-- [nonpos_iterator::Iterator::count]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 142:8-144:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.count.default_loop
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (s : Self) (n : Std.Usize) :
+/-- [nonpos_iterator::Iterator::count::{impl core::ops::function::FnMut<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}::call_mut]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+def
+  Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize.call_mut
+  {Self : Type _} {Clause0_Item : Type _}
+  (c : Iterator.count.closure Self Clause0_Item)
+  (tupled_args : (Std.Usize × Clause0_Item)) :
+  Result (Std.Usize × (Iterator.count.closure Self Clause0_Item))
+  := do
+  let (accum, _) := tupled_args
+  let i ← accum + 1#usize
+  ok (i, c)
+
+/-- [nonpos_iterator::Iterator::count::{impl core::ops::function::FnOnce<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}::call_once]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+def
+  Iterator.count.closure.Insts.CoreOpsFunctionFnOncePairUsizeClause0_ItemUsize.call_once
+  {Self : Type _} {Clause0_Item : Type _}
+  (c : Iterator.count.closure Self Clause0_Item)
+  (p : (Std.Usize × Clause0_Item)) :
   Result Std.Usize
   := do
-  loop
-    (fun (s1, n1) => Iterator.count.default_loop.body IteratorInst s1 n1)
-    (s, n)
-nonpos_continuity Iterator.count.default_loop
+  let (i, _) ←
+    Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize.call_mut
+      c p
+  ok i
+
+/-- Trait implementation: [nonpos_iterator::Iterator::count::{impl core::ops::function::FnOnce<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+@[reducible]
+def
+  Iterator.count.closure.Insts.CoreOpsFunctionFnOncePairUsizeClause0_ItemUsize
+  (Self : Type _) (Clause0_Item : Type _) : core.ops.function.FnOnce
+  (Iterator.count.closure Self Clause0_Item) (Std.Usize × Clause0_Item)
+  Std.Usize := {
+  call_once :=
+    Iterator.count.closure.Insts.CoreOpsFunctionFnOncePairUsizeClause0_ItemUsize.call_once
+}
+
+/-- Trait implementation: [nonpos_iterator::Iterator::count::{impl core::ops::function::FnMut<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+@[reducible]
+def Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize
+  (Self : Type _) (Clause0_Item : Type _) : core.ops.function.FnMut
+  (Iterator.count.closure Self Clause0_Item) (Std.Usize × Clause0_Item)
+  Std.Usize := {
+  FnOnceInst :=
+    Iterator.count.closure.Insts.CoreOpsFunctionFnOncePairUsizeClause0_ItemUsize
+    Self Clause0_Item
+  call_mut :=
+    Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize.call_mut
+}
 
 /-- [nonpos_iterator::Iterator::count]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 135:4-146:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 208:4-218:5
     Visibility: public -/
-@[reducible, trait_default]
+@[trait_default]
 def Iterator.count.default
   {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
   Clause0_Item) (self : Self) :
   Result Std.Usize
   := do
-  Iterator.count.default_loop IteratorInst self 0#usize
+  IteratorInst.fold
+    (Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize
+    Self Clause0_Item) self 0#usize ()
 nonpos_continuity Iterator.count.default
 
-/-- [nonpos_iterator::Iterator::last]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 155:8-157:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.last.default_loop.body
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (s : Self) (l : Option Clause0_Item) :
-  Result (ControlFlow (Self × (Option Clause0_Item)) (Option Clause0_Item))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done l)
-  | some _ => ok (cont (s1, o))
-nonpos_continuity Iterator.last.default_loop.body
-
-/-- [nonpos_iterator::Iterator::last]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 155:8-157:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.last.default_loop
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (s : Self) (l : Option Clause0_Item) :
-  Result (Option Clause0_Item)
-  := do
-  loop
-    (fun (s1, l1) => Iterator.last.default_loop.body IteratorInst s1 l1)
-    (s, l)
-nonpos_continuity Iterator.last.default_loop
-
-/-- [nonpos_iterator::Iterator::last]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 148:4-159:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.last.default
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (self : Self) :
-  Result (Option Clause0_Item)
-  := do
-  Iterator.last.default_loop IteratorInst self none
-nonpos_continuity Iterator.last.default
-
-/-- [nonpos_iterator::Iterator::nth]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 182:8-190:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.nth.default_loop.body
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (n : Std.Usize) (self : Self) (i : Std.Usize) :
-  Result (ControlFlow (Self × Std.Usize) ((Option Clause0_Item) × Self))
-  := do
-  if i < n
-  then
-    let (o, self1) ← IteratorInst.next self
-    match o with
-    | none => ok (done (none, self1))
-    | some _ => let i1 ← i + 1#usize
-                ok (cont (self1, i1))
-  else let (o, self1) ← IteratorInst.next self
-       ok (done (o, self1))
-nonpos_continuity Iterator.nth.default_loop.body
-
-/-- [nonpos_iterator::Iterator::nth]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 182:8-190:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.nth.default_loop
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (self : Self) (n : Std.Usize) (i : Std.Usize) :
-  Result ((Option Clause0_Item) × Self)
-  := do
-  loop
-    (fun (self1, i1) => Iterator.nth.default_loop.body IteratorInst n self1 i1)
-    (self, i)
-nonpos_continuity Iterator.nth.default_loop
-
-/-- [nonpos_iterator::Iterator::nth]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 177:4-190:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.nth.default
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (self : Self) (n : Std.Usize) :
-  Result ((Option Clause0_Item) × Self)
-  := do
-  Iterator.nth.default_loop IteratorInst self n 0#usize
-nonpos_continuity Iterator.nth.default
-
 /-- [nonpos_iterator::{nonpos_iterator::StepBy<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1419:4-1422:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1584:4-1587:5 -/
 def StepBy.new
   {I : Type _} (iter : I) (step : Std.Usize) : Result (StepBy I) := do
   massert (step != 0#usize)
@@ -676,7 +730,7 @@ def StepBy.new
   ok { iter, step_minus_one := i, first_take := true }
 
 /-- [nonpos_iterator::Iterator::step_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 193:4-198:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 305:4-310:5
     Visibility: public -/
 @[trait_default]
 def Iterator.step_by.default
@@ -686,13 +740,13 @@ def Iterator.step_by.default
   StepBy.new self step
 
 /-- [nonpos_iterator::{nonpos_iterator::Chain<A, B>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1442:4-1444:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1613:4-1615:5 -/
 def Chain.new
   {A : Type _} {B : Type _} (a : A) (b : B) : Result (Chain A B) := do
   ok { a := (some a), b := (some b) }
 
 /-- [nonpos_iterator::Iterator::chain]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 200:4-206:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 312:4-318:5
     Visibility: public -/
 @[trait_default]
 def Iterator.chain.default
@@ -706,7 +760,7 @@ def Iterator.chain.default
 nonpos_continuity Iterator.chain.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Zip<A, B>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1468:4-1470:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1639:4-1641:5 -/
 def Zip.new
   {A : Type _} {B : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
   (IteratorInst : Iterator A Clause0_Item) (IteratorInst1 : Iterator B
@@ -717,7 +771,7 @@ def Zip.new
 nonpos_continuity Zip.new
 
 /-- [nonpos_iterator::Iterator::zip]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 209:4-215:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 321:4-327:5
     Visibility: public -/
 @[trait_default]
 def Iterator.zip.default
@@ -732,7 +786,7 @@ def Iterator.zip.default
 nonpos_continuity Iterator.zip.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Intersperse<I, Clause0_Item>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1501:4-1503:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1672:4-1674:5 -/
 def Intersperse.new
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (corecloneCloneInst : core.clone.Clone Clause0_Item) (iter : I)
@@ -743,7 +797,7 @@ def Intersperse.new
 nonpos_continuity Intersperse.new
 
 /-- [nonpos_iterator::Iterator::intersperse]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 217:4-223:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 329:4-335:5
     Visibility: public -/
 @[trait_default]
 def Iterator.intersperse.default
@@ -756,7 +810,7 @@ def Iterator.intersperse.default
 nonpos_continuity Iterator.intersperse.default
 
 /-- [nonpos_iterator::{nonpos_iterator::IntersperseWith<I, G, Clause0_Item>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1544:4-1546:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1715:4-1717:5 -/
 def IntersperseWith.new
   {I : Type _} {G : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
   Clause0_Item) (coreopsfunctionFnMutGTupleClause0_ItemInst :
@@ -767,7 +821,7 @@ def IntersperseWith.new
 nonpos_continuity IntersperseWith.new
 
 /-- [nonpos_iterator::Iterator::intersperse_with]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 225:4-231:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 337:4-343:5
     Visibility: public -/
 @[trait_default]
 def Iterator.intersperse_with.default
@@ -781,13 +835,13 @@ def Iterator.intersperse_with.default
 nonpos_continuity Iterator.intersperse_with.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Map<I, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1575:4-1577:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1746:4-1748:5 -/
 def Map.new
   {I : Type _} {F : Type _} (iter : I) (f : F) : Result (Map I F) := do
   ok { iter, f }
 
 /-- [nonpos_iterator::Iterator::map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 233:4-239:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 345:4-351:5
     Visibility: public -/
 @[trait_default]
 def Iterator.map.default
@@ -798,57 +852,8 @@ def Iterator.map.default
   := do
   Map.new self f
 
-/-- [nonpos_iterator::Iterator::for_each]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 249:8-251:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.for_each.default_loop.body
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemTupleInst :
-  core.ops.function.FnMut F Clause0_Item Unit) (s : Self) (f : F) :
-  Result (ControlFlow (Self × F) Unit)
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done ())
-  | some x =>
-    let (_, f1) ←
-      coreopsfunctionFnMutFTupleClause0_ItemTupleInst.call_mut f x
-    ok (cont (s1, f1))
-nonpos_continuity Iterator.for_each.default_loop.body
-
-/-- [nonpos_iterator::Iterator::for_each]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 249:8-251:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.for_each.default_loop
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemTupleInst :
-  core.ops.function.FnMut F Clause0_Item Unit) (s : Self) (f : F) :
-  Result Unit
-  := do
-  loop
-    (fun (s1, f1) => Iterator.for_each.default_loop.body IteratorInst
-      coreopsfunctionFnMutFTupleClause0_ItemTupleInst s1 f1)
-    (s, f)
-nonpos_continuity Iterator.for_each.default_loop
-
-/-- [nonpos_iterator::Iterator::for_each]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 242:4-252:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.for_each.default
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemTupleInst :
-  core.ops.function.FnMut F Clause0_Item Unit) (self : Self) (f : F) :
-  Result Unit
-  := do
-  Iterator.for_each.default_loop IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemTupleInst self f
-nonpos_continuity Iterator.for_each.default
-
 /-- [nonpos_iterator::{nonpos_iterator::Filter<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1595:4-1597:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1766:4-1768:5 -/
 def Filter.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (Filter I P)
@@ -856,7 +861,7 @@ def Filter.new
   ok { iter, predicate }
 
 /-- [nonpos_iterator::Iterator::filter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 254:4-260:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 371:4-377:5
     Visibility: public -/
 @[trait_default]
 def Iterator.filter.default
@@ -868,13 +873,13 @@ def Iterator.filter.default
   Filter.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::FilterMap<I, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1617:4-1619:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1788:4-1790:5 -/
 def FilterMap.new
   {I : Type _} {F : Type _} (iter : I) (f : F) : Result (FilterMap I F) := do
   ok { iter, f }
 
 /-- [nonpos_iterator::Iterator::filter_map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 262:4-268:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 379:4-385:5
     Visibility: public -/
 @[trait_default]
 def Iterator.filter_map.default
@@ -886,12 +891,12 @@ def Iterator.filter_map.default
   FilterMap.new self f
 
 /-- [nonpos_iterator::{nonpos_iterator::Enumerate<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1640:4-1642:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1811:4-1813:5 -/
 def Enumerate.new {I : Type _} (iter : I) : Result (Enumerate I) := do
   ok { iter, count := 0#usize }
 
 /-- [nonpos_iterator::Iterator::enumerate]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 270:4-275:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 387:4-392:5
     Visibility: public -/
 @[trait_default]
 def Iterator.enumerate.default
@@ -901,7 +906,7 @@ def Iterator.enumerate.default
   Enumerate.new self
 
 /-- [nonpos_iterator::{nonpos_iterator::Peekable<I, Clause0_Item>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1663:4-1665:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1834:4-1836:5 -/
 def Peekable.new
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (iter : I) :
@@ -911,7 +916,7 @@ def Peekable.new
 nonpos_continuity Peekable.new
 
 /-- [nonpos_iterator::Iterator::peekable]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 277:4-282:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 394:4-399:5
     Visibility: public -/
 @[trait_default]
 def Iterator.peekable.default
@@ -923,7 +928,7 @@ def Iterator.peekable.default
 nonpos_continuity Iterator.peekable.default
 
 /-- [nonpos_iterator::{nonpos_iterator::SkipWhile<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1684:4-1686:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1855:4-1857:5 -/
 def SkipWhile.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (SkipWhile I P)
@@ -931,7 +936,7 @@ def SkipWhile.new
   ok { iter, flag := false, predicate }
 
 /-- [nonpos_iterator::Iterator::skip_while]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 284:4-290:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 401:4-407:5
     Visibility: public -/
 @[trait_default]
 def Iterator.skip_while.default
@@ -943,7 +948,7 @@ def Iterator.skip_while.default
   SkipWhile.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::TakeWhile<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1708:4-1710:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1879:4-1881:5 -/
 def TakeWhile.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (TakeWhile I P)
@@ -951,7 +956,7 @@ def TakeWhile.new
   ok { iter, flag := false, predicate }
 
 /-- [nonpos_iterator::Iterator::take_while]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 292:4-298:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 409:4-415:5
     Visibility: public -/
 @[trait_default]
 def Iterator.take_while.default
@@ -963,7 +968,7 @@ def Iterator.take_while.default
   TakeWhile.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::MapWhile<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1738:4-1740:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1909:4-1911:5 -/
 def MapWhile.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (MapWhile I P)
@@ -971,7 +976,7 @@ def MapWhile.new
   ok { iter, predicate }
 
 /-- [nonpos_iterator::Iterator::map_while]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 300:4-306:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 417:4-423:5
     Visibility: public -/
 @[trait_default]
 def Iterator.map_while.default
@@ -983,12 +988,12 @@ def Iterator.map_while.default
   MapWhile.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::Skip<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1758:4-1760:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1929:4-1931:5 -/
 def Skip.new {I : Type _} (iter : I) (n : Std.Usize) : Result (Skip I) := do
   ok { iter, n }
 
 /-- [nonpos_iterator::Iterator::skip]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 308:4-313:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 425:4-430:5
     Visibility: public -/
 @[trait_default]
 def Iterator.skip.default
@@ -998,12 +1003,12 @@ def Iterator.skip.default
   Skip.new self n
 
 /-- [nonpos_iterator::{nonpos_iterator::Take<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1782:4-1784:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1953:4-1955:5 -/
 def Take.new {I : Type _} (iter : I) (n : Std.Usize) : Result (Take I) := do
   ok { iter, n }
 
 /-- [nonpos_iterator::Iterator::take]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 315:4-320:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 432:4-437:5
     Visibility: public -/
 @[trait_default]
 def Iterator.take.default
@@ -1013,7 +1018,7 @@ def Iterator.take.default
   Take.new self n
 
 /-- [nonpos_iterator::{nonpos_iterator::Scan<I, St, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1805:4-1807:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1976:4-1978:5 -/
 def Scan.new
   {I : Type _} {St : Type _} {F : Type _} (iter : I) (state : St) (f : F) :
   Result (Scan I St F)
@@ -1021,7 +1026,7 @@ def Scan.new
   ok { iter, f, state }
 
 /-- [nonpos_iterator::Iterator::scan]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 322:4-328:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 439:4-445:5
     Visibility: public -/
 @[trait_default]
 def Iterator.scan.default
@@ -1034,7 +1039,7 @@ def Iterator.scan.default
   Scan.new self initial_state f
 
 /-- [nonpos_iterator::{nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1828:4-1830:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2001:4-2003:5 -/
 def FlatMap.new
   {I : Type _} {U : Type _} {F : Type _} {Clause0_Item : Type _} {Clause1_Item
   : Type _} {Clause1_IntoIter : Type _} (IteratorInst : Iterator I
@@ -1047,7 +1052,7 @@ def FlatMap.new
 nonpos_continuity FlatMap.new
 
 /-- [nonpos_iterator::Iterator::flat_map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 331:4-338:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 448:4-455:5
     Visibility: public -/
 @[trait_default]
 def Iterator.flat_map.default
@@ -1063,7 +1068,7 @@ def Iterator.flat_map.default
 nonpos_continuity Iterator.flat_map.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1856:4-1858:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2029:4-2031:5 -/
 def Flatten.new
   {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
   {Clause1_IntoIter : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -1075,7 +1080,7 @@ def Flatten.new
 nonpos_continuity Flatten.new
 
 /-- [nonpos_iterator::Iterator::flatten]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 340:4-346:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 457:4-463:5
     Visibility: public -/
 @[trait_default]
 def Iterator.flatten.default
@@ -1089,7 +1094,7 @@ def Iterator.flatten.default
 nonpos_continuity Iterator.flatten.default
 
 /-- [nonpos_iterator::{nonpos_iterator::MapWindows<I, F, Clause0_Item, N>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1886:4-1889:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2059:4-2062:5 -/
 def MapWindows.new
   {I : Type _} {F : Type _} {Clause0_Item : Type _} (N : Std.Usize)
   (IteratorInst : Iterator I Clause0_Item) (iter : I) (f : F) :
@@ -1100,7 +1105,7 @@ def MapWindows.new
 nonpos_continuity MapWindows.new
 
 /-- [nonpos_iterator::Iterator::map_windows]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 348:4-357:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 465:4-474:5
     Visibility: public -/
 @[trait_default]
 def Iterator.map_windows.default
@@ -1114,12 +1119,12 @@ def Iterator.map_windows.default
 nonpos_continuity Iterator.map_windows.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Fuse<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1897:4-1899:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2070:4-2072:5 -/
 def Fuse.new {I : Type _} (iter : I) : Result (Fuse I) := do
   ok { iter := (some iter) }
 
 /-- [nonpos_iterator::Iterator::fuse]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 359:4-364:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 476:4-481:5
     Visibility: public -/
 @[trait_default]
 def Iterator.fuse.default
@@ -1129,13 +1134,13 @@ def Iterator.fuse.default
   Fuse.new self
 
 /-- [nonpos_iterator::{nonpos_iterator::Inspect<I, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1923:4-1925:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2096:4-2098:5 -/
 def Inspect.new
   {I : Type _} {F : Type _} (iter : I) (f : F) : Result (Inspect I F) := do
   ok { iter, f }
 
 /-- [nonpos_iterator::Iterator::inspect]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 366:4-372:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 483:4-489:5
     Visibility: public -/
 @[trait_default]
 def Iterator.inspect.default
@@ -1147,7 +1152,7 @@ def Iterator.inspect.default
   Inspect.new self f
 
 /-- [nonpos_iterator::Iterator::by_ref]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 374:4-379:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 491:4-496:5
     Visibility: public -/
 @[trait_default]
 def Iterator.by_ref.default
@@ -1157,7 +1162,7 @@ def Iterator.by_ref.default
   ok (self, fun self1 => self1)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::IntoIterator<Clause0_Item, I> for I}::into_iter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1324:4-1326:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1464:4-1466:5
     Visibility: public -/
 def IntoIterator.Blanket.into_iter
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -1168,7 +1173,7 @@ def IntoIterator.Blanket.into_iter
 nonpos_continuity IntoIterator.Blanket.into_iter
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::IntoIterator<Clause0_Item, I> for I}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1319:0-1327:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1459:0-1467:1 -/
 @[reducible]
 def IntoIterator.Blanket {I : Type _} {Clause0_Item : Type _} (IteratorInst1 :
   Iterator I Clause0_Item) : IntoIterator I Clause0_Item I := IntoIterator.mk
@@ -1176,21 +1181,8 @@ def IntoIterator.Blanket {I : Type _} {Clause0_Item : Type _} (IteratorInst1 :
   (into_iter := IntoIterator.Blanket.into_iter IteratorInst1)
   (by nonpos_cont 5000)
 
-/-- [nonpos_iterator::Iterator::collect]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 382:4-387:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.collect.default
-  {Self : Type _} {B : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (FromIteratorInst : FromIterator B Clause0_Item)
-  (self : Self) :
-  Result B
-  := do
-  FromIteratorInst.from_iter (IntoIterator.Blanket IteratorInst) self
-nonpos_continuity Iterator.collect.default
-
 /-- [nonpos_iterator::Iterator::collect_into]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 406:4-412:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 534:4-540:5
     Visibility: public -/
 @[trait_default]
 def Iterator.collect_into.default
@@ -1204,129 +1196,8 @@ def Iterator.collect_into.default
   ok (collection1, fun collection2 => collection2)
 nonpos_continuity Iterator.collect_into.default
 
-/-- [nonpos_iterator::Iterator::partition]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 425:8-431:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.partition.default_loop.body
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (ExtendInst : Extend B
-  Clause0_Item) (coreopsfunctionFnMutFTupleSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (s : Self) (left : B)
-  (right : B) (f : F) :
-  Result (ControlFlow (Self × B × B × F) (B × B))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done (left, right))
-  | some x =>
-    let (b, f1) ←
-      coreopsfunctionFnMutFTupleSharedClause0_ItemBoolInst.call_mut f x
-    if b
-    then
-      let left1 ← ExtendInst.extend_one left x
-      ok (cont (s1, left1, right, f1))
-    else
-      let right1 ← ExtendInst.extend_one right x
-      ok (cont (s1, left, right1, f1))
-nonpos_continuity Iterator.partition.default_loop.body
-
-/-- [nonpos_iterator::Iterator::partition]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 425:8-431:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.partition.default_loop
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (ExtendInst : Extend B
-  Clause0_Item) (coreopsfunctionFnMutFTupleSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (s : Self) (left : B)
-  (right : B) (f : F) :
-  Result (B × B)
-  := do
-  loop
-    (fun (s1, left1, right1, f1) => Iterator.partition.default_loop.body
-      IteratorInst ExtendInst
-      coreopsfunctionFnMutFTupleSharedClause0_ItemBoolInst s1 left1 right1 f1)
-    (s, left, right, f)
-nonpos_continuity Iterator.partition.default_loop
-
-/-- [nonpos_iterator::Iterator::partition]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 415:4-433:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.partition.default
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (coredefaultDefaultInst :
-  core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (B × B)
-  := do
-  let left ← coredefaultDefaultInst.default
-  Iterator.partition.default_loop IteratorInst ExtendInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemBoolInst self left left f
-nonpos_continuity Iterator.partition.default
-
-/-- [nonpos_iterator::Iterator::is_partitioned]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 482:8-492:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.is_partitioned.default_loop.body
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P)
-  (seen_false : Bool) :
-  Result (ControlFlow (Self × P × Bool) Bool)
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done true)
-  | some x =>
-    let (b, predicate1) ←
-      coreopsfunctionFnMutPTupleClause0_ItemBoolInst.call_mut predicate x
-    if b
-    then
-      if seen_false
-      then ok (done false)
-      else ok (cont (self1, predicate1, seen_false))
-    else ok (cont (self1, predicate1, true))
-nonpos_continuity Iterator.is_partitioned.default_loop.body
-
-/-- [nonpos_iterator::Iterator::is_partitioned]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 482:8-492:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.is_partitioned.default_loop
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P)
-  (seen_false : Bool) :
-  Result Bool
-  := do
-  loop
-    (fun (self1, predicate1, seen_false1) =>
-      Iterator.is_partitioned.default_loop.body IteratorInst
-      coreopsfunctionFnMutPTupleClause0_ItemBoolInst self1 predicate1
-      seen_false1)
-    (self, predicate, seen_false)
-nonpos_continuity Iterator.is_partitioned.default_loop
-
-/-- [nonpos_iterator::Iterator::is_partitioned]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 475:4-492:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.is_partitioned.default
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P) :
-  Result Bool
-  := do
-  Iterator.is_partitioned.default_loop IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemBoolInst self predicate false
-nonpos_continuity Iterator.is_partitioned.default
-
 /-- [nonpos_iterator::Iterator::fold]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 537:8-539:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 676:8-678:9
     Visibility: public -/
 @[rust_loop_body, trait_default]
 def Iterator.fold.default_loop.body
@@ -1345,7 +1216,7 @@ def Iterator.fold.default_loop.body
 nonpos_continuity Iterator.fold.default_loop.body
 
 /-- [nonpos_iterator::Iterator::fold]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 537:8-539:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 676:8-678:9
     Visibility: public -/
 @[rust_loop, trait_default]
 def Iterator.fold.default_loop
@@ -1362,7 +1233,7 @@ def Iterator.fold.default_loop
 nonpos_continuity Iterator.fold.default_loop
 
 /-- [nonpos_iterator::Iterator::fold]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 531:4-541:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 670:4-680:5
     Visibility: public -/
 @[reducible, trait_default]
 def Iterator.fold.default
@@ -1377,7 +1248,7 @@ def Iterator.fold.default
 nonpos_continuity Iterator.fold.default
 
 /-- [nonpos_iterator::Iterator::reduce]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 543:4-553:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 682:4-689:5
     Visibility: public -/
 @[trait_default]
 def Iterator.reduce.default
@@ -1388,645 +1259,24 @@ def Iterator.reduce.default
   Result (Option Clause0_Item)
   := do
   let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok none
-  | some x =>
+  let cf ← core.option.Option.Insts.CoreOpsTry_traitTry.branch o
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
     let t ←
-      IteratorInst.fold coreopsfunctionFnMutFPairClause0_ItemInst self1 x f
+      IteratorInst.fold coreopsfunctionFnMutFPairClause0_ItemInst self1 val f
     ok (some t)
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual
+      Clause0_Item residual
 nonpos_continuity Iterator.reduce.default
 
-/-- [nonpos_iterator::Iterator::all]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 582:8-588:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.all.default_loop.body
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (ControlFlow (Self × F) (Bool × Self))
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done (true, self1))
-  | some x =>
-    let (b, f1) ← coreopsfunctionFnMutFTupleClause0_ItemBoolInst.call_mut f x
-    if b
-    then ok (cont (self1, f1))
-    else ok (done (false, self1))
-nonpos_continuity Iterator.all.default_loop.body
-
-/-- [nonpos_iterator::Iterator::all]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 582:8-588:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.all.default_loop
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (Bool × Self)
-  := do
-  loop
-    (fun (self1, f1) => Iterator.all.default_loop.body IteratorInst
-      coreopsfunctionFnMutFTupleClause0_ItemBoolInst self1 f1)
-    (self, f)
-nonpos_continuity Iterator.all.default_loop
-
-/-- [nonpos_iterator::Iterator::all]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 576:4-588:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.all.default
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (Bool × Self)
-  := do
-  Iterator.all.default_loop IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBoolInst self f
-nonpos_continuity Iterator.all.default
-
-/-- [nonpos_iterator::Iterator::any]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 597:8-603:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.any.default_loop.body
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (ControlFlow (Self × F) (Bool × Self))
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done (false, self1))
-  | some x =>
-    let (b, f1) ← coreopsfunctionFnMutFTupleClause0_ItemBoolInst.call_mut f x
-    if b
-    then ok (done (true, self1))
-    else ok (cont (self1, f1))
-nonpos_continuity Iterator.any.default_loop.body
-
-/-- [nonpos_iterator::Iterator::any]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 597:8-603:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.any.default_loop
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (Bool × Self)
-  := do
-  loop
-    (fun (self1, f1) => Iterator.any.default_loop.body IteratorInst
-      coreopsfunctionFnMutFTupleClause0_ItemBoolInst self1 f1)
-    (self, f)
-nonpos_continuity Iterator.any.default_loop
-
-/-- [nonpos_iterator::Iterator::any]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 591:4-603:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.any.default
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutFTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut F Clause0_Item Bool) (self : Self) (f : F) :
-  Result (Bool × Self)
-  := do
-  Iterator.any.default_loop IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBoolInst self f
-nonpos_continuity Iterator.any.default
-
-/-- [nonpos_iterator::Iterator::find]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 612:8-618:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.find.default_loop.body
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P) :
-  Result (ControlFlow (Self × P) ((Option Clause0_Item) × Self))
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done (none, self1))
-  | some x =>
-    let (b, predicate1) ←
-      coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst.call_mut predicate x
-    if b
-    then ok (done (o, self1))
-    else ok (cont (self1, predicate1))
-nonpos_continuity Iterator.find.default_loop.body
-
-/-- [nonpos_iterator::Iterator::find]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 612:8-618:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.find.default_loop
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P) :
-  Result ((Option Clause0_Item) × Self)
-  := do
-  loop
-    (fun (self1, predicate1) => Iterator.find.default_loop.body IteratorInst
-      coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst self1 predicate1)
-    (self, predicate)
-nonpos_continuity Iterator.find.default_loop
-
-/-- [nonpos_iterator::Iterator::find]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 606:4-618:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.find.default
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleShared0Clause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P) :
-  Result ((Option Clause0_Item) × Self)
-  := do
-  Iterator.find.default_loop IteratorInst
-    coreopsfunctionFnMutPTupleShared0Clause0_ItemBoolInst self predicate
-nonpos_continuity Iterator.find.default
-
-/-- [nonpos_iterator::Iterator::find_map]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 627:8-634:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.find_map.default_loop.body
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item)
-  (coreopsfunctionFnMutFTupleClause0_ItemOptionInst : core.ops.function.FnMut F
-  Clause0_Item (Option B)) (self : Self) (f : F) :
-  Result (ControlFlow (Self × F) ((Option B) × Self))
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done (none, self1))
-  | some x =>
-    let (o1, f1) ←
-      coreopsfunctionFnMutFTupleClause0_ItemOptionInst.call_mut f x
-    match o1 with
-    | none => ok (cont (self1, f1))
-    | some _ => ok (done (o1, self1))
-nonpos_continuity Iterator.find_map.default_loop.body
-
-/-- [nonpos_iterator::Iterator::find_map]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 627:8-634:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.find_map.default_loop
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item)
-  (coreopsfunctionFnMutFTupleClause0_ItemOptionInst : core.ops.function.FnMut F
-  Clause0_Item (Option B)) (self : Self) (f : F) :
-  Result ((Option B) × Self)
-  := do
-  loop
-    (fun (self1, f1) => Iterator.find_map.default_loop.body IteratorInst
-      coreopsfunctionFnMutFTupleClause0_ItemOptionInst self1 f1)
-    (self, f)
-nonpos_continuity Iterator.find_map.default_loop
-
-/-- [nonpos_iterator::Iterator::find_map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 621:4-634:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.find_map.default
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item)
-  (coreopsfunctionFnMutFTupleClause0_ItemOptionInst : core.ops.function.FnMut F
-  Clause0_Item (Option B)) (self : Self) (f : F) :
-  Result ((Option B) × Self)
-  := do
-  Iterator.find_map.default_loop IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst self f
-nonpos_continuity Iterator.find_map.default
-
-/-- [nonpos_iterator::Iterator::position]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 666:8-673:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.position.default_loop.body
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P)
-  (i : Std.Usize) :
-  Result (ControlFlow (Self × P × Std.Usize) ((Option Std.Usize) × Self))
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done (none, self1))
-  | some x =>
-    let (b, predicate1) ←
-      coreopsfunctionFnMutPTupleClause0_ItemBoolInst.call_mut predicate x
-    if b
-    then ok (done (some i, self1))
-    else let i1 ← i + 1#usize
-         ok (cont (self1, predicate1, i1))
-nonpos_continuity Iterator.position.default_loop.body
-
-/-- [nonpos_iterator::Iterator::position]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 666:8-673:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.position.default_loop
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P)
-  (i : Std.Usize) :
-  Result ((Option Std.Usize) × Self)
-  := do
-  loop
-    (fun (self1, predicate1, i1) => Iterator.position.default_loop.body
-      IteratorInst coreopsfunctionFnMutPTupleClause0_ItemBoolInst self1
-      predicate1 i1)
-    (self, predicate, i)
-nonpos_continuity Iterator.position.default_loop
-
-/-- [nonpos_iterator::Iterator::position]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 659:4-673:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.position.default
-  {Self : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item) (coreopsfunctionFnMutPTupleClause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Item Bool) (self : Self) (predicate : P) :
-  Result ((Option Std.Usize) × Self)
-  := do
-  Iterator.position.default_loop IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemBoolInst self predicate 0#usize
-nonpos_continuity Iterator.position.default
-
-/-- [nonpos_iterator::Iterator::max]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 701:8-707:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.max.default_loop.body
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpOrdInst : core.cmp.Ord Clause0_Item) (s : Self)
-  (m : Option Clause0_Item) :
-  Result (ControlFlow (Self × (Option Clause0_Item)) (Option Clause0_Item))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done m)
-  | some x =>
-    match m with
-    | none => ok (cont (s1, o))
-    | some y =>
-      let b ← corecmpOrdInst.partialOrdInst.ge x y
-      if b
-      then ok (cont (s1, o))
-      else ok (cont (s1, m))
-nonpos_continuity Iterator.max.default_loop.body
-
-/-- [nonpos_iterator::Iterator::max]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 701:8-707:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.max.default_loop
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpOrdInst : core.cmp.Ord Clause0_Item) (s : Self)
-  (m : Option Clause0_Item) :
-  Result (Option Clause0_Item)
-  := do
-  loop
-    (fun (s1, m1) => Iterator.max.default_loop.body IteratorInst corecmpOrdInst
-      s1 m1)
-    (s, m)
-nonpos_continuity Iterator.max.default_loop
-
-/-- [nonpos_iterator::Iterator::max]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 694:4-709:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.max.default
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpOrdInst : core.cmp.Ord Clause0_Item) (self : Self) :
-  Result (Option Clause0_Item)
-  := do
-  Iterator.max.default_loop IteratorInst corecmpOrdInst self none
-nonpos_continuity Iterator.max.default
-
-/-- [nonpos_iterator::Iterator::min]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 718:8-724:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.min.default_loop.body
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpOrdInst : core.cmp.Ord Clause0_Item) (s : Self)
-  (m : Option Clause0_Item) :
-  Result (ControlFlow (Self × (Option Clause0_Item)) (Option Clause0_Item))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done m)
-  | some x =>
-    match m with
-    | none => ok (cont (s1, o))
-    | some y =>
-      let b ← corecmpOrdInst.partialOrdInst.lt x y
-      if b
-      then ok (cont (s1, o))
-      else ok (cont (s1, m))
-nonpos_continuity Iterator.min.default_loop.body
-
-/-- [nonpos_iterator::Iterator::min]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 718:8-724:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.min.default_loop
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpOrdInst : core.cmp.Ord Clause0_Item) (s : Self)
-  (m : Option Clause0_Item) :
-  Result (Option Clause0_Item)
-  := do
-  loop
-    (fun (s1, m1) => Iterator.min.default_loop.body IteratorInst corecmpOrdInst
-      s1 m1)
-    (s, m)
-nonpos_continuity Iterator.min.default_loop
-
-/-- [nonpos_iterator::Iterator::min]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 711:4-726:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.min.default
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpOrdInst : core.cmp.Ord Clause0_Item) (self : Self) :
-  Result (Option Clause0_Item)
-  := do
-  Iterator.min.default_loop IteratorInst corecmpOrdInst self none
-nonpos_continuity Iterator.min.default
-
-/-- [nonpos_iterator::Iterator::max_by_key]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 737:8-749:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.max_by_key.default_loop.body
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (corecmpOrdInst : core.cmp.Ord B)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBInst : core.ops.function.FnMut
-  F Clause0_Item B) (s : Self) (f : F) (best : Option (B × Clause0_Item)) :
-  Result (ControlFlow (Self × F × (Option (B × Clause0_Item))) (Option (B ×
-    Clause0_Item)))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done best)
-  | some x =>
-    let (k, f1) ←
-      coreopsfunctionFnMutFTupleSharedClause0_ItemBInst.call_mut f x
-    match best with
-    | none => ok (cont (s1, f1, some (k, x)))
-    | some p =>
-      let (bk, _) := p
-      let b ← corecmpOrdInst.partialOrdInst.ge k bk
-      if b
-      then ok (cont (s1, f1, some (k, x)))
-      else ok (cont (s1, f1, best))
-nonpos_continuity Iterator.max_by_key.default_loop.body
-
-/-- [nonpos_iterator::Iterator::max_by_key]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 737:8-749:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.max_by_key.default_loop
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (corecmpOrdInst : core.cmp.Ord B)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBInst : core.ops.function.FnMut
-  F Clause0_Item B) (s : Self) (f : F) (best : Option (B × Clause0_Item)) :
-  Result (Option (B × Clause0_Item))
-  := do
-  loop
-    (fun (s1, f1, best1) => Iterator.max_by_key.default_loop.body IteratorInst
-      corecmpOrdInst coreopsfunctionFnMutFTupleSharedClause0_ItemBInst s1 f1
-      best1)
-    (s, f, best)
-nonpos_continuity Iterator.max_by_key.default_loop
-
-/-- [nonpos_iterator::Iterator::max_by_key]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 729:4-754:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.max_by_key.default
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (corecmpOrdInst : core.cmp.Ord B)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBInst : core.ops.function.FnMut
-  F Clause0_Item B) (self : Self) (f : F) :
-  Result (Option Clause0_Item)
-  := do
-  let best ←
-    Iterator.max_by_key.default_loop IteratorInst corecmpOrdInst
-      coreopsfunctionFnMutFTupleSharedClause0_ItemBInst self f none
-  match best with
-  | none => ok none
-  | some p => let (_, x) := p
-              ok (some x)
-nonpos_continuity Iterator.max_by_key.default
-
-/-- [nonpos_iterator::Iterator::max_by]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 765:8-773:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.max_by.default_loop.body
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) 
-  (s : Self) (compare : F) (m : Option Clause0_Item) :
-  Result (ControlFlow (Self × F × (Option Clause0_Item)) (Option
-    Clause0_Item))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done m)
-  | some x =>
-    match m with
-    | none => ok (cont (s1, compare, o))
-    | some y =>
-      let (o1, compare1) ←
-        coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst.call_mut
-          compare (y, x)
-      match o1 with
-      | Ordering.lt => ok (cont (s1, compare1, o))
-      | Ordering.eq => ok (cont (s1, compare1, o))
-      | Ordering.gt => ok (cont (s1, compare1, m))
-nonpos_continuity Iterator.max_by.default_loop.body
-
-/-- [nonpos_iterator::Iterator::max_by]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 765:8-773:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.max_by.default_loop
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) 
-  (s : Self) (compare : F) (m : Option Clause0_Item) :
-  Result (Option Clause0_Item)
-  := do
-  loop
-    (fun (s1, compare1, m1) => Iterator.max_by.default_loop.body IteratorInst
-      coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst
-      s1 compare1 m1)
-    (s, compare, m)
-nonpos_continuity Iterator.max_by.default_loop
-
-/-- [nonpos_iterator::Iterator::max_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 756:4-775:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.max_by.default
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering)
-  (self : Self) (compare : F) :
-  Result (Option Clause0_Item)
-  := do
-  Iterator.max_by.default_loop IteratorInst
-    coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst
-    self compare none
-nonpos_continuity Iterator.max_by.default
-
-/-- [nonpos_iterator::Iterator::min_by_key]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 786:8-798:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.min_by_key.default_loop.body
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (corecmpOrdInst : core.cmp.Ord B)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBInst : core.ops.function.FnMut
-  F Clause0_Item B) (s : Self) (f : F) (best : Option (B × Clause0_Item)) :
-  Result (ControlFlow (Self × F × (Option (B × Clause0_Item))) (Option (B ×
-    Clause0_Item)))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done best)
-  | some x =>
-    let (k, f1) ←
-      coreopsfunctionFnMutFTupleSharedClause0_ItemBInst.call_mut f x
-    match best with
-    | none => ok (cont (s1, f1, some (k, x)))
-    | some p =>
-      let (bk, _) := p
-      let b ← corecmpOrdInst.partialOrdInst.lt k bk
-      if b
-      then ok (cont (s1, f1, some (k, x)))
-      else ok (cont (s1, f1, best))
-nonpos_continuity Iterator.min_by_key.default_loop.body
-
-/-- [nonpos_iterator::Iterator::min_by_key]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 786:8-798:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.min_by_key.default_loop
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (corecmpOrdInst : core.cmp.Ord B)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBInst : core.ops.function.FnMut
-  F Clause0_Item B) (s : Self) (f : F) (best : Option (B × Clause0_Item)) :
-  Result (Option (B × Clause0_Item))
-  := do
-  loop
-    (fun (s1, f1, best1) => Iterator.min_by_key.default_loop.body IteratorInst
-      corecmpOrdInst coreopsfunctionFnMutFTupleSharedClause0_ItemBInst s1 f1
-      best1)
-    (s, f, best)
-nonpos_continuity Iterator.min_by_key.default_loop
-
-/-- [nonpos_iterator::Iterator::min_by_key]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 778:4-803:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.min_by_key.default
-  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item) (corecmpOrdInst : core.cmp.Ord B)
-  (coreopsfunctionFnMutFTupleSharedClause0_ItemBInst : core.ops.function.FnMut
-  F Clause0_Item B) (self : Self) (f : F) :
-  Result (Option Clause0_Item)
-  := do
-  let best ←
-    Iterator.min_by_key.default_loop IteratorInst corecmpOrdInst
-      coreopsfunctionFnMutFTupleSharedClause0_ItemBInst self f none
-  match best with
-  | none => ok none
-  | some p => let (_, x) := p
-              ok (some x)
-nonpos_continuity Iterator.min_by_key.default
-
-/-- [nonpos_iterator::Iterator::min_by]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 814:8-822:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.min_by.default_loop.body
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) 
-  (s : Self) (compare : F) (m : Option Clause0_Item) :
-  Result (ControlFlow (Self × F × (Option Clause0_Item)) (Option
-    Clause0_Item))
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done m)
-  | some x =>
-    match m with
-    | none => ok (cont (s1, compare, o))
-    | some y =>
-      let (o1, compare1) ←
-        coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst.call_mut
-          compare (y, x)
-      match o1 with
-      | Ordering.lt => ok (cont (s1, compare1, m))
-      | Ordering.eq => ok (cont (s1, compare1, m))
-      | Ordering.gt => ok (cont (s1, compare1, o))
-nonpos_continuity Iterator.min_by.default_loop.body
-
-/-- [nonpos_iterator::Iterator::min_by]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 814:8-822:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.min_by.default_loop
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) 
-  (s : Self) (compare : F) (m : Option Clause0_Item) :
-  Result (Option Clause0_Item)
-  := do
-  loop
-    (fun (s1, compare1, m1) => Iterator.min_by.default_loop.body IteratorInst
-      coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst
-      s1 compare1 m1)
-    (s, compare, m)
-nonpos_continuity Iterator.min_by.default_loop
-
-/-- [nonpos_iterator::Iterator::min_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 805:4-824:5
-    Visibility: public -/
-@[reducible, trait_default]
-def Iterator.min_by.default
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering)
-  (self : Self) (compare : F) :
-  Result (Option Clause0_Item)
-  := do
-  Iterator.min_by.default_loop IteratorInst
-    coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemOrderingInst
-    self compare none
-nonpos_continuity Iterator.min_by.default
-
 /-- [nonpos_iterator::{nonpos_iterator::Rev<T>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1945:4-1947:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2118:4-2120:5 -/
 def Rev.new {T : Type _} (iter : T) : Result (Rev T) := do
   ok { iter }
 
 /-- [nonpos_iterator::Iterator::rev]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 826:4-831:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 996:4-1001:5
     Visibility: public -/
 @[trait_default]
 def Iterator.rev.default
@@ -2039,7 +1289,7 @@ def Iterator.rev.default
 nonpos_continuity Iterator.rev.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Cycle<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1988:4-1990:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2174:4-2176:5 -/
 def Cycle.new
   {I : Type _} (corecloneCloneInst : core.clone.Clone I) (iter : I) :
   Result (Cycle I)
@@ -2048,7 +1298,7 @@ def Cycle.new
   ok { orig := t, iter }
 
 /-- [nonpos_iterator::Iterator::cycle]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 872:4-877:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1043:4-1048:5
     Visibility: public -/
 @[trait_default]
 def Iterator.cycle.default
@@ -2059,7 +1309,7 @@ def Iterator.cycle.default
   Cycle.new corecloneCloneInst self
 
 /-- [nonpos_iterator::{nonpos_iterator::ArrayChunks<I, Clause0_Item, N>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2016:4-2019:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2202:4-2205:5 -/
 def ArrayChunks.new
   {I : Type _} {Clause0_Item : Type _} (N : Std.Usize) (IteratorInst : Iterator
   I Clause0_Item) (iter : I) :
@@ -2070,7 +1320,7 @@ def ArrayChunks.new
 nonpos_continuity ArrayChunks.new
 
 /-- [nonpos_iterator::Iterator::array_chunks]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 879:4-884:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1050:4-1055:5
     Visibility: public -/
 @[trait_default]
 def Iterator.array_chunks.default
@@ -2082,7 +1332,7 @@ def Iterator.array_chunks.default
 nonpos_continuity Iterator.array_chunks.default
 
 /-- [nonpos_iterator::Iterator::sum]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 886:4-892:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1057:4-1063:5
     Visibility: public -/
 @[trait_default]
 def Iterator.sum.default
@@ -2094,7 +1344,7 @@ def Iterator.sum.default
 nonpos_continuity Iterator.sum.default
 
 /-- [nonpos_iterator::Iterator::product]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 894:4-900:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1065:4-1071:5
     Visibility: public -/
 @[trait_default]
 def Iterator.product.default
@@ -2105,75 +1355,13 @@ def Iterator.product.default
   ProductInst.product IteratorInst self
 nonpos_continuity Iterator.product.default
 
-/-- [nonpos_iterator::Iterator::cmp]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1:0-927:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.cmp.default_loop.body
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter :
-  Type _} (IteratorInst : Iterator Self Clause0_Item) (IntoIteratorInst :
-  IntoIterator I Clause0_Item Clause1_IntoIter) (corecmpOrdInst : core.cmp.Ord
-  Clause0_Item) (a : Self) (b : Clause1_IntoIter) :
-  Result (ControlFlow (Self × Clause1_IntoIter) Ordering)
-  := do
-  let (o, a1) ← IteratorInst.next a
-  match o with
-  | none =>
-    let (o1, _) ← IntoIteratorInst.IteratorInst.next b
-    match o1 with
-    | none => ok (done Ordering.eq)
-    | some _ => ok (done Ordering.lt)
-  | some x =>
-    let (o1, b1) ← IntoIteratorInst.IteratorInst.next b
-    match o1 with
-    | none => ok (done Ordering.gt)
-    | some y =>
-      let o2 ← corecmpOrdInst.cmp x y
-      match o2 with
-      | Ordering.lt => ok (done Ordering.lt)
-      | Ordering.eq => ok (cont (a1, b1))
-      | Ordering.gt => ok (done Ordering.gt)
-nonpos_continuity Iterator.cmp.default_loop.body
-
-/-- [nonpos_iterator::Iterator::cmp]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1:0-927:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.cmp.default_loop
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter :
-  Type _} (IteratorInst : Iterator Self Clause0_Item) (IntoIteratorInst :
-  IntoIterator I Clause0_Item Clause1_IntoIter) (corecmpOrdInst : core.cmp.Ord
-  Clause0_Item) (a : Self) (b : Clause1_IntoIter) :
-  Result Ordering
-  := do
-  loop
-    (fun (a1, b1) => Iterator.cmp.default_loop.body IteratorInst
-      IntoIteratorInst corecmpOrdInst a1 b1)
-    (a, b)
-nonpos_continuity Iterator.cmp.default_loop
-
-/-- [nonpos_iterator::Iterator::cmp]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 903:4-928:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.cmp.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter :
-  Type _} (IteratorInst : Iterator Self Clause0_Item) (IntoIteratorInst :
-  IntoIterator I Clause0_Item Clause1_IntoIter) (corecmpOrdInst : core.cmp.Ord
-  Clause0_Item) (self : Self) (other : I) :
-  Result Ordering
-  := do
-  let b ← IntoIteratorInst.into_iter other
-  Iterator.cmp.default_loop IteratorInst IntoIteratorInst corecmpOrdInst self b
-nonpos_continuity Iterator.cmp.default
-
 /-- [nonpos_iterator::Iterator::cmp_by::compare::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 942:12-945:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1099:12-1102:13 -/
 @[reducible]
 def Iterator.cmp_by.compare.closure (X : Type _) (Y : Type _) (F : Type _) := F
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 942:12-945:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1099:12-1102:13 -/
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOrderingTuple.call_mut
   {X : Type _} {Y : Type _} {F : Type _} (coreopsfunctionFnMutFPairOrderingInst
@@ -2189,7 +1377,7 @@ def
   | Ordering.gt => ok (core.ops.control_flow.ControlFlow.Break Ordering.gt, t)
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 942:12-945:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1099:12-1102:13 -/
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOrderingTuple.call_once
   {X : Type _} {Y : Type _} {F : Type _} (coreopsfunctionFnMutFPairOrderingInst
@@ -2203,7 +1391,7 @@ def
   ok cf
 
 /-- Trait implementation: [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 942:12-945:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1099:12-1102:13 -/
 @[reducible]
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOrderingTuple
@@ -2217,7 +1405,7 @@ def
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 942:12-945:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1099:12-1102:13 -/
 @[reducible]
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOrderingTuple
@@ -2234,7 +1422,7 @@ def
 }
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 938:8-946:9 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1095:8-1103:9 -/
 def Iterator.cmp_by.compare
   {X : Type _} {Y : Type _} {F : Type _} (coreopsfunctionFnMutFPairOrderingInst
   : core.ops.function.FnMut F (X × Y) Ordering) (cmp : F) :
@@ -2243,7 +1431,7 @@ def Iterator.cmp_by.compare
   ok cmp
 
 /-- [nonpos_iterator::Iterator::cmp_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 931:4-952:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1088:4-1109:5
     Visibility: public -/
 @[trait_default]
 def Iterator.cmp_by.default
@@ -2266,84 +1454,15 @@ def Iterator.cmp_by.default
   | core.ops.control_flow.ControlFlow.Break ord => ok ord
 nonpos_continuity Iterator.cmp_by.default
 
-/-- [nonpos_iterator::Iterator::partial_cmp]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1:0-979:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.partial_cmp.default_loop.body
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (a : Self) (b : Clause1_IntoIter) :
-  Result (ControlFlow (Self × Clause1_IntoIter) (Option Ordering))
-  := do
-  let (o, a1) ← IteratorInst.next a
-  match o with
-  | none =>
-    let (o1, _) ← IntoIteratorInst.IteratorInst.next b
-    match o1 with
-    | none => ok (done (some Ordering.eq))
-    | some _ => ok (done (some Ordering.lt))
-  | some x =>
-    let (o1, b1) ← IntoIteratorInst.IteratorInst.next b
-    match o1 with
-    | none => ok (done (some Ordering.gt))
-    | some y =>
-      let o2 ← corecmpPartialOrdInst.partial_cmp x y
-      match o2 with
-      | none => ok (done none)
-      | some o3 =>
-        match o3 with
-        | Ordering.lt => ok (done o2)
-        | Ordering.eq => ok (cont (a1, b1))
-        | Ordering.gt => ok (done o2)
-nonpos_continuity Iterator.partial_cmp.default_loop.body
-
-/-- [nonpos_iterator::Iterator::partial_cmp]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1:0-979:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.partial_cmp.default_loop
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (a : Self) (b : Clause1_IntoIter) :
-  Result (Option Ordering)
-  := do
-  loop
-    (fun (a1, b1) => Iterator.partial_cmp.default_loop.body IteratorInst
-      IntoIteratorInst corecmpPartialOrdInst a1 b1)
-    (a, b)
-nonpos_continuity Iterator.partial_cmp.default_loop
-
-/-- [nonpos_iterator::Iterator::partial_cmp]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 955:4-980:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.partial_cmp.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result (Option Ordering)
-  := do
-  let b ← IntoIteratorInst.into_iter other
-  Iterator.partial_cmp.default_loop IteratorInst IntoIteratorInst
-    corecmpPartialOrdInst self b
-nonpos_continuity Iterator.partial_cmp.default
-
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 994:12-997:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 @[reducible]
 def Iterator.partial_cmp_by.compare.closure (X : Type _) (Y : Type _) (F :
   Type _) :=
   F
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 994:12-997:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOptionOrderingTuple.call_mut
   {X : Type _} {Y : Type _} {F : Type _}
@@ -2364,7 +1483,7 @@ def
     | Ordering.gt => ok (core.ops.control_flow.ControlFlow.Break o, t)
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 994:12-997:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOptionOrderingTuple.call_once
   {X : Type _} {Y : Type _} {F : Type _}
@@ -2379,7 +1498,7 @@ def
   ok cf
 
 /-- Trait implementation: [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 994:12-997:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 @[reducible]
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOptionOrderingTuple
@@ -2394,7 +1513,7 @@ def
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 994:12-997:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 @[reducible]
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOptionOrderingTuple
@@ -2412,7 +1531,7 @@ def
 }
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 990:8-998:9 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1133:8-1141:9 -/
 def Iterator.partial_cmp_by.compare
   {X : Type _} {Y : Type _} {F : Type _}
   (coreopsfunctionFnMutFPairOptionOrderingInst : core.ops.function.FnMut F (X
@@ -2422,7 +1541,7 @@ def Iterator.partial_cmp_by.compare
   ok partial_cmp
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 983:4-1004:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1126:4-1147:5
     Visibility: public -/
 @[trait_default]
 def Iterator.partial_cmp_by.default
@@ -2447,363 +1566,8 @@ def Iterator.partial_cmp_by.default
   | core.ops.control_flow.ControlFlow.Break ord => ok ord
 nonpos_continuity Iterator.partial_cmp_by.default
 
-/-- [nonpos_iterator::Iterator::eq]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1:0-1032:9
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.eq.default_loop.body
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause1_Item)
-  (a : Self) (b : Clause1_IntoIter) :
-  Result (ControlFlow (Self × Clause1_IntoIter) Bool)
-  := do
-  let (o, a1) ← IteratorInst.next a
-  match o with
-  | none =>
-    let (o1, _) ← IntoIteratorInst.IteratorInst.next b
-    match o1 with
-    | none => ok (done true)
-    | some _ => ok (done false)
-  | some x =>
-    let (o1, b1) ← IntoIteratorInst.IteratorInst.next b
-    match o1 with
-    | none => ok (done false)
-    | some y =>
-      let b2 ← corecmpPartialEqInst.eq x y
-      if b2
-      then ok (cont (a1, b1))
-      else ok (done false)
-nonpos_continuity Iterator.eq.default_loop.body
-
-/-- [nonpos_iterator::Iterator::eq]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1:0-1032:9
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.eq.default_loop
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause1_Item)
-  (a : Self) (b : Clause1_IntoIter) :
-  Result Bool
-  := do
-  loop
-    (fun (a1, b1) => Iterator.eq.default_loop.body IteratorInst
-      IntoIteratorInst corecmpPartialEqInst a1 b1)
-    (a, b)
-nonpos_continuity Iterator.eq.default_loop
-
-/-- [nonpos_iterator::Iterator::eq]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1007:4-1033:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.eq.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result Bool
-  := do
-  let b ← IntoIteratorInst.into_iter other
-  Iterator.eq.default_loop IteratorInst IntoIteratorInst corecmpPartialEqInst
-    self b
-nonpos_continuity Iterator.eq.default
-
-/-- [nonpos_iterator::Iterator::ne]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1058:4-1065:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.ne.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result Bool
-  := do
-  let b ← IteratorInst.eq IntoIteratorInst corecmpPartialEqInst self other
-  ok (¬ b)
-nonpos_continuity Iterator.ne.default
-
-/-- [nonpos_iterator::Iterator::lt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1068:4-1078:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.lt.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result Bool
-  := do
-  let o ←
-    IteratorInst.partial_cmp IntoIteratorInst corecmpPartialOrdInst self other
-  match o with
-  | none => ok false
-  | some o1 =>
-    match o1 with
-    | Ordering.lt => ok true
-    | Ordering.eq => ok false
-    | Ordering.gt => ok false
-nonpos_continuity Iterator.lt.default
-
-/-- [nonpos_iterator::Iterator::le]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1081:4-1091:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.le.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result Bool
-  := do
-  let o ←
-    IteratorInst.partial_cmp IntoIteratorInst corecmpPartialOrdInst self other
-  match o with
-  | none => ok false
-  | some o1 =>
-    match o1 with
-    | Ordering.lt => ok true
-    | Ordering.eq => ok true
-    | Ordering.gt => ok false
-nonpos_continuity Iterator.le.default
-
-/-- [nonpos_iterator::Iterator::gt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1094:4-1104:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.gt.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result Bool
-  := do
-  let o ←
-    IteratorInst.partial_cmp IntoIteratorInst corecmpPartialOrdInst self other
-  match o with
-  | none => ok false
-  | some o1 =>
-    match o1 with
-    | Ordering.lt => ok false
-    | Ordering.eq => ok false
-    | Ordering.gt => ok true
-nonpos_continuity Iterator.gt.default
-
-/-- [nonpos_iterator::Iterator::ge]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1107:4-1117:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.ge.default
-  {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
-  {Clause1_IntoIter : Type _} (IteratorInst : Iterator Self Clause0_Item)
-  (IntoIteratorInst : IntoIterator I Clause1_Item Clause1_IntoIter)
-  (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause1_Item)
-  (self : Self) (other : I) :
-  Result Bool
-  := do
-  let o ←
-    IteratorInst.partial_cmp IntoIteratorInst corecmpPartialOrdInst self other
-  match o with
-  | none => ok false
-  | some o1 =>
-    match o1 with
-    | Ordering.lt => ok false
-    | Ordering.eq => ok true
-    | Ordering.gt => ok true
-nonpos_continuity Iterator.ge.default
-
-/-- [nonpos_iterator::Iterator::is_sorted]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:8-1136:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.is_sorted.default_loop.body
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-  Clause0_Item) (s : Self) (last : Clause0_Item) :
-  Result (ControlFlow (Self × Clause0_Item) Bool)
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done true)
-  | some curr =>
-    let b ← corecmpPartialOrdInst.le last curr
-    if b
-    then ok (cont (s1, curr))
-    else ok (done false)
-nonpos_continuity Iterator.is_sorted.default_loop.body
-
-/-- [nonpos_iterator::Iterator::is_sorted]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:8-1136:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.is_sorted.default_loop
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-  Clause0_Item) (s : Self) (last : Clause0_Item) :
-  Result Bool
-  := do
-  loop
-    (fun (s1, last1) => Iterator.is_sorted.default_loop.body IteratorInst
-      corecmpPartialOrdInst s1 last1)
-    (s, last)
-nonpos_continuity Iterator.is_sorted.default_loop
-
-/-- [nonpos_iterator::Iterator::is_sorted]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1119:4-1136:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.is_sorted.default
-  {Self : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator Self
-  Clause0_Item) (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-  Clause0_Item) (self : Self) :
-  Result Bool
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok true
-  | some e =>
-    Iterator.is_sorted.default_loop IteratorInst corecmpPartialOrdInst self1 e
-nonpos_continuity Iterator.is_sorted.default
-
-/-- [nonpos_iterator::Iterator::is_sorted_by]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1149:8-1156:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.is_sorted_by.default_loop.body
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Bool) (self : Self)
-  (compare : F) (last : Clause0_Item) :
-  Result (ControlFlow (Self × F × Clause0_Item) Bool)
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok (done true)
-  | some curr =>
-    let (b, compare1) ←
-      coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemBoolInst.call_mut
-        compare (last, curr)
-    if b
-    then ok (cont (self1, compare1, curr))
-    else ok (done false)
-nonpos_continuity Iterator.is_sorted_by.default_loop.body
-
-/-- [nonpos_iterator::Iterator::is_sorted_by]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1149:8-1156:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.is_sorted_by.default_loop
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Bool) (self : Self)
-  (compare : F) (last : Clause0_Item) :
-  Result Bool
-  := do
-  loop
-    (fun (self1, compare1, last1) => Iterator.is_sorted_by.default_loop.body
-      IteratorInst
-      coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemBoolInst
-      self1 compare1 last1)
-    (self, compare, last)
-nonpos_continuity Iterator.is_sorted_by.default_loop
-
-/-- [nonpos_iterator::Iterator::is_sorted_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1138:4-1156:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.is_sorted_by.default
-  {Self : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator
-  Self Clause0_Item)
-  (coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemBoolInst :
-  core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Bool) (self : Self)
-  (compare : F) :
-  Result Bool
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok true
-  | some e =>
-    Iterator.is_sorted_by.default_loop IteratorInst
-      coreopsfunctionFnMutFPairSharedClause0_ItemSharedClause0_ItemBoolInst
-      self1 compare e
-nonpos_continuity Iterator.is_sorted_by.default
-
-/-- [nonpos_iterator::Iterator::is_sorted_by_key]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1171:8-1179:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def Iterator.is_sorted_by_key.default_loop.body
-  {Self : Type _} {F : Type _} {K : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item)
-  (coreopsfunctionFnMutFTupleClause0_ItemKInst : core.ops.function.FnMut F
-  Clause0_Item K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) (s : Self)
-  (f : F) (last : K) :
-  Result (ControlFlow (Self × F × K) Bool)
-  := do
-  let (o, s1) ← IteratorInst.next s
-  match o with
-  | none => ok (done true)
-  | some x =>
-    let (curr, f1) ← coreopsfunctionFnMutFTupleClause0_ItemKInst.call_mut f x
-    let b ← corecmpPartialOrdInst.le last curr
-    if b
-    then ok (cont (s1, f1, curr))
-    else ok (done false)
-nonpos_continuity Iterator.is_sorted_by_key.default_loop.body
-
-/-- [nonpos_iterator::Iterator::is_sorted_by_key]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1171:8-1179:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def Iterator.is_sorted_by_key.default_loop
-  {Self : Type _} {F : Type _} {K : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item)
-  (coreopsfunctionFnMutFTupleClause0_ItemKInst : core.ops.function.FnMut F
-  Clause0_Item K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) (s : Self)
-  (f : F) (last : K) :
-  Result Bool
-  := do
-  loop
-    (fun (s1, f1, last1) => Iterator.is_sorted_by_key.default_loop.body
-      IteratorInst coreopsfunctionFnMutFTupleClause0_ItemKInst
-      corecmpPartialOrdInst s1 f1 last1)
-    (s, f, last)
-nonpos_continuity Iterator.is_sorted_by_key.default_loop
-
-/-- [nonpos_iterator::Iterator::is_sorted_by_key]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1159:4-1179:5
-    Visibility: public -/
-@[trait_default]
-def Iterator.is_sorted_by_key.default
-  {Self : Type _} {F : Type _} {K : Type _} {Clause0_Item : Type _}
-  (IteratorInst : Iterator Self Clause0_Item)
-  (coreopsfunctionFnMutFTupleClause0_ItemKInst : core.ops.function.FnMut F
-  Clause0_Item K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
-  (self : Self) (f : F) :
-  Result Bool
-  := do
-  let (o, self1) ← IteratorInst.next self
-  match o with
-  | none => ok true
-  | some e =>
-    let (last, f1) ← coreopsfunctionFnMutFTupleClause0_ItemKInst.call_mut f e
-    Iterator.is_sorted_by_key.default_loop IteratorInst
-      coreopsfunctionFnMutFTupleClause0_ItemKInst corecmpPartialOrdInst self1
-      f1 last
-nonpos_continuity Iterator.is_sorted_by_key.default
-
 /-- [nonpos_iterator::Iterator::__iterator_get_unchecked]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1182:4-1188:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1312:4-1318:5
     Visibility: public -/
 @[trait_default]
 def Iterator.__iterator_get_unchecked.default
@@ -2816,7 +1580,7 @@ def Iterator.__iterator_get_unchecked.default
   fail panic
 
 /-- [nonpos_iterator::DoubleEndedIterator::next_chunk_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1199:4-1206:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1330:4-1337:5
     Visibility: public -/
 @[trait_default]
 def DoubleEndedIterator.next_chunk_back.default
@@ -2829,61 +1593,8 @@ def DoubleEndedIterator.next_chunk_back.default
   array.iter_next_chunk_back N DoubleEndedIteratorInst self
 nonpos_continuity DoubleEndedIterator.next_chunk_back.default
 
-/-- [nonpos_iterator::DoubleEndedIterator::nth_back]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1229:8-1237:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def DoubleEndedIterator.nth_back.default_loop.body
-  {Self : Type _} {Clause0_Clause0_Item : Type _} (DoubleEndedIteratorInst :
-  DoubleEndedIterator Self Clause0_Clause0_Item) (n : Std.Usize) (self : Self)
-  (i : Std.Usize) :
-  Result (ControlFlow (Self × Std.Usize) ((Option Clause0_Clause0_Item) ×
-    Self))
-  := do
-  if i < n
-  then
-    let (o, self1) ← DoubleEndedIteratorInst.next_back self
-    match o with
-    | none => ok (done (none, self1))
-    | some _ => let i1 ← i + 1#usize
-                ok (cont (self1, i1))
-  else
-    let (o, self1) ← DoubleEndedIteratorInst.next_back self
-    ok (done (o, self1))
-nonpos_continuity DoubleEndedIterator.nth_back.default_loop.body
-
-/-- [nonpos_iterator::DoubleEndedIterator::nth_back]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1229:8-1237:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def DoubleEndedIterator.nth_back.default_loop
-  {Self : Type _} {Clause0_Clause0_Item : Type _} (DoubleEndedIteratorInst :
-  DoubleEndedIterator Self Clause0_Clause0_Item) (self : Self) (n : Std.Usize)
-  (i : Std.Usize) :
-  Result ((Option Clause0_Clause0_Item) × Self)
-  := do
-  loop
-    (fun (self1, i1) => DoubleEndedIterator.nth_back.default_loop.body
-      DoubleEndedIteratorInst n self1 i1)
-    (self, i)
-nonpos_continuity DoubleEndedIterator.nth_back.default_loop
-
-/-- [nonpos_iterator::DoubleEndedIterator::nth_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1224:4-1237:5
-    Visibility: public -/
-@[reducible, trait_default]
-def DoubleEndedIterator.nth_back.default
-  {Self : Type _} {Clause0_Clause0_Item : Type _} (DoubleEndedIteratorInst :
-  DoubleEndedIterator Self Clause0_Clause0_Item) (self : Self) (n : Std.Usize)
-  :
-  Result ((Option Clause0_Clause0_Item) × Self)
-  := do
-  DoubleEndedIterator.nth_back.default_loop DoubleEndedIteratorInst self n
-    0#usize
-nonpos_continuity DoubleEndedIterator.nth_back.default
-
 /-- [nonpos_iterator::DoubleEndedIterator::rfold]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1263:8-1265:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 1391:8-1393:9
     Visibility: public -/
 @[rust_loop_body, trait_default]
 def DoubleEndedIterator.rfold.default_loop.body
@@ -2902,7 +1613,7 @@ def DoubleEndedIterator.rfold.default_loop.body
 nonpos_continuity DoubleEndedIterator.rfold.default_loop.body
 
 /-- [nonpos_iterator::DoubleEndedIterator::rfold]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1263:8-1265:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 1391:8-1393:9
     Visibility: public -/
 @[rust_loop, trait_default]
 def DoubleEndedIterator.rfold.default_loop
@@ -2919,7 +1630,7 @@ def DoubleEndedIterator.rfold.default_loop
 nonpos_continuity DoubleEndedIterator.rfold.default_loop
 
 /-- [nonpos_iterator::DoubleEndedIterator::rfold]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1257:4-1267:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1385:4-1395:5
     Visibility: public -/
 @[reducible, trait_default]
 def DoubleEndedIterator.rfold.default
@@ -2933,69 +1644,8 @@ def DoubleEndedIterator.rfold.default
     coreopsfunctionFnMutFPairBInst self f init
 nonpos_continuity DoubleEndedIterator.rfold.default
 
-/-- [nonpos_iterator::DoubleEndedIterator::rfind]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1276:8-1282:5
-    Visibility: public -/
-@[rust_loop_body, trait_default]
-def DoubleEndedIterator.rfind.default_loop.body
-  {Self : Type _} {P : Type _} {Clause0_Clause0_Item : Type _}
-  (DoubleEndedIteratorInst : DoubleEndedIterator Self Clause0_Clause0_Item)
-  (coreopsfunctionFnMutPTupleSharedClause0_Clause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Clause0_Item Bool) (self : Self)
-  (predicate : P) :
-  Result (ControlFlow (Self × P) ((Option Clause0_Clause0_Item) × Self))
-  := do
-  let (o, self1) ← DoubleEndedIteratorInst.next_back self
-  match o with
-  | none => ok (done (none, self1))
-  | some x =>
-    let (b, predicate1) ←
-      coreopsfunctionFnMutPTupleSharedClause0_Clause0_ItemBoolInst.call_mut
-        predicate x
-    if b
-    then ok (done (o, self1))
-    else ok (cont (self1, predicate1))
-nonpos_continuity DoubleEndedIterator.rfind.default_loop.body
-
-/-- [nonpos_iterator::DoubleEndedIterator::rfind]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1276:8-1282:5
-    Visibility: public -/
-@[rust_loop, trait_default]
-def DoubleEndedIterator.rfind.default_loop
-  {Self : Type _} {P : Type _} {Clause0_Clause0_Item : Type _}
-  (DoubleEndedIteratorInst : DoubleEndedIterator Self Clause0_Clause0_Item)
-  (coreopsfunctionFnMutPTupleSharedClause0_Clause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Clause0_Item Bool) (self : Self)
-  (predicate : P) :
-  Result ((Option Clause0_Clause0_Item) × Self)
-  := do
-  loop
-    (fun (self1, predicate1) => DoubleEndedIterator.rfind.default_loop.body
-      DoubleEndedIteratorInst
-      coreopsfunctionFnMutPTupleSharedClause0_Clause0_ItemBoolInst self1
-      predicate1)
-    (self, predicate)
-nonpos_continuity DoubleEndedIterator.rfind.default_loop
-
-/-- [nonpos_iterator::DoubleEndedIterator::rfind]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1269:4-1282:5
-    Visibility: public -/
-@[reducible, trait_default]
-def DoubleEndedIterator.rfind.default
-  {Self : Type _} {P : Type _} {Clause0_Clause0_Item : Type _}
-  (DoubleEndedIteratorInst : DoubleEndedIterator Self Clause0_Clause0_Item)
-  (coreopsfunctionFnMutPTupleShared0Clause0_Clause0_ItemBoolInst :
-  core.ops.function.FnMut P Clause0_Clause0_Item Bool) (self : Self)
-  (predicate : P) :
-  Result ((Option Clause0_Clause0_Item) × Self)
-  := do
-  DoubleEndedIterator.rfind.default_loop DoubleEndedIteratorInst
-    coreopsfunctionFnMutPTupleShared0Clause0_Clause0_ItemBoolInst self
-    predicate
-nonpos_continuity DoubleEndedIterator.rfind.default
-
 /-- Trait declaration: [nonpos_iterator::ExactSizeIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1289:0-1303:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1427:0-1441:1
     Visibility: public -/
 structure ExactSizeIterator (Self : Type _) (Self_Clause0_Item : Type _) where
   IteratorInst : Iterator Self Self_Clause0_Item
@@ -3004,7 +1654,7 @@ structure ExactSizeIterator (Self : Type _) (Self_Clause0_Item : Type _) where
 deriving Lean.Order.CCPO
 
 /-- [nonpos_iterator::ExactSizeIterator::len]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1290:4-1298:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1428:4-1436:5
     Visibility: public -/
 @[trait_default]
 def ExactSizeIterator.len.default
@@ -3020,7 +1670,7 @@ def ExactSizeIterator.len.default
   ok lower
 
 /-- [nonpos_iterator::ExactSizeIterator::is_empty]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1300:4-1302:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1438:4-1440:5
     Visibility: public -/
 @[trait_default]
 def ExactSizeIterator.is_empty.default
@@ -3031,14 +1681,22 @@ def ExactSizeIterator.is_empty.default
   let i ← ExactSizeIteratorInst.len self
   ok (i = 0#usize)
 
+/-- Trait declaration: [nonpos_iterator::FromIterator]
+    Source: 'tests/src/nonpos-iterator.rs', lines 1454:0-1456:1
+    Visibility: public -/
+structure FromIterator (Self : Type _) (T : Type _) where
+  from_iter : forall {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
+    IntoIterator I T Clause0_IntoIter), I → Result Self
+deriving Lean.Order.CCPO
+
 /-- [nonpos_iterator::OptionIntoIter]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1366:0-1368:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1520:0-1522:1
     Visibility: public -/
 structure OptionIntoIter (A : Type _) where
   inner : Option A
 
 /-- [nonpos_iterator::{impl nonpos_iterator::IntoIterator<T, nonpos_iterator::OptionIntoIter<T>> for core::option::Option<T>}::into_iter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1378:4-1380:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1532:4-1534:5
     Visibility: public -/
 def
   core.option.Option.Insts.Nonpos_iteratorIntoIteratorTOptionIntoIter.into_iter
@@ -3046,7 +1704,7 @@ def
   ok { inner := self }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<A> for nonpos_iterator::OptionIntoIter<A>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1371:4-1373:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1525:4-1527:5
     Visibility: public -/
 def OptionIntoIter.Insts.Nonpos_iteratorIterator.next
   {A : Type _} (self : OptionIntoIter A) :
@@ -3057,7 +1715,7 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<A> for nonpos_iterator::OptionIntoIter<A>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1369:0-1374:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1523:0-1528:1 -/
 @[reducible]
 def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
   (OptionIntoIter A) A := Iterator.mk
@@ -3067,10 +1725,6 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
   (size_hint := Iterator.size_hint.default A)
   (count := Iterator.count.default
     (OptionIntoIter.Insts.Nonpos_iteratorIterator A))
-  (last := Iterator.last.default (OptionIntoIter.Insts.Nonpos_iteratorIterator
-    A))
-  (nth := Iterator.nth.default (OptionIntoIter.Insts.Nonpos_iteratorIterator
-    A))
   (step_by := Iterator.step_by.default A)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U A Clause0_IntoIter) => Iterator.chain.default
@@ -3089,10 +1743,6 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleBPInst :
     core.ops.function.FnMut F A B) => Iterator.map.default
     coreopsfunctionFnMutPTupleBPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTupleFTupleInst :
-    core.ops.function.FnMut F A Unit) => Iterator.for_each.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTupleFTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P A Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -3139,22 +1789,9 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
     core.ops.function.FnMut F A Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedFTupleInst)
   (by_ref := Iterator.by_ref.default A)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B A) =>
-    Iterator.collect.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E A) =>
     Iterator.collect_into.default (OptionIntoIter.Insts.Nonpos_iteratorIterator
     A) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B A)
-    (coreopsfunctionFnMutPTupleSharedBBoolInst : core.ops.function.FnMut F A
-    Bool) => Iterator.partition.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedBBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P A Bool) => Iterator.is_partitioned.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × A) B) => Iterator.fold.default
     (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
@@ -3163,48 +1800,6 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
     core.ops.function.FnMut F (A × A) A) => Iterator.reduce.default
     (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
     coreopsfunctionFnMutPPairFInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F A Bool) => Iterator.all.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F A Bool) => Iterator.any.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P A Bool) => Iterator.find.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleBOptionInst
-    : core.ops.function.FnMut F A (Option B)) => Iterator.find_map.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTupleBOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P A Bool) => Iterator.position.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord A) => Iterator.max.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord A) => Iterator.min.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F A B) =>
-    Iterator.max_by_key.default (OptionIntoIter.Insts.Nonpos_iteratorIterator
-    A) corecmpOrdInst coreopsfunctionFnMutPTupleSharedBPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F (A × A) Ordering) => Iterator.max_by.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F A B) =>
-    Iterator.min_by_key.default (OptionIntoIter.Insts.Nonpos_iteratorIterator
-    A) corecmpOrdInst coreopsfunctionFnMutPTupleSharedBPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F (A × A) Ordering) => Iterator.min_by.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type}
     (DoubleEndedIteratorOptionIntoIterPInst : DoubleEndedIterator
     (OptionIntoIter A) Clause0_Clause0_Item) => Iterator.rev.default A
@@ -3219,21 +1814,12 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
   (product := fun {P : Type} (ProductInst : Product P A) =>
     Iterator.product.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
     ProductInst)
-  (cmp := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I A Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord A) =>
-    Iterator.cmp.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F (A ×
     Clause0_Item) Ordering) => Iterator.cmp_by.default
     (OptionIntoIter.Insts.Nonpos_iteratorIterator A) IntoIteratorInst
     coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd A Clause0_Item) =>
-    Iterator.partial_cmp.default (OptionIntoIter.Insts.Nonpos_iteratorIterator
-    A) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -3241,50 +1827,6 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
     Iterator.partial_cmp_by.default
     (OptionIntoIter.Insts.Nonpos_iteratorIterator A) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq A Clause0_Item) =>
-    Iterator.eq.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq A Clause0_Item) =>
-    Iterator.ne.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd A Clause0_Item) =>
-    Iterator.lt.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd A Clause0_Item) =>
-    Iterator.le.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd A Clause0_Item) =>
-    Iterator.gt.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd A Clause0_Item) =>
-    Iterator.ge.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd A A) =>
-    Iterator.is_sorted.default (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFBoolInst : core.ops.function.FnMut
-    F (A × A) Bool) => Iterator.is_sorted_by.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPPairSharedFSharedFBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleFPInst : core.ops.function.FnMut F A K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default
-    (OptionIntoIter.Insts.Nonpos_iteratorIterator A)
-    coreopsfunctionFnMutPTupleFPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceOptionIntoIterInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (OptionIntoIter A)) =>
@@ -3294,7 +1836,7 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::IntoIterator<T, nonpos_iterator::OptionIntoIter<T>> for core::option::Option<T>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1375:0-1381:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1529:0-1535:1 -/
 @[reducible]
 def core.option.Option.Insts.Nonpos_iteratorIntoIteratorTOptionIntoIter (T :
   Type _) : IntoIterator (Option T) T (OptionIntoIter T) := IntoIterator.mk
@@ -3304,7 +1846,7 @@ def core.option.Option.Insts.Nonpos_iteratorIntoIteratorTOptionIntoIter (T :
   (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Extend::extend_one]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1332:4-1334:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1472:4-1474:5
     Visibility: public -/
 @[trait_default]
 def Extend.extend_one.default
@@ -3318,7 +1860,7 @@ def Extend.extend_one.default
 nonpos_continuity Extend.extend_one.default
 
 /-- [nonpos_iterator::Extend::extend_reserve]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1336:4-1338:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1476:4-1478:5
     Visibility: public -/
 @[trait_default]
 def Extend.extend_reserve.default
@@ -3328,7 +1870,7 @@ def Extend.extend_reserve.default
   ok self
 
 /-- [nonpos_iterator::Extend::extend_one_unchecked]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1341:4-1346:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1481:4-1486:5
     Visibility: public -/
 @[trait_default]
 def Extend.extend_one_unchecked.default
@@ -3339,8 +1881,119 @@ def Extend.extend_one_unchecked.default
   ExtendInst.extend_one self item
 nonpos_continuity Extend.extend_one_unchecked.default
 
+/-- [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}::extend]: loop body 0:
+    Source: 'tests/src/nonpos-iterator.rs', lines 1494:8-1497:9
+    Visibility: public -/
+@[rust_loop_body]
+def Pair.Insts.Nonpos_iteratorExtendPair.extend_loop.body
+  {A : Type _} {B : Type _} {ExtendA : Type _} {ExtendB : Type _} {T : Type _}
+  {Clause2_IntoIter : Type _} (ExtendInst : Extend ExtendA A) (ExtendInst1 :
+  Extend ExtendB B) (IntoIteratorTPairClause2_IntoIterInst : IntoIterator T (A
+  × B) Clause2_IntoIter) (iter : Clause2_IntoIter)
+  (self : (ExtendA × ExtendB)) :
+  Result (ControlFlow (Clause2_IntoIter × (ExtendA × ExtendB)) (ExtendA ×
+    ExtendB))
+  := do
+  let (o, iter1) ←
+    IntoIteratorTPairClause2_IntoIterInst.IteratorInst.next iter
+  match o with
+  | none => let (t, t1) := self
+            ok (done (t, t1))
+  | some p =>
+    let (a, b) := p
+    let (t, t1) := self
+    let t2 ← ExtendInst.extend_one t a
+    let t3 ← ExtendInst1.extend_one t1 b
+    ok (cont (iter1, (t2, t3)))
+nonpos_continuity Pair.Insts.Nonpos_iteratorExtendPair.extend_loop.body
+
+/-- [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}::extend]: loop 0:
+    Source: 'tests/src/nonpos-iterator.rs', lines 1494:8-1497:9
+    Visibility: public -/
+@[rust_loop]
+def Pair.Insts.Nonpos_iteratorExtendPair.extend_loop
+  {A : Type _} {B : Type _} {ExtendA : Type _} {ExtendB : Type _} {T : Type _}
+  {Clause2_IntoIter : Type _} (ExtendInst : Extend ExtendA A) (ExtendInst1 :
+  Extend ExtendB B) (IntoIteratorTPairClause2_IntoIterInst : IntoIterator T (A
+  × B) Clause2_IntoIter) (iter : Clause2_IntoIter)
+  (self : (ExtendA × ExtendB)) :
+  Result (ExtendA × ExtendB)
+  := do
+  loop
+    (fun (iter1, self1) =>
+      Pair.Insts.Nonpos_iteratorExtendPair.extend_loop.body ExtendInst
+      ExtendInst1 IntoIteratorTPairClause2_IntoIterInst iter1 self1)
+    (iter, self)
+nonpos_continuity Pair.Insts.Nonpos_iteratorExtendPair.extend_loop
+
+/-- [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}::extend]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 1492:4-1498:5
+    Visibility: public -/
+def Pair.Insts.Nonpos_iteratorExtendPair.extend
+  {A : Type _} {B : Type _} {ExtendA : Type _} {ExtendB : Type _} {T : Type _}
+  {Clause2_IntoIter : Type _} (ExtendInst : Extend ExtendA A) (ExtendInst1 :
+  Extend ExtendB B) (IntoIteratorTPairClause2_IntoIterInst : IntoIterator T (A
+  × B) Clause2_IntoIter) (self : (ExtendA × ExtendB)) (into_iter : T) :
+  Result (ExtendA × ExtendB)
+  := do
+  let iter ← IntoIteratorTPairClause2_IntoIterInst.into_iter into_iter
+  Pair.Insts.Nonpos_iteratorExtendPair.extend_loop ExtendInst ExtendInst1
+    IntoIteratorTPairClause2_IntoIterInst iter self
+nonpos_continuity Pair.Insts.Nonpos_iteratorExtendPair.extend
+
+set_option backward.proofsInPublic true in
+/-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}]
+    Source: 'tests/src/nonpos-iterator.rs', lines 1491:0-1499:1 -/
+@[reducible]
+def Pair.Insts.Nonpos_iteratorExtendPair {A : Type _} {B : Type _} {ExtendA :
+  Type _} {ExtendB : Type _} (ExtendInst : Extend ExtendA A) (ExtendInst1 :
+  Extend ExtendB B) : Extend (ExtendA × ExtendB) (A × B) := Extend.mk
+  (extend := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorPPairPInst :
+    IntoIterator I (A × B) Clause0_IntoIter) =>
+    Pair.Insts.Nonpos_iteratorExtendPair.extend ExtendInst ExtendInst1
+    IntoIteratorPPairPInst)
+  (extend_one := Extend.extend_one.default
+    (Pair.Insts.Nonpos_iteratorExtendPair ExtendInst ExtendInst1))
+  (extend_reserve := Extend.extend_reserve.default (A × B))
+  (extend_one_unchecked := Extend.extend_one_unchecked.default
+    (Pair.Insts.Nonpos_iteratorExtendPair ExtendInst ExtendInst1))
+  (by nonpos_cont 5000)
+partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
+
+/-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]: loop body 0:
+    Source: 'tests/src/nonpos-iterator.rs', lines 1598:12-1601:13
+    Visibility: public -/
+@[rust_loop_body]
+def StepBy.Insts.Nonpos_iteratorIterator.next_loop.body
+  {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
+  (i : Std.Usize) (t : I) (i1 : Std.Usize) :
+  Result (ControlFlow (I × Std.Usize) I)
+  := do
+  if i1 < i
+  then
+    let (_, t1) ← IteratorInst.next t
+    let i2 ← i1 + 1#usize
+    ok (cont (t1, i2))
+  else ok (done t)
+nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next_loop.body
+
+/-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]: loop 0:
+    Source: 'tests/src/nonpos-iterator.rs', lines 1598:12-1601:13
+    Visibility: public -/
+@[rust_loop]
+def StepBy.Insts.Nonpos_iteratorIterator.next_loop
+  {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
+  (t : I) (i : Std.Usize) (i1 : Std.Usize) :
+  Result I
+  := do
+  loop
+    (fun (t1, i2) => StepBy.Insts.Nonpos_iteratorIterator.next_loop.body
+      IteratorInst i t1 i2)
+    (t, i1)
+nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next_loop
+
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1426:4-1433:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1591:4-1604:5
     Visibility: public -/
 def StepBy.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -3352,13 +2005,16 @@ def StepBy.Insts.Nonpos_iteratorIterator.next
     let (o, t) ← IteratorInst.next self.iter
     ok (o, { self with iter := t, first_take := false })
   else
-    let (o, t) ← IteratorInst.nth self.iter self.step_minus_one
-    ok (o, { self with iter := t })
+    let t ←
+      StepBy.Insts.Nonpos_iteratorIterator.next_loop IteratorInst self.iter
+        self.step_minus_one 0#usize
+    let (o, t1) ← IteratorInst.next t
+    ok (o, { self with iter := t1 })
 nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1424:0-1434:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1589:0-1605:1 -/
 @[reducible]
 def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (StepBy I) Clause0_Item
@@ -3368,10 +2024,6 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     (StepBy.Insts.Nonpos_iteratorIterator IteratorInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (last := Iterator.last.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (nth := Iterator.nth.default (StepBy.Insts.Nonpos_iteratorIterator
     IteratorInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -3391,10 +2043,6 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -3441,22 +2089,9 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (StepBy.Insts.Nonpos_iteratorIterator
     IteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
@@ -3465,52 +2100,6 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorStepByPInst :
     DoubleEndedIterator (StepBy I) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorStepByPInst)
@@ -3523,22 +2112,12 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (StepBy.Insts.Nonpos_iteratorIterator
     IteratorInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -3546,49 +2125,6 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     Ordering)) => Iterator.partial_cmp_by.default
     (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (StepBy.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (StepBy.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceStepByInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (StepBy I)) =>
@@ -3598,7 +2134,7 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1448:4-1459:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1619:4-1630:5
     Visibility: public -/
 def Chain.Insts.Nonpos_iteratorIterator.next
   {A : Type _} {B : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator A
@@ -3626,7 +2162,7 @@ nonpos_continuity Chain.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1446:0-1460:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1617:0-1631:1 -/
 @[reducible]
 def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
   : Type _} (IteratorInst : Iterator A Clause0_Item) (IteratorInst1 : Iterator
@@ -3636,10 +2172,6 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1))
-  (last := Iterator.last.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1))
-  (nth := Iterator.nth.default (Chain.Insts.Nonpos_iteratorIterator
     IteratorInst IteratorInst1))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -3659,10 +2191,6 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
   (map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B1) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -3710,23 +2238,9 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 Clause0_Item)
-    => Iterator.collect.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Chain.Insts.Nonpos_iteratorIterator
     IteratorInst IteratorInst1) ExtendInst)
-  (partition := fun {B1 : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B1) (ExtendInst : Extend B1 Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B1 × Clause0_Item) B1) => Iterator.fold.default
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
@@ -3735,53 +2249,6 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
     IteratorInst1) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B1 : Type} {F : Type}
-    (coreopsfunctionFnMutPTuplePOptionInst : core.ops.function.FnMut F
-    Clause0_Item (Option B1)) => Iterator.find_map.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) corecmpOrdInst)
-  (max_by_key := fun {B1 : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B1) => Iterator.max_by_key.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B1 : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B1) => Iterator.min_by_key.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorChainPInst :
     DoubleEndedIterator (Chain A B) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorChainPInst)
@@ -3794,22 +2261,12 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
     IteratorInst1) ProductInst)
-  (cmp := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I : Type} {F : Type} {Clause0_Item1 : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F
     (Clause0_Item × Clause0_Item1) Ordering) => Iterator.cmp_by.default
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -3817,51 +2274,6 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
     Ordering)) => Iterator.partial_cmp_by.default
     (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
     IntoIteratorInst coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Chain.Insts.Nonpos_iteratorIterator IteratorInst
-    IteratorInst1) IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Chain.Insts.Nonpos_iteratorIterator IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Chain.Insts.Nonpos_iteratorIterator
-    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePPInst
-    corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceChainInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Chain A B)) =>
@@ -3871,7 +2283,7 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1474:4-1484:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1645:4-1655:5
     Visibility: public -/
 def Zip.Insts.Nonpos_iteratorIteratorPair.next
   {A : Type _} {B : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -3891,7 +2303,7 @@ nonpos_continuity Zip.Insts.Nonpos_iteratorIteratorPair.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1472:0-1485:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1643:0-1656:1 -/
 @[reducible]
 def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
   {Clause0_Item : Type _} {Clause1_Item : Type _} (IteratorInst : Iterator A
@@ -3903,10 +2315,6 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
     (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1))
   (size_hint := Iterator.size_hint.default (Clause0_Item × Clause1_Item))
   (count := Iterator.count.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1))
-  (last := Iterator.last.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1))
-  (nth := Iterator.nth.default (Zip.Insts.Nonpos_iteratorIteratorPair
     IteratorInst IteratorInst1))
   (step_by := Iterator.step_by.default (Clause0_Item × Clause1_Item))
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorPPairPInst :
@@ -3927,10 +2335,6 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
   (map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTuplePairPInst :
     core.ops.function.FnMut F (Clause0_Item × Clause1_Item) B1) =>
     Iterator.map.default coreopsfunctionFnMutPTuplePairPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePairTupleInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Unit) =>
-    Iterator.for_each.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePairTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPairBoolInst :
     core.ops.function.FnMut P (Clause0_Item × Clause1_Item) Bool) =>
     Iterator.filter.default coreopsfunctionFnMutPTupleSharedPairBoolInst)
@@ -3980,25 +2384,10 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
     core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Unit) =>
     Iterator.inspect.default coreopsfunctionFnMutPTupleSharedPairTupleInst)
   (by_ref := Iterator.by_ref.default (Clause0_Item × Clause1_Item))
-  (collect := fun {B1 : Type} (FromIteratorPPairInst : FromIterator B1
-    (Clause0_Item × Clause1_Item)) => Iterator.collect.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    FromIteratorPPairInst)
   (collect_into := fun {E : Type} (ExtendPPairInst : Extend E (Clause0_Item ×
     Clause1_Item)) => Iterator.collect_into.default
     (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
     ExtendPPairInst)
-  (partition := fun {B1 : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B1) (ExtendPPairInst : Extend B1 (Clause0_Item ×
-    Clause1_Item)) (coreopsfunctionFnMutPTupleSharedPairBoolInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.partition.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1) coredefaultDefaultInst ExtendPPairInst
-    coreopsfunctionFnMutPTupleSharedPairBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePairBoolInst :
-    core.ops.function.FnMut P (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.is_partitioned.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePairBoolInst)
   (fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPPairPInst :
     core.ops.function.FnMut F (B1 × (Clause0_Item × Clause1_Item)) B1) =>
     Iterator.fold.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
@@ -4008,57 +2397,6 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
     × Clause1_Item)) (Clause0_Item × Clause1_Item)) =>
     Iterator.reduce.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
     IteratorInst1) coreopsfunctionFnMutPPairPairPairPairInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePairBoolInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.all.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPTuplePairBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePairBoolInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.any.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPTuplePairBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PairBoolInst :
-    core.ops.function.FnMut P (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.find.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) coreopsfunctionFnMutPTupleShared0PairBoolInst)
-  (find_map := fun {B1 : Type} {F : Type}
-    (coreopsfunctionFnMutPTuplePairOptionInst : core.ops.function.FnMut F
-    (Clause0_Item × Clause1_Item) (Option B1)) => Iterator.find_map.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePairOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePairBoolInst :
-    core.ops.function.FnMut P (Clause0_Item × Clause1_Item) Bool) =>
-    Iterator.position.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1) coreopsfunctionFnMutPTuplePairBoolInst)
-  (max := fun (corecmpOrdPairInst : core.cmp.Ord (Clause0_Item ×
-    Clause1_Item)) => Iterator.max.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    corecmpOrdPairInst)
-  (min := fun (corecmpOrdPairInst : core.cmp.Ord (Clause0_Item ×
-    Clause1_Item)) => Iterator.min.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    corecmpOrdPairInst)
-  (max_by_key := fun {B1 : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedPairPInst : core.ops.function.FnMut F
-    (Clause0_Item × Clause1_Item) B1) => Iterator.max_by_key.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPairPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPairSharedPairOrderingInst :
-    core.ops.function.FnMut F ((Clause0_Item × Clause1_Item) × (Clause0_Item
-    × Clause1_Item)) Ordering) => Iterator.max_by.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPPairSharedPairSharedPairOrderingInst)
-  (min_by_key := fun {B1 : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedPairPInst : core.ops.function.FnMut F
-    (Clause0_Item × Clause1_Item) B1) => Iterator.min_by_key.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPairPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPairSharedPairOrderingInst :
-    core.ops.function.FnMut F ((Clause0_Item × Clause1_Item) × (Clause0_Item
-    × Clause1_Item)) Ordering) => Iterator.min_by.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPPairSharedPairSharedPairOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorZipPInst :
     DoubleEndedIterator (Zip A B) Clause0_Clause0_Item) => Iterator.rev.default
     (Clause0_Item × Clause1_Item) DoubleEndedIteratorZipPInst)
@@ -4074,23 +2412,12 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
     Clause1_Item)) => Iterator.product.default
     (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
     ProductPPairInst)
-  (cmp := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorPPairPInst :
-    IntoIterator I (Clause0_Item × Clause1_Item) Clause0_IntoIter)
-    (corecmpOrdPairInst : core.cmp.Ord (Clause0_Item × Clause1_Item)) =>
-    Iterator.cmp.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
-    IteratorInst1) IntoIteratorPPairPInst corecmpOrdPairInst)
   (cmp_by := fun {I : Type} {F : Type} {Clause0_Item1 : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
     (coreopsfunctionFnMutPPairPairPOrderingInst : core.ops.function.FnMut F
     ((Clause0_Item × Clause1_Item) × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst
     IteratorInst1) IntoIteratorInst coreopsfunctionFnMutPPairPairPOrderingInst)
-  (partial_cmp := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairPInst : core.cmp.PartialOrd (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.partial_cmp.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialOrdPairPInst)
   (partial_cmp_by := fun {I : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairPairPOptionOrderingInst :
@@ -4098,58 +2425,6 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
     (Option Ordering)) => Iterator.partial_cmp_by.default
     (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
     IntoIteratorInst coreopsfunctionFnMutPPairPairPOptionOrderingInst)
-  (eq := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqPairPInst : core.cmp.PartialEq (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.eq.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialEqPairPInst)
-  (ne := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqPairPInst : core.cmp.PartialEq (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.ne.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialEqPairPInst)
-  (lt := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairPInst : core.cmp.PartialOrd (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.lt.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialOrdPairPInst)
-  (le := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairPInst : core.cmp.PartialOrd (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.le.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialOrdPairPInst)
-  (gt := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairPInst : core.cmp.PartialOrd (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.gt.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialOrdPairPInst)
-  (ge := fun {I : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairPInst : core.cmp.PartialOrd (Clause0_Item ×
-    Clause1_Item) Clause0_Item1) => Iterator.ge.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    IntoIteratorInst corecmpPartialOrdPairPInst)
-  (is_sorted := fun (corecmpPartialOrdPairPairInst : core.cmp.PartialOrd
-    (Clause0_Item × Clause1_Item) (Clause0_Item × Clause1_Item)) =>
-    Iterator.is_sorted.default (Zip.Insts.Nonpos_iteratorIteratorPair
-    IteratorInst IteratorInst1) corecmpPartialOrdPairPairInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPairSharedPairBoolInst :
-    core.ops.function.FnMut F ((Clause0_Item × Clause1_Item) × (Clause0_Item
-    × Clause1_Item)) Bool) => Iterator.is_sorted_by.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPPairSharedPairSharedPairBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePairPInst : core.ops.function.FnMut F
-    (Clause0_Item × Clause1_Item) K) (corecmpPartialOrdInst :
-    core.cmp.PartialOrd K K) => Iterator.is_sorted_by_key.default
-    (Zip.Insts.Nonpos_iteratorIteratorPair IteratorInst IteratorInst1)
-    coreopsfunctionFnMutPTuplePairPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceZipInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Zip A B)) =>
@@ -4159,7 +2434,7 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Intersperse<I, Clause0_Item>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1510:4-1526:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1681:4-1697:5
     Visibility: public -/
 def Intersperse.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4186,7 +2461,7 @@ nonpos_continuity Intersperse.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Intersperse<I, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1505:0-1527:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1676:0-1698:1 -/
 @[reducible]
 def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   Type _} (IteratorInst : Iterator I Clause0_Item) (corecloneCloneInst :
@@ -4199,10 +2474,6 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     corecloneCloneInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst))
-  (last := Iterator.last.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst))
-  (nth := Iterator.nth.default (Intersperse.Insts.Nonpos_iteratorIterator
     IteratorInst corecloneCloneInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -4223,10 +2494,6 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -4275,23 +2542,9 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Intersperse.Insts.Nonpos_iteratorIterator
     IteratorInst corecloneCloneInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
@@ -4300,54 +2553,6 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (Intersperse.Insts.Nonpos_iteratorIterator
     IteratorInst corecloneCloneInst) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type}
     (DoubleEndedIteratorInterspersePInst : DoubleEndedIterator (Intersperse I
     Clause0_Item) Clause0_Clause0_Item) => Iterator.rev.default Clause0_Item
@@ -4364,11 +2569,6 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (Intersperse.Insts.Nonpos_iteratorIterator
     IteratorInst corecloneCloneInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -4376,11 +2576,6 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     Iterator.cmp_by.default (Intersperse.Insts.Nonpos_iteratorIterator
     IteratorInst corecloneCloneInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Intersperse.Insts.Nonpos_iteratorIterator
-    IteratorInst corecloneCloneInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -4388,51 +2583,6 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
     Ordering)) => Iterator.partial_cmp_by.default
     (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst
-    corecloneCloneInst) IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst
-    corecloneCloneInst) IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst
-    corecloneCloneInst) IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst
-    corecloneCloneInst) IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst
-    corecloneCloneInst) IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst
-    corecloneCloneInst) IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default
-    (Intersperse.Insts.Nonpos_iteratorIterator IteratorInst corecloneCloneInst)
-    coreopsfunctionFnMutPTupleKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceIntersperseInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Intersperse I
@@ -4442,7 +2592,7 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::IntersperseWith<I, G, Clause0_Item>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1550:4-1566:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1721:4-1737:5
     Visibility: public -/
 def IntersperseWith.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {G : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -4471,7 +2621,7 @@ nonpos_continuity IntersperseWith.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::IntersperseWith<I, G, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1548:0-1567:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1719:0-1738:1 -/
 @[reducible]
 def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4487,10 +2637,6 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
   (count := Iterator.count.default
     (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutGTupleClause0_ItemInst))
-  (last := Iterator.last.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst))
-  (nth := Iterator.nth.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U Clause0_Item Clause0_IntoIter) => Iterator.chain.default
@@ -4512,11 +2658,6 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -4567,26 +2708,10 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default
     (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutGTupleClause0_ItemInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
@@ -4596,61 +2721,6 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
     Iterator.reduce.default (IntersperseWith.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type}
     (DoubleEndedIteratorIntersperseWithPInst : DoubleEndedIterator
     (IntersperseWith I G Clause0_Item) Clause0_Clause0_Item) =>
@@ -4667,12 +2737,6 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (IntersperseWith.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -4680,12 +2744,6 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
     Iterator.cmp_by.default (IntersperseWith.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -4694,59 +2752,6 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
     (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (IntersperseWith.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutGTupleClause0_ItemInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default
-    (IntersperseWith.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutGTupleClause0_ItemInst)
-    coreopsfunctionFnMutPTuplePPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceIntersperseWithInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (IntersperseWith I G
@@ -4756,7 +2761,7 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1581:4-1586:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1752:4-1757:5
     Visibility: public -/
 def Map.Insts.Nonpos_iteratorIterator.next
   {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst
@@ -4775,7 +2780,7 @@ nonpos_continuity Map.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1579:0-1587:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1750:0-1758:1 -/
 @[reducible]
 def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4789,10 +2794,6 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
   (size_hint := Iterator.size_hint.default B)
   (count := Iterator.count.default (Map.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst))
-  (last := Iterator.last.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst))
-  (nth := Iterator.nth.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst))
   (step_by := Iterator.step_by.default B)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
     IntoIterator U B Clause0_IntoIter) => Iterator.chain.default
@@ -4813,11 +2814,6 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
   (map := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPTupleBPInst :
     core.ops.function.FnMut F1 B B1) => Iterator.map.default
     coreopsfunctionFnMutPTupleBPInst)
-  (for_each := fun {F1 : Type} (coreopsfunctionFnMutPTupleFTupleInst :
-    core.ops.function.FnMut F1 B Unit) => Iterator.for_each.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleFTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P B Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -4866,24 +2862,9 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
     core.ops.function.FnMut F1 B Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedFTupleInst)
   (by_ref := Iterator.by_ref.default B)
-  (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 B) =>
-    Iterator.collect.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E B) =>
     Iterator.collect_into.default (Map.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst) ExtendInst)
-  (partition := fun {B1 : Type} {F1 : Type} (coredefaultDefaultInst :
-    core.default.Default B1) (ExtendInst : Extend B1 B)
-    (coreopsfunctionFnMutPTupleSharedBBoolInst : core.ops.function.FnMut F1 B
-    Bool) => Iterator.partition.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedBBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P B Bool) => Iterator.is_partitioned.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F1 (B1 × B) B1) => Iterator.fold.default
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
@@ -4894,60 +2875,6 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
     (Map.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemBInst)
     coreopsfunctionFnMutPPairFInst)
-  (all := fun {F1 : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F1 B Bool) => Iterator.all.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (any := fun {F1 : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F1 B Bool) => Iterator.any.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P B Bool) => Iterator.find.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B1 : Type} {F1 : Type}
-    (coreopsfunctionFnMutPTupleBOptionInst : core.ops.function.FnMut F1 B
-    (Option B1)) => Iterator.find_map.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleBOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P B Bool) => Iterator.position.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.max.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.min.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpOrdInst)
-  (max_by_key := fun {B1 : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F1 B B1)
-    => Iterator.max_by_key.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedBPInst)
-  (max_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F1 (B × B) Ordering) => Iterator.max_by.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
-  (min_by_key := fun {B1 : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F1 B B1)
-    => Iterator.min_by_key.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedBPInst)
-  (min_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F1 (B × B) Ordering) => Iterator.min_by.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorMapPInst :
     DoubleEndedIterator (Map I F) Clause0_Clause0_Item) => Iterator.rev.default
     B DoubleEndedIteratorMapPInst)
@@ -4962,11 +2889,6 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
   (product := fun {P : Type} (ProductInst : Product P B) =>
     Iterator.product.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemBInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 B Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord B) =>
-    Iterator.cmp.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -4974,12 +2896,6 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
     Iterator.cmp_by.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.partial_cmp.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -4987,57 +2903,6 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
     Iterator.partial_cmp_by.default (Map.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq B Clause0_Item1) =>
-    Iterator.eq.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq B Clause0_Item1) =>
-    Iterator.ne.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.lt.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.le.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.gt.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.ge.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd B B) =>
-    Iterator.is_sorted.default (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFBoolInst : core.ops.function.FnMut
-    F1 (B × B) Bool) => Iterator.is_sorted_by.default
-    (Map.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPPairSharedFSharedFBoolInst)
-  (is_sorted_by_key := fun {F1 : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleFPInst : core.ops.function.FnMut F1 B K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Map.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemBInst)
-    coreopsfunctionFnMutPTupleFPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceMapInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Map I F)) =>
@@ -5047,7 +2912,7 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1602:8-1608:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1773:8-1779:5
     Visibility: public -/
 @[rust_loop_body]
 def Filter.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -5069,7 +2934,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1602:8-1608:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1773:8-1779:5
     Visibility: public -/
 @[rust_loop]
 def Filter.Insts.Nonpos_iteratorIterator.next_loop
@@ -5085,7 +2950,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1601:4-1608:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1772:4-1779:5
     Visibility: public -/
 def Filter.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -5101,7 +2966,7 @@ nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1599:0-1609:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1770:0-1780:1 -/
 @[reducible]
 def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -5115,10 +2980,6 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
-  (last := Iterator.last.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
-  (nth := Iterator.nth.default (Filter.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -5140,11 +3001,6 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P1 : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -5194,27 +3050,10 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Filter.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Filter.Insts.Nonpos_iteratorIterator IteratorInst
@@ -5225,61 +3064,6 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.reduce.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P1 : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.find.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.position.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFilterPInst :
     DoubleEndedIterator (Filter I P) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorFilterPInst)
@@ -5294,12 +3078,6 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   (product := fun {P1 : Type} (ProductInst : Product P1 Clause0_Item) =>
     Iterator.product.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -5307,12 +3085,6 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.cmp_by.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -5321,59 +3093,6 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     (Filter.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Filter.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Filter.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceFilterInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Filter I P)) =>
@@ -5383,7 +3102,7 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1624:8-1631:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1795:8-1802:5
     Visibility: public -/
 @[rust_loop_body]
 def FilterMap.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -5404,7 +3123,7 @@ def FilterMap.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity FilterMap.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1624:8-1631:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1795:8-1802:5
     Visibility: public -/
 @[rust_loop]
 def FilterMap.Insts.Nonpos_iteratorIterator.next_loop
@@ -5420,7 +3139,7 @@ def FilterMap.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity FilterMap.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1623:4-1631:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1794:4-1802:5
     Visibility: public -/
 def FilterMap.Insts.Nonpos_iteratorIterator.next
   {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst
@@ -5436,7 +3155,7 @@ nonpos_continuity FilterMap.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1621:0-1632:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1792:0-1803:1 -/
 @[reducible]
 def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
   Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -5449,10 +3168,6 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
     coreopsfunctionFnMutFTupleClause0_ItemOptionInst))
   (size_hint := Iterator.size_hint.default B)
   (count := Iterator.count.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst))
-  (last := Iterator.last.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst))
-  (nth := Iterator.nth.default (FilterMap.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst))
   (step_by := Iterator.step_by.default B)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -5474,11 +3189,6 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
   (map := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPTupleBPInst :
     core.ops.function.FnMut F1 B B1) => Iterator.map.default
     coreopsfunctionFnMutPTupleBPInst)
-  (for_each := fun {F1 : Type} (coreopsfunctionFnMutPTupleFTupleInst :
-    core.ops.function.FnMut F1 B Unit) => Iterator.for_each.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P B Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -5529,25 +3239,9 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
     core.ops.function.FnMut F1 B Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedFTupleInst)
   (by_ref := Iterator.by_ref.default B)
-  (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 B) =>
-    Iterator.collect.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E B) =>
     Iterator.collect_into.default (FilterMap.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst) ExtendInst)
-  (partition := fun {B1 : Type} {F1 : Type} (coredefaultDefaultInst :
-    core.default.Default B1) (ExtendInst : Extend B1 B)
-    (coreopsfunctionFnMutPTupleSharedBBoolInst : core.ops.function.FnMut F1 B
-    Bool) => Iterator.partition.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedBBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P B Bool) => Iterator.is_partitioned.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B1 : Type} {F1 : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F1 (B1 × B) B1) => Iterator.fold.default
     (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
@@ -5558,60 +3252,6 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
     (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
     coreopsfunctionFnMutPPairFInst)
-  (all := fun {F1 : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F1 B Bool) => Iterator.all.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (any := fun {F1 : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F1 B Bool) => Iterator.any.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P B Bool) => Iterator.find.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B1 : Type} {F1 : Type}
-    (coreopsfunctionFnMutPTupleBOptionInst : core.ops.function.FnMut F1 B
-    (Option B1)) => Iterator.find_map.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleBOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P B Bool) => Iterator.position.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.max.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.min.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) corecmpOrdInst)
-  (max_by_key := fun {B1 : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F1 B B1)
-    => Iterator.max_by_key.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedBPInst)
-  (max_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F1 (B × B) Ordering) => Iterator.max_by.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
-  (min_by_key := fun {B1 : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F1 B B1)
-    => Iterator.min_by_key.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedBPInst)
-  (min_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F1 (B × B) Ordering) => Iterator.min_by.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFilterMapPInst
     : DoubleEndedIterator (FilterMap I F) Clause0_Clause0_Item) =>
     Iterator.rev.default B DoubleEndedIteratorFilterMapPInst)
@@ -5626,11 +3266,6 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
   (product := fun {P : Type} (ProductInst : Product P B) =>
     Iterator.product.default (FilterMap.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 B Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord B) =>
-    Iterator.cmp.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -5638,12 +3273,6 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
     Iterator.cmp_by.default (FilterMap.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.partial_cmp.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -5651,58 +3280,6 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
     Iterator.partial_cmp_by.default (FilterMap.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq B Clause0_Item1) =>
-    Iterator.eq.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq B Clause0_Item1) =>
-    Iterator.ne.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.lt.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.le.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.gt.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.ge.default (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd B B) =>
-    Iterator.is_sorted.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFBoolInst : core.ops.function.FnMut
-    F1 (B × B) Bool) => Iterator.is_sorted_by.default
-    (FilterMap.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPPairSharedFSharedFBoolInst)
-  (is_sorted_by_key := fun {F1 : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleFPInst : core.ops.function.FnMut F1 B K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (FilterMap.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceFilterMapInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (FilterMap I F)) =>
@@ -5712,7 +3289,7 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1646:4-1654:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1817:4-1825:5
     Visibility: public -/
 def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -5729,7 +3306,7 @@ nonpos_continuity Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.n
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1644:0-1655:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1815:0-1826:1 -/
 @[reducible]
 def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator
@@ -5741,12 +3318,6 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
     IteratorInst))
   (size_hint := Iterator.size_hint.default (Std.Usize × Clause0_Item))
   (count := Iterator.count.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
-    IteratorInst))
-  (last := Iterator.last.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
-    IteratorInst))
-  (nth := Iterator.nth.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item
     IteratorInst))
   (step_by := Iterator.step_by.default (Std.Usize × Clause0_Item))
@@ -5771,11 +3342,6 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePairUsizeFPInst
     : core.ops.function.FnMut F (Std.Usize × Clause0_Item) B) =>
     Iterator.map.default coreopsfunctionFnMutPTuplePairUsizeFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePTupleInst :
-    core.ops.function.FnMut F (Std.Usize × Clause0_Item) Unit) =>
-    Iterator.for_each.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPairUsizePBoolInst
     : core.ops.function.FnMut P (Std.Usize × Clause0_Item) Bool) =>
     Iterator.filter.default coreopsfunctionFnMutPTupleSharedPairUsizePBoolInst)
@@ -5832,27 +3398,10 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
     Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPairUsizePTupleInst)
   (by_ref := Iterator.by_ref.default (Std.Usize × Clause0_Item))
-  (collect := fun {B : Type} (FromIteratorPPairUsizePInst : FromIterator B
-    (Std.Usize × Clause0_Item)) => Iterator.collect.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    FromIteratorPPairUsizePInst)
   (collect_into := fun {E : Type} (ExtendPPairUsizePInst : Extend E (Std.Usize
     × Clause0_Item)) => Iterator.collect_into.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
     ExtendPPairUsizePInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendPPairUsizeFInst : Extend B (Std.Usize ×
-    Clause0_Item)) (coreopsfunctionFnMutPTupleSharedPairUsizeFBoolInst :
-    core.ops.function.FnMut F (Std.Usize × Clause0_Item) Bool) =>
-    Iterator.partition.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coredefaultDefaultInst ExtendPPairUsizeFInst
-    coreopsfunctionFnMutPTupleSharedPairUsizeFBoolInst)
-  (is_partitioned := fun {P : Type}
-    (coreopsfunctionFnMutPTuplePairUsizePBoolInst : core.ops.function.FnMut P
-    (Std.Usize × Clause0_Item) Bool) => Iterator.is_partitioned.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPPairUsizeFPInst
     : core.ops.function.FnMut F (B × (Std.Usize × Clause0_Item)) B) =>
     Iterator.fold.default
@@ -5864,61 +3413,6 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
     Clause0_Item)) (Std.Usize × Clause0_Item)) => Iterator.reduce.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
     coreopsfunctionFnMutPPairPairUsizePPairUsizePPairUsizePInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePBoolInst :
-    core.ops.function.FnMut F (Std.Usize × Clause0_Item) Bool) =>
-    Iterator.all.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePairUsizePBoolInst :
-    core.ops.function.FnMut F (Std.Usize × Clause0_Item) Bool) =>
-    Iterator.any.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PairUsizePBoolInst
-    : core.ops.function.FnMut P (Std.Usize × Clause0_Item) Bool) =>
-    Iterator.find.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PairUsizePBoolInst)
-  (find_map := fun {B : Type} {F : Type}
-    (coreopsfunctionFnMutPTuplePairUsizeFOptionInst : core.ops.function.FnMut F
-    (Std.Usize × Clause0_Item) (Option B)) => Iterator.find_map.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizeFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePairUsizePBoolInst :
-    core.ops.function.FnMut P (Std.Usize × Clause0_Item) Bool) =>
-    Iterator.position.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizePBoolInst)
-  (max := fun (corecmpOrdPairUsizePInst : core.cmp.Ord (Std.Usize ×
-    Clause0_Item)) => Iterator.max.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    corecmpOrdPairUsizePInst)
-  (min := fun (corecmpOrdPairUsizePInst : core.cmp.Ord (Std.Usize ×
-    Clause0_Item)) => Iterator.min.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    corecmpOrdPairUsizePInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPairUsizeFPInst : core.ops.function.FnMut
-    F (Std.Usize × Clause0_Item) B) => Iterator.max_by_key.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPairUsizeFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPairUsizePSharedPairUsizePOrderingInst :
-    core.ops.function.FnMut F ((Std.Usize × Clause0_Item) × (Std.Usize ×
-    Clause0_Item)) Ordering) => Iterator.max_by.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPPairSharedPairUsizePSharedPairUsizePOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPairUsizeFPInst : core.ops.function.FnMut
-    F (Std.Usize × Clause0_Item) B) => Iterator.min_by_key.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPairUsizeFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPairUsizePSharedPairUsizePOrderingInst :
-    core.ops.function.FnMut F ((Std.Usize × Clause0_Item) × (Std.Usize ×
-    Clause0_Item)) Ordering) => Iterator.min_by.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPPairSharedPairUsizePSharedPairUsizePOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorEnumeratePInst
     : DoubleEndedIterator (Enumerate I) Clause0_Clause0_Item) =>
     Iterator.rev.default (Std.Usize × Clause0_Item)
@@ -5937,13 +3431,6 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
     Clause0_Item)) => Iterator.product.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
     ProductPPairUsizePInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorPPairUsizeClause0_IntoIterPInst : IntoIterator I1 (Std.Usize
-    × Clause0_Item) Clause0_IntoIter) (corecmpOrdPairUsizeClause0_IntoIterInst
-    : core.cmp.Ord (Std.Usize × Clause0_Item)) => Iterator.cmp.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorPPairUsizeClause0_IntoIterPInst
-    corecmpOrdPairUsizeClause0_IntoIterInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairPairUsizeFPOrderingInst :
@@ -5951,12 +3438,6 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
     Ordering) => Iterator.cmp_by.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairPairUsizeFPOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairUsizeClause0_ItemPInst : core.cmp.PartialOrd
-    (Std.Usize × Clause0_Item) Clause0_Item1) => Iterator.partial_cmp.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialOrdPairUsizeClause0_ItemPInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairPairUsizeFPOptionOrderingInst :
@@ -5964,59 +3445,6 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
     (Option Ordering)) => Iterator.partial_cmp_by.default
     (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairPairUsizeFPOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqPairUsizeClause0_ItemPInst : core.cmp.PartialEq (Std.Usize
-    × Clause0_Item) Clause0_Item1) => Iterator.eq.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialEqPairUsizeClause0_ItemPInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqPairUsizeClause0_ItemPInst : core.cmp.PartialEq (Std.Usize
-    × Clause0_Item) Clause0_Item1) => Iterator.ne.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialEqPairUsizeClause0_ItemPInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairUsizeClause0_ItemPInst : core.cmp.PartialOrd
-    (Std.Usize × Clause0_Item) Clause0_Item1) => Iterator.lt.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialOrdPairUsizeClause0_ItemPInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairUsizeClause0_ItemPInst : core.cmp.PartialOrd
-    (Std.Usize × Clause0_Item) Clause0_Item1) => Iterator.le.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialOrdPairUsizeClause0_ItemPInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairUsizeClause0_ItemPInst : core.cmp.PartialOrd
-    (Std.Usize × Clause0_Item) Clause0_Item1) => Iterator.gt.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialOrdPairUsizeClause0_ItemPInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdPairUsizeClause0_ItemPInst : core.cmp.PartialOrd
-    (Std.Usize × Clause0_Item) Clause0_Item1) => Iterator.ge.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    IntoIteratorInst corecmpPartialOrdPairUsizeClause0_ItemPInst)
-  (is_sorted := fun (corecmpPartialOrdPairUsizePPairUsizePInst :
-    core.cmp.PartialOrd (Std.Usize × Clause0_Item) (Std.Usize ×
-    Clause0_Item)) => Iterator.is_sorted.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    corecmpPartialOrdPairUsizePPairUsizePInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPairUsizePSharedPairUsizePBoolInst :
-    core.ops.function.FnMut F ((Std.Usize × Clause0_Item) × (Std.Usize ×
-    Clause0_Item)) Bool) => Iterator.is_sorted_by.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPPairSharedPairUsizePSharedPairUsizePBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePairUsizeKPInst : core.ops.function.FnMut F
-    (Std.Usize × Clause0_Item) K) (corecmpPartialOrdInst : core.cmp.PartialOrd
-    K K) => Iterator.is_sorted_by_key.default
-    (Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item IteratorInst)
-    coreopsfunctionFnMutPTuplePairUsizeKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceEnumerateInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Enumerate I)) =>
@@ -6026,7 +3454,7 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1669:4-1674:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1840:4-1845:5
     Visibility: public -/
 def Peekable.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -6043,7 +3471,7 @@ nonpos_continuity Peekable.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1667:0-1675:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1838:0-1846:1 -/
 @[reducible]
 def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Peekable I Clause0_Item)
@@ -6053,10 +3481,6 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     (Peekable.Insts.Nonpos_iteratorIterator IteratorInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (last := Iterator.last.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (nth := Iterator.nth.default (Peekable.Insts.Nonpos_iteratorIterator
     IteratorInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -6076,10 +3500,6 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -6126,23 +3546,9 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Peekable.Insts.Nonpos_iteratorIterator
     IteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
@@ -6151,52 +3557,6 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (Peekable.Insts.Nonpos_iteratorIterator
     IteratorInst) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorPeekablePInst :
     DoubleEndedIterator (Peekable I Clause0_Item) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorPeekablePInst)
@@ -6210,22 +3570,12 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (Peekable.Insts.Nonpos_iteratorIterator
     IteratorInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (Peekable.Insts.Nonpos_iteratorIterator
     IteratorInst) IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -6233,50 +3583,6 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     Ordering)) => Iterator.partial_cmp_by.default
     (Peekable.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Peekable.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Peekable.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoercePeekableInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Peekable I
@@ -6286,7 +3592,7 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1691:8-1698:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1862:8-1869:5
     Visibility: public -/
 @[rust_loop_body]
 def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -6312,7 +3618,7 @@ def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity SkipWhile.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1691:8-1698:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1862:8-1869:5
     Visibility: public -/
 @[rust_loop]
 def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop
@@ -6328,7 +3634,7 @@ def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity SkipWhile.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1690:4-1698:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1861:4-1869:5
     Visibility: public -/
 def SkipWhile.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -6344,7 +3650,7 @@ nonpos_continuity SkipWhile.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1688:0-1699:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1859:0-1870:1 -/
 @[reducible]
 def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -6358,10 +3664,6 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
-  (last := Iterator.last.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
-  (nth := Iterator.nth.default (SkipWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -6383,11 +3685,6 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P1 : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -6438,27 +3735,10 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (SkipWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
@@ -6469,61 +3749,6 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.reduce.default (SkipWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P1 : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.find.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.position.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorSkipWhilePInst
     : DoubleEndedIterator (SkipWhile I P) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorSkipWhilePInst)
@@ -6539,12 +3764,6 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.product.default (SkipWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -6552,12 +3771,6 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.cmp_by.default (SkipWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -6566,59 +3779,6 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (SkipWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (SkipWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceSkipWhileInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (SkipWhile I P)) =>
@@ -6628,7 +3788,7 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::TakeWhile<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1714:4-1729:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1885:4-1900:5
     Visibility: public -/
 def TakeWhile.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -6653,7 +3813,7 @@ nonpos_continuity TakeWhile.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::TakeWhile<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1712:0-1730:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1883:0-1901:1 -/
 @[reducible]
 def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -6667,10 +3827,6 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
-  (last := Iterator.last.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
-  (nth := Iterator.nth.default (TakeWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -6692,11 +3848,6 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P1 : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -6747,27 +3898,10 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (TakeWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
@@ -6778,61 +3912,6 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.reduce.default (TakeWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P1 : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.find.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 Clause0_Item Bool) => Iterator.position.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorTakeWhilePInst
     : DoubleEndedIterator (TakeWhile I P) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorTakeWhilePInst)
@@ -6848,12 +3927,6 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.product.default (TakeWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -6861,12 +3934,6 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     Iterator.cmp_by.default (TakeWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -6875,59 +3942,6 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
     (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (TakeWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (TakeWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleSharedClause0_ItemBoolInst)
-    coreopsfunctionFnMutPTuplePPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceTakeWhileInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (TakeWhile I P)) =>
@@ -6937,7 +3951,7 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::MapWhile<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1744:4-1749:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1915:4-1920:5
     Visibility: public -/
 def MapWhile.Insts.Nonpos_iteratorIterator.next
   {B : Type _} {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst
@@ -6957,7 +3971,7 @@ nonpos_continuity MapWhile.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::MapWhile<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1742:0-1750:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1913:0-1921:1 -/
 @[reducible]
 def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
   Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -6970,10 +3984,6 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
     coreopsfunctionFnMutPTupleClause0_ItemOptionInst))
   (size_hint := Iterator.size_hint.default B)
   (count := Iterator.count.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst))
-  (last := Iterator.last.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst))
-  (nth := Iterator.nth.default (MapWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst))
   (step_by := Iterator.step_by.default B)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -6995,11 +4005,6 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
   (map := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPTupleBPInst :
     core.ops.function.FnMut F B B1) => Iterator.map.default
     coreopsfunctionFnMutPTupleBPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTupleFTupleInst :
-    core.ops.function.FnMut F B Unit) => Iterator.for_each.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFTupleInst)
   (filter := fun {P1 : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P1 B Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -7050,25 +4055,9 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
     core.ops.function.FnMut F B Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedFTupleInst)
   (by_ref := Iterator.by_ref.default B)
-  (collect := fun {B1 : Type} (FromIteratorInst : FromIterator B1 B) =>
-    Iterator.collect.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E B) =>
     Iterator.collect_into.default (MapWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst) ExtendInst)
-  (partition := fun {B1 : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B1) (ExtendInst : Extend B1 B)
-    (coreopsfunctionFnMutPTupleSharedBBoolInst : core.ops.function.FnMut F B
-    Bool) => Iterator.partition.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedBBoolInst)
-  (is_partitioned := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 B Bool) => Iterator.is_partitioned.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B1 : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B1 × B) B1) => Iterator.fold.default
     (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
@@ -7079,60 +4068,6 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
     (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
     coreopsfunctionFnMutPPairFInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F B Bool) => Iterator.all.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTupleFBoolInst :
-    core.ops.function.FnMut F B Bool) => Iterator.any.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFBoolInst)
-  (find := fun {P1 : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P1 B Bool) => Iterator.find.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B1 : Type} {F : Type}
-    (coreopsfunctionFnMutPTupleBOptionInst : core.ops.function.FnMut F B
-    (Option B1)) => Iterator.find_map.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleBOptionInst)
-  (position := fun {P1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P1 B Bool) => Iterator.position.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.max.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord B) => Iterator.min.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) corecmpOrdInst)
-  (max_by_key := fun {B1 : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F B B1)
-    => Iterator.max_by_key.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedBPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F (B × B) Ordering) => Iterator.max_by.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
-  (min_by_key := fun {B1 : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B1)
-    (coreopsfunctionFnMutPTupleSharedBPInst : core.ops.function.FnMut F B B1)
-    => Iterator.min_by_key.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedBPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFOrderingInst :
-    core.ops.function.FnMut F (B × B) Ordering) => Iterator.min_by.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPPairSharedFSharedFOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorMapWhilePInst :
     DoubleEndedIterator (MapWhile I P) Clause0_Clause0_Item) =>
     Iterator.rev.default B DoubleEndedIteratorMapWhilePInst)
@@ -7147,11 +4082,6 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
   (product := fun {P1 : Type} (ProductInst : Product P1 B) =>
     Iterator.product.default (MapWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 B Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord B) =>
-    Iterator.cmp.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -7159,12 +4089,6 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
     Iterator.cmp_by.default (MapWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.partial_cmp.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -7172,58 +4096,6 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
     Iterator.partial_cmp_by.default (MapWhile.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq B Clause0_Item1) =>
-    Iterator.eq.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq B Clause0_Item1) =>
-    Iterator.ne.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.lt.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.le.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.gt.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd B Clause0_Item1) =>
-    Iterator.ge.default (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd B B) =>
-    Iterator.is_sorted.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedFSharedFBoolInst : core.ops.function.FnMut
-    F (B × B) Bool) => Iterator.is_sorted_by.default
-    (MapWhile.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPPairSharedFSharedFBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleFPInst : core.ops.function.FnMut F B K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (MapWhile.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutPTupleClause0_ItemOptionInst)
-    coreopsfunctionFnMutPTupleFPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceMapWhileInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (MapWhile I P)) =>
@@ -7233,7 +4105,7 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1765:8-1773:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1936:8-1944:5
     Visibility: public -/
 @[rust_loop_body]
 def Skip.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -7253,7 +4125,7 @@ def Skip.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity Skip.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1765:8-1773:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1936:8-1944:5
     Visibility: public -/
 @[rust_loop]
 def Skip.Insts.Nonpos_iteratorIterator.next_loop
@@ -7268,7 +4140,7 @@ def Skip.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity Skip.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1764:4-1773:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1935:4-1944:5
     Visibility: public -/
 def Skip.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -7282,7 +4154,7 @@ nonpos_continuity Skip.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1762:0-1774:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1933:0-1945:1 -/
 @[reducible]
 def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Skip I) Clause0_Item
@@ -7292,10 +4164,6 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     (Skip.Insts.Nonpos_iteratorIterator IteratorInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Skip.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (last := Iterator.last.default (Skip.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (nth := Iterator.nth.default (Skip.Insts.Nonpos_iteratorIterator
     IteratorInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -7315,10 +4183,6 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -7365,22 +4229,9 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Skip.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Skip.Insts.Nonpos_iteratorIterator
     IteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Skip.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
@@ -7389,52 +4240,6 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorSkipPInst :
     DoubleEndedIterator (Skip I) Clause0_Clause0_Item) => Iterator.rev.default
     Clause0_Item DoubleEndedIteratorSkipPInst)
@@ -7447,22 +4252,12 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Skip.Insts.Nonpos_iteratorIterator
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -7470,49 +4265,6 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     Ordering)) => Iterator.partial_cmp_by.default
     (Skip.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Skip.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Skip.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceSkipInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Skip I)) =>
@@ -7522,7 +4274,7 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1788:4-1795:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1959:4-1966:5
     Visibility: public -/
 def Take.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -7539,7 +4291,7 @@ nonpos_continuity Take.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1786:0-1796:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1957:0-1967:1 -/
 @[reducible]
 def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Take I) Clause0_Item
@@ -7549,10 +4301,6 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     (Take.Insts.Nonpos_iteratorIterator IteratorInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (last := Iterator.last.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (nth := Iterator.nth.default (Take.Insts.Nonpos_iteratorIterator
     IteratorInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -7572,10 +4320,6 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -7622,22 +4366,9 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Take.Insts.Nonpos_iteratorIterator
     IteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Take.Insts.Nonpos_iteratorIterator IteratorInst)
@@ -7646,52 +4377,6 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorTakePInst :
     DoubleEndedIterator (Take I) Clause0_Clause0_Item) => Iterator.rev.default
     Clause0_Item DoubleEndedIteratorTakePInst)
@@ -7704,22 +4389,12 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -7727,49 +4402,6 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     Ordering)) => Iterator.partial_cmp_by.default
     (Take.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Take.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Take.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceTakeInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Take I)) =>
@@ -7779,7 +4411,7 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1835:8-1847:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2008:8-2020:5
     Visibility: public -/
 @[rust_loop_body]
 def FlatMap.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -7818,7 +4450,7 @@ def FlatMap.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity FlatMap.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1835:8-1847:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2008:8-2020:5
     Visibility: public -/
 @[rust_loop]
 def FlatMap.Insts.Nonpos_iteratorIterator.next_loop
@@ -7838,7 +4470,7 @@ def FlatMap.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity FlatMap.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1834:4-1847:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2007:4-2020:5
     Visibility: public -/
 def FlatMap.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {U : Type _} {F : Type _} {Clause0_Item : Type _} {Clause1_Item
@@ -7858,7 +4490,7 @@ nonpos_continuity FlatMap.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1832:0-1848:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2005:0-2021:1 -/
 @[reducible]
 def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
   Type _} {Clause0_Item : Type _} {Clause1_Item : Type _} {Clause1_IntoIter :
@@ -7874,10 +4506,6 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
     coreopsfunctionFnMutFTupleClause0_ItemUInst))
   (size_hint := Iterator.size_hint.default Clause1_Item)
   (count := Iterator.count.default (FlatMap.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst))
-  (last := Iterator.last.default (FlatMap.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst))
-  (nth := Iterator.nth.default (FlatMap.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst))
   (step_by := Iterator.step_by.default Clause1_Item)
   (chain := fun {U1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst1 :
@@ -7900,11 +4528,6 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
   (map := fun {B : Type} {F1 : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F1 Clause1_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F1 : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F1 Clause1_Item Unit) => Iterator.for_each.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause1_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -7954,26 +4577,10 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
     core.ops.function.FnMut F1 Clause1_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause1_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause1_Item)
-    => Iterator.collect.default (FlatMap.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause1_Item) =>
     Iterator.collect_into.default (FlatMap.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
     ExtendInst)
-  (partition := fun {B : Type} {F1 : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause1_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F1
-    Clause1_Item Bool) => Iterator.partition.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) =>
-    Iterator.is_partitioned.default (FlatMap.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F1 : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F1 (B × Clause1_Item) B) => Iterator.fold.default
     (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
@@ -7984,64 +4591,6 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
     Iterator.reduce.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
     IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F1 Clause1_Item Bool) => Iterator.all.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F1 Clause1_Item Bool) => Iterator.any.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) => Iterator.find.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F1 : Type}
-    (coreopsfunctionFnMutPTuplePOptionInst : core.ops.function.FnMut F1
-    Clause1_Item (Option B)) => Iterator.find_map.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) => Iterator.position.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause1_Item) =>
-    Iterator.max.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause1_Item) =>
-    Iterator.min.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F1
-    Clause1_Item B) => Iterator.max_by_key.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F1 (Clause1_Item × Clause1_Item) Ordering) =>
-    Iterator.max_by.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F1
-    Clause1_Item B) => Iterator.min_by_key.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F1 (Clause1_Item × Clause1_Item) Ordering) =>
-    Iterator.min_by.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFlatMapPInst :
     DoubleEndedIterator (FlatMap I U F Clause1_Item Clause1_IntoIter)
     Clause0_Clause0_Item) => Iterator.rev.default Clause1_Item
@@ -8059,12 +4608,6 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
     Iterator.product.default (FlatMap.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst1 :
-    IntoIterator I1 Clause1_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause1_Item) => Iterator.cmp.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst) IntoIteratorInst1
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst1 : IntoIterator I1
     Clause0_Item1 Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -8072,12 +4615,6 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
     Iterator.cmp_by.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
     IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
     IntoIteratorInst1 coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (FlatMap.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst1 : IntoIterator I1
     Clause0_Item1 Clause0_IntoIter)
@@ -8086,58 +4623,6 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
     Iterator.partial_cmp_by.default (FlatMap.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
     IntoIteratorInst1 coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause1_Item Clause0_Item1) =>
-    Iterator.eq.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause1_Item Clause0_Item1) =>
-    Iterator.ne.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.lt.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.le.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.gt.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.ge.default (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    IntoIteratorInst1 corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item
-    Clause1_Item) => Iterator.is_sorted.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F1 (Clause1_Item × Clause1_Item) Bool) => Iterator.is_sorted_by.default
-    (FlatMap.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst
-    coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F1 : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F1 Clause1_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (FlatMap.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst coreopsfunctionFnMutFTupleClause0_ItemUInst)
-    coreopsfunctionFnMutPTuplePPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceFlatMapInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (FlatMap I U F
@@ -8148,7 +4633,7 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1863:8-1875:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2036:8-2048:5
     Visibility: public -/
 @[rust_loop_body]
 def Flatten.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -8181,7 +4666,7 @@ def Flatten.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity Flatten.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1863:8-1875:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2036:8-2048:5
     Visibility: public -/
 @[rust_loop]
 def Flatten.Insts.Nonpos_iteratorIterator.next_loop
@@ -8198,7 +4683,7 @@ def Flatten.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity Flatten.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1862:4-1875:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2035:4-2048:5
     Visibility: public -/
 def Flatten.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -8216,7 +4701,7 @@ nonpos_continuity Flatten.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1860:0-1876:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2033:0-2049:1 -/
 @[reducible]
 def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   {Clause1_Item : Type _} {Clause1_IntoIter : Type _} (IteratorInst : Iterator
@@ -8229,10 +4714,6 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst))
   (size_hint := Iterator.size_hint.default Clause1_Item)
   (count := Iterator.count.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst))
-  (last := Iterator.last.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst))
-  (nth := Iterator.nth.default (Flatten.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst))
   (step_by := Iterator.step_by.default Clause1_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst1 :
@@ -8252,10 +4733,6 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F Clause1_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause1_Item Unit) => Iterator.for_each.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause1_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -8303,23 +4780,9 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F Clause1_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause1_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause1_Item)
-    => Iterator.collect.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause1_Item) =>
     Iterator.collect_into.default (Flatten.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause1_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F
-    Clause1_Item Bool) => Iterator.partition.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) =>
-    Iterator.is_partitioned.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause1_Item) B) => Iterator.fold.default
     (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
@@ -8328,52 +4791,6 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F (Clause1_Item × Clause1_Item) Clause1_Item) =>
     Iterator.reduce.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
     IntoIteratorInst) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause1_Item Bool) => Iterator.all.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause1_Item Bool) => Iterator.any.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) => Iterator.find.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTuplePOptionInst
-    : core.ops.function.FnMut F Clause1_Item (Option B)) =>
-    Iterator.find_map.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst) coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) => Iterator.position.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause1_Item) =>
-    Iterator.max.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause1_Item) =>
-    Iterator.min.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause1_Item B) => Iterator.max_by_key.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause1_Item × Clause1_Item) Ordering) =>
-    Iterator.max_by.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F
-    Clause1_Item B) => Iterator.min_by_key.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause1_Item × Clause1_Item) Ordering) =>
-    Iterator.min_by.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFlattenPInst :
     DoubleEndedIterator (Flatten I Clause0_Item Clause1_Item Clause1_IntoIter)
     Clause0_Clause0_Item) => Iterator.rev.default Clause1_Item
@@ -8389,22 +4806,12 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause1_Item) =>
     Iterator.product.default (Flatten.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst1 :
-    IntoIterator I1 Clause1_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause1_Item) => Iterator.cmp.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    IntoIteratorInst1 corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst1 : IntoIterator I1
     Clause0_Item1 Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
     core.ops.function.FnMut F (Clause1_Item × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
     IntoIteratorInst) IntoIteratorInst1 coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst) IntoIteratorInst1 corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst1 : IntoIterator I1
     Clause0_Item1 Clause0_IntoIter)
@@ -8413,51 +4820,6 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     Iterator.partial_cmp_by.default (Flatten.Insts.Nonpos_iteratorIterator
     IteratorInst IntoIteratorInst) IntoIteratorInst1
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause1_Item Clause0_Item1) =>
-    Iterator.eq.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) IntoIteratorInst1 corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause1_Item Clause0_Item1) =>
-    Iterator.ne.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) IntoIteratorInst1 corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.lt.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) IntoIteratorInst1 corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.le.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) IntoIteratorInst1 corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.gt.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) IntoIteratorInst1 corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst1 : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item1) =>
-    Iterator.ge.default (Flatten.Insts.Nonpos_iteratorIterator IteratorInst
-    IntoIteratorInst) IntoIteratorInst1 corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item
-    Clause1_Item) => Iterator.is_sorted.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause1_Item × Clause1_Item) Bool) => Iterator.is_sorted_by.default
-    (Flatten.Insts.Nonpos_iteratorIterator IteratorInst IntoIteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F Clause1_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Flatten.Insts.Nonpos_iteratorIterator
-    IteratorInst IntoIteratorInst) coreopsfunctionFnMutPTuplePPInst
-    corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceFlattenInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Flatten I Clause0_Item
@@ -8468,7 +4830,7 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Fuse<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1903:4-1914:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2076:4-2087:5
     Visibility: public -/
 def Fuse.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -8486,7 +4848,7 @@ nonpos_continuity Fuse.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Fuse<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1901:0-1915:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2074:0-2088:1 -/
 @[reducible]
 def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Fuse I) Clause0_Item
@@ -8496,10 +4858,6 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     (Fuse.Insts.Nonpos_iteratorIterator IteratorInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Fuse.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (last := Iterator.last.default (Fuse.Insts.Nonpos_iteratorIterator
-    IteratorInst))
-  (nth := Iterator.nth.default (Fuse.Insts.Nonpos_iteratorIterator
     IteratorInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -8519,10 +4877,6 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Item Unit) => Iterator.for_each.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -8569,22 +4923,9 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Fuse.Insts.Nonpos_iteratorIterator
-    IteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Fuse.Insts.Nonpos_iteratorIterator
     IteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Item Bool) => Iterator.partition.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst) coredefaultDefaultInst
-    ExtendInst coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Fuse.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Item) B) => Iterator.fold.default
     (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
@@ -8593,52 +4934,6 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Clause0_Item) =>
     Iterator.reduce.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.all.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Item Bool) => Iterator.any.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorFusePInst :
     DoubleEndedIterator (Fuse I) Clause0_Clause0_Item) => Iterator.rev.default
     Clause0_Item DoubleEndedIteratorFusePInst)
@@ -8651,22 +4946,12 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause0_Item) =>
     Iterator.product.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
     core.ops.function.FnMut F (Clause0_Item × Clause0_Item1) Ordering) =>
     Iterator.cmp_by.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Fuse.Insts.Nonpos_iteratorIterator
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -8674,49 +4959,6 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
     Ordering)) => Iterator.partial_cmp_by.default
     (Fuse.Insts.Nonpos_iteratorIterator IteratorInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Fuse.Insts.Nonpos_iteratorIterator IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Fuse.Insts.Nonpos_iteratorIterator
-    IteratorInst) coreopsfunctionFnMutPTupleKPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceFuseInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Fuse I)) =>
@@ -8726,7 +4968,7 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Inspect<I, F>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1929:4-1937:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2102:4-2110:5
     Visibility: public -/
 def Inspect.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -8745,7 +4987,7 @@ nonpos_continuity Inspect.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Inspect<I, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1927:0-1938:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2100:0-2111:1 -/
 @[reducible]
 def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -8759,10 +5001,6 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
     coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst))
   (size_hint := Iterator.size_hint.default Clause0_Item)
   (count := Iterator.count.default (Inspect.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst))
-  (last := Iterator.last.default (Inspect.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst))
-  (nth := Iterator.nth.default (Inspect.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst))
   (step_by := Iterator.step_by.default Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -8784,11 +5022,6 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
   (map := fun {B : Type} {F1 : Type} (coreopsfunctionFnMutPTuplePPInst :
     core.ops.function.FnMut F1 Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTuplePPInst)
-  (for_each := fun {F1 : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F1 Clause0_Item Unit) => Iterator.for_each.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -8838,27 +5071,10 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
     core.ops.function.FnMut F1 Clause0_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause0_Item)
-    => Iterator.collect.default (Inspect.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Item) =>
     Iterator.collect_into.default (Inspect.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
     ExtendInst)
-  (partition := fun {B : Type} {F1 : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedPBoolInst : core.ops.function.FnMut F1
-    Clause0_Item Bool) => Iterator.partition.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedPBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Inspect.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F1 : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F1 (B × Clause0_Item) B) => Iterator.fold.default
     (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
@@ -8869,62 +5085,6 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
     Iterator.reduce.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F1 Clause0_Item Bool) => Iterator.all.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F1 : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F1 Clause0_Item Bool) => Iterator.any.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.find.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F1 : Type}
-    (coreopsfunctionFnMutPTuplePOptionInst : core.ops.function.FnMut F1
-    Clause0_Item (Option B)) => Iterator.find_map.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Item Bool) => Iterator.position.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.max.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Item) =>
-    Iterator.min.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F1
-    Clause0_Item B) => Iterator.max_by_key.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (max_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F1 (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.max_by.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F1 : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedPPInst : core.ops.function.FnMut F1
-    Clause0_Item B) => Iterator.min_by_key.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedPPInst)
-  (min_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F1 (Clause0_Item × Clause0_Item) Ordering) =>
-    Iterator.min_by.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorInspectPInst :
     DoubleEndedIterator (Inspect I F) Clause0_Clause0_Item) =>
     Iterator.rev.default Clause0_Item DoubleEndedIteratorInspectPInst)
@@ -8940,12 +5100,6 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
     Iterator.product.default (Inspect.Insts.Nonpos_iteratorIterator
     IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
     ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Item) => Iterator.cmp.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOrderingInst :
@@ -8953,12 +5107,6 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
     Iterator.cmp_by.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.partial_cmp.default (Inspect.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F1 : Type} {Clause0_Item1 : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item1
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -8967,59 +5115,6 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
     (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
     coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.eq.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Item Clause0_Item1) =>
-    Iterator.ne.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.lt.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.le.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.gt.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item1 : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item1 Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item Clause0_Item1) =>
-    Iterator.ge.default (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Item
-    Clause0_Item) => Iterator.is_sorted.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F1 : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F1 (Clause0_Item × Clause0_Item) Bool) => Iterator.is_sorted_by.default
-    (Inspect.Insts.Nonpos_iteratorIterator IteratorInst
-    coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F1 : Type} {K : Type}
-    (coreopsfunctionFnMutPTuplePPInst : core.ops.function.FnMut F1 Clause0_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Inspect.Insts.Nonpos_iteratorIterator
-    IteratorInst coreopsfunctionFnMutFTupleSharedClause0_ItemTupleInst)
-    coreopsfunctionFnMutPTuplePPInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceInspectInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Inspect I F)) =>
@@ -9029,7 +5124,7 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1951:4-1953:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2124:4-2126:5
     Visibility: public -/
 def Rev.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Clause0_Item : Type _} (DoubleEndedIteratorInst :
@@ -9042,7 +5137,7 @@ nonpos_continuity Rev.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1949:0-1954:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2122:0-2127:1 -/
 @[reducible]
 def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
   Type _} (DoubleEndedIteratorInst : DoubleEndedIterator I
@@ -9052,10 +5147,6 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
     (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst))
   (size_hint := Iterator.size_hint.default Clause0_Clause0_Item)
   (count := Iterator.count.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst))
-  (last := Iterator.last.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst))
-  (nth := Iterator.nth.default (Rev.Insts.Nonpos_iteratorIterator
     DoubleEndedIteratorInst))
   (step_by := Iterator.step_by.default Clause0_Clause0_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -9076,10 +5167,6 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause0_Clause0_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause0_Clause0_Item Unit) =>
-    Iterator.for_each.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause0_Clause0_Item Bool) =>
     Iterator.filter.default coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -9127,24 +5214,9 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
     core.ops.function.FnMut F Clause0_Clause0_Item Unit) =>
     Iterator.inspect.default coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause0_Clause0_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B
-    Clause0_Clause0_Item) => Iterator.collect.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
-    FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause0_Clause0_Item)
     => Iterator.collect_into.default (Rev.Insts.Nonpos_iteratorIterator
     DoubleEndedIteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause0_Clause0_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause0_Clause0_Item Bool) => Iterator.partition.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Clause0_Item Bool) =>
-    Iterator.is_partitioned.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause0_Clause0_Item) B) =>
     Iterator.fold.default (Rev.Insts.Nonpos_iteratorIterator
@@ -9154,54 +5226,6 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
     Clause0_Clause0_Item) => Iterator.reduce.default
     (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
     coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Clause0_Item Bool) =>
-    Iterator.all.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause0_Clause0_Item Bool) =>
-    Iterator.any.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause0_Clause0_Item Bool) =>
-    Iterator.find.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause0_Clause0_Item (Option B)) =>
-    Iterator.find_map.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause0_Clause0_Item Bool) =>
-    Iterator.position.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause0_Clause0_Item) =>
-    Iterator.max.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause0_Clause0_Item) =>
-    Iterator.min.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Clause0_Item B) => Iterator.max_by_key.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Clause0_Item × Clause0_Clause0_Item)
-    Ordering) => Iterator.max_by.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause0_Clause0_Item B) => Iterator.min_by_key.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause0_Clause0_Item × Clause0_Clause0_Item)
-    Ordering) => Iterator.min_by.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item1 : Type} (DoubleEndedIteratorRevPInst :
     DoubleEndedIterator (Rev I) Clause0_Clause0_Item1) => Iterator.rev.default
     Clause0_Clause0_Item DoubleEndedIteratorRevPInst)
@@ -9215,23 +5239,12 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
   (product := fun {P : Type} (ProductInst : Product P Clause0_Clause0_Item) =>
     Iterator.product.default (Rev.Insts.Nonpos_iteratorIterator
     DoubleEndedIteratorInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause0_Clause0_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause0_Clause0_Item) => Iterator.cmp.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
-    IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F
     (Clause0_Clause0_Item × Clause0_Item) Ordering) => Iterator.cmp_by.default
     (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Clause0_Item
-    Clause0_Item) => Iterator.partial_cmp.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
-    IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -9239,51 +5252,6 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
     Ordering)) => Iterator.partial_cmp_by.default
     (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Clause0_Item
-    Clause0_Item) => Iterator.eq.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause0_Clause0_Item
-    Clause0_Item) => Iterator.ne.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Clause0_Item
-    Clause0_Item) => Iterator.lt.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Clause0_Item
-    Clause0_Item) => Iterator.le.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Clause0_Item
-    Clause0_Item) => Iterator.gt.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause0_Clause0_Item
-    Clause0_Item) => Iterator.ge.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd
-    Clause0_Clause0_Item Clause0_Clause0_Item) => Iterator.is_sorted.default
-    (Rev.Insts.Nonpos_iteratorIterator DoubleEndedIteratorInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause0_Clause0_Item × Clause0_Clause0_Item) Bool) =>
-    Iterator.is_sorted_by.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F
-    Clause0_Clause0_Item K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
-    => Iterator.is_sorted_by_key.default (Rev.Insts.Nonpos_iteratorIterator
-    DoubleEndedIteratorInst) coreopsfunctionFnMutPTupleKPInst
-    corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceRevInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Rev I)) =>
@@ -9293,13 +5261,18 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Copied]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1956:0-1958:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2129:0-2131:1
     Visibility: public -/
 structure Copied (I : Type _) where
   it : I
 
+/-- [nonpos_iterator::{nonpos_iterator::Copied<I>}::new]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 2134:4-2136:5 -/
+def Copied.new {I : Type _} (it : I) : Result (Copied I) := do
+  ok { it }
+
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Copied<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1961:4-1966:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2140:4-2145:5
     Visibility: public -/
 def Copied.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {T : Type _} (IteratorISharedATInst : Iterator I T)
@@ -9314,7 +5287,7 @@ nonpos_continuity Copied.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Copied<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1959:0-1967:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2138:0-2146:1 -/
 @[reducible]
 def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (IteratorISharedATInst : Iterator I T) (coremarkerCopyInst : core.marker.Copy
@@ -9326,10 +5299,6 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     coremarkerCopyInst))
   (size_hint := Iterator.size_hint.default T)
   (count := Iterator.count.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst))
-  (last := Iterator.last.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst))
-  (nth := Iterator.nth.default (Copied.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst coremarkerCopyInst))
   (step_by := Iterator.step_by.default T)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -9349,10 +5318,6 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F T B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F T Unit) => Iterator.for_each.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P T Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -9399,22 +5364,9 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     core.ops.function.FnMut F T Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default T)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B T) =>
-    Iterator.collect.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E T) =>
     Iterator.collect_into.default (Copied.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst coremarkerCopyInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B T)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F T
-    Bool) => Iterator.partition.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P T Bool) => Iterator.is_partitioned.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × T) B) => Iterator.fold.default
     (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
@@ -9423,52 +5375,6 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     core.ops.function.FnMut F (T × T) T) => Iterator.reduce.default
     (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
     coremarkerCopyInst) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F T Bool) => Iterator.all.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F T Bool) => Iterator.any.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P T Bool) => Iterator.find.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F T (Option B)) => Iterator.find_map.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P T Bool) => Iterator.position.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord T) => Iterator.max.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord T) => Iterator.min.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F T B) =>
-    Iterator.max_by_key.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (T × T) Ordering) => Iterator.max_by.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F T B) =>
-    Iterator.min_by_key.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (T × T) Ordering) => Iterator.min_by.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorCopiedPInst :
     DoubleEndedIterator (Copied I) Clause0_Clause0_Item) =>
     Iterator.rev.default T DoubleEndedIteratorCopiedPInst)
@@ -9483,22 +5389,12 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (product := fun {P : Type} (ProductInst : Product P T) =>
     Iterator.product.default (Copied.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst coremarkerCopyInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 T Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord T) =>
-    Iterator.cmp.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F (T ×
     Clause0_Item) Ordering) => Iterator.cmp_by.default
     (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
     coremarkerCopyInst) IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.partial_cmp.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -9506,56 +5402,6 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     Iterator.partial_cmp_by.default (Copied.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq T Clause0_Item) =>
-    Iterator.eq.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq T Clause0_Item) =>
-    Iterator.ne.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.lt.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.le.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.gt.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.ge.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd T T) =>
-    Iterator.is_sorted.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (T × T) Bool) => Iterator.is_sorted_by.default
-    (Copied.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    coremarkerCopyInst) coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F T K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Copied.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst coremarkerCopyInst) coreopsfunctionFnMutPTupleKPInst
-    corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceCopiedInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Copied I)) =>
@@ -9565,13 +5411,18 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Cloned]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1969:0-1971:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2148:0-2150:1
     Visibility: public -/
 structure Cloned (I : Type _) where
   it : I
 
+/-- [nonpos_iterator::{nonpos_iterator::Cloned<I>}::new]:
+    Source: 'tests/src/nonpos-iterator.rs', lines 2153:4-2155:5 -/
+def Cloned.new {I : Type _} (it : I) : Result (Cloned I) := do
+  ok { it }
+
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Cloned<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1974:4-1979:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2159:4-2164:5
     Visibility: public -/
 def Cloned.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {T : Type _} (IteratorISharedATInst : Iterator I T)
@@ -9587,7 +5438,7 @@ nonpos_continuity Cloned.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Cloned<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1972:0-1980:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2157:0-2165:1 -/
 @[reducible]
 def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (IteratorISharedATInst : Iterator I T) (corecloneCloneInst : core.clone.Clone
@@ -9599,10 +5450,6 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     corecloneCloneInst))
   (size_hint := Iterator.size_hint.default T)
   (count := Iterator.count.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst))
-  (last := Iterator.last.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst))
-  (nth := Iterator.nth.default (Cloned.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst corecloneCloneInst))
   (step_by := Iterator.step_by.default T)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -9622,10 +5469,6 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F T B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F T Unit) => Iterator.for_each.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P T Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -9672,22 +5515,9 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     core.ops.function.FnMut F T Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default T)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B T) =>
-    Iterator.collect.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E T) =>
     Iterator.collect_into.default (Cloned.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst corecloneCloneInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B T)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F T
-    Bool) => Iterator.partition.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P T Bool) => Iterator.is_partitioned.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × T) B) => Iterator.fold.default
     (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
@@ -9696,52 +5526,6 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     core.ops.function.FnMut F (T × T) T) => Iterator.reduce.default
     (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
     corecloneCloneInst) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F T Bool) => Iterator.all.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F T Bool) => Iterator.any.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P T Bool) => Iterator.find.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F T (Option B)) => Iterator.find_map.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P T Bool) => Iterator.position.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord T) => Iterator.max.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord T) => Iterator.min.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F T B) =>
-    Iterator.max_by_key.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (T × T) Ordering) => Iterator.max_by.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F T B) =>
-    Iterator.min_by_key.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (T × T) Ordering) => Iterator.min_by.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorClonedPInst :
     DoubleEndedIterator (Cloned I) Clause0_Clause0_Item) =>
     Iterator.rev.default T DoubleEndedIteratorClonedPInst)
@@ -9756,22 +5540,12 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (product := fun {P : Type} (ProductInst : Product P T) =>
     Iterator.product.default (Cloned.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst corecloneCloneInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 T Clause0_IntoIter) (corecmpOrdInst : core.cmp.Ord T) =>
-    Iterator.cmp.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F (T ×
     Clause0_Item) Ordering) => Iterator.cmp_by.default
     (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
     corecloneCloneInst) IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.partial_cmp.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -9779,56 +5553,6 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
     Iterator.partial_cmp_by.default (Cloned.Insts.Nonpos_iteratorIterator
     IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq T Clause0_Item) =>
-    Iterator.eq.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq T Clause0_Item) =>
-    Iterator.ne.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.lt.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.le.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.gt.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd T Clause0_Item) =>
-    Iterator.ge.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) IntoIteratorInst
-    corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd T T) =>
-    Iterator.is_sorted.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (T × T) Bool) => Iterator.is_sorted_by.default
-    (Cloned.Insts.Nonpos_iteratorIterator IteratorISharedATInst
-    corecloneCloneInst) coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F T K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Cloned.Insts.Nonpos_iteratorIterator
-    IteratorISharedATInst corecloneCloneInst) coreopsfunctionFnMutPTupleKPInst
-    corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceClonedInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Cloned I)) =>
@@ -9838,7 +5562,7 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Cycle<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1994:4-2002:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2180:4-2188:5
     Visibility: public -/
 def Cycle.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause1_Item : Type _} (corecloneCloneInst : core.clone.Clone
@@ -9856,7 +5580,7 @@ nonpos_continuity Cycle.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Cycle<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1992:0-2003:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2178:0-2189:1 -/
 @[reducible]
 def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
   (corecloneCloneInst : core.clone.Clone I) (IteratorInst : Iterator I
@@ -9867,10 +5591,6 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
     (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst))
   (size_hint := Iterator.size_hint.default Clause1_Item)
   (count := Iterator.count.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst))
-  (last := Iterator.last.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst))
-  (nth := Iterator.nth.default (Cycle.Insts.Nonpos_iteratorIterator
     corecloneCloneInst IteratorInst))
   (step_by := Iterator.step_by.default Clause1_Item)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -9890,10 +5610,6 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFPInst :
     core.ops.function.FnMut F Clause1_Item B) => Iterator.map.default
     coreopsfunctionFnMutPTupleFPInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTuplePTupleInst :
-    core.ops.function.FnMut F Clause1_Item Unit) => Iterator.for_each.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPTuplePTupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedPBoolInst :
     core.ops.function.FnMut P Clause1_Item Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedPBoolInst)
@@ -9941,23 +5657,9 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
     core.ops.function.FnMut F Clause1_Item Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedPTupleInst)
   (by_ref := Iterator.by_ref.default Clause1_Item)
-  (collect := fun {B : Type} (FromIteratorInst : FromIterator B Clause1_Item)
-    => Iterator.collect.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) FromIteratorInst)
   (collect_into := fun {E : Type} (ExtendInst : Extend E Clause1_Item) =>
     Iterator.collect_into.default (Cycle.Insts.Nonpos_iteratorIterator
     corecloneCloneInst IteratorInst) ExtendInst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendInst : Extend B Clause1_Item)
-    (coreopsfunctionFnMutPTupleSharedFBoolInst : core.ops.function.FnMut F
-    Clause1_Item Bool) => Iterator.partition.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coredefaultDefaultInst ExtendInst
-    coreopsfunctionFnMutPTupleSharedFBoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) =>
-    Iterator.is_partitioned.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) coreopsfunctionFnMutPTuplePBoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPInst :
     core.ops.function.FnMut F (B × Clause1_Item) B) => Iterator.fold.default
     (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
@@ -9966,54 +5668,6 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
     core.ops.function.FnMut F (Clause1_Item × Clause1_Item) Clause1_Item) =>
     Iterator.reduce.default (Cycle.Insts.Nonpos_iteratorIterator
     corecloneCloneInst IteratorInst) coreopsfunctionFnMutPPairPInst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause1_Item Bool) => Iterator.all.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut F Clause1_Item Bool) => Iterator.any.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0PBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) => Iterator.find.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPTupleShared0PBoolInst)
-  (find_map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleFOptionInst
-    : core.ops.function.FnMut F Clause1_Item (Option B)) =>
-    Iterator.find_map.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) coreopsfunctionFnMutPTupleFOptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTuplePBoolInst :
-    core.ops.function.FnMut P Clause1_Item Bool) => Iterator.position.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPTuplePBoolInst)
-  (max := fun (corecmpOrdInst : core.cmp.Ord Clause1_Item) =>
-    Iterator.max.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) corecmpOrdInst)
-  (min := fun (corecmpOrdInst : core.cmp.Ord Clause1_Item) =>
-    Iterator.min.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) corecmpOrdInst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause1_Item B) => Iterator.max_by_key.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedFPInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause1_Item × Clause1_Item) Ordering) =>
-    Iterator.max_by.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedFPInst : core.ops.function.FnMut F
-    Clause1_Item B) => Iterator.min_by_key.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    corecmpOrdInst coreopsfunctionFnMutPTupleSharedFPInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPOrderingInst :
-    core.ops.function.FnMut F (Clause1_Item × Clause1_Item) Ordering) =>
-    Iterator.min_by.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPOrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorCyclePInst :
     DoubleEndedIterator (Cycle I) Clause0_Clause0_Item) => Iterator.rev.default
     Clause1_Item DoubleEndedIteratorCyclePInst)
@@ -10027,22 +5681,12 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
   (product := fun {P : Type} (ProductInst : Product P Clause1_Item) =>
     Iterator.product.default (Cycle.Insts.Nonpos_iteratorIterator
     corecloneCloneInst IteratorInst) ProductInst)
-  (cmp := fun {I1 : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
-    IntoIterator I1 Clause1_Item Clause0_IntoIter) (corecmpOrdInst :
-    core.cmp.Ord Clause1_Item) => Iterator.cmp.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    IntoIteratorInst corecmpOrdInst)
   (cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairOrderingInst : core.ops.function.FnMut F
     (Clause1_Item × Clause0_Item) Ordering) => Iterator.cmp_by.default
     (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
     IntoIteratorInst coreopsfunctionFnMutPPairOrderingInst)
-  (partial_cmp := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item) =>
-    Iterator.partial_cmp.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
   (partial_cmp_by := fun {I1 : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I1 Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairOptionOrderingInst :
@@ -10050,51 +5694,6 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
     => Iterator.partial_cmp_by.default (Cycle.Insts.Nonpos_iteratorIterator
     corecloneCloneInst IteratorInst) IntoIteratorInst
     coreopsfunctionFnMutPPairOptionOrderingInst)
-  (eq := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause1_Item Clause0_Item) =>
-    Iterator.eq.default (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst
-    IteratorInst) IntoIteratorInst corecmpPartialEqInst)
-  (ne := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqInst : core.cmp.PartialEq Clause1_Item Clause0_Item) =>
-    Iterator.ne.default (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst
-    IteratorInst) IntoIteratorInst corecmpPartialEqInst)
-  (lt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item) =>
-    Iterator.lt.default (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (le := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item) =>
-    Iterator.le.default (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (gt := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item) =>
-    Iterator.gt.default (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (ge := fun {I1 : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I1 Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item Clause0_Item) =>
-    Iterator.ge.default (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst
-    IteratorInst) IntoIteratorInst corecmpPartialOrdInst)
-  (is_sorted := fun (corecmpPartialOrdInst : core.cmp.PartialOrd Clause1_Item
-    Clause1_Item) => Iterator.is_sorted.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    corecmpPartialOrdInst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedPSharedPBoolInst : core.ops.function.FnMut
-    F (Clause1_Item × Clause1_Item) Bool) => Iterator.is_sorted_by.default
-    (Cycle.Insts.Nonpos_iteratorIterator corecloneCloneInst IteratorInst)
-    coreopsfunctionFnMutPPairSharedPSharedPBoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleKPInst : core.ops.function.FnMut F Clause1_Item
-    K) (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default (Cycle.Insts.Nonpos_iteratorIterator
-    corecloneCloneInst IteratorInst) coreopsfunctionFnMutPTupleKPInst
-    corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceCycleInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Cycle I)) =>
@@ -10104,27 +5703,27 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Count]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2031:0-2033:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2217:0-2219:1
     Visibility: public -/
 structure Count where
   n : Std.U32
 
 /-- [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::Count}::clone]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2030:9-2030:14
+    Source: 'tests/src/nonpos-iterator.rs', lines 2216:9-2216:14
     Visibility: public -/
 def Count.Insts.CoreCloneClone.clone (self : Count) : Result Count := do
   let i ← lift (core.clone.impls.CloneU32.clone self.n)
   ok { n := i }
 
 /-- Trait implementation: [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2030:9-2030:14 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2216:9-2216:14 -/
 @[reducible]
 def Count.Insts.CoreCloneClone : core.clone.Clone Count := {
   clone := Count.Insts.CoreCloneClone.clone
 }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<u32> for nonpos_iterator::Count}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2036:4-2043:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2222:4-2229:5
     Visibility: public -/
 def Count.Insts.Nonpos_iteratorIteratorU32.next
   (self : Count) : Result ((Option Std.U32) × Count) := do
@@ -10135,7 +5734,7 @@ def Count.Insts.Nonpos_iteratorIteratorU32.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<u32> for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2034:0-2044:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2220:0-2230:1 -/
 @[reducible]
 def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
   := Iterator.mk
@@ -10144,8 +5743,6 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
     Count.Insts.Nonpos_iteratorIteratorU32)
   (size_hint := Iterator.size_hint.default Std.U32)
   (count := Iterator.count.default Count.Insts.Nonpos_iteratorIteratorU32)
-  (last := Iterator.last.default Count.Insts.Nonpos_iteratorIteratorU32)
-  (nth := Iterator.nth.default Count.Insts.Nonpos_iteratorIteratorU32)
   (step_by := Iterator.step_by.default Std.U32)
   (chain := fun {U : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst :
     IntoIterator U Std.U32 Clause0_IntoIter) => Iterator.chain.default
@@ -10164,10 +5761,6 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
   (map := fun {B : Type} {F : Type} (coreopsfunctionFnMutPTupleU32PInst :
     core.ops.function.FnMut F Std.U32 B) => Iterator.map.default
     coreopsfunctionFnMutPTupleU32PInst)
-  (for_each := fun {F : Type} (coreopsfunctionFnMutPTupleU32TupleInst :
-    core.ops.function.FnMut F Std.U32 Unit) => Iterator.for_each.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32TupleInst)
   (filter := fun {P : Type} (coreopsfunctionFnMutPTupleSharedU32BoolInst :
     core.ops.function.FnMut P Std.U32 Bool) => Iterator.filter.default
     coreopsfunctionFnMutPTupleSharedU32BoolInst)
@@ -10214,22 +5807,9 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
     core.ops.function.FnMut F Std.U32 Unit) => Iterator.inspect.default
     coreopsfunctionFnMutPTupleSharedU32TupleInst)
   (by_ref := Iterator.by_ref.default Std.U32)
-  (collect := fun {B : Type} (FromIteratorPU32Inst : FromIterator B Std.U32) =>
-    Iterator.collect.default Count.Insts.Nonpos_iteratorIteratorU32
-    FromIteratorPU32Inst)
   (collect_into := fun {E : Type} (ExtendPU32Inst : Extend E Std.U32) =>
     Iterator.collect_into.default Count.Insts.Nonpos_iteratorIteratorU32
     ExtendPU32Inst)
-  (partition := fun {B : Type} {F : Type} (coredefaultDefaultInst :
-    core.default.Default B) (ExtendPU32Inst : Extend B Std.U32)
-    (coreopsfunctionFnMutPTupleSharedU32BoolInst : core.ops.function.FnMut F
-    Std.U32 Bool) => Iterator.partition.default
-    Count.Insts.Nonpos_iteratorIteratorU32 coredefaultDefaultInst
-    ExtendPU32Inst coreopsfunctionFnMutPTupleSharedU32BoolInst)
-  (is_partitioned := fun {P : Type} (coreopsfunctionFnMutPTupleU32BoolInst :
-    core.ops.function.FnMut P Std.U32 Bool) => Iterator.is_partitioned.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32BoolInst)
   (fold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPU32PInst :
     core.ops.function.FnMut F (B × Std.U32) B) => Iterator.fold.default
     Count.Insts.Nonpos_iteratorIteratorU32 coreopsfunctionFnMutPPairPU32PInst)
@@ -10237,53 +5817,6 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
     core.ops.function.FnMut F (Std.U32 × Std.U32) Std.U32) =>
     Iterator.reduce.default Count.Insts.Nonpos_iteratorIteratorU32
     coreopsfunctionFnMutPPairU32U32U32Inst)
-  (all := fun {F : Type} (coreopsfunctionFnMutPTupleU32BoolInst :
-    core.ops.function.FnMut F Std.U32 Bool) => Iterator.all.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32BoolInst)
-  (any := fun {F : Type} (coreopsfunctionFnMutPTupleU32BoolInst :
-    core.ops.function.FnMut F Std.U32 Bool) => Iterator.any.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32BoolInst)
-  (find := fun {P : Type} (coreopsfunctionFnMutPTupleShared0U32BoolInst :
-    core.ops.function.FnMut P Std.U32 Bool) => Iterator.find.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleShared0U32BoolInst)
-  (find_map := fun {B : Type} {F : Type}
-    (coreopsfunctionFnMutPTupleU32OptionInst : core.ops.function.FnMut F
-    Std.U32 (Option B)) => Iterator.find_map.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32OptionInst)
-  (position := fun {P : Type} (coreopsfunctionFnMutPTupleU32BoolInst :
-    core.ops.function.FnMut P Std.U32 Bool) => Iterator.position.default
-    Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32BoolInst)
-  (max := fun (corecmpOrdU32Inst : core.cmp.Ord Std.U32) =>
-    Iterator.max.default Count.Insts.Nonpos_iteratorIteratorU32
-    corecmpOrdU32Inst)
-  (min := fun (corecmpOrdU32Inst : core.cmp.Ord Std.U32) =>
-    Iterator.min.default Count.Insts.Nonpos_iteratorIteratorU32
-    corecmpOrdU32Inst)
-  (max_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedU32PInst : core.ops.function.FnMut F
-    Std.U32 B) => Iterator.max_by_key.default
-    Count.Insts.Nonpos_iteratorIteratorU32 corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedU32PInst)
-  (max_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedU32SharedU32OrderingInst :
-    core.ops.function.FnMut F (Std.U32 × Std.U32) Ordering) =>
-    Iterator.max_by.default Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPPairSharedU32SharedU32OrderingInst)
-  (min_by_key := fun {B : Type} {F : Type} (corecmpOrdInst : core.cmp.Ord B)
-    (coreopsfunctionFnMutPTupleSharedU32PInst : core.ops.function.FnMut F
-    Std.U32 B) => Iterator.min_by_key.default
-    Count.Insts.Nonpos_iteratorIteratorU32 corecmpOrdInst
-    coreopsfunctionFnMutPTupleSharedU32PInst)
-  (min_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedU32SharedU32OrderingInst :
-    core.ops.function.FnMut F (Std.U32 × Std.U32) Ordering) =>
-    Iterator.min_by.default Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPPairSharedU32SharedU32OrderingInst)
   (rev := fun {Clause0_Clause0_Item : Type} (DoubleEndedIteratorCountPInst :
     DoubleEndedIterator Count Clause0_Clause0_Item) => Iterator.rev.default
     Std.U32 DoubleEndedIteratorCountPInst)
@@ -10296,70 +5829,18 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
   (product := fun {P : Type} (ProductPU32Inst : Product P Std.U32) =>
     Iterator.product.default Count.Insts.Nonpos_iteratorIteratorU32
     ProductPU32Inst)
-  (cmp := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst :
-    IntoIterator I Std.U32 Clause0_IntoIter) (corecmpOrdU32Inst : core.cmp.Ord
-    Std.U32) => Iterator.cmp.default Count.Insts.Nonpos_iteratorIteratorU32
-    IntoIteratorPU32PInst corecmpOrdU32Inst)
   (cmp_by := fun {I : Type} {F : Type} {Clause0_Item : Type} {Clause0_IntoIter
     : Type} (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
     (coreopsfunctionFnMutPPairU32POrderingInst : core.ops.function.FnMut F
     (Std.U32 × Clause0_Item) Ordering) => Iterator.cmp_by.default
     Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
     coreopsfunctionFnMutPPairU32POrderingInst)
-  (partial_cmp := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter :
-    Type} (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdU32PInst : core.cmp.PartialOrd Std.U32 Clause0_Item) =>
-    Iterator.partial_cmp.default Count.Insts.Nonpos_iteratorIteratorU32
-    IntoIteratorInst corecmpPartialOrdU32PInst)
   (partial_cmp_by := fun {I : Type} {F : Type} {Clause0_Item : Type}
     {Clause0_IntoIter : Type} (IntoIteratorInst : IntoIterator I Clause0_Item
     Clause0_IntoIter) (coreopsfunctionFnMutPPairU32POptionOrderingInst :
     core.ops.function.FnMut F (Std.U32 × Clause0_Item) (Option Ordering)) =>
     Iterator.partial_cmp_by.default Count.Insts.Nonpos_iteratorIteratorU32
     IntoIteratorInst coreopsfunctionFnMutPPairU32POptionOrderingInst)
-  (eq := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqU32PInst : core.cmp.PartialEq Std.U32 Clause0_Item) =>
-    Iterator.eq.default Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
-    corecmpPartialEqU32PInst)
-  (ne := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialEqU32PInst : core.cmp.PartialEq Std.U32 Clause0_Item) =>
-    Iterator.ne.default Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
-    corecmpPartialEqU32PInst)
-  (lt := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdU32PInst : core.cmp.PartialOrd Std.U32 Clause0_Item) =>
-    Iterator.lt.default Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
-    corecmpPartialOrdU32PInst)
-  (le := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdU32PInst : core.cmp.PartialOrd Std.U32 Clause0_Item) =>
-    Iterator.le.default Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
-    corecmpPartialOrdU32PInst)
-  (gt := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdU32PInst : core.cmp.PartialOrd Std.U32 Clause0_Item) =>
-    Iterator.gt.default Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
-    corecmpPartialOrdU32PInst)
-  (ge := fun {I : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-    (IntoIteratorInst : IntoIterator I Clause0_Item Clause0_IntoIter)
-    (corecmpPartialOrdU32PInst : core.cmp.PartialOrd Std.U32 Clause0_Item) =>
-    Iterator.ge.default Count.Insts.Nonpos_iteratorIteratorU32 IntoIteratorInst
-    corecmpPartialOrdU32PInst)
-  (is_sorted := fun (corecmpPartialOrdU32U32Inst : core.cmp.PartialOrd Std.U32
-    Std.U32) => Iterator.is_sorted.default
-    Count.Insts.Nonpos_iteratorIteratorU32 corecmpPartialOrdU32U32Inst)
-  (is_sorted_by := fun {F : Type}
-    (coreopsfunctionFnMutPPairSharedU32SharedU32BoolInst :
-    core.ops.function.FnMut F (Std.U32 × Std.U32) Bool) =>
-    Iterator.is_sorted_by.default Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPPairSharedU32SharedU32BoolInst)
-  (is_sorted_by_key := fun {F : Type} {K : Type}
-    (coreopsfunctionFnMutPTupleU32PInst : core.ops.function.FnMut F Std.U32 K)
-    (corecmpPartialOrdInst : core.cmp.PartialOrd K K) =>
-    Iterator.is_sorted_by_key.default Count.Insts.Nonpos_iteratorIteratorU32
-    coreopsfunctionFnMutPTupleU32PInst corecmpPartialOrdInst)
   (__iterator_get_unchecked := fun
     (coreiteradapterszipTrustedRandomAccessNoCoerceCountInst :
     core.iter.adapters.zip.TrustedRandomAccessNoCoerce Count) =>
@@ -10369,7 +5850,7 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::DoubleEndedIterator<u32> for nonpos_iterator::Count}::next_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2046:4-2048:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2232:4-2234:5
     Visibility: public -/
 def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back
   (self : Count) : Result ((Option Std.U32) × Count) := do
@@ -10377,7 +5858,7 @@ def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::DoubleEndedIterator<u32> for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2045:0-2049:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2231:0-2235:1 -/
 @[reducible]
 def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32 : DoubleEndedIterator
   Count Std.U32 := DoubleEndedIterator.mk
@@ -10386,23 +5867,16 @@ def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32 : DoubleEndedIterator
   (next_chunk_back := fun (N : Std.Usize) =>
     DoubleEndedIterator.next_chunk_back.default N
     Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32)
-  (nth_back := DoubleEndedIterator.nth_back.default
-    Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32)
   (rfold := fun {B : Type} {F : Type} (coreopsfunctionFnMutPPairPU32PInst :
     core.ops.function.FnMut F (B × Std.U32) B) =>
     DoubleEndedIterator.rfold.default
     Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32
     coreopsfunctionFnMutPPairPU32PInst)
-  (rfind := fun {P : Type} (coreopsfunctionFnMutPTupleShared0U32BoolInst :
-    core.ops.function.FnMut P Std.U32 Bool) =>
-    DoubleEndedIterator.rfind.default
-    Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32
-    coreopsfunctionFnMutPTupleShared0U32BoolInst)
   (by nonpos_cont 5000)
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::ExactSizeIterator<u32> for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2050:0-2050:35 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2236:0-2236:35 -/
 @[reducible]
 impl_def Count.Insts.Nonpos_iteratorExactSizeIteratorU32 : ExactSizeIterator
   Count Std.U32 := {
@@ -10414,7 +5888,7 @@ impl_def Count.Insts.Nonpos_iteratorExactSizeIteratorU32 : ExactSizeIterator
 }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2055:8-2057:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2241:8-2243:9
     Visibility: public -/
 @[rust_loop_body]
 def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
@@ -10431,7 +5905,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
 nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2055:8-2057:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2241:8-2243:9
     Visibility: public -/
 @[rust_loop]
 def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
@@ -10448,7 +5922,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
 nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2052:4-2059:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2238:4-2245:5
     Visibility: public -/
 def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
   {T : Type _} {Clause0_IntoIter : Type _}
@@ -10462,17 +5936,17 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
 nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2051:0-2060:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2237:0-2246:1 -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorFromIteratorU32 : FromIterator Std.U32 Std.U32
-  := FromIterator.mk
-  (from_iter := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst
+  := {
+  from_iter := fun {I : Type} {Clause0_IntoIter : Type} (IntoIteratorPU32PInst
     : IntoIterator I Std.U32 Clause0_IntoIter) =>
-    U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter IntoIteratorPU32PInst)
-  (by nonpos_cont 5000)
+    U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter IntoIteratorPU32PInst
+}
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2065:8-2067:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2251:8-2253:9
     Visibility: public -/
 @[rust_loop_body]
 def U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
@@ -10487,7 +5961,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
 nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2065:8-2067:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2251:8-2253:9
     Visibility: public -/
 @[rust_loop]
 def U32.Insts.Nonpos_iteratorSumU32.sum_loop
@@ -10501,7 +5975,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum_loop
 nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2062:4-2069:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2248:4-2255:5
     Visibility: public -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorSumU32.sum
@@ -10512,7 +5986,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum
 nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2061:0-2070:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2247:0-2256:1 -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorSumU32 : Sum Std.U32 Std.U32 := Sum.mk
   (sum := fun {I : Type} (IteratorPU32Inst : Iterator I Std.U32) =>
@@ -10520,10 +5994,10 @@ def U32.Insts.Nonpos_iteratorSumU32 : Sum Std.U32 Std.U32 := Sum.mk
   (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::use_collect]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2071:0-2073:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2257:0-2260:1
     Visibility: public -/
 def use_collect : Result Std.U32 := do
-  Iterator.collect.default Count.Insts.Nonpos_iteratorIteratorU32
-    U32.Insts.Nonpos_iteratorFromIteratorU32 { n := 4#u32 }
+  U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter (IntoIterator.Blanket
+    Count.Insts.Nonpos_iteratorIteratorU32) { n := 4#u32 }
 
 end nonpos_iterator
