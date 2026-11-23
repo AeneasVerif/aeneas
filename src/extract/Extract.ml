@@ -3124,9 +3124,10 @@ let trait_decl_is_nonpos (ctx : extraction_ctx) (id : trait_decl_id) : bool =
                 List.exists is_self meth.signature.generics.trait_clauses)
               decl.methods)
 
-(** Values for fuel for proving continuity, and typeclass instance search,
-    for files with nonpositive structures..*)
+(** Values for fuel for proving continuity, and typeclass instance search, for
+    files with nonpositive structures..*)
 let nonpos_cont_fuel = 5000
+
 let nonpos_synth_instance_max_size = 4096
 
 (** Print [nonpos_continuity f] (Lean only) after a function [f] which takes a
