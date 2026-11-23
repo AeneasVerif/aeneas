@@ -16,8 +16,14 @@ open Result Error Arith ScalarElab WP
 @[expose] def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail divisionByZero
 
+/-- Like in Rust, `MIN % -1` panics: Rust's `%` on signed integers panics if the divisor is `0`
+    or if `x / y` overflows, even though the remainder itself would be `0`. Use `wrapping_rem`
+    for the non-panicking version. -/
 @[expose] def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩
+  if y.val != 0 then
+    -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
+    if ¬ (x.val = IScalar.min ty && y.val = -1) then ok ⟨ BitVec.srem x.bv y.bv ⟩
+    else fail integerOverflow
   else fail divisionByZero
 
 def UScalar.try_rem {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
@@ -83,10 +89,13 @@ theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.va
   simp
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
+theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ := by
   conv => arg 1; simp [HMod.hMod]
-  simp only [spec_ok, rem, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte]
+  have hNoOverflow' : ¬ (x.val = IScalar.min ty && y.val = -1) := by simpa using hNoOverflow
+  simp only [rem, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte, hNoOverflow',
+    Bool.false_eq_true, spec_ok]
   simp only [val]
   simp only [BitVec.toInt_srem, bv_toInt_eq, and_true]
 
@@ -95,9 +104,10 @@ uscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0)
   x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ :=
   UScalar.rem_bv_spec x hnz
 
-iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ :=
-  IScalar.rem_bv_spec x hnz
+  IScalar.rem_bv_spec x hnz (by scalar_tac)
 
 /-!
 Theorems with a specification which only uses integers
@@ -112,10 +122,11 @@ theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val �
     exact h.1
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
+theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ := by
   apply spec_mono
-  · apply rem_bv_spec x hzero
+  · apply rem_bv_spec x hzero hNoOverflow
   · intros x' h
     exact h.1
 
@@ -123,8 +134,9 @@ uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val �
   x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ :=
   UScalar.rem_spec x hnz
 
-iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ :=
-  IScalar.rem_spec x hnz
+  IScalar.rem_spec x hnz (by scalar_tac)
 
 end Aeneas.Std

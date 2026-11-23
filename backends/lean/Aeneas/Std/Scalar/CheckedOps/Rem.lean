@@ -60,25 +60,32 @@ Signed checked rem
 -/
 theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
   match core.num.checked_rem_IScalar x y with
-  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
-  | none => y.val = 0 := by
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = IScalar.min ty ∧ y.val = -1) ∧
+    z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = IScalar.min ty ∧ y.val = -1) := by
   simp [checked_rem_IScalar, Option.ofResult, IScalar.rem]
   split_ifs
   . zify at *
     simp_all
-  . rename_i hnz
+  . rename_i hnz hNoOverflow
     have hnz' : y.val ≠ 0 := by
       intro h; apply hnz; exact h
+    have hNoOverflow' : ¬ (x.val = IScalar.min ty ∧ y.val = -1) := by simpa using hNoOverflow
     have : x % y = x.rem y := by rfl
-    have hz := @IScalar.rem_bv_spec _ x y hnz'
+    have hz := @IScalar.rem_bv_spec _ x y hnz' hNoOverflow'
     simp [this, IScalar.rem, hnz] at hz
-    simp [*]
+    split_ifs at hz
+    simp at hz
+    simp [hz, hnz']
+    tauto
+  . simp_all
 
 iscalar @[step_pure «%S».checked_rem x y]
 theorem «%S».checked_rem_bv_spec (x y : «%S») :
   match core.num.checked_rem_IScalar x y with
-  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
-  | none => y.val = 0 := by
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = IScalar.min .«%S» ∧ y.val = -1) ∧
+    z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = IScalar.min .«%S» ∧ y.val = -1) := by
   have := core.num.checked_rem_IScalar_bv_spec x y
   simp_all only [«%S».bv]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
