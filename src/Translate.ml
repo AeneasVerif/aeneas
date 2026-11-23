@@ -1099,7 +1099,7 @@ let export_trait_decl_group (fmt : Format.formatter) (_config : gen_config)
         | _ -> None)
       ids
   in
-  (* The backends other than Lean don't support recursive traits *)
+  (* The backends other than Lean don't support mutually recursive trait groups. *)
   if is_rec && Config.backend () <> Lean && decls <> [] then
     [%warn_opt_span] None
       ("Recursive traits are not supported for this backend; the following \
@@ -1522,7 +1522,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            (fun (d : Pure.trait_impl) -> (d.def_id, d))
            trans_trait_impls)
     in
-    (* The traits of the groups of at least two mutually recursive traits *)
+    (* Check which traits are in a recursive group of at least 2 traits, so that
+       we can tell which ones should be extracted as nonpositive structures later.
+       (See {!Extract.trait_decl_is_nonpos})*)
     let rec_group_trait_decls =
       List.fold_left
         (fun acc (group : declaration_group) ->

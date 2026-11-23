@@ -6,11 +6,10 @@ public meta import Lean.Elab.Deriving.Util
 
 @[expose] public section
 /-!
-# `deriving Lean.Order.CCPO` for a structure
-
-Declares `instance : CCPO (S …) := CCPO.ofEquiv (proxy_equiv% (S …))`: Mathlib's `proxy_equiv%`
-gives the bijection between `S` and the tuple of its fields, so two values of `S` are compared field
-by field.  This lets the dictionary of an ordinary trait be a plain field of a `nonpos_structure`.
+A command for deriving `CCPO` for a structure.
+This is needed because a (normal, not nonpositive) trait could show up as a field in
+a nonpositive trait as a supertrait or bound on an associated type.
+Fields of a nonpos_structure must be CCPO.
 -/
 
 namespace Aeneas
@@ -31,7 +30,7 @@ universe u v
     · exact h _ (by simpa only [e.apply_symm_apply])
     · simpa only [e.symm_apply_apply] using h _ hb
 
-/-- The proxy type's pairs `(_ : α) × β` are compared componentwise. -/
+/-- CCPO instance for dependent products that don't use the dependency -/
 instance {α : Type u} {β : Type v} [CCPO α] [CCPO β] : CCPO ((_ : α) × β) :=
   CCPO.ofEquiv (B := α ×' β) ⟨fun p => ⟨p.1, p.2⟩, fun x => ⟨x.1, x.2⟩, fun _ => rfl, fun _ => rfl⟩
 

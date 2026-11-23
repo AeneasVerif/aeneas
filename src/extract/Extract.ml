@@ -3124,15 +3124,9 @@ let trait_decl_is_nonpos (ctx : extraction_ctx) (id : trait_decl_id) : bool =
                 List.exists is_self meth.signature.generics.trait_clauses)
               decl.methods)
 
-(** The fuel of the [nonpos_cont] tactic, which proves the conditions of the
-    [nonpos_structure]s. Its default (300 steps) is too small for the impls of
-    traits with many methods, such as [Iterator]. *)
+(** Values for fuel for proving continuity, and typeclass instance search,
+    for files with nonpositive structures..*)
 let nonpos_cont_fuel = 5000
-
-(** The value of [synthInstance.maxSize] for the files containing
-    [nonpos_structure]s: the instances which describe the shape of a structure
-    grow with its number of fields, and Lean's default limit (128) is already
-    too small for a trait with four methods. 4096 is enough for [Iterator]. *)
 let nonpos_synth_instance_max_size = 4096
 
 (** Print [nonpos_continuity f] (Lean only) after a function [f] which takes a
@@ -3383,9 +3377,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "}");
   F.pp_close_box fmt ();
-  (* Lean: the order of the dictionaries of an ordinary trait, so that they can
-     be plain fields of a [nonpos_structure] (a supertrait, or a bound on an
-     associated type): see [Aeneas/Tactic/Elab/DeriveCCPO.lean]. *)
+  (* In lean, traits need to derive CCPO so they can be used as fields
+     of nonpositive traits. Happens for supertraits, and bounds on an
+     associated type. See [Aeneas/Tactic/Elab/DeriveCCPO.lean]. *)
   if backend () = Lean && not is_nonpos then (
     F.pp_force_newline fmt ();
     F.pp_print_string fmt "deriving Lean.Order.CCPO");
@@ -3531,8 +3525,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl span impl.def_id ctx in
   (* If the trait is extracted as a [nonpos_structure], we build the impl with
-     its constructor function (with the items as named arguments, followed by
-     the proof of its condition) rather than with the [{ ... }] notation *)
+     its constructor function and named arguments rather than as a structure. *)
   let is_nonpos = trait_decl_is_nonpos ctx impl.impl_trait.trait_decl_id in
   (* An impl of a [nonpos_structure] which refers to itself (e.g., through a
      provided method) is defined with [partial_fixpoint], not [impl_def] *)
