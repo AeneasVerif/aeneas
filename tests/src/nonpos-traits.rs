@@ -1,6 +1,11 @@
 //@ [!lean] skip
+#![feature(register_tool)]
+#![register_tool(verify)]
 //! Traits that break positivity: a method takes another implementor of the same trait.
 //! In Lean, such a trait can't be an ordinary `structure`, so Aeneas emits a `nonpos_structure`.
+//!
+//! The `#[verify::test]` functions are run by Lean (`#guard`), with the compiled code of the
+//! dictionaries, including the impls which refer to themselves; `cargo test` runs them in Rust.
 
 pub trait Bla {
     fn to_num(&self) -> u32;
@@ -21,17 +26,15 @@ pub fn use_bla() -> u32 {
 }
 
 // An impl which refers to itself: `bigger` is a provided method, so the impl of `Sized2` for
-// `u32` uses its default, which takes the impl itself as an argument.
-// TODO: not supported yet; Aeneas prints the impl with `impl_def`, which doesn't work for a
-// `nonpos_structure` (it should use `partial_fixpoint`).
+// `u32` uses its default, which takes the impl itself as an argument (`partial_fixpoint`).
 pub trait Sized2 {
     fn area(&self) -> u32;
     fn bigger<Other: Sized2>(&self, other: &Other) -> bool {
         self.area() > other.area()
     }
     // A provided method with no generics: the impl's field is `Sized2.double.default X`, without
-    // a lambda, so evaluating `X` evaluates `X` again. TODO: the field must be eta-expanded
-    // (`fun x => Sized2.double.default X x`), otherwise the code type-checks but loops when run.
+    // a lambda, which mentions `X` itself; it runs because the fields of a dictionary are only
+    // evaluated when it is first used (`Fix.foldDelayed`).
     fn double(&self) -> u32 {
         self.area() + self.area()
     }
@@ -49,6 +52,15 @@ pub fn use_sized2() -> bool {
 
 pub fn use_double() -> u32 {
     3u32.double()
+}
+
+// Through the dictionary: its projections, on the impl which refers to itself.
+pub fn double_of<S: Sized2>(s: &S) -> u32 {
+    s.double()
+}
+
+pub fn bigger_of<S: Sized2, T: Sized2>(s: &S, t: &T) -> bool {
+    s.bigger(t)
 }
 
 // A group of mutually recursive traits: neither trait refers to itself, but each one refers to
@@ -88,7 +100,6 @@ pub fn use_left_right() -> u32 {
 // supertrait inside the group (`MyDoubleEnded: MyIterator`), provided methods with a loop and with
 // other dictionaries, impls which refer to themselves, and a generic impl (`Peek`) which refers to
 // itself. See `nonpos-iterator.rs` for a larger copy of the std traits.
-// TODO: not supported yet (mutually recursive group, impls which refer to themselves).
 pub trait MyIntoIterator {
     type Item;
     type IntoIter: MyIterator<Item = Self::Item>;
@@ -196,4 +207,178 @@ pub fn sum_peek() -> u32 {
 
 pub fn zip_counts() -> u32 {
     Count { n: 3 }.zip_count(Count { n: 5 })
+}
+
+// A generic impl: the dictionary of `Wrapper<T>` is built from the one of `T`.
+pub struct Wrapper<T> {
+    pub x: T,
+}
+
+impl<T: Bla> Bla for Wrapper<T> {
+    fn to_num(&self) -> u32 {
+        self.x.to_num()
+    }
+    fn add<Other: Bla>(&self, other: &Other) -> u32 {
+        self.x.add(other)
+    }
+}
+
+// An associated constant: a plain field of the dictionary, holding a value of the monad.
+pub trait WithConst {
+    const BASE: u32;
+    fn scaled<O: WithConst>(&self, o: &O) -> u32;
+}
+
+impl WithConst for u32 {
+    const BASE: u32 = 10;
+    fn scaled<O: WithConst>(&self, _o: &O) -> u32 {
+        *self * O::BASE
+    }
+}
+
+// A const generic parameter.
+pub trait Bounded<const N: usize> {
+    fn cap(&self) -> usize;
+    fn fits<O: Bounded<N>>(&self, o: &O) -> bool;
+}
+
+impl<const N: usize> Bounded<N> for u32 {
+    fn cap(&self) -> usize {
+        N
+    }
+    fn fits<O: Bounded<N>>(&self, o: &O) -> bool {
+        (*self as usize) <= o.cap()
+    }
+}
+
+// Bounds on a trait from outside the group (`Clone`): as a supertrait, and on an associated type.
+// Aeneas emits each such bound as a plain field of the `nonpos_structure` that holds the other
+// trait's dictionary.
+pub trait Foo: Clone {
+    fn get(&self) -> u32;
+    fn combine<O: Foo>(&self, other: &O) -> u32;
+}
+
+impl Foo for u32 {
+    fn get(&self) -> u32 {
+        *self
+    }
+    fn combine<O: Foo>(&self, other: &O) -> u32 {
+        *self + other.get()
+    }
+}
+
+pub fn use_foo<T: Foo>(x: &T) -> u32 {
+    x.clone().get()
+}
+
+pub trait Bar {
+    type Item: Clone;
+    fn item(&self) -> Self::Item;
+    fn with<O: Bar>(&self, other: &O) -> u32;
+}
+
+impl Bar for u32 {
+    type Item = u32;
+    fn item(&self) -> u32 {
+        *self
+    }
+    fn with<O: Bar>(&self, _other: &O) -> u32 {
+        *self
+    }
+}
+
+pub fn use_bar<T: Bar>(x: &T) -> T::Item {
+    x.item().clone()
+}
+
+// Functions taking a dictionary: a loop, and mutual recursion.
+pub fn count_down<B: Bla>(b: &B, n: u32) -> u32 {
+    let mut n = n;
+    let mut acc = 0;
+    while n > 0 {
+        acc += b.to_num();
+        n -= 1;
+    }
+    acc
+}
+
+pub fn even<B: Bla>(b: &B, n: u32) -> u32 {
+    if n == 0 { b.to_num() } else { odd(b, n - 1) }
+}
+
+pub fn odd<B: Bla>(b: &B, n: u32) -> u32 {
+    if n == 0 { 1 } else { even(b, n - 1) }
+}
+
+// Tests, run in Lean with the compiled code.
+
+#[verify::test]
+pub fn test_bla() {
+    assert!(use_bla() == 7);
+    assert!(Wrapper { x: 3u32 }.add(&4u32) == 7);
+    assert!(3u32.add(&Wrapper { x: 4u32 }) == 7);
+}
+
+#[verify::test]
+pub fn test_sized2() {
+    assert!(!use_sized2());
+    assert!(4u32.bigger(&3u32));
+}
+
+#[verify::test]
+pub fn test_double() {
+    assert!(use_double() == 6);
+    assert!(double_of(&3u32) == 6);
+    assert!(bigger_of(&4u32, &3u32));
+}
+
+#[verify::test]
+pub fn test_left_right() {
+    assert!(use_left_right() == 3);
+}
+
+#[verify::test]
+pub fn test_iterators() {
+    assert!(sum_count() == 6);
+    assert!(sum_peek() == 6);
+    assert!(zip_counts() == 3);
+}
+
+#[verify::test]
+pub fn test_const_and_params() {
+    assert!(2u32.scaled(&3u32) == 20);
+    assert!(Bounded::<5>::fits(&3u32, &4u32));
+    assert!(!Bounded::<2>::fits(&3u32, &4u32));
+}
+
+#[verify::test]
+pub fn test_foreign_bounds() {
+    assert!(use_foo(&5u32) == 5);
+    assert!(2u32.combine(&3u32) == 5);
+    assert!(use_bar(&7u32) == 7);
+}
+
+#[verify::test]
+pub fn test_dictionary_arguments() {
+    assert!(count_down(&3u32, 4) == 12);
+    assert!(even(&5u32, 3) == 1);
+    assert!(even(&5u32, 2) == 5);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all() {
+        test_bla();
+        test_sized2();
+        test_double();
+        test_left_right();
+        test_iterators();
+        test_const_and_params();
+        test_foreign_bounds();
+        test_dictionary_arguments();
+    }
 }
