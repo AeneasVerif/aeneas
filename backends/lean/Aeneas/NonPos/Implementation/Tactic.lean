@@ -149,14 +149,14 @@ in the goal and hypotheses (by definitional unfolding, checked by `change`) so t
 literal lambda and its instance is built from the pieces of the pieces of `TrustedBase/Definitions.lean`; then `simp` unfolds the `cond`
 of each piece. -/
 macro "nonpos_cond_simp" loc:(Parser.Tactic.location)? : tactic =>
-  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input, FixFunctor.base,
+  `(tactic| (nonpos_cond_norm; simp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input, FixFunctor.arg, FixFunctor.base,
       FixFunctor.var, FixFunctor.unit, true_and, and_true, implies_true, forall_and] $[$loc]?))
 
 /-- `nonpos_cond_simp` by definitional unfolding only (`dsimp`): no proof term, so the proof of a
 condition is only the tree of its conjuncts.  What `simp` would also do (dropping `True`
 conjuncts, splitting `∀ x, A ∧ B`) is left to `nonpos_cont`'s loop. -/
 macro "nonpos_cond_dsimp" : tactic =>
-  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input,
+  `(tactic| (nonpos_cond_norm; dsimp only [FixFunctor.cond, FixFunctor.prod, FixFunctor.pi, FixFunctor.rec_input, FixFunctor.arg,
       FixFunctor.base, FixFunctor.var, FixFunctor.unit]))
 
 /-- The proof of `Cont (fun d => fn' d)`, for `fn'` a field of a fixed dictionary `e` applied to
@@ -452,6 +452,79 @@ meta def nonposShapePair (goal : MVarId) (D iD iB f : Expr) : TacticM Bool := do
     s.restore
     return false
 
+/-- `e`, if the `CCPO` that instance search finds for `T` is `Aeneas.CCPO.ofEquiv e`: a structure
+with a derived `CCPO` (compared through the tuple of its fields), or a `Sigma` (its tuples). -/
+meta def ofEquivOf? (T : Expr) : MetaM (Option Expr) := do
+  try
+    let mut e ← synthInstance (← mkAppM ``Lean.Order.CCPO #[T])
+    for _ in [0:16] do
+      e ← whnfCore e
+      if e.isAppOf `Aeneas.CCPO.ofEquiv then return some e.appArg!
+      match ← unfoldDefinition? e with
+      | some x => e := x
+      | none => return none
+    return none
+  catch _ => return none
+
+/-- The tuple of `B` (a nest of `Sigma`s or `PProd`s, as `e`'s domain) with components `xs`. -/
+meta partial def ofEquivTuple (B : Expr) (xs : List Expr) : MetaM Expr := do
+  match xs with
+  | [] => return mkConst ``Unit.unit
+  | [x] => return x
+  | x :: rest =>
+    let B ← whnfR B
+    if B.isAppOfArity ``Sigma 2 then
+      let β := B.appArg!
+      let snd ← ofEquivTuple (β.beta #[x]) rest
+      mkAppOptM ``Sigma.mk #[B.appFn!.appArg!, β, x, snd]
+    else if B.isAppOfArity ``PProd 2 then
+      mkAppM ``PProd.mk #[x, ← ofEquivTuple B.appArg! rest]
+    else throwError "not a tuple: {B}"
+
+/-- `body` through the `CCPO.ofEquiv e` of a structure: a constructor `S.mk a₁ … aₙ` is
+`e ⟨a₁, …, aₙ⟩`, and a projection `x.fieldⱼ` is the component `j` of `e.symm x` (its order is
+the order of the tuple, so the forms of `Cont.ofEquiv_apply`, `Cont.ofEquiv_symm` and of the tuple
+then apply).  `none` if `body` is neither, or its structure is not ordered by `CCPO.ofEquiv`. -/
+meta def ofEquivBody? (body : Expr) : MetaM (Option Expr) := do
+  let env ← getEnv
+  -- a projection `x.j`
+  let proj? : MetaM (Option (Name × Nat × Expr)) := do
+    if let .proj s i x := body then return some (s, i, x)
+    if let some c := body.getAppFn.constName? then
+      if let some info ← getProjectionFnInfo? c then
+        if !info.fromClass && body.getAppNumArgs == info.numParams + 1 then
+          return some (info.ctorName.getPrefix, info.i, body.appArg!)
+    return none
+  if let some (s, j, x) ← proj? then
+    let some e ← ofEquivOf? (← inferType x) | return none
+    let n := (getStructureFields env s).size
+    let mut v ← mkAppM `DFunLike.coe #[← mkAppM `Equiv.symm #[e], x]
+    for _ in [0:j] do v ← mkProjection v `snd
+    if j + 1 < n then v ← mkProjection v `fst
+    return some v
+  -- a constructor `S.mk ps a₁ … aₙ`
+  if let some c := body.getAppFn.constName? then
+    if let some ci := (env.find? c).bind (fun | .ctorInfo ci => some ci | _ => none) then
+      if isStructure env ci.induct && body.getAppNumArgs == ci.numParams + ci.numFields then
+        let some e ← ofEquivOf? (← inferType body) | return none
+        let B := (← whnfR (← inferType e)).appFn!.appArg!  -- `B` of `e : B ≃ A`
+        let xs := (body.getAppArgs.extract ci.numParams body.getAppNumArgs).toList
+        return some (← mkAppM `DFunLike.coe #[e, ← ofEquivTuple B xs])
+  return none
+
+/-- On a goal `Cont (fun d => body)` with `body` a constructor or a projection of a structure
+ordered by `CCPO.ofEquiv`: the goal with `body` through it (`ofEquivBody?`).  `none` otherwise. -/
+meta def nonposOfEquiv? (goal : MVarId) (f : Expr) : MetaM (Option MVarId) := do
+  let .lam n dTy body bi := f | return none
+  let r ← withLocalDecl n bi dTy fun d => do
+    let some body' ← ofEquivBody? (body.instantiate1 d) | return none
+    return some (← mkLambdaFVars #[d] body')
+  let some f' := r | return none
+  let ty ← goal.getType
+  let_expr Cont D A iD iB _ := ty | return none
+  try return some (← goal.replaceTargetDefEq (mkApp5 (mkConst ``Cont ty.getAppFn.constLevels!) D A iD iB f'))
+  catch _ => return none
+
 open Tactic in
 /-- One step on a goal `Cont (fun d => body)`. -/
 meta partial def nonposContStep (tree : DiscrTree Name) : TacticM Unit := withMainContext do
@@ -462,6 +535,7 @@ meta partial def nonposContStep (tree : DiscrTree Name) : TacticM Unit := withMa
   let f ← if f.isLambda then pure f else etaExpand f
   if ← nonposShapeProj g D iD f then return
   if ← nonposShapePair g D iD iB f then return
+  if let some g' ← nonposOfEquiv? g f then replaceMainGoal [g']; return
   let act ← lambdaTelescope f fun ds body => do
     let d := ds[0]!
     let body := body.consumeMData.headBeta

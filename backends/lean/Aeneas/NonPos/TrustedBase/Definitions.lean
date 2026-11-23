@@ -104,6 +104,16 @@ instance FixFunctor.rec_input (k : I) (G : (I → Type v) → Type w) [FixFuncto
   cond := fun {X} _ f => Cont (iB := FixFunctor.order G X) f ∧ ∀ d, FixFunctor.cond (f d)
   model := .arr k (FixFunctor.model (G := G))
 
+/-
+Function binders where the input has an order (a computation, or a structure): the function must be
+continuous in it too, as for a recursive input.  (Chosen over `pi` when the input type has a `CCPO`.)
+-/
+instance (priority := high) FixFunctor.arg (A : Type w₁) [CCPO A] (G : (I → Type v) → Type w)
+    [FixFunctor G] : FixFunctor (fun X => A → G X) where
+  order := fun X _ => @instOrderPi A (fun _ => G X) (fun _ => FixFunctor.order G X)
+  cond := fun {X} _ f => Cont (iB := FixFunctor.order G X) f ∧ ∀ a, FixFunctor.cond (f a)
+  model := .arg A (FixFunctor.model (G := G))
+
 -- Used to combine fields of the structure together
 instance FixFunctor.prod (G₁ : (I → Type v) → Type w₁) (G₂ : (I → Type v) → Type w₂) [FixFunctor G₁]
     [FixFunctor G₂] : FixFunctor (fun X => G₁ X ×' G₂ X) where

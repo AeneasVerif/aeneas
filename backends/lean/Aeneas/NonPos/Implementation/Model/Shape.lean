@@ -383,6 +383,78 @@ def Shape.arr' : ShapeData (fun X => X k → G X) (fun f => Shape.arrCond k dG _
             (Dom.mkChain (fun n => ⟨(c n).1 d, (c n).2.2 d⟩) (fun n => Dom.step' c n d))) }
 end Arr
 
+section Arg
+variable (A : Type w₁) [Dom A] [NonPos.Pointed A] {G : Fam.{pu, v} I → Type w}
+  {cG : ∀ {X : Fam.{pu, v} I} [∀ k, Dom (X k)], G X → Prop}
+  (dG : ShapeData G cG)
+
+/-- The order on `A → G X` is the pointwise one. -/
+abbrev Shape.argDom (X : Fam.{pu, v} I) [∀ k, Dom (X k)] : Dom (A → G X) :=
+  @Dom.pi A (fun _ => G X) (fun _ => dG.dom X)
+
+/-- The condition on `A → G X`: continuity, and the condition of the body at every argument. -/
+abbrev Shape.argCond (X : Fam.{pu, v} I) [∀ k, Dom (X k)] (f : A → G X) : Prop :=
+  @DCont _ _ ‹Dom A› (dG.dom X) f ∧ ∀ a, cG (f a)
+
+/-- The continuous map of a field `f` satisfying the condition: convert the body. -/
+def Shape.argFrom (D : I → Domain.{v})
+    (f : {x : A → G (Carriers D) // Shape.argCond A dG (Carriers D) x}) :
+    ContinuousMap (Domain.ofDom A) (dG.op.obj D) :=
+  { toFun := fun a => (dG.conv D).invFun ⟨f.1 a, f.2.2 a⟩
+    cont := DCont.comp' (dB := Dom.subtype (dG.dom (Carriers D)) _ ⟨dG.cond_sup _, dG.cond_csup _⟩)
+      (dG.conv D).cont_invFun
+      (DCont.intoSubtype (dG.dom (Carriers D)) (Dom.ofDomain (Domain.ofDom A))
+        (f := fun a => ⟨f.1 a, f.2.2 a⟩) f.2.1) }
+
+/-- The field of a continuous map: convert the body. -/
+def Shape.argTo (D : I → Domain.{v}) (φ : ContinuousMap (Domain.ofDom A) (dG.op.obj D)) :
+    {x : A → G (Carriers D) // Shape.argCond A dG (Carriers D) x} :=
+  ⟨fun x => ((dG.conv D).toFun (φ x)).1, by
+    refine ⟨?_, fun x => ((dG.conv D).toFun _).2⟩
+    refine DCont.comp' (dB := Dom.subtype (dG.dom (Carriers D)) _ ⟨dG.cond_sup _, dG.cond_csup _⟩) (DCont.subtypeVal _) ?_
+    exact DCont.comp' (dB := Dom.ofDomain (dG.op.obj D)) (dG.conv D).cont_toFun φ.cont⟩
+
+/-- `A → G X`, for a fixed `A`: an argument of a type with an order. -/
+def Shape.arg' : ShapeData (fun X => A → G X) (fun f => Shape.argCond A dG _ f) where
+  op := DomainOperator.arrow (DomainOperator.constant (Domain.ofDom A)) dG.op
+  dom := fun X _ => Shape.argDom A dG X
+  cond_sup := fun X [∀ k, Dom (X k)] c h =>
+    ⟨DCont.congr' (DCont.supChain' (dD := ‹Dom A›) (dB := dG.dom X)
+        (g := fun n a => c n a) (fun n => (h n).1) (fun n a => Dom.step' c n a)) (fun a => rfl),
+     fun a => dG.cond_sup X (Dom.mkChain (fun n => c n a) (fun n => Dom.step' c n a)) (fun n => (h n).2 a)⟩
+  cond_csup := fun X [∀ k, Dom (X k)] c hc hne hcond s hs =>
+    ⟨DCont.of_isSup _ (dG.dom X) (fun f hf => (hcond f hf).1) (Dom.isSup_pi (fun _ => dG.dom X) hc hne hs),
+     fun a => dG.cond_csup X _ (@chain_image _ _ (Shape.argDom A dG X).po (dG.dom X).po
+        (fun f => f a) (fun _ _ h => h a) c hc) (image_nonempty _ hne)
+      (fun _ ⟨f, hf, e⟩ => e ▸ (hcond f hf).2 a) _ (Dom.isSup_pi (fun _ => dG.dom X) hc hne hs a)⟩
+  conv D :=
+    let r := dG.conv D
+    { toFun := fun φ => Shape.argTo A dG D φ
+      invFun := fun f => Shape.argFrom A dG D f
+      right_inv := fun f => by
+        apply Subtype.ext
+        funext x
+        exact congrArg Subtype.val (r.right_inv ⟨f.1 x, f.2.2 x⟩)
+      left_inv := fun φ => by
+        apply ContinuousMap.ext
+        intro a
+        exact r.left_inv (φ a)
+      cont_toFun := DCont.mk' _
+        (fun φ φ' h x => DCont.mono' r.cont_toFun ((ContinuousMap.rel_iff _ _).1 h x))
+        (fun c => by
+          apply Subtype.ext
+          funext x
+          exact congrArg Subtype.val (DCont.sup_eq' r.cont_toFun
+            (Dom.mkChain (fun n => (c n) x) (fun n => (ContinuousMap.rel_iff _ _).1 (Dom.step' c n) x))))
+      cont_invFun := DCont.mk' _
+        (fun f f' h => (ContinuousMap.rel_iff _ _).2 fun a => DCont.mono' r.cont_invFun (h a))
+        (fun c => by
+          apply ContinuousMap.ext
+          intro a
+          exact DCont.sup_eq' r.cont_invFun
+            (Dom.mkChain (fun n => ⟨(c n).1 a, (c n).2.2 a⟩) (fun n => Dom.step' c n a))) }
+end Arg
+
 /-! ## The shapes: the model of each piece -/
 
 section Instances
@@ -406,6 +478,12 @@ variable {I : Type pu}
       (fun f => DCont (inst_1 := Shape.dom (F := G) _) f ∧ ∀ d, Model.Shape.cond (F := G) (f d)) :=
   { Shape.arr' k (Model.Shape.sd (F := G)) with
     dom := fun X [∀ k, Dom (X k)] => @Dom.pi (X k) (fun _ => G X) (fun _ => Shape.dom G X) }
+/-- An argument of a type with an order (`A → G X`, `A` fixed). -/
+@[reducible] def Model.Shape.arg (A : Type w₁) [Dom A] [NonPos.Pointed A] (G : Fam.{pu, v} I → Type w) [Shape G] :
+    ShapeData (fun X => A → G X)
+      (fun f => DCont (inst_1 := Shape.dom (F := G) _) f ∧ ∀ a, Model.Shape.cond (F := G) (f a)) :=
+  { Shape.arg' A (Model.Shape.sd (F := G)) with
+    dom := fun X [∀ k, Dom (X k)] => @Dom.pi A (fun _ => G X) (fun _ => Shape.dom G X) }
 /-- Two fields. -/
 @[reducible] def Model.Shape.prod (F : Fam.{pu, v} I → Type w₁) (G : Fam.{pu, v} I → Type w₂) [Shape F] [Shape G] :
     ShapeData (fun X => F X ×' G X) (fun x => Model.Shape.cond (F := F) x.1 ∧ Model.Shape.cond (F := G) x.2) :=

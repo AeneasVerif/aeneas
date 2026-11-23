@@ -311,6 +311,12 @@ def FixFunctor.theModel {I : Type pu} (G : (I → Type v) → Type w) [i : FixFu
   cond _ := True
   sd := letI := Dom.ofCCPO A; letI := Pointed.ofCCPO A; Model.Shape.const A
 
+/-- An argument of a type with a `CCPO`, `A → G X` (in the model: with the `Dom` of the `CCPO`). -/
+@[reducible] def Shape.argInst {I : Type pu} (A : Type w₁) [CCPO A] (G : (I → Type v) → Type w) [Shape G] :
+    Shape (fun X => A → G X) where
+  cond {X} _ f := @DCont A (G X) (Dom.ofCCPO A) (Shape.dom G X) f ∧ ∀ a, Model.Shape.cond (f a)
+  sd := letI := Dom.ofCCPO A; letI := Pointed.ofCCPO A; Model.Shape.arg A G
+
 namespace FixFunctor.Model
 variable {I : Type pu}
 
@@ -355,6 +361,25 @@ def arr : Model (fun X => X k → G X)
     (forall_congr' fun x => m.cond_iff X d (f x))
 end Arr
 
+section Arg
+variable (A : Type w₁) [i : CCPO A] {G : (I → Type v) → Type w}
+  {o : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G X)}
+  {c : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G X → Prop}
+  (m : Model G o c)
+
+def arg : Model (fun X => A → G X)
+    (fun X _ => @instOrderPi A (fun _ => G X) (fun _ => o X))
+    (fun {X} [∀ k, PartialOrder (X k)] f => @Cont A (G X) i.toPartialOrder (o X) f ∧ ∀ a, c (f a)) where
+  shape := @Shape.argInst _ A _ G m.shape
+  order_eq X d := by
+    show @instOrderPi A (fun _ => G X) (fun _ => (@Shape.dom _ G m.shape X d).po) = _
+    exact congrArg (fun p => @instOrderPi A (fun _ => G X) (fun _ => p)) (m.order_eq X d)
+  cond_iff X d f := and_congr
+    (@Proofs.Cont.iff_dom A (G X) i.toPartialOrder (@o X (fun k => (d k).po)) (Dom.ofCCPO A)
+      (@Shape.dom _ G m.shape X d) rfl (m.order_eq X d) f).symm
+    (forall_congr' fun x => m.cond_iff X d (f x))
+end Arg
+
 section Prod
 variable {G₁ : (I → Type v) → Type w₁} {G₂ : (I → Type v) → Type w₂}
   {o₁ : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G₁ X)}
@@ -397,6 +422,13 @@ theorem arr (k : I) {G : (I → Type v) → Type w}
       (fun X _ => @instOrderPi (X k) (fun _ => G X) (fun _ => o X))
       (fun {X} [i : ∀ k, PartialOrder (X k)] f => @Cont (X k) (G X) (i k) (o X) f ∧ ∀ d, c (f d)) :=
   ⟨Model.arr k (Classical.choice m)⟩
+theorem arg (A : Type w₁) [i : CCPO A] {G : (I → Type v) → Type w}
+    {o : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G X)}
+    {c : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G X → Prop} (m : HasModel G o c) :
+    HasModel (fun X => A → G X)
+      (fun X _ => @instOrderPi A (fun _ => G X) (fun _ => o X))
+      (fun {X} [∀ k, PartialOrder (X k)] f => @Cont A (G X) i.toPartialOrder (o X) f ∧ ∀ a, c (f a)) :=
+  ⟨Model.arg A (Classical.choice m)⟩
 theorem prod {G₁ : (I → Type v) → Type w₁} {G₂ : (I → Type v) → Type w₂}
     {o₁ : ∀ (X : I → Type v) [∀ k, PartialOrder (X k)], PartialOrder (G₁ X)}
     {c₁ : ∀ {X : I → Type v} [∀ k, PartialOrder (X k)], G₁ X → Prop}

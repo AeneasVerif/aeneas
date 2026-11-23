@@ -1070,9 +1070,6 @@ pub const trait Iterator {
         Product::product(self)
     }
 
-    // NOT SUPPORTED: its closure is given the dictionary (Aeneas gives a closure its method's generics), and is
-    // passed to `cmp_by` as a plain `FnMut` argument, in which `cmp_by` is not known to be continuous.
-    /*
     #[rustc_non_const_trait_method]
     fn cmp<I>(self, other: I) -> Ordering
     where
@@ -1082,7 +1079,6 @@ pub const trait Iterator {
     {
         self.cmp_by(other, |x, y| x.cmp(&y))
     }
-    */
 
     #[rustc_non_const_trait_method]
     fn cmp_by<I, F>(self, other: I, cmp: F) -> Ordering
@@ -1108,9 +1104,6 @@ pub const trait Iterator {
         }
     }
 
-    // NOT SUPPORTED: its closure is given the dictionary (Aeneas gives a closure its method's generics), and is
-    // passed to `partial_cmp_by` as a plain `FnMut` argument, in which `partial_cmp_by` is not known to be continuous.
-    /*
     #[rustc_non_const_trait_method]
     fn partial_cmp<I>(self, other: I) -> Option<Ordering>
     where
@@ -1120,7 +1113,6 @@ pub const trait Iterator {
     {
         self.partial_cmp_by(other, |x, y| x.partial_cmp(&y))
     }
-    */
 
     #[rustc_non_const_trait_method]
     fn partial_cmp_by<I, F>(self, other: I, partial_cmp: F) -> Option<Ordering>
@@ -1196,8 +1188,6 @@ pub const trait Iterator {
     }
     */
 
-    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
-    /*
     #[rustc_non_const_trait_method]
     fn lt<I>(self, other: I) -> bool
     where
@@ -1207,10 +1197,7 @@ pub const trait Iterator {
     {
         self.partial_cmp(other) == Some(Ordering::Less)
     }
-    */
 
-    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
-    /*
     #[rustc_non_const_trait_method]
     fn le<I>(self, other: I) -> bool
     where
@@ -1220,10 +1207,7 @@ pub const trait Iterator {
     {
         matches!(self.partial_cmp(other), Some(Ordering::Less | Ordering::Equal))
     }
-    */
 
-    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
-    /*
     #[rustc_non_const_trait_method]
     fn gt<I>(self, other: I) -> bool
     where
@@ -1233,10 +1217,7 @@ pub const trait Iterator {
     {
         self.partial_cmp(other) == Some(Ordering::Greater)
     }
-    */
 
-    // NOT SUPPORTED: its body calls `partial_cmp`, which is commented out.
-    /*
     #[rustc_non_const_trait_method]
     fn ge<I>(self, other: I) -> bool
     where
@@ -1246,7 +1227,6 @@ pub const trait Iterator {
     {
         matches!(self.partial_cmp(other), Some(Ordering::Greater | Ordering::Equal))
     }
-    */
 
     // NOT SUPPORTED: its body calls `is_sorted_by`, which is commented out.
     /*

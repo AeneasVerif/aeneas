@@ -2,6 +2,7 @@ module
 public import Lean
 public import Aeneas.NonPos.TrustedBase.Definitions
 public import Aeneas.NonPos.Implementation.Tactic
+public import Aeneas.NonPos.Implementation.OrdinaryForms
 
 
 @[expose] public section
