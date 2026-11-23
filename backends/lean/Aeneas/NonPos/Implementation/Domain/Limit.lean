@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Domain.Basic
+public import Aeneas.NonPos.Implementation.Domain.Basic
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
 module
 public import Lean
 public import Aeneas.NonPos.TrustedBase.Definitions
-public import Aeneas.NonPos.Tactic
+public import Aeneas.NonPos.Implementation.Tactic
 
 
 @[expose] public section
@@ -131,7 +131,7 @@ meta def elabGroup (ss : Array StructStx) : CommandElabM Unit := do
           (h : FixFunctor.cond (G := $fId $k) (X := Fix $fId) $fieldTuple) :
           @$projId $args* ($mkId $fieldArgs* h) = @$f := by nonpos_proj_mk))
 
-/-- Elaborate a group, then prove the lemmas of `NonPos/Tactic.lean` about it. -/
+/-- Elaborate a group, then prove the lemmas of `NonPos/Implementation/Tactic.lean` about it. -/
 meta def elabGroupAndLemmas (stxs : Array Syntax) : CommandElabM Unit := do
   let ss ← stxs.mapM parseStruct
   elabGroup ss

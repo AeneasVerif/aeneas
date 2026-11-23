@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Domain.Limit
+public import Aeneas.NonPos.Implementation.Domain.Limit
 
 @[expose] public section
 

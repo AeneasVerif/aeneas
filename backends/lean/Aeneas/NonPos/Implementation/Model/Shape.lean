@@ -1,6 +1,6 @@
 module
-public import Aeneas.NonPos.Domain.Operator
-public import Aeneas.NonPos.Model.Cont
+public import Aeneas.NonPos.Implementation.Domain.Operator
+public import Aeneas.NonPos.Implementation.Model.Cont
 
 @[expose] public section
 /-!
@@ -20,7 +20,7 @@ universe pu v w w₁ w₂
 noncomputable section
 set_option warn.classDefReducibility false
 attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod
-attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO FixCompat.pointed FixCompat.ofCCPO FixCompat.pi FixCompat.prod FixCompat.pprod
+attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO
 
 /-- Families of types indexed by the structures of a group (`I`: a structure applied to parameters). -/
 abbrev Fam (I : Type pu) : Type (max pu (v + 1)) := I → Type v

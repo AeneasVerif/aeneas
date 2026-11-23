@@ -1,6 +1,6 @@
 module
 public import Lean
-public import Aeneas.NonPos.Bridge
+public import Aeneas.NonPos.Implementation.Bridge
 open Lean.Order
 
 @[expose] public section

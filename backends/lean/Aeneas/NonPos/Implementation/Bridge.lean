@@ -1,15 +1,16 @@
 module
-public import Aeneas.NonPos.Orders
+public import Aeneas.NonPos.Implementation.Model.Fix
 import all Init.Internal.Order.Basic
 
 @[expose] public section
 /-!
 # From the model to the statements of `TrustedBase/Definitions.lean`
 
-Not part of the trusted surface.  The model (`NonPos/Model/`) is stated on its own classes (`Dom`, an
+Not part of the trusted surface.  The model (`NonPos/Implementation/Model/`) is stated on its own classes (`Dom`, an
 order with its suprema; `DCont`; `Shape`; `MFix`).  `TrustedBase/Definitions.lean` is
 stated on Lean's `Lean.Order.PartialOrder` alone.  This file has what is in between:
 
+0. the orders of the model (`Dom`) of each type, and the `Shape` of each piece;
 1. `Cont`, defined from `⊑` only, and the proofs of its forms, which hold for any partial orders;
 2. `Cont` and the model's `DCont` agree, where the model has a `Dom`;
 3. the class `FixFunctor` (an order and a condition on the bodies of a functor, with their model),
@@ -22,6 +23,62 @@ open Lean.Order
 noncomputable section
 
 universe pu v u w w₁ w₂ w₃
+
+/-! ## 0. The model's orders, and the `Shape` of each piece
+
+### Admissible types
+
+`Dom A` is the order of the type `A`, with suprema of chains; the condition is continuity for these
+orders.  Every type has one in a trivial way (`Dom.discrete`, low priority); products and function
+types are ordered componentwise and pointwise; `M α` by the order of a supported monad `M`.
+`Pointed A` says `A` has a least element.  No instance of these classes is registered anywhere but in
+this file. -/
+
+instance (priority := low) (A : Type w) : Dom A := Dom.discrete A
+instance : Dom PUnit.{w+1} := Dom.unit
+instance (T : Type w₁) (B : T → Type w₂) [∀ t, Dom (B t)] : Dom ((t : T) → B t) := Dom.pi T B
+instance (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] : Dom (A ×' B) := Dom.pprod A B
+
+instance : Pointed PUnit.{w+1} := Pointed.unit
+instance (T : Type w₁) (B : T → Type w₂) [∀ t, Dom (B t)] [∀ t, Pointed (B t)] : Pointed ((t : T) → B t) :=
+  Pointed.pi T B
+instance (A : Type w₁) (B : Type w₂) [Dom A] [Dom B] [Pointed A] [Pointed B] : Pointed (A ×' B) := Pointed.pprod A B
+
+
+/-! ### The `Shape` of each piece -/
+
+section Pieces
+variable {I : Type pu}
+
+/-- `PUnit`, with its order and least element. -/
+@[reducible] def Shape.unitInst : Shape (fun _ : (I → Type v) => PUnit.{w+1}) where
+  cond _ := True
+  sd := Model.Shape.const PUnit
+@[reducible] def Shape.varInst (k : I) : Shape (fun X : (I → Type v) => X k) where
+  cond _ := True
+  sd := Model.Shape.var k
+@[reducible] def Shape.piInst (T : Type w₁) (G : T → (I → Type v) → Type w₂) [∀ t, Shape (G t)] :
+    Shape (fun X => (t : T) → G t X) where
+  cond f := ∀ t, Model.Shape.cond (f t)
+  sd := Model.Shape.pi T G
+@[reducible] def Shape.arrInst (k : I) (G : (I → Type v) → Type w) [Shape G] :
+    Shape (fun X => X k → G X) where
+  cond {X} _ f := DCont (inst_1 := Shape.dom G X) f ∧ ∀ d, Model.Shape.cond (f d)
+  sd := Model.Shape.arr k G
+@[reducible] def Shape.prodInst (F : (I → Type v) → Type w₁) (G : (I → Type v) → Type w₂) [Shape F] [Shape G] :
+    Shape (fun X => F X ×' G X) where
+  cond x := Model.Shape.cond x.1 ∧ Model.Shape.cond x.2
+  sd := Model.Shape.prod F G
+end Pieces
+
+/-! ### The order of the fixed point of a group -/
+
+section MFix
+variable {I : Type pu} (H : I → (I → Type v) → Type v) [∀ k, Shape (H k)]
+
+instance (k : I) : Dom (MFix H k) := MFix.dom H k
+
+end MFix
 
 /-! ## 1. `Cont`, and its forms -/
 

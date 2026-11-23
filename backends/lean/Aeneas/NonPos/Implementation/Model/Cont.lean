@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Model.Dom
+public import Aeneas.NonPos.Implementation.Model.Dom
 import all Init.Internal.Order.Basic
 
 @[expose] public section
@@ -273,87 +273,6 @@ theorem DCont.iterSup {f : D → A → A} (hf : DCont (fun p : D × A => f p.1 p
 
 end MFix
 
-/-! ## `partial_fixpoint`'s fixpoints -/
-
-section LeanFix
-variable {D : Type w} {A : Type w₁} [Dom D] [Dom A] [CCPO A] [FixCompat A]
-
-theorem FixCompat.le_iff' {x y : A} : Dom.le x y ↔ x ⊑ y := FixCompat.le_iff x y
-
-/-- A continuous map between types whose `Dom` and `CCPO` agree is monotone for the `CCPO`s (the
-`monotonicity` obligation of `partial_fixpoint`). -/
-theorem Model.DCont.toMonotone {B : Type w} [Dom B] [CCPO B] [FixCompat B] {f : A → B} (h : DCont f) :
-    Lean.Order.monotone f :=
-  fun _ _ hxy => FixCompat.le_iff'.1 (h.mono (FixCompat.le_iff'.2 hxy))
-
-theorem FixCompat.pointed : Pointed A :=
-  ⟨⟨Lean.Order.bot, fun x => FixCompat.le_iff'.2 (Lean.Order.bot_le x)⟩⟩
-attribute [local instance] FixCompat.pointed
-
-/-- A supremum for `Dom` is a supremum for the `CCPO`. -/
-theorem FixCompat.sup_eq_csup (c : Dom.Chain A) (hc : chain (fun x => ∃ n, c n = x)) :
-    Dom.sup c = CCPO.csup hc := by
-  apply is_sup_unique (c := fun x => ∃ n, c n = x)
-  · intro x
-    constructor
-    · rintro h _ ⟨n, rfl⟩
-      exact PartialOrder.rel_trans (FixCompat.le_iff'.1 (Dom.le_sup c n)) h
-    · intro h
-      exact FixCompat.le_iff'.1 (Dom.sup_le c x fun n => FixCompat.le_iff'.2 (h _ ⟨n, rfl⟩))
-  · exact CCPO.csup_spec hc
-
-/-- A continuous function's least fixpoint is the supremum of its iterates. -/
-theorem fix_eq_iterSup (f : A → A) (hm : monotone f) (hc : DCont f) :
-    fix f hm = Dom.sup (A := A) (Dom.iter f hc.monoFn) := by
-  apply PartialOrder.rel_antisymm
-  · -- `fix f ⊑ S` since `S` is a prefixpoint
-    have hpre : f (Dom.sup (A := A) (Dom.iter f hc.monoFn)) ⊑ Dom.sup (A := A) (Dom.iter f hc.monoFn) := by
-      rw [hc.sup_eq]
-      apply FixCompat.le_iff'.1
-      apply Dom.sup_le
-      intro n
-      exact Dom.le_sup (Dom.iter f hc.monoFn) (n + 1)
-    apply fix_induct hm (fun x => x ⊑ Dom.sup (A := A) (Dom.iter f hc.monoFn))
-    · intro c hchain h
-      exact csup_le hchain h
-    · intro x hx
-      exact PartialOrder.rel_trans (hm _ _ hx) hpre
-  · apply FixCompat.le_iff'.1
-    apply Dom.sup_le
-    intro n
-    apply FixCompat.le_iff'.2
-    induction n with
-    | zero => exact FixCompat.le_iff'.1 (Dom.bot_le _)
-    | succ n ih =>
-      rw [Dom.iter_succ, fix_eq hm]
-      exact hm _ _ ih
-
-theorem Model.DCont.fix {f : D → A → A} {hm : ∀ d, monotone (f d)} (hf : DCont (fun p : D × A => f p.1 p.2)) :
-    DCont (fun d => Lean.Order.fix (f d) (hm d)) := by
-  have hc : ∀ d, DCont (f d) := fun d =>
-    DCont.congr (DCont.comp (g := fun p : D × A => f p.1 p.2) (f := fun a => (d, a)) hf
-      (DCont.pair (DCont.const d) DCont.id)) (fun _ => rfl)
-  exact DCont.congr (DCont.iterSup hf hc) (fun d => (fix_eq_iterSup (f d) (hm d) (hc d)).symm)
-end LeanFix
-
-/-! ### `FixCompat` instances -/
-
-theorem FixCompat.ofCCPO (A : Type w) [CCPO A] : @FixCompat A (Dom.ofCCPO A) _ :=
-  letI : Dom A := Dom.ofCCPO A
-  ⟨fun _ _ => Iff.rfl⟩
-attribute [local instance] FixCompat.ofCCPO
-theorem FixCompat.pi {T : Type w₁} {B : T → Type w₂} [∀ t, Dom (B t)] [∀ t, CCPO (B t)] [∀ t, FixCompat (B t)] :
-    FixCompat ((t : T) → B t) :=
-  ⟨fun f g => forall_congr' fun t => FixCompat.le_iff (f t) (g t)⟩
-attribute [local instance] FixCompat.pi
-theorem FixCompat.prod {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [CCPO A] [CCPO B] [FixCompat A] [FixCompat B] :
-    FixCompat (A × B) :=
-  ⟨fun x y => and_congr (FixCompat.le_iff x.1 y.1) (FixCompat.le_iff x.2 y.2)⟩
-attribute [local instance] FixCompat.prod
-theorem FixCompat.pprod {A : Type w₁} {B : Type w₂} [Dom A] [Dom B] [CCPO A] [CCPO B] [FixCompat A] [FixCompat B] :
-    FixCompat (A ×' B) :=
-  ⟨fun x y => and_congr (FixCompat.le_iff x.1 y.1) (FixCompat.le_iff x.2 y.2)⟩
-attribute [local instance] FixCompat.pprod
 
 
 end

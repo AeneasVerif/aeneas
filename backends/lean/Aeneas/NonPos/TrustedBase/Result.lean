@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Std
+public import Aeneas.NonPos.Implementation.ResultProofs
 
 @[expose] public section
 /-!
@@ -9,7 +9,7 @@ The forms of `Definitions.lean`, for the monad that Aeneas outputs: `bind` (as `
 and as `>>=`, from `do` notation) and `vis` (an effect, with its continuation) satisfy the condition
 when their parts do.  `Result.ok x`, `Result.fail e` and `Result.div` need no form: they do not
 mention the dictionary (a dictionary has no field of plain data), so they are `Cont.const`.
-The proofs are in `NonPos/Std.lean`.
+The proofs are in `NonPos/Implementation/ResultProofs.lean`.
 -/
 namespace NonPos
 open Aeneas.Std

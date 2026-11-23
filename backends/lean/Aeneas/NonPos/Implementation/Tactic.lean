@@ -39,7 +39,7 @@ theorem Cont.monotone {A : Type w₁} {B : Type w₂} [PartialOrder A] [PartialO
     Lean.Order.monotone f := Proofs.Cont.monotone h
 
 /-- `bind`, in a monad whose `bind` satisfies the condition (`hbind`): the proof of the `bind` form of
-each monad, which that monad tags `@[nonpos_continuous]` (`Result`'s in `NonPos/Std.lean`). -/
+each monad, which that monad tags `@[nonpos_continuous]` (`Result`'s in `NonPos/Implementation/ResultProofs.lean`). -/
 theorem Cont.bind {D : Type w} [PartialOrder D] {M : Type u → Type u} [Bind M] [∀ α, PartialOrder (M α)]
     {α β : Type u} (hbind : Cont (fun p : M α ×' (α → M β) => p.1 >>= p.2)) {m : D → M α} {k : D → α → M β}
     (hm : Cont m) (hk : ∀ a, Cont (fun d => k d a)) : Cont (fun d => m d >>= k d) :=

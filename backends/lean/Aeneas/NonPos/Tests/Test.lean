@@ -70,8 +70,8 @@ theorem Cont.option_bindCont {α β : Type} : Cont (fun p : Option α ×' (α �
       | bot => exact FlatOrder.rel.bot
       | refl => exact PartialOrder.rel_refl
     · cases x with
-      | none => exact Proofs.DCont.const none
-      | some a => exact Proofs.DCont.app (f := fun k : α → Option β => k) Proofs.DCont.id a)
+      | none => exact NonPos.Model.DCont.const none
+      | some a => exact NonPos.Model.DCont.app (f := fun k : α → Option β => k) NonPos.Model.DCont.id a)
 
 /-- The form of `bind` for `Option`. -/
 @[nonpos_continuous]

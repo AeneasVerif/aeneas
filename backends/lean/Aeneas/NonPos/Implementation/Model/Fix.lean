@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Model.Shape
+public import Aeneas.NonPos.Implementation.Model.Shape
 
 @[expose] public section
 /-!
@@ -16,7 +16,7 @@ universe pu v w w₁
 noncomputable section
 set_option warn.classDefReducibility false
 attribute [local instance] Dom.unit Dom.prod Dom.pi Dom.pprod
-attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO FixCompat.pointed FixCompat.ofCCPO FixCompat.pi FixCompat.prod FixCompat.pprod
+attribute [local instance] Pointed.unit Pointed.prod Pointed.pprod Pointed.pi Pointed.ofCCPO
 
 section MFix
 variable {I : Type pu} (F : I → Fam.{pu, v} I → Type v) [∀ k, Shape (F k)]

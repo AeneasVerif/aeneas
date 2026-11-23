@@ -1,5 +1,5 @@
 module
-public import Aeneas.NonPos.Domain.Basic
+public import Aeneas.NonPos.Implementation.Domain.Basic
 
 @[expose] public section
 /-!
@@ -139,9 +139,6 @@ def Dom.ofCCPO (A : Type w) [CCPO A] : Dom A where
       sup_le := fun c _ h => csup_le (Dom.chain_range c) (fun _ ⟨n, hn⟩ => hn ▸ h n) }
   cc := ⟨fun _ hc _ => CCPO.has_csup hc⟩
 
-/-- The `Dom` structure agrees with the given `CCPO`: same order, same suprema of chains. -/
-class FixCompat (A : Type w) [inst : Dom A] [CCPO A] : Prop where
-  le_iff : ∀ x y : A, Dom.le x y ↔ x ⊑ y
 
 
 end
