@@ -1632,18 +1632,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
   (* Small helper: filter the variables which appear in [pat] and not in [next] *)
   let filter_useless (next : texpr) (pat : tpat) : tpat =
     let fvars = texpr_get_fvars next in
-
-    let visitor =
-      object
-        inherit [_] map_tpat
-
-        method! visit_POpen _ v mp =
-          if FVarId.Set.mem v.id fvars then POpen (v, mp) else PIgnored
-
-        method! visit_PBound _ _ _ = [%internal_error] span
-      end
-    in
-    visitor#visit_tpat () pat
+    fst (filter_tpat_by_fvars span fvars pat)
   in
 
   let rec update (e : texpr) : texpr =
