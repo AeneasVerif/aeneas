@@ -244,8 +244,8 @@ abbrev productTower : Tower.{max u v} where
   bond n := prodEP (T.bond n) (S.bond n)
 
 def productSplit (x : limit (productTower T S)) : limit T × limit S :=
-  (⟨fun n => (x n).1, fun n => congrArg Prod.fst (x.coherent n)⟩,
-    ⟨fun n => (x n).2, fun n => congrArg Prod.snd (x.coherent n)⟩)
+  ({ coord n := (x n).1, coherent n := congrArg Prod.fst (x.coherent n) },
+    { coord n := (x n).2, coherent n := congrArg Prod.snd (x.coherent n) })
 
 def productJoin (x : limit T × limit S) : limit (productTower T S) where
   coord n := (x.1 n, x.2 n)

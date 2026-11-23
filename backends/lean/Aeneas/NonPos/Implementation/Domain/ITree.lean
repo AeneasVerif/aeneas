@@ -71,30 +71,7 @@ theorem ITree.sup_le (c : Chain (ITree E R)) (x : ITree E R) (h : ∀ n, c n ⊑
     ITree.sup c ⊑ x :=
   csup_le c.range_chain (by rintro y ⟨n, rfl⟩; exact h n)
 
-/-- The executable implementation of the supremum: scan the chain for the first non-diverging
-element; if it is a `vis` node, the children are the (lazily computed) suprema of the chains of
-children. If all the elements diverge, the scan diverges, which is the correct value of the
-supremum. Evaluating an element may itself diverge without ever producing `div` (it is an
-interaction tree, not a value), in which case the scan cannot skip it: execution may diverge even
-though the logical value is defined. -/
-unsafe def ITree.supImpl (c : Chain (ITree E R)) : ITree E R :=
-  scan c.val 0
-where
-  scan (f : Nat → ITree E R) (n : Nat) : ITree E R :=
-    match (f n).unfold with
-    | .div => scan f (n + 1)
-    | .ret r => .ret r
-    | .vis i _ => .vis i fun o => scan (fun m => child (f (n + m)) o) 0
-  /-- The child at `o` of a tree of the chain: all the non-diverging elements after the first
-  `vis` node have the same shape, so the cast is safe. -/
-  child (t : ITree E R) {i : E.I} (o : E.O i) : ITree E R :=
-    match t.unfold with
-    | .vis _ k => k (unsafeCast o)
-    | _ => .div
-
-attribute [implemented_by ITree.supImpl] ITree.sup
-
-instance instOmegaCompleteITree : OmegaComplete (ITree E R) where
+noncomputable instance instOmegaCompleteITree : OmegaComplete (ITree E R) where
   bottom := .div
   bottom_le := ITree.div_le
   sup := ITree.sup

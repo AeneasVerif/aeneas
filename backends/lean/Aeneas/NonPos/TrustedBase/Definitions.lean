@@ -223,6 +223,20 @@ noncomputable def Fix.foldDelayed {k : I} (x : Unit → F k (Fix F)) (h : FixFun
 unsafe def Fix.unfoldImpl {k : I} (d : Fix F k) : F k (Fix F) := (unsafeCast d : Thunk (F k (Fix F))).get
 attribute [implemented_by Fix.unfoldImpl] Fix.unfold
 
+/-
+The two casts above are also correct only if the compiler represents `Fix F k` as an ordinary boxed
+object, which a `Thunk` can stand in for.  The compiler sees `Fix F k` as what it unfolds to: a
+`Thread` (checked by `rfl`), whose constructor takes two arguments that are not proofs (`coord` and a
+`PUnit`).  The compiler represents such a structure as a boxed object.
+-/
+example (k : I) : ∃ T, Fix F k = Domain.Thread T := ⟨_, rfl⟩
+/--
+info: @Domain.Thread.mk : {T : Domain.Tower} →
+  (coord : (n : Nat) → (T.obj n).Carrier) →
+    (∀ (n : Nat), (T.bond n).project.toFun (coord (n + 1)) = coord n) → PUnit → Domain.Thread T
+-/
+#guard_msgs in #check @Domain.Thread.mk
+
 -- No axioms are used in the untrusted proofs and definitions:
 theorem axiomCheck : True := by
   have := @Fix.cond.{0,0}; have := @Fix.unfold_fold.{0,0}; have := @Fix.fold_unfold.{0,0}

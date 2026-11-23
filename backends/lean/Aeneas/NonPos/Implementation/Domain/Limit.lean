@@ -195,10 +195,18 @@ def Tower.tail (T : Tower.{u}) : Tower.{u} where
   obj n := T.obj (n + 1)
   bond n := T.bond (n + 1)
 
-/-- A coherent thread: an element of the inverse limit. -/
+/-- A coherent thread: an element of the inverse limit.
+
+The field `runtime` carries no information.  It is there for the compiler: a dictionary's type
+unfolds to a `Thread`, and with `coord` as its only computationally relevant field, the compiler
+would represent a `Thread`, hence a dictionary, as a function, and eta-expand any lambda returning
+a dictionary, applying the dictionary's `Thunk` (`Fix.foldDelayedImpl`) to an argument at runtime.
+With a second such field, it is an ordinary object.  (`TrustedBase/Definitions.lean` checks that
+`Fix F k` unfolds to a structure with two such fields, and `TrustedBase/RuntimeTest.lean` tests it.) -/
 structure Thread (T : Tower.{u}) : Type u where
   coord : ∀ n, T.obj n
   coherent : ∀ n, (T.bond n).project (coord (n + 1)) = coord n
+  runtime : PUnit.{u + 1} := ⟨⟩
 
 instance {T : Tower.{u}} : CoeFun (Thread T) (fun _ => (n : Nat) → T.obj n) := ⟨Thread.coord⟩
 

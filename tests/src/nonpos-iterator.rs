@@ -218,7 +218,7 @@ pub const trait Iterator {
     }
 
     // NOT SUPPORTED: its body defines a function named `some`, which in Lean shadows `Option.some`, so the
-    // generated code does not type-check.
+    // generated code does not type-check. Similar issue: aeneas#1554.
     /*
     fn last(self) -> Option<Self::Item>
     where
@@ -351,7 +351,7 @@ pub const trait Iterator {
     }
 
     // NOT SUPPORTED: its closure returns `()`, and Aeneas generates an ill-typed `call_mut` for it (the
-    // unit output is dropped).
+    // unit output is dropped). Possibly related to aeneas#960 and #1046.
     /*
     #[rustc_non_const_trait_method]
     fn for_each<F>(self, f: F)
@@ -540,7 +540,7 @@ pub const trait Iterator {
     }
 
     // NOT SUPPORTED: its closure captures `&mut` variables, and Aeneas generates an ill-typed
-    // `call_mut`/`call_once` for it.
+    // `call_mut`/`call_once` for it. Related issues: aeneas#1576, #1215, #960, #1046.
     /*
     #[rustc_non_const_trait_method]
     fn partition<B, F>(self, f: F) -> (B, B)
@@ -878,7 +878,7 @@ pub const trait Iterator {
     */
 
     // NOT SUPPORTED: its body passes `Ord::max` as a closure, and Aeneas cannot translate the `FnMut` impl of
-    // a trait method ("Unimplemented").
+    // a trait method ("Unimplemented"). Related issue: aeneas#1193.
     /*
     fn max(self) -> Option<Self::Item>
     where
@@ -890,7 +890,7 @@ pub const trait Iterator {
     */
 
     // NOT SUPPORTED: its body passes `Ord::min` as a closure, and Aeneas cannot translate the `FnMut` impl of
-    // a trait method ("Unimplemented").
+    // a trait method ("Unimplemented"). Related issue: aeneas#1193.
     /*
     fn min(self) -> Option<Self::Item>
     where
