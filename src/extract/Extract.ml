@@ -3139,8 +3139,8 @@ let nonpos_synth_instance_max_size = 4096
     dictionary of a trait extracted as a [nonpos_structure]: this command
     proves, once, the continuity of [f] in its dictionary arguments, which
     [nonpos_cont] otherwise proves again each time it meets [f] (see the Lean
-    file [Aeneas/NonPos/Tactic.lean]). Opaque functions are skipped: they
-    have no body to prove their continuity from. *)
+    file [Aeneas/NonPos/Tactic.lean]). Opaque functions are skipped: they have
+    no body to prove their continuity from. *)
 let extract_nonpos_continuity (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   if

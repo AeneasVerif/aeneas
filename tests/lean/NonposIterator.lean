@@ -103,13 +103,13 @@ axiom
   (T : Type _) : Option Never → Result (Option T)
 
 /-- [nonpos_iterator::KeyAndValue]
-    Source: 'tests/src/nonpos-iterator.rs', lines 68:0-71:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 74:0-77:1 -/
 structure KeyAndValue (K : Type _) (V : Type _) where
   key : K
   value : V
 
 /-- [nonpos_iterator::{impl core::fmt::Debug for nonpos_iterator::KeyAndValue<K, V>}::fmt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 67:9-67:14
+    Source: 'tests/src/nonpos-iterator.rs', lines 73:9-73:14
     Visibility: public -/
 def KeyAndValue.Insts.CoreFmtDebug.fmt
   {K : Type _} {V : Type _} (corefmtDebugInst : core.fmt.Debug K)
@@ -123,7 +123,7 @@ def KeyAndValue.Insts.CoreFmtDebug.fmt
     "key") dyn (toStr "value") dyn1
 
 /-- Trait implementation: [nonpos_iterator::{impl core::fmt::Debug for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 67:9-67:14 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 73:9-73:14 -/
 @[reducible]
 def KeyAndValue.Insts.CoreFmtDebug {K : Type _} {V : Type _} (corefmtDebugInst
   : core.fmt.Debug K) (corefmtDebugInst1 : core.fmt.Debug V) : core.fmt.Debug
@@ -132,7 +132,7 @@ def KeyAndValue.Insts.CoreFmtDebug {K : Type _} {V : Type _} (corefmtDebugInst
 }
 
 /-- [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::KeyAndValue<K, V>}::clone]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 67:22-67:27
+    Source: 'tests/src/nonpos-iterator.rs', lines 73:22-73:27
     Visibility: public -/
 def KeyAndValue.Insts.CoreCloneClone.clone
   {K : Type _} {V : Type _} (corecloneCloneInst : core.clone.Clone K)
@@ -144,7 +144,7 @@ def KeyAndValue.Insts.CoreCloneClone.clone
   ok { key := t, value := t1 }
 
 /-- Trait implementation: [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 67:22-67:27 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 73:22-73:27 -/
 @[reducible]
 def KeyAndValue.Insts.CoreCloneClone {K : Type _} {V : Type _}
   (corecloneCloneInst : core.clone.Clone K) (corecloneCloneInst1 :
@@ -154,7 +154,7 @@ def KeyAndValue.Insts.CoreCloneClone {K : Type _} {V : Type _}
 }
 
 /-- Trait implementation: [nonpos_iterator::{impl core::marker::Copy for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 67:16-67:20 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 73:16-73:20 -/
 @[reducible]
 def KeyAndValue.Insts.CoreMarkerCopy {K : Type _} {V : Type _}
   (coremarkerCopyInst : core.marker.Copy K) (coremarkerCopyInst1 :
@@ -164,7 +164,7 @@ def KeyAndValue.Insts.CoreMarkerCopy {K : Type _} {V : Type _}
 }
 
 /-- [nonpos_iterator::{impl core::cmp::PartialEq<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::ne]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 78:4-80:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 84:4-86:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.ne
   {K : Type _} {V : Type _} (corecmpPartialEqInst : core.cmp.PartialEq K K)
@@ -174,7 +174,7 @@ def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.ne
   corecmpPartialEqInst.ne self.key other.key
 
 /-- [nonpos_iterator::{impl core::cmp::PartialEq<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::eq]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 74:4-76:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 80:4-82:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.eq
   {K : Type _} {V : Type _} (corecmpPartialEqInst : core.cmp.PartialEq K K)
@@ -184,7 +184,7 @@ def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue.eq
   corecmpPartialEqInst.eq self.key other.key
 
 /-- Trait implementation: [nonpos_iterator::{impl core::cmp::PartialEq<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 72:0-81:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 78:0-87:1 -/
 @[reducible]
 def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue {K : Type _} (V : Type _)
   (corecmpPartialEqInst : core.cmp.PartialEq K K) : core.cmp.PartialEq
@@ -194,7 +194,7 @@ def KeyAndValue.Insts.CoreCmpPartialEqKeyAndValue {K : Type _} (V : Type _)
 }
 
 /-- Trait implementation: [nonpos_iterator::{impl core::cmp::Eq for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 82:0-82:42 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 88:0-88:42 -/
 @[reducible]
 def KeyAndValue.Insts.CoreCmpEq {K : Type _} (V : Type _) (corecmpEqInst :
   core.cmp.Eq K) : core.cmp.Eq (KeyAndValue K V) := {
@@ -203,7 +203,7 @@ def KeyAndValue.Insts.CoreCmpEq {K : Type _} (V : Type _) (corecmpEqInst :
 }
 
 /-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::ge]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 101:4-103:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 107:4-109:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.ge
   {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
@@ -213,7 +213,7 @@ def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.ge
   corecmpPartialOrdInst.ge self.key other.key
 
 /-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::gt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 97:4-99:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 103:4-105:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.gt
   {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
@@ -223,7 +223,7 @@ def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.gt
   corecmpPartialOrdInst.gt self.key other.key
 
 /-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::le]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 93:4-95:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 99:4-101:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.le
   {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
@@ -233,7 +233,7 @@ def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.le
   corecmpPartialOrdInst.le self.key other.key
 
 /-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::lt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 89:4-91:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 95:4-97:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.lt
   {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
@@ -243,7 +243,7 @@ def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.lt
   corecmpPartialOrdInst.lt self.key other.key
 
 /-- [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}::partial_cmp]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 85:4-87:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 91:4-93:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.partial_cmp
   {K : Type _} {V : Type _} (corecmpPartialOrdInst : core.cmp.PartialOrd K K)
@@ -253,7 +253,7 @@ def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue.partial_cmp
   corecmpPartialOrdInst.partial_cmp self.key other.key
 
 /-- Trait implementation: [nonpos_iterator::{impl core::cmp::PartialOrd<nonpos_iterator::KeyAndValue<K, V>> for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 83:0-104:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 89:0-110:1 -/
 @[reducible]
 def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue {K : Type _} (V : Type _)
   (corecmpPartialOrdInst : core.cmp.PartialOrd K K) : core.cmp.PartialOrd
@@ -269,7 +269,7 @@ def KeyAndValue.Insts.CoreCmpPartialOrdKeyAndValue {K : Type _} (V : Type _)
 }
 
 /-- [nonpos_iterator::{impl core::cmp::Ord for nonpos_iterator::KeyAndValue<K, V>}::cmp]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 107:4-109:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 113:4-115:5
     Visibility: public -/
 def KeyAndValue.Insts.CoreCmpOrd.cmp
   {K : Type _} {V : Type _} (corecmpOrdInst : core.cmp.Ord K)
@@ -279,7 +279,7 @@ def KeyAndValue.Insts.CoreCmpOrd.cmp
   corecmpOrdInst.cmp self.key other.key
 
 /-- Trait implementation: [nonpos_iterator::{impl core::cmp::Ord for nonpos_iterator::KeyAndValue<K, V>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 105:0-110:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 111:0-116:1 -/
 @[reducible]
 def KeyAndValue.Insts.CoreCmpOrd {K : Type _} (V : Type _) (corecmpOrdInst :
   core.cmp.Ord K) : core.cmp.Ord (KeyAndValue K V) := {
@@ -290,7 +290,7 @@ def KeyAndValue.Insts.CoreCmpOrd {K : Type _} (V : Type _) (corecmpOrdInst :
 }
 
 /-- [nonpos_iterator::ArrayChunks]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2172:0-2175:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2229:0-2232:1
     Visibility: public -/
 structure ArrayChunks (I : Type _) (Clause0_Item : Type _) (N : Std.Usize)
   where
@@ -298,33 +298,33 @@ structure ArrayChunks (I : Type _) (Clause0_Item : Type _) (N : Std.Usize)
   remainder : Option (core.array.iter.IntoIter Clause0_Item N)
 
 /-- [nonpos_iterator::Cycle]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2147:0-2150:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2201:0-2204:1
     Visibility: public -/
 structure Cycle (I : Type _) where
   orig : I
   iter : I
 
 /-- [nonpos_iterator::Rev]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2093:0-2095:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2147:0-2149:1
     Visibility: public -/
 structure Rev (T : Type _) where
   iter : T
 
 /-- [nonpos_iterator::Inspect]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2070:0-2073:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2124:0-2127:1
     Visibility: public -/
 structure Inspect (I : Type _) (F : Type _) where
   iter : I
   f : F
 
 /-- [nonpos_iterator::Fuse]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2045:0-2047:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2099:0-2101:1
     Visibility: public -/
 structure Fuse (I : Type _) where
   iter : Option I
 
 /-- [nonpos_iterator::MapWindows]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2032:0-2036:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2079:0-2083:1
     Visibility: public -/
 structure MapWindows (I : Type _) (F : Type _) (Clause0_Item : Type _) (N :
   Std.Usize) where
@@ -333,7 +333,7 @@ structure MapWindows (I : Type _) (F : Type _) (Clause0_Item : Type _) (N :
   buffer : Option (Array Clause0_Item N)
 
 /-- [nonpos_iterator::Flatten]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2003:0-2006:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2047:0-2050:1
     Visibility: public -/
 structure Flatten (I : Type _) (Clause0_Item : Type _) (Clause1_Item : Type _)
   (Clause1_IntoIter : Type _) where
@@ -341,7 +341,7 @@ structure Flatten (I : Type _) (Clause0_Item : Type _) (Clause1_Item : Type _)
   frontiter : Option Clause1_IntoIter
 
 /-- [nonpos_iterator::FlatMap]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1974:0-1978:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2014:0-2018:1
     Visibility: public -/
 structure FlatMap (I : Type _) (U : Type _) (F : Type _) (Clause0_Item :
   Type _) (Clause0_IntoIter : Type _) where
@@ -350,7 +350,7 @@ structure FlatMap (I : Type _) (U : Type _) (F : Type _) (Clause0_Item :
   frontiter : Option Clause0_IntoIter
 
 /-- [nonpos_iterator::Scan]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1949:0-1953:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1989:0-1993:1
     Visibility: public -/
 structure Scan (I : Type _) (St : Type _) (F : Type _) where
   iter : I
@@ -358,28 +358,28 @@ structure Scan (I : Type _) (St : Type _) (F : Type _) where
   state : St
 
 /-- [nonpos_iterator::Take]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1927:0-1930:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1967:0-1970:1
     Visibility: public -/
 structure Take (I : Type _) where
   iter : I
   n : Std.Usize
 
 /-- [nonpos_iterator::Skip]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1903:0-1906:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1943:0-1946:1
     Visibility: public -/
 structure Skip (I : Type _) where
   iter : I
   n : Std.Usize
 
 /-- [nonpos_iterator::MapWhile]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1883:0-1886:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1923:0-1926:1
     Visibility: public -/
 structure MapWhile (I : Type _) (P : Type _) where
   iter : I
   predicate : P
 
 /-- [nonpos_iterator::TakeWhile]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1852:0-1856:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1888:0-1892:1
     Visibility: public -/
 structure TakeWhile (I : Type _) (P : Type _) where
   iter : I
@@ -387,7 +387,7 @@ structure TakeWhile (I : Type _) (P : Type _) where
   predicate : P
 
 /-- [nonpos_iterator::SkipWhile]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1828:0-1832:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1860:0-1864:1
     Visibility: public -/
 structure SkipWhile (I : Type _) (P : Type _) where
   iter : I
@@ -395,42 +395,42 @@ structure SkipWhile (I : Type _) (P : Type _) where
   predicate : P
 
 /-- [nonpos_iterator::Peekable]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1808:0-1811:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1840:0-1843:1
     Visibility: public -/
 structure Peekable (I : Type _) (Clause0_Item : Type _) where
   iter : I
   peeked : Option (Option Clause0_Item)
 
 /-- [nonpos_iterator::Enumerate]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1785:0-1788:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1817:0-1820:1
     Visibility: public -/
 structure Enumerate (I : Type _) where
   iter : I
   count : Std.Usize
 
 /-- [nonpos_iterator::FilterMap]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1762:0-1765:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1794:0-1797:1
     Visibility: public -/
 structure FilterMap (I : Type _) (F : Type _) where
   iter : I
   f : F
 
 /-- [nonpos_iterator::Filter]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1740:0-1743:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1772:0-1775:1
     Visibility: public -/
 structure Filter (I : Type _) (P : Type _) where
   iter : I
   predicate : P
 
 /-- [nonpos_iterator::Map]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1720:0-1723:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1752:0-1755:1
     Visibility: public -/
 structure Map (I : Type _) (F : Type _) where
   iter : I
   f : F
 
 /-- [nonpos_iterator::IntersperseWith]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1680:0-1688:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1707:0-1715:1
     Visibility: public -/
 structure IntersperseWith (I : Type _) (G : Type _) (Clause0_Item : Type _)
   where
@@ -440,7 +440,7 @@ structure IntersperseWith (I : Type _) (G : Type _) (Clause0_Item : Type _)
   iter : I
 
 /-- [nonpos_iterator::Intersperse]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1638:0-1646:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1660:0-1668:1
     Visibility: public -/
 structure Intersperse (I : Type _) (Clause0_Item : Type _) where
   started : Bool
@@ -449,21 +449,21 @@ structure Intersperse (I : Type _) (Clause0_Item : Type _) where
   iter : I
 
 /-- [nonpos_iterator::Zip]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1613:0-1616:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1635:0-1638:1
     Visibility: public -/
 structure Zip (A : Type _) (B : Type _) where
   a : A
   b : B
 
 /-- [nonpos_iterator::Chain]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1587:0-1590:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1606:0-1609:1
     Visibility: public -/
 structure Chain (A : Type _) (B : Type _) where
   a : Option A
   b : Option B
 
 /-- [nonpos_iterator::StepBy]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1557:0-1561:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1572:0-1576:1
     Visibility: public -/
 structure StepBy (I : Type _) where
   iter : I
@@ -473,7 +473,7 @@ structure StepBy (I : Type _) where
 mutual
 
 /-- Trait declaration: [nonpos_iterator::Iterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 190:0-1299:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 196:0-1313:1
     Visibility: public -/
 nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
   next : Self → Result ((Option Self_Item) × Self)
@@ -589,7 +589,7 @@ nonpos_structure Iterator (Self : Type) (Self_Item : Type) : Type 1 where
     Std.Usize → Result (Self_Item × Self)
 
 /-- Trait declaration: [nonpos_iterator::DoubleEndedIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1306:0-1401:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1320:0-1416:1
     Visibility: public -/
 nonpos_structure DoubleEndedIterator (Self : Type) (Self_Clause0_Item : Type)
   : Type 1 where
@@ -603,7 +603,7 @@ nonpos_structure DoubleEndedIterator (Self : Type) (Self_Clause0_Item : Type)
     Result B
 
 /-- Trait declaration: [nonpos_iterator::IntoIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1428:0-1432:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1443:0-1447:1
     Visibility: public -/
 nonpos_structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter :
   Type) : Type 1 where
@@ -611,7 +611,7 @@ nonpos_structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter :
   into_iter : Self → Result Self_IntoIter
 
 /-- Trait declaration: [nonpos_iterator::Extend]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1449:0-1467:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1464:0-1482:1
     Visibility: public -/
 nonpos_structure Extend (Self : Type) (T : Type) : Type 1 where
   extend : forall {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -621,13 +621,13 @@ nonpos_structure Extend (Self : Type) (T : Type) : Type 1 where
   extend_one_unchecked : Self → T → Result Self
 
 /-- Trait declaration: [nonpos_iterator::Sum]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1486:0-1488:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1501:0-1503:1
     Visibility: public -/
 nonpos_structure Sum (Self : Type) (A : Type) : Type 1 where
   sum : forall {I : Type} (IteratorInst : Iterator I A), I → Result Self
 
 /-- Trait declaration: [nonpos_iterator::Product]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1491:0-1493:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1506:0-1508:1
     Visibility: public -/
 nonpos_structure Product (Self : Type) (A : Type) : Type 1 where
   product : forall {I : Type} (IteratorInst : Iterator I A), I → Result Self
@@ -635,7 +635,7 @@ nonpos_structure Product (Self : Type) (A : Type) : Type 1 where
 end
 
 /-- [nonpos_iterator::array::iter_next_chunk]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 125:4-129:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 131:4-135:5 -/
 def array.iter_next_chunk
   {T : Type _} {T2 : Type _} (N : Std.Usize) (IteratorInst : Iterator T2 T)
   (iter : T2) :
@@ -646,7 +646,7 @@ def array.iter_next_chunk
 nonpos_continuity array.iter_next_chunk
 
 /-- [nonpos_iterator::array::iter_next_chunk_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 132:4-136:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 138:4-142:5 -/
 def array.iter_next_chunk_back
   {T : Type _} {T2 : Type _} (N : Std.Usize) (DoubleEndedIteratorInst :
   DoubleEndedIterator T2 T) (iter : T2) :
@@ -657,7 +657,7 @@ def array.iter_next_chunk_back
 nonpos_continuity array.iter_next_chunk_back
 
 /-- [nonpos_iterator::iter_compare]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 141:0-148:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 147:0-154:1 -/
 def iter_compare
   {A : Type _} {B : Type _} {F : Type _} {T : Type _} {Clause0_Item : Type _}
   {Clause1_Item : Type _} (IteratorInst : Iterator A Clause0_Item)
@@ -671,7 +671,7 @@ def iter_compare
 nonpos_continuity iter_compare
 
 /-- [nonpos_iterator::Iterator::next_chunk]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 195:4-202:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 201:4-208:5
     Visibility: public -/
 @[trait_default]
 def Iterator.next_chunk.default
@@ -684,7 +684,7 @@ def Iterator.next_chunk.default
 nonpos_continuity Iterator.next_chunk.default
 
 /-- [nonpos_iterator::Iterator::size_hint]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 204:4-206:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 210:4-212:5
     Visibility: public -/
 @[trait_default]
 def Iterator.size_hint.default
@@ -694,12 +694,12 @@ def Iterator.size_hint.default
   ok (0#usize, none)
 
 /-- [nonpos_iterator::Iterator::count::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 222:12-222:42 -/
 @[reducible]
 def Iterator.count.closure (Self : Type _) (Clause0_Item : Type _) := Unit
 
 /-- [nonpos_iterator::Iterator::count::{impl core::ops::function::FnMut<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 222:12-222:42 -/
 def
   Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize.call_mut
   {Self : Type _} {Clause0_Item : Type _}
@@ -712,7 +712,7 @@ def
   ok (i, c)
 
 /-- [nonpos_iterator::Iterator::count::{impl core::ops::function::FnOnce<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 222:12-222:42 -/
 def
   Iterator.count.closure.Insts.CoreOpsFunctionFnOncePairUsizeClause0_ItemUsize.call_once
   {Self : Type _} {Clause0_Item : Type _}
@@ -726,7 +726,7 @@ def
   ok i
 
 /-- Trait implementation: [nonpos_iterator::Iterator::count::{impl core::ops::function::FnOnce<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 222:12-222:42 -/
 @[reducible]
 def
   Iterator.count.closure.Insts.CoreOpsFunctionFnOncePairUsizeClause0_ItemUsize
@@ -738,7 +738,7 @@ def
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::count::{impl core::ops::function::FnMut<(usize, Clause0_Item), usize> for nonpos_iterator::Iterator::count::{closure}<Self, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 216:12-216:42 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 222:12-222:42 -/
 @[reducible]
 def Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize
   (Self : Type _) (Clause0_Item : Type _) : core.ops.function.FnMut
@@ -752,7 +752,7 @@ def Iterator.count.closure.Insts.CoreOpsFunctionFnMutPairUsizeClause0_ItemUsize
 }
 
 /-- [nonpos_iterator::Iterator::count]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 208:4-218:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 214:4-224:5
     Visibility: public -/
 @[trait_default]
 def Iterator.count.default
@@ -766,7 +766,7 @@ def Iterator.count.default
 nonpos_continuity Iterator.count.default
 
 /-- [nonpos_iterator::{nonpos_iterator::StepBy<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1564:4-1567:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1579:4-1586:5 -/
 def StepBy.new
   {I : Type _} (iter : I) (step : Std.Usize) : Result (StepBy I) := do
   massert (step != 0#usize)
@@ -774,7 +774,7 @@ def StepBy.new
   ok { iter, step_minus_one := i, first_take := true }
 
 /-- [nonpos_iterator::Iterator::step_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 305:4-310:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 311:4-316:5
     Visibility: public -/
 @[trait_default]
 def Iterator.step_by.default
@@ -784,13 +784,13 @@ def Iterator.step_by.default
   StepBy.new self step
 
 /-- [nonpos_iterator::{nonpos_iterator::Chain<A, B>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1593:4-1595:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1612:4-1617:5 -/
 def Chain.new
   {A : Type _} {B : Type _} (a : A) (b : B) : Result (Chain A B) := do
   ok { a := (some a), b := (some b) }
 
 /-- [nonpos_iterator::Iterator::chain]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 312:4-318:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 318:4-324:5
     Visibility: public -/
 @[trait_default]
 def Iterator.chain.default
@@ -804,7 +804,7 @@ def Iterator.chain.default
 nonpos_continuity Iterator.chain.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Zip<A, B>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1619:4-1621:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1641:4-1643:5 -/
 def Zip.new
   {A : Type _} {B : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
   (IteratorInst : Iterator A Clause0_Item) (IteratorInst1 : Iterator B
@@ -815,7 +815,7 @@ def Zip.new
 nonpos_continuity Zip.new
 
 /-- [nonpos_iterator::Iterator::zip]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 321:4-327:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 327:4-333:5
     Visibility: public -/
 @[trait_default]
 def Iterator.zip.default
@@ -830,7 +830,7 @@ def Iterator.zip.default
 nonpos_continuity Iterator.zip.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Intersperse<I, Clause0_Item>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1652:4-1654:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1674:4-1681:5 -/
 def Intersperse.new
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (corecloneCloneInst : core.clone.Clone Clause0_Item) (iter : I)
@@ -841,7 +841,7 @@ def Intersperse.new
 nonpos_continuity Intersperse.new
 
 /-- [nonpos_iterator::Iterator::intersperse]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 329:4-335:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 335:4-341:5
     Visibility: public -/
 @[trait_default]
 def Iterator.intersperse.default
@@ -854,7 +854,7 @@ def Iterator.intersperse.default
 nonpos_continuity Iterator.intersperse.default
 
 /-- [nonpos_iterator::{nonpos_iterator::IntersperseWith<I, G, Clause0_Item>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1695:4-1697:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1722:4-1729:5 -/
 def IntersperseWith.new
   {I : Type _} {G : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
   Clause0_Item) (coreopsfunctionFnMutGTupleClause0_ItemInst :
@@ -865,7 +865,7 @@ def IntersperseWith.new
 nonpos_continuity IntersperseWith.new
 
 /-- [nonpos_iterator::Iterator::intersperse_with]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 337:4-343:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 343:4-349:5
     Visibility: public -/
 @[trait_default]
 def Iterator.intersperse_with.default
@@ -879,13 +879,13 @@ def Iterator.intersperse_with.default
 nonpos_continuity Iterator.intersperse_with.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Map<I, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1726:4-1728:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1758:4-1760:5 -/
 def Map.new
   {I : Type _} {F : Type _} (iter : I) (f : F) : Result (Map I F) := do
   ok { iter, f }
 
 /-- [nonpos_iterator::Iterator::map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 345:4-351:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 351:4-357:5
     Visibility: public -/
 @[trait_default]
 def Iterator.map.default
@@ -897,7 +897,7 @@ def Iterator.map.default
   Map.new self f
 
 /-- [nonpos_iterator::{nonpos_iterator::Filter<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1746:4-1748:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1778:4-1780:5 -/
 def Filter.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (Filter I P)
@@ -905,7 +905,7 @@ def Filter.new
   ok { iter, predicate }
 
 /-- [nonpos_iterator::Iterator::filter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 371:4-377:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 377:4-383:5
     Visibility: public -/
 @[trait_default]
 def Iterator.filter.default
@@ -917,13 +917,13 @@ def Iterator.filter.default
   Filter.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::FilterMap<I, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1768:4-1770:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1800:4-1802:5 -/
 def FilterMap.new
   {I : Type _} {F : Type _} (iter : I) (f : F) : Result (FilterMap I F) := do
   ok { iter, f }
 
 /-- [nonpos_iterator::Iterator::filter_map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 379:4-385:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 385:4-391:5
     Visibility: public -/
 @[trait_default]
 def Iterator.filter_map.default
@@ -935,12 +935,12 @@ def Iterator.filter_map.default
   FilterMap.new self f
 
 /-- [nonpos_iterator::{nonpos_iterator::Enumerate<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1791:4-1793:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1823:4-1825:5 -/
 def Enumerate.new {I : Type _} (iter : I) : Result (Enumerate I) := do
   ok { iter, count := 0#usize }
 
 /-- [nonpos_iterator::Iterator::enumerate]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 387:4-392:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 393:4-398:5
     Visibility: public -/
 @[trait_default]
 def Iterator.enumerate.default
@@ -950,7 +950,7 @@ def Iterator.enumerate.default
   Enumerate.new self
 
 /-- [nonpos_iterator::{nonpos_iterator::Peekable<I, Clause0_Item>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1814:4-1816:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1846:4-1848:5 -/
 def Peekable.new
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
   (iter : I) :
@@ -960,7 +960,7 @@ def Peekable.new
 nonpos_continuity Peekable.new
 
 /-- [nonpos_iterator::Iterator::peekable]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 394:4-399:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 400:4-405:5
     Visibility: public -/
 @[trait_default]
 def Iterator.peekable.default
@@ -972,7 +972,7 @@ def Iterator.peekable.default
 nonpos_continuity Iterator.peekable.default
 
 /-- [nonpos_iterator::{nonpos_iterator::SkipWhile<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1835:4-1837:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1867:4-1873:5 -/
 def SkipWhile.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (SkipWhile I P)
@@ -980,7 +980,7 @@ def SkipWhile.new
   ok { iter, flag := false, predicate }
 
 /-- [nonpos_iterator::Iterator::skip_while]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 401:4-407:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 407:4-413:5
     Visibility: public -/
 @[trait_default]
 def Iterator.skip_while.default
@@ -992,7 +992,7 @@ def Iterator.skip_while.default
   SkipWhile.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::TakeWhile<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1859:4-1861:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1895:4-1901:5 -/
 def TakeWhile.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (TakeWhile I P)
@@ -1000,7 +1000,7 @@ def TakeWhile.new
   ok { iter, flag := false, predicate }
 
 /-- [nonpos_iterator::Iterator::take_while]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 409:4-415:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 415:4-421:5
     Visibility: public -/
 @[trait_default]
 def Iterator.take_while.default
@@ -1012,7 +1012,7 @@ def Iterator.take_while.default
   TakeWhile.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::MapWhile<I, P>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1889:4-1891:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1929:4-1931:5 -/
 def MapWhile.new
   {I : Type _} {P : Type _} (iter : I) (predicate : P) :
   Result (MapWhile I P)
@@ -1020,7 +1020,7 @@ def MapWhile.new
   ok { iter, predicate }
 
 /-- [nonpos_iterator::Iterator::map_while]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 417:4-423:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 423:4-429:5
     Visibility: public -/
 @[trait_default]
 def Iterator.map_while.default
@@ -1032,12 +1032,12 @@ def Iterator.map_while.default
   MapWhile.new self predicate
 
 /-- [nonpos_iterator::{nonpos_iterator::Skip<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1909:4-1911:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1949:4-1951:5 -/
 def Skip.new {I : Type _} (iter : I) (n : Std.Usize) : Result (Skip I) := do
   ok { iter, n }
 
 /-- [nonpos_iterator::Iterator::skip]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 425:4-430:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 431:4-436:5
     Visibility: public -/
 @[trait_default]
 def Iterator.skip.default
@@ -1047,12 +1047,12 @@ def Iterator.skip.default
   Skip.new self n
 
 /-- [nonpos_iterator::{nonpos_iterator::Take<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1933:4-1935:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1973:4-1975:5 -/
 def Take.new {I : Type _} (iter : I) (n : Std.Usize) : Result (Take I) := do
   ok { iter, n }
 
 /-- [nonpos_iterator::Iterator::take]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 432:4-437:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 438:4-443:5
     Visibility: public -/
 @[trait_default]
 def Iterator.take.default
@@ -1062,7 +1062,7 @@ def Iterator.take.default
   Take.new self n
 
 /-- [nonpos_iterator::{nonpos_iterator::Scan<I, St, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1956:4-1958:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1996:4-1998:5 -/
 def Scan.new
   {I : Type _} {St : Type _} {F : Type _} (iter : I) (state : St) (f : F) :
   Result (Scan I St F)
@@ -1070,7 +1070,7 @@ def Scan.new
   ok { iter, f, state }
 
 /-- [nonpos_iterator::Iterator::scan]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 439:4-445:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 445:4-451:5
     Visibility: public -/
 @[trait_default]
 def Iterator.scan.default
@@ -1083,7 +1083,7 @@ def Iterator.scan.default
   Scan.new self initial_state f
 
 /-- [nonpos_iterator::{nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1981:4-1983:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2021:4-2027:5 -/
 def FlatMap.new
   {I : Type _} {U : Type _} {F : Type _} {Clause0_Item : Type _} {Clause1_Item
   : Type _} {Clause1_IntoIter : Type _} (IteratorInst : Iterator I
@@ -1096,7 +1096,7 @@ def FlatMap.new
 nonpos_continuity FlatMap.new
 
 /-- [nonpos_iterator::Iterator::flat_map]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 448:4-455:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 454:4-461:5
     Visibility: public -/
 @[trait_default]
 def Iterator.flat_map.default
@@ -1112,7 +1112,7 @@ def Iterator.flat_map.default
 nonpos_continuity Iterator.flat_map.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2009:4-2011:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2053:4-2058:5 -/
 def Flatten.new
   {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
   {Clause1_IntoIter : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -1124,7 +1124,7 @@ def Flatten.new
 nonpos_continuity Flatten.new
 
 /-- [nonpos_iterator::Iterator::flatten]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 457:4-463:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 463:4-469:5
     Visibility: public -/
 @[trait_default]
 def Iterator.flatten.default
@@ -1138,7 +1138,7 @@ def Iterator.flatten.default
 nonpos_continuity Iterator.flatten.default
 
 /-- [nonpos_iterator::{nonpos_iterator::MapWindows<I, F, Clause0_Item, N>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2039:4-2042:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2086:4-2096:5 -/
 def MapWindows.new
   {I : Type _} {F : Type _} {Clause0_Item : Type _} (N : Std.Usize)
   (IteratorInst : Iterator I Clause0_Item) (iter : I) (f : F) :
@@ -1149,7 +1149,7 @@ def MapWindows.new
 nonpos_continuity MapWindows.new
 
 /-- [nonpos_iterator::Iterator::map_windows]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 465:4-474:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 471:4-480:5
     Visibility: public -/
 @[trait_default]
 def Iterator.map_windows.default
@@ -1163,12 +1163,12 @@ def Iterator.map_windows.default
 nonpos_continuity Iterator.map_windows.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Fuse<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2050:4-2052:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2104:4-2106:5 -/
 def Fuse.new {I : Type _} (iter : I) : Result (Fuse I) := do
   ok { iter := (some iter) }
 
 /-- [nonpos_iterator::Iterator::fuse]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 476:4-481:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 482:4-487:5
     Visibility: public -/
 @[trait_default]
 def Iterator.fuse.default
@@ -1178,13 +1178,13 @@ def Iterator.fuse.default
   Fuse.new self
 
 /-- [nonpos_iterator::{nonpos_iterator::Inspect<I, F>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2076:4-2078:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2130:4-2132:5 -/
 def Inspect.new
   {I : Type _} {F : Type _} (iter : I) (f : F) : Result (Inspect I F) := do
   ok { iter, f }
 
 /-- [nonpos_iterator::Iterator::inspect]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 483:4-489:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 489:4-495:5
     Visibility: public -/
 @[trait_default]
 def Iterator.inspect.default
@@ -1196,7 +1196,7 @@ def Iterator.inspect.default
   Inspect.new self f
 
 /-- [nonpos_iterator::Iterator::by_ref]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 491:4-496:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 497:4-502:5
     Visibility: public -/
 @[trait_default]
 def Iterator.by_ref.default
@@ -1206,7 +1206,7 @@ def Iterator.by_ref.default
   ok (self, fun self1 => self1)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::IntoIterator<Clause0_Item, I> for I}::into_iter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1444:4-1446:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1459:4-1461:5
     Visibility: public -/
 def IntoIterator.Blanket.into_iter
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -1217,7 +1217,7 @@ def IntoIterator.Blanket.into_iter
 nonpos_continuity IntoIterator.Blanket.into_iter
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::IntoIterator<Clause0_Item, I> for I}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1439:0-1447:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1454:0-1462:1 -/
 @[reducible]
 def IntoIterator.Blanket {I : Type _} {Clause0_Item : Type _} (IteratorInst1 :
   Iterator I Clause0_Item) : IntoIterator I Clause0_Item I := IntoIterator.mk
@@ -1226,7 +1226,7 @@ def IntoIterator.Blanket {I : Type _} {Clause0_Item : Type _} (IteratorInst1 :
   (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Iterator::collect_into]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 534:4-540:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 540:4-546:5
     Visibility: public -/
 @[trait_default]
 def Iterator.collect_into.default
@@ -1241,7 +1241,7 @@ def Iterator.collect_into.default
 nonpos_continuity Iterator.collect_into.default
 
 /-- [nonpos_iterator::Iterator::fold]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 676:8-678:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 682:8-684:9
     Visibility: public -/
 @[rust_loop_body, trait_default]
 def Iterator.fold.default_loop.body
@@ -1260,7 +1260,7 @@ def Iterator.fold.default_loop.body
 nonpos_continuity Iterator.fold.default_loop.body
 
 /-- [nonpos_iterator::Iterator::fold]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 676:8-678:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 682:8-684:9
     Visibility: public -/
 @[rust_loop, trait_default]
 def Iterator.fold.default_loop
@@ -1277,7 +1277,7 @@ def Iterator.fold.default_loop
 nonpos_continuity Iterator.fold.default_loop
 
 /-- [nonpos_iterator::Iterator::fold]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 670:4-680:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 676:4-686:5
     Visibility: public -/
 @[reducible, trait_default]
 def Iterator.fold.default
@@ -1292,7 +1292,7 @@ def Iterator.fold.default
 nonpos_continuity Iterator.fold.default
 
 /-- [nonpos_iterator::Iterator::reduce]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 682:4-689:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 688:4-695:5
     Visibility: public -/
 @[trait_default]
 def Iterator.reduce.default
@@ -1315,12 +1315,12 @@ def Iterator.reduce.default
 nonpos_continuity Iterator.reduce.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Rev<T>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2098:4-2100:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2152:4-2154:5 -/
 def Rev.new {T : Type _} (iter : T) : Result (Rev T) := do
   ok { iter }
 
 /-- [nonpos_iterator::Iterator::rev]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 996:4-1001:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1004:4-1009:5
     Visibility: public -/
 @[trait_default]
 def Iterator.rev.default
@@ -1333,7 +1333,7 @@ def Iterator.rev.default
 nonpos_continuity Iterator.rev.default
 
 /-- [nonpos_iterator::{nonpos_iterator::Cycle<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2154:4-2156:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2208:4-2213:5 -/
 def Cycle.new
   {I : Type _} (corecloneCloneInst : core.clone.Clone I) (iter : I) :
   Result (Cycle I)
@@ -1342,7 +1342,7 @@ def Cycle.new
   ok { orig := t, iter }
 
 /-- [nonpos_iterator::Iterator::cycle]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1043:4-1048:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1051:4-1056:5
     Visibility: public -/
 @[trait_default]
 def Iterator.cycle.default
@@ -1353,7 +1353,7 @@ def Iterator.cycle.default
   Cycle.new corecloneCloneInst self
 
 /-- [nonpos_iterator::{nonpos_iterator::ArrayChunks<I, Clause0_Item, N>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2182:4-2185:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2239:4-2245:5 -/
 def ArrayChunks.new
   {I : Type _} {Clause0_Item : Type _} (N : Std.Usize) (IteratorInst : Iterator
   I Clause0_Item) (iter : I) :
@@ -1364,7 +1364,7 @@ def ArrayChunks.new
 nonpos_continuity ArrayChunks.new
 
 /-- [nonpos_iterator::Iterator::array_chunks]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1050:4-1055:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1058:4-1063:5
     Visibility: public -/
 @[trait_default]
 def Iterator.array_chunks.default
@@ -1376,7 +1376,7 @@ def Iterator.array_chunks.default
 nonpos_continuity Iterator.array_chunks.default
 
 /-- [nonpos_iterator::Iterator::sum]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1057:4-1063:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1065:4-1071:5
     Visibility: public -/
 @[trait_default]
 def Iterator.sum.default
@@ -1388,7 +1388,7 @@ def Iterator.sum.default
 nonpos_continuity Iterator.sum.default
 
 /-- [nonpos_iterator::Iterator::product]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1065:4-1071:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1073:4-1079:5
     Visibility: public -/
 @[trait_default]
 def Iterator.product.default
@@ -1400,14 +1400,14 @@ def Iterator.product.default
 nonpos_continuity Iterator.product.default
 
 /-- [nonpos_iterator::Iterator::cmp::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1080:27-1080:43 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1088:27-1088:43 -/
 @[reducible]
 def Iterator.cmp.closure (Self : Type _) (I : Type _) (Clause0_Item : Type _)
   (Clause1_IntoIter : Type _) :=
 Unit
 
 /-- [nonpos_iterator::Iterator::cmp::{impl core::ops::function::FnMut<(Clause0_Item, Clause0_Item), core::cmp::Ordering> for nonpos_iterator::Iterator::cmp::{closure}<Self, I, Clause0_Item, Clause1_IntoIter>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1080:27-1080:43 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1088:27-1088:43 -/
 def Iterator.cmp.closure.Insts.CoreOpsFunctionFnMutPairOrdering.call_mut
   {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter :
   Type _} (IntoIteratorInst : IntoIterator I Clause0_Item Clause1_IntoIter)
@@ -1423,7 +1423,7 @@ def Iterator.cmp.closure.Insts.CoreOpsFunctionFnMutPairOrdering.call_mut
 nonpos_continuity Iterator.cmp.closure.Insts.CoreOpsFunctionFnMutPairOrdering.call_mut
 
 /-- [nonpos_iterator::Iterator::cmp::{impl core::ops::function::FnOnce<(Clause0_Item, Clause0_Item), core::cmp::Ordering> for nonpos_iterator::Iterator::cmp::{closure}<Self, I, Clause0_Item, Clause1_IntoIter>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1080:27-1080:43 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1088:27-1088:43 -/
 def Iterator.cmp.closure.Insts.CoreOpsFunctionFnOncePairOrdering.call_once
   {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter :
   Type _} (IntoIteratorInst : IntoIterator I Clause0_Item Clause1_IntoIter)
@@ -1439,7 +1439,7 @@ def Iterator.cmp.closure.Insts.CoreOpsFunctionFnOncePairOrdering.call_once
 nonpos_continuity Iterator.cmp.closure.Insts.CoreOpsFunctionFnOncePairOrdering.call_once
 
 /-- Trait implementation: [nonpos_iterator::Iterator::cmp::{impl core::ops::function::FnOnce<(Clause0_Item, Clause0_Item), core::cmp::Ordering> for nonpos_iterator::Iterator::cmp::{closure}<Self, I, Clause0_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1080:27-1080:43 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1088:27-1088:43 -/
 @[reducible]
 def Iterator.cmp.closure.Insts.CoreOpsFunctionFnOncePairOrdering (Self :
   Type _) {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter : Type _}
@@ -1453,7 +1453,7 @@ def Iterator.cmp.closure.Insts.CoreOpsFunctionFnOncePairOrdering (Self :
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::cmp::{impl core::ops::function::FnMut<(Clause0_Item, Clause0_Item), core::cmp::Ordering> for nonpos_iterator::Iterator::cmp::{closure}<Self, I, Clause0_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1080:27-1080:43 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1088:27-1088:43 -/
 @[reducible]
 def Iterator.cmp.closure.Insts.CoreOpsFunctionFnMutPairOrdering (Self : Type _)
   {I : Type _} {Clause0_Item : Type _} {Clause1_IntoIter : Type _}
@@ -1469,7 +1469,7 @@ def Iterator.cmp.closure.Insts.CoreOpsFunctionFnMutPairOrdering (Self : Type _)
 }
 
 /-- [nonpos_iterator::Iterator::cmp]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1074:4-1081:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1082:4-1089:5
     Visibility: public -/
 @[trait_default]
 def Iterator.cmp.default
@@ -1485,12 +1485,12 @@ def Iterator.cmp.default
 nonpos_continuity Iterator.cmp.default
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1095:12-1098:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1103:12-1106:13 -/
 @[reducible]
 def Iterator.cmp_by.compare.closure (X : Type _) (Y : Type _) (F : Type _) := F
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1095:12-1098:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1103:12-1106:13 -/
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOrderingTuple.call_mut
   {X : Type _} {Y : Type _} {F : Type _} (coreopsfunctionFnMutFPairOrderingInst
@@ -1506,7 +1506,7 @@ def
   | Ordering.gt => ok (core.ops.control_flow.ControlFlow.Break Ordering.gt, t)
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1095:12-1098:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1103:12-1106:13 -/
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOrderingTuple.call_once
   {X : Type _} {Y : Type _} {F : Type _} (coreopsfunctionFnMutFPairOrderingInst
@@ -1520,7 +1520,7 @@ def
   ok cf
 
 /-- Trait implementation: [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1095:12-1098:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1103:12-1106:13 -/
 @[reducible]
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOrderingTuple
@@ -1534,7 +1534,7 @@ def
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::cmp::Ordering, ()>> for nonpos_iterator::Iterator::cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1095:12-1098:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1103:12-1106:13 -/
 @[reducible]
 def
   Iterator.cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOrderingTuple
@@ -1551,7 +1551,7 @@ def
 }
 
 /-- [nonpos_iterator::Iterator::cmp_by::compare]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1091:8-1099:9 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1099:8-1107:9 -/
 def Iterator.cmp_by.compare
   {X : Type _} {Y : Type _} {F : Type _} (coreopsfunctionFnMutFPairOrderingInst
   : core.ops.function.FnMut F (X × Y) Ordering) (cmp : F) :
@@ -1560,7 +1560,7 @@ def Iterator.cmp_by.compare
   ok cmp
 
 /-- [nonpos_iterator::Iterator::cmp_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1084:4-1105:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1092:4-1113:5
     Visibility: public -/
 @[trait_default]
 def Iterator.cmp_by.default
@@ -1584,14 +1584,14 @@ def Iterator.cmp_by.default
 nonpos_continuity Iterator.cmp_by.default
 
 /-- [nonpos_iterator::Iterator::partial_cmp::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1114:35-1114:59 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1122:35-1122:59 -/
 @[reducible]
 def Iterator.partial_cmp.closure (Self : Type _) (I : Type _) (Clause0_Item :
   Type _) (Clause1_Item : Type _) (Clause1_IntoIter : Type _) :=
 Unit
 
 /-- [nonpos_iterator::Iterator::partial_cmp::{impl core::ops::function::FnMut<(Clause0_Item, Clause1_Item), core::option::Option<core::cmp::Ordering>> for nonpos_iterator::Iterator::partial_cmp::{closure}<Self, I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1114:35-1114:59 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1122:35-1122:59 -/
 def
   Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnMutPairOptionOrdering.call_mut
   {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -1609,7 +1609,7 @@ def
 nonpos_continuity Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnMutPairOptionOrdering.call_mut
 
 /-- [nonpos_iterator::Iterator::partial_cmp::{impl core::ops::function::FnOnce<(Clause0_Item, Clause1_Item), core::option::Option<core::cmp::Ordering>> for nonpos_iterator::Iterator::partial_cmp::{closure}<Self, I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1114:35-1114:59 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1122:35-1122:59 -/
 def
   Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnOncePairOptionOrdering.call_once
   {Self : Type _} {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -1627,7 +1627,7 @@ def
 nonpos_continuity Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnOncePairOptionOrdering.call_once
 
 /-- Trait implementation: [nonpos_iterator::Iterator::partial_cmp::{impl core::ops::function::FnOnce<(Clause0_Item, Clause1_Item), core::option::Option<core::cmp::Ordering>> for nonpos_iterator::Iterator::partial_cmp::{closure}<Self, I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1114:35-1114:59 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1122:35-1122:59 -/
 @[reducible]
 def Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnOncePairOptionOrdering
   (Self : Type _) {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -1642,7 +1642,7 @@ def Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnOncePairOptionOrdering
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::partial_cmp::{impl core::ops::function::FnMut<(Clause0_Item, Clause1_Item), core::option::Option<core::cmp::Ordering>> for nonpos_iterator::Iterator::partial_cmp::{closure}<Self, I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1114:35-1114:59 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1122:35-1122:59 -/
 @[reducible]
 def Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnMutPairOptionOrdering
   (Self : Type _) {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -1660,7 +1660,7 @@ def Iterator.partial_cmp.closure.Insts.CoreOpsFunctionFnMutPairOptionOrdering
 }
 
 /-- [nonpos_iterator::Iterator::partial_cmp]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1108:4-1115:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1116:4-1123:5
     Visibility: public -/
 @[trait_default]
 def Iterator.partial_cmp.default
@@ -1677,14 +1677,14 @@ def Iterator.partial_cmp.default
 nonpos_continuity Iterator.partial_cmp.default
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:12-1132:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 @[reducible]
 def Iterator.partial_cmp_by.compare.closure (X : Type _) (Y : Type _) (F :
   Type _) :=
   F
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}::call_mut]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:12-1132:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOptionOrderingTuple.call_mut
   {X : Type _} {Y : Type _} {F : Type _}
@@ -1705,7 +1705,7 @@ def
     | Ordering.gt => ok (core.ops.control_flow.ControlFlow.Break o, t)
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}::call_once]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:12-1132:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOptionOrderingTuple.call_once
   {X : Type _} {Y : Type _} {F : Type _}
@@ -1720,7 +1720,7 @@ def
   ok cf
 
 /-- Trait implementation: [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnOnce<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:12-1132:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 @[reducible]
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnOncePairControlFlowOptionOrderingTuple
@@ -1735,7 +1735,7 @@ def
 }
 
 /-- Trait implementation: [nonpos_iterator::Iterator::partial_cmp_by::compare::{impl core::ops::function::FnMut<(X, Y), core::ops::control_flow::ControlFlow<core::option::Option<core::cmp::Ordering>, ()>> for nonpos_iterator::Iterator::partial_cmp_by::compare::{closure}<X, Y, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1129:12-1132:13 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1137:12-1140:13 -/
 @[reducible]
 def
   Iterator.partial_cmp_by.compare.closure.Insts.CoreOpsFunctionFnMutPairControlFlowOptionOrderingTuple
@@ -1753,7 +1753,7 @@ def
 }
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by::compare]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1125:8-1133:9 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1133:8-1141:9 -/
 def Iterator.partial_cmp_by.compare
   {X : Type _} {Y : Type _} {F : Type _}
   (coreopsfunctionFnMutFPairOptionOrderingInst : core.ops.function.FnMut F (X
@@ -1763,7 +1763,7 @@ def Iterator.partial_cmp_by.compare
   ok partial_cmp
 
 /-- [nonpos_iterator::Iterator::partial_cmp_by]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1118:4-1139:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1126:4-1147:5
     Visibility: public -/
 @[trait_default]
 def Iterator.partial_cmp_by.default
@@ -1789,7 +1789,7 @@ def Iterator.partial_cmp_by.default
 nonpos_continuity Iterator.partial_cmp_by.default
 
 /-- [nonpos_iterator::Iterator::lt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1192:4-1199:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1200:4-1207:5
     Visibility: public -/
 @[trait_default]
 def Iterator.lt.default
@@ -1807,7 +1807,7 @@ def Iterator.lt.default
 nonpos_continuity Iterator.lt.default
 
 /-- [nonpos_iterator::Iterator::le]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1202:4-1209:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1210:4-1220:5
     Visibility: public -/
 @[trait_default]
 def Iterator.le.default
@@ -1830,7 +1830,7 @@ def Iterator.le.default
 nonpos_continuity Iterator.le.default
 
 /-- [nonpos_iterator::Iterator::gt]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1212:4-1219:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1223:4-1230:5
     Visibility: public -/
 @[trait_default]
 def Iterator.gt.default
@@ -1848,7 +1848,7 @@ def Iterator.gt.default
 nonpos_continuity Iterator.gt.default
 
 /-- [nonpos_iterator::Iterator::ge]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1222:4-1229:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1233:4-1243:5
     Visibility: public -/
 @[trait_default]
 def Iterator.ge.default
@@ -1871,7 +1871,7 @@ def Iterator.ge.default
 nonpos_continuity Iterator.ge.default
 
 /-- [nonpos_iterator::Iterator::__iterator_get_unchecked]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1292:4-1298:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1306:4-1312:5
     Visibility: public -/
 @[trait_default]
 def Iterator.__iterator_get_unchecked.default
@@ -1884,7 +1884,7 @@ def Iterator.__iterator_get_unchecked.default
   fail panic
 
 /-- [nonpos_iterator::DoubleEndedIterator::next_chunk_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1310:4-1317:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1324:4-1331:5
     Visibility: public -/
 @[trait_default]
 def DoubleEndedIterator.next_chunk_back.default
@@ -1898,7 +1898,7 @@ def DoubleEndedIterator.next_chunk_back.default
 nonpos_continuity DoubleEndedIterator.next_chunk_back.default
 
 /-- [nonpos_iterator::DoubleEndedIterator::rfold]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1371:8-1373:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 1386:8-1388:9
     Visibility: public -/
 @[rust_loop_body, trait_default]
 def DoubleEndedIterator.rfold.default_loop.body
@@ -1917,7 +1917,7 @@ def DoubleEndedIterator.rfold.default_loop.body
 nonpos_continuity DoubleEndedIterator.rfold.default_loop.body
 
 /-- [nonpos_iterator::DoubleEndedIterator::rfold]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1371:8-1373:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 1386:8-1388:9
     Visibility: public -/
 @[rust_loop, trait_default]
 def DoubleEndedIterator.rfold.default_loop
@@ -1934,7 +1934,7 @@ def DoubleEndedIterator.rfold.default_loop
 nonpos_continuity DoubleEndedIterator.rfold.default_loop
 
 /-- [nonpos_iterator::DoubleEndedIterator::rfold]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1365:4-1375:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1380:4-1390:5
     Visibility: public -/
 @[reducible, trait_default]
 def DoubleEndedIterator.rfold.default
@@ -1949,7 +1949,7 @@ def DoubleEndedIterator.rfold.default
 nonpos_continuity DoubleEndedIterator.rfold.default
 
 /-- Trait declaration: [nonpos_iterator::ExactSizeIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1407:0-1421:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1422:0-1436:1
     Visibility: public -/
 structure ExactSizeIterator (Self : Type _) (Self_Clause0_Item : Type _) where
   IteratorInst : Iterator Self Self_Clause0_Item
@@ -1958,7 +1958,7 @@ structure ExactSizeIterator (Self : Type _) (Self_Clause0_Item : Type _) where
 deriving Lean.Order.CCPO
 
 /-- [nonpos_iterator::ExactSizeIterator::len]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1408:4-1416:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1423:4-1431:5
     Visibility: public -/
 @[trait_default]
 def ExactSizeIterator.len.default
@@ -1974,7 +1974,7 @@ def ExactSizeIterator.len.default
   ok lower
 
 /-- [nonpos_iterator::ExactSizeIterator::is_empty]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1418:4-1420:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1433:4-1435:5
     Visibility: public -/
 @[trait_default]
 def ExactSizeIterator.is_empty.default
@@ -1986,7 +1986,7 @@ def ExactSizeIterator.is_empty.default
   ok (i = 0#usize)
 
 /-- Trait declaration: [nonpos_iterator::FromIterator]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1434:0-1436:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1449:0-1451:1
     Visibility: public -/
 structure FromIterator (Self : Type _) (T : Type _) where
   from_iter : forall {I : Type} {Clause0_IntoIter : Type} (IntoIteratorInst :
@@ -1994,13 +1994,13 @@ structure FromIterator (Self : Type _) (T : Type _) where
 deriving Lean.Order.CCPO
 
 /-- [nonpos_iterator::OptionIntoIter]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1500:0-1502:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 1515:0-1517:1
     Visibility: public -/
 structure OptionIntoIter (A : Type _) where
   inner : Option A
 
 /-- [nonpos_iterator::{impl nonpos_iterator::IntoIterator<T, nonpos_iterator::OptionIntoIter<T>> for core::option::Option<T>}::into_iter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1512:4-1514:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1527:4-1529:5
     Visibility: public -/
 def
   core.option.Option.Insts.Nonpos_iteratorIntoIteratorTOptionIntoIter.into_iter
@@ -2008,7 +2008,7 @@ def
   ok { inner := self }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<A> for nonpos_iterator::OptionIntoIter<A>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1505:4-1507:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1520:4-1522:5
     Visibility: public -/
 def OptionIntoIter.Insts.Nonpos_iteratorIterator.next
   {A : Type _} (self : OptionIntoIter A) :
@@ -2019,7 +2019,7 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<A> for nonpos_iterator::OptionIntoIter<A>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1503:0-1508:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1518:0-1523:1 -/
 @[reducible]
 def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
   (OptionIntoIter A) A := Iterator.mk
@@ -2169,7 +2169,7 @@ def OptionIntoIter.Insts.Nonpos_iteratorIterator (A : Type _) : Iterator
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::IntoIterator<T, nonpos_iterator::OptionIntoIter<T>> for core::option::Option<T>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1509:0-1515:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1524:0-1530:1 -/
 @[reducible]
 def core.option.Option.Insts.Nonpos_iteratorIntoIteratorTOptionIntoIter (T :
   Type _) : IntoIterator (Option T) T (OptionIntoIter T) := IntoIterator.mk
@@ -2179,7 +2179,7 @@ def core.option.Option.Insts.Nonpos_iteratorIntoIteratorTOptionIntoIter (T :
   (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Extend::extend_one]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1452:4-1454:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1467:4-1469:5
     Visibility: public -/
 @[trait_default]
 def Extend.extend_one.default
@@ -2193,7 +2193,7 @@ def Extend.extend_one.default
 nonpos_continuity Extend.extend_one.default
 
 /-- [nonpos_iterator::Extend::extend_reserve]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1456:4-1458:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1471:4-1473:5
     Visibility: public -/
 @[trait_default]
 def Extend.extend_reserve.default
@@ -2203,7 +2203,7 @@ def Extend.extend_reserve.default
   ok self
 
 /-- [nonpos_iterator::Extend::extend_one_unchecked]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1461:4-1466:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1476:4-1481:5
     Visibility: public -/
 @[trait_default]
 def Extend.extend_one_unchecked.default
@@ -2215,7 +2215,7 @@ def Extend.extend_one_unchecked.default
 nonpos_continuity Extend.extend_one_unchecked.default
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}::extend]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1474:8-1477:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 1489:8-1492:9
     Visibility: public -/
 @[rust_loop_body]
 def Pair.Insts.Nonpos_iteratorExtendPair.extend_loop.body
@@ -2241,7 +2241,7 @@ def Pair.Insts.Nonpos_iteratorExtendPair.extend_loop.body
 nonpos_continuity Pair.Insts.Nonpos_iteratorExtendPair.extend_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}::extend]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1474:8-1477:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 1489:8-1492:9
     Visibility: public -/
 @[rust_loop]
 def Pair.Insts.Nonpos_iteratorExtendPair.extend_loop
@@ -2260,7 +2260,7 @@ def Pair.Insts.Nonpos_iteratorExtendPair.extend_loop
 nonpos_continuity Pair.Insts.Nonpos_iteratorExtendPair.extend_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}::extend]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1472:4-1478:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1487:4-1493:5
     Visibility: public -/
 def Pair.Insts.Nonpos_iteratorExtendPair.extend
   {A : Type _} {B : Type _} {ExtendA : Type _} {ExtendB : Type _} {T : Type _}
@@ -2276,7 +2276,7 @@ nonpos_continuity Pair.Insts.Nonpos_iteratorExtendPair.extend
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Extend<(A, B)> for (ExtendA, ExtendB)}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1471:0-1479:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1486:0-1494:1 -/
 @[reducible]
 def Pair.Insts.Nonpos_iteratorExtendPair {A : Type _} {B : Type _} {ExtendA :
   Type _} {ExtendB : Type _} (ExtendInst : Extend ExtendA A) (ExtendInst1 :
@@ -2294,7 +2294,7 @@ def Pair.Insts.Nonpos_iteratorExtendPair {A : Type _} {B : Type _} {ExtendA :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1578:12-1581:13
+    Source: 'tests/src/nonpos-iterator.rs', lines 1597:12-1600:13
     Visibility: public -/
 @[rust_loop_body]
 def StepBy.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -2311,7 +2311,7 @@ def StepBy.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1578:12-1581:13
+    Source: 'tests/src/nonpos-iterator.rs', lines 1597:12-1600:13
     Visibility: public -/
 @[rust_loop]
 def StepBy.Insts.Nonpos_iteratorIterator.next_loop
@@ -2326,7 +2326,7 @@ def StepBy.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1571:4-1584:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1590:4-1603:5
     Visibility: public -/
 def StepBy.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -2347,7 +2347,7 @@ nonpos_continuity StepBy.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::StepBy<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1569:0-1585:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1588:0-1604:1 -/
 @[reducible]
 def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (StepBy I) Clause0_Item
@@ -2497,7 +2497,7 @@ def StepBy.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1599:4-1610:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1621:4-1632:5
     Visibility: public -/
 def Chain.Insts.Nonpos_iteratorIterator.next
   {A : Type _} {B : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator A
@@ -2525,7 +2525,7 @@ nonpos_continuity Chain.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Chain<A, B>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1597:0-1611:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1619:0-1633:1 -/
 @[reducible]
 def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
   : Type _} (IteratorInst : Iterator A Clause0_Item) (IteratorInst1 : Iterator
@@ -2676,7 +2676,7 @@ def Chain.Insts.Nonpos_iteratorIterator {A : Type _} {B : Type _} {Clause0_Item
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1625:4-1635:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1647:4-1657:5
     Visibility: public -/
 def Zip.Insts.Nonpos_iteratorIteratorPair.next
   {A : Type _} {B : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -2696,7 +2696,7 @@ nonpos_continuity Zip.Insts.Nonpos_iteratorIteratorPair.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(Clause0_Item, Clause1_Item)> for nonpos_iterator::Zip<A, B>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1623:0-1636:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1645:0-1658:1 -/
 @[reducible]
 def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
   {Clause0_Item : Type _} {Clause1_Item : Type _} (IteratorInst : Iterator A
@@ -2862,7 +2862,7 @@ def Zip.Insts.Nonpos_iteratorIteratorPair {A : Type _} {B : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Intersperse<I, Clause0_Item>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1661:4-1677:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1688:4-1704:5
     Visibility: public -/
 def Intersperse.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -2889,7 +2889,7 @@ nonpos_continuity Intersperse.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Intersperse<I, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1656:0-1678:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1683:0-1705:1 -/
 @[reducible]
 def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
   Type _} (IteratorInst : Iterator I Clause0_Item) (corecloneCloneInst :
@@ -3050,7 +3050,7 @@ def Intersperse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::IntersperseWith<I, G, Clause0_Item>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1701:4-1717:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1733:4-1749:5
     Visibility: public -/
 def IntersperseWith.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {G : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -3079,7 +3079,7 @@ nonpos_continuity IntersperseWith.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::IntersperseWith<I, G, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1699:0-1718:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1731:0-1750:1 -/
 @[reducible]
 def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -3255,7 +3255,7 @@ def IntersperseWith.Insts.Nonpos_iteratorIterator {I : Type _} {G : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1732:4-1737:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1764:4-1769:5
     Visibility: public -/
 def Map.Insts.Nonpos_iteratorIterator.next
   {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst
@@ -3274,7 +3274,7 @@ nonpos_continuity Map.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::Map<I, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1730:0-1738:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1762:0-1770:1 -/
 @[reducible]
 def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -3441,7 +3441,7 @@ def Map.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1753:8-1759:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1785:8-1791:5
     Visibility: public -/
 @[rust_loop_body]
 def Filter.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -3463,7 +3463,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1753:8-1759:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1785:8-1791:5
     Visibility: public -/
 @[rust_loop]
 def Filter.Insts.Nonpos_iteratorIterator.next_loop
@@ -3479,7 +3479,7 @@ def Filter.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1752:4-1759:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1784:4-1791:5
     Visibility: public -/
 def Filter.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -3495,7 +3495,7 @@ nonpos_continuity Filter.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Filter<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1750:0-1760:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1782:0-1792:1 -/
 @[reducible]
 def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -3667,7 +3667,7 @@ def Filter.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1775:8-1782:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1807:8-1814:5
     Visibility: public -/
 @[rust_loop_body]
 def FilterMap.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -3688,7 +3688,7 @@ def FilterMap.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity FilterMap.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1775:8-1782:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1807:8-1814:5
     Visibility: public -/
 @[rust_loop]
 def FilterMap.Insts.Nonpos_iteratorIterator.next_loop
@@ -3704,7 +3704,7 @@ def FilterMap.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity FilterMap.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1774:4-1782:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1806:4-1814:5
     Visibility: public -/
 def FilterMap.Insts.Nonpos_iteratorIterator.next
   {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst
@@ -3720,7 +3720,7 @@ nonpos_continuity FilterMap.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::FilterMap<I, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1772:0-1783:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1804:0-1815:1 -/
 @[reducible]
 def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
   Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -3889,7 +3889,7 @@ def FilterMap.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {F :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1797:4-1805:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1829:4-1837:5
     Visibility: public -/
 def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -3906,7 +3906,7 @@ nonpos_continuity Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item.n
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<(usize, Clause0_Item)> for nonpos_iterator::Enumerate<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1795:0-1806:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1827:0-1838:1 -/
 @[reducible]
 def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item) : Iterator
@@ -4091,7 +4091,7 @@ def Enumerate.Insts.Nonpos_iteratorIteratorPairUsizeClause0_Item {I : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1820:4-1825:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1852:4-1857:5
     Visibility: public -/
 def Peekable.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4108,7 +4108,7 @@ nonpos_continuity Peekable.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Peekable<I, Clause0_Item>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1818:0-1826:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1850:0-1858:1 -/
 @[reducible]
 def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Peekable I Clause0_Item)
@@ -4259,7 +4259,7 @@ def Peekable.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1842:8-1849:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1878:8-1885:5
     Visibility: public -/
 @[rust_loop_body]
 def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -4285,7 +4285,7 @@ def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity SkipWhile.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1842:8-1849:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1878:8-1885:5
     Visibility: public -/
 @[rust_loop]
 def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop
@@ -4301,7 +4301,7 @@ def SkipWhile.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity SkipWhile.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1841:4-1849:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1877:4-1885:5
     Visibility: public -/
 def SkipWhile.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -4317,7 +4317,7 @@ nonpos_continuity SkipWhile.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::SkipWhile<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1839:0-1850:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1875:0-1886:1 -/
 @[reducible]
 def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4491,7 +4491,7 @@ def SkipWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::TakeWhile<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1865:4-1880:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1905:4-1920:5
     Visibility: public -/
 def TakeWhile.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -4516,7 +4516,7 @@ nonpos_continuity TakeWhile.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::TakeWhile<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1863:0-1881:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1903:0-1921:1 -/
 @[reducible]
 def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4690,7 +4690,7 @@ def TakeWhile.Insts.Nonpos_iteratorIterator {I : Type _} {P : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::MapWhile<I, P>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1895:4-1900:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1935:4-1940:5
     Visibility: public -/
 def MapWhile.Insts.Nonpos_iteratorIterator.next
   {B : Type _} {I : Type _} {P : Type _} {Clause0_Item : Type _} (IteratorInst
@@ -4710,7 +4710,7 @@ nonpos_continuity MapWhile.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<B> for nonpos_iterator::MapWhile<I, P>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1893:0-1901:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1933:0-1941:1 -/
 @[reducible]
 def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
   Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4879,7 +4879,7 @@ def MapWhile.Insts.Nonpos_iteratorIterator {B : Type _} {I : Type _} {P :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1916:8-1924:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1956:8-1964:5
     Visibility: public -/
 @[rust_loop_body]
 def Skip.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -4899,7 +4899,7 @@ def Skip.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity Skip.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1916:8-1924:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1956:8-1964:5
     Visibility: public -/
 @[rust_loop]
 def Skip.Insts.Nonpos_iteratorIterator.next_loop
@@ -4914,7 +4914,7 @@ def Skip.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity Skip.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1915:4-1924:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1955:4-1964:5
     Visibility: public -/
 def Skip.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -4928,7 +4928,7 @@ nonpos_continuity Skip.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Skip<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1913:0-1925:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1953:0-1965:1 -/
 @[reducible]
 def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Skip I) Clause0_Item
@@ -5078,7 +5078,7 @@ def Skip.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1939:4-1946:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 1979:4-1986:5
     Visibility: public -/
 def Take.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -5095,7 +5095,7 @@ nonpos_continuity Take.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Take<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1937:0-1947:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 1977:0-1987:1 -/
 @[reducible]
 def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Take I) Clause0_Item
@@ -5245,7 +5245,7 @@ def Take.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1988:8-2000:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2032:8-2044:5
     Visibility: public -/
 @[rust_loop_body]
 def FlatMap.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -5284,7 +5284,7 @@ def FlatMap.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity FlatMap.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1988:8-2000:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2032:8-2044:5
     Visibility: public -/
 @[rust_loop]
 def FlatMap.Insts.Nonpos_iteratorIterator.next_loop
@@ -5304,7 +5304,7 @@ def FlatMap.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity FlatMap.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 1987:4-2000:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2031:4-2044:5
     Visibility: public -/
 def FlatMap.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {U : Type _} {F : Type _} {Clause0_Item : Type _} {Clause1_Item
@@ -5324,7 +5324,7 @@ nonpos_continuity FlatMap.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::FlatMap<I, U, F, Clause1_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 1985:0-2001:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2029:0-2045:1 -/
 @[reducible]
 def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
   Type _} {Clause0_Item : Type _} {Clause1_Item : Type _} {Clause1_IntoIter :
@@ -5503,7 +5503,7 @@ def FlatMap.Insts.Nonpos_iteratorIterator {I : Type _} {U : Type _} {F :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::next]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2016:8-2028:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2063:8-2075:5
     Visibility: public -/
 @[rust_loop_body]
 def Flatten.Insts.Nonpos_iteratorIterator.next_loop.body
@@ -5536,7 +5536,7 @@ def Flatten.Insts.Nonpos_iteratorIterator.next_loop.body
 nonpos_continuity Flatten.Insts.Nonpos_iteratorIterator.next_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::next]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2016:8-2028:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2063:8-2075:5
     Visibility: public -/
 @[rust_loop]
 def Flatten.Insts.Nonpos_iteratorIterator.next_loop
@@ -5553,7 +5553,7 @@ def Flatten.Insts.Nonpos_iteratorIterator.next_loop
 nonpos_continuity Flatten.Insts.Nonpos_iteratorIterator.next_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2015:4-2028:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2062:4-2075:5
     Visibility: public -/
 def Flatten.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} {Clause1_Item : Type _}
@@ -5571,7 +5571,7 @@ nonpos_continuity Flatten.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Flatten<I, Clause0_Item, Clause1_Item, Clause1_IntoIter>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2013:0-2029:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2060:0-2076:1 -/
 @[reducible]
 def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   {Clause1_Item : Type _} {Clause1_IntoIter : Type _} (IteratorInst : Iterator
@@ -5730,7 +5730,7 @@ def Flatten.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Fuse<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2056:4-2067:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2110:4-2121:5
     Visibility: public -/
 def Fuse.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -5748,7 +5748,7 @@ nonpos_continuity Fuse.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Fuse<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2054:0-2068:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2108:0-2122:1 -/
 @[reducible]
 def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
   (IteratorInst : Iterator I Clause0_Item) : Iterator (Fuse I) Clause0_Item
@@ -5898,7 +5898,7 @@ def Fuse.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Inspect<I, F>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2082:4-2090:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2136:4-2144:5
     Visibility: public -/
 def Inspect.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {F : Type _} {Clause0_Item : Type _} (IteratorInst : Iterator I
@@ -5917,7 +5917,7 @@ nonpos_continuity Inspect.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Item> for nonpos_iterator::Inspect<I, F>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2080:0-2091:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2134:0-2145:1 -/
 @[reducible]
 def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
   {Clause0_Item : Type _} (IteratorInst : Iterator I Clause0_Item)
@@ -6090,7 +6090,7 @@ def Inspect.Insts.Nonpos_iteratorIterator {I : Type _} {F : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2104:4-2106:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2158:4-2160:5
     Visibility: public -/
 def Rev.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause0_Clause0_Item : Type _} (DoubleEndedIteratorInst :
@@ -6103,7 +6103,7 @@ nonpos_continuity Rev.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause0_Clause0_Item> for nonpos_iterator::Rev<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2102:0-2107:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2156:0-2161:1 -/
 @[reducible]
 def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
   Type _} (DoubleEndedIteratorInst : DoubleEndedIterator I
@@ -6258,18 +6258,18 @@ def Rev.Insts.Nonpos_iteratorIterator {I : Type _} {Clause0_Clause0_Item :
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Copied]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2109:0-2111:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2163:0-2165:1
     Visibility: public -/
 structure Copied (I : Type _) where
   it : I
 
 /-- [nonpos_iterator::{nonpos_iterator::Copied<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2114:4-2116:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2168:4-2170:5 -/
 def Copied.new {I : Type _} (it : I) : Result (Copied I) := do
   ok { it }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Copied<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2120:4-2125:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2174:4-2179:5
     Visibility: public -/
 def Copied.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {T : Type _} (IteratorISharedATInst : Iterator I T)
@@ -6284,7 +6284,7 @@ nonpos_continuity Copied.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Copied<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2118:0-2126:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2172:0-2180:1 -/
 @[reducible]
 def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (IteratorISharedATInst : Iterator I T) (coremarkerCopyInst : core.marker.Copy
@@ -6442,18 +6442,18 @@ def Copied.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Cloned]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2128:0-2130:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2182:0-2184:1
     Visibility: public -/
 structure Cloned (I : Type _) where
   it : I
 
 /-- [nonpos_iterator::{nonpos_iterator::Cloned<I>}::new]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2133:4-2135:5 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2187:4-2189:5 -/
 def Cloned.new {I : Type _} (it : I) : Result (Cloned I) := do
   ok { it }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Cloned<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2139:4-2144:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2193:4-2198:5
     Visibility: public -/
 def Cloned.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {T : Type _} (IteratorISharedATInst : Iterator I T)
@@ -6469,7 +6469,7 @@ nonpos_continuity Cloned.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<T> for nonpos_iterator::Cloned<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2137:0-2145:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2191:0-2199:1 -/
 @[reducible]
 def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
   (IteratorISharedATInst : Iterator I T) (corecloneCloneInst : core.clone.Clone
@@ -6627,7 +6627,7 @@ def Cloned.Insts.Nonpos_iteratorIterator {I : Type _} {T : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Cycle<I>}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2160:4-2168:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2217:4-2225:5
     Visibility: public -/
 def Cycle.Insts.Nonpos_iteratorIterator.next
   {I : Type _} {Clause1_Item : Type _} (corecloneCloneInst : core.clone.Clone
@@ -6645,7 +6645,7 @@ nonpos_continuity Cycle.Insts.Nonpos_iteratorIterator.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<Clause1_Item> for nonpos_iterator::Cycle<I>}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2158:0-2169:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2215:0-2226:1 -/
 @[reducible]
 def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
   (corecloneCloneInst : core.clone.Clone I) (IteratorInst : Iterator I
@@ -6798,27 +6798,27 @@ def Cycle.Insts.Nonpos_iteratorIterator {I : Type _} {Clause1_Item : Type _}
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::Count]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2197:0-2199:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2257:0-2259:1
     Visibility: public -/
 structure Count where
   n : Std.U32
 
 /-- [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::Count}::clone]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2196:9-2196:14
+    Source: 'tests/src/nonpos-iterator.rs', lines 2256:9-2256:14
     Visibility: public -/
 def Count.Insts.CoreCloneClone.clone (self : Count) : Result Count := do
   let i ← lift (core.clone.impls.CloneU32.clone self.n)
   ok { n := i }
 
 /-- Trait implementation: [nonpos_iterator::{impl core::clone::Clone for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2196:9-2196:14 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2256:9-2256:14 -/
 @[reducible]
 def Count.Insts.CoreCloneClone : core.clone.Clone Count := {
   clone := Count.Insts.CoreCloneClone.clone
 }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Iterator<u32> for nonpos_iterator::Count}::next]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2202:4-2209:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2262:4-2269:5
     Visibility: public -/
 def Count.Insts.Nonpos_iteratorIteratorU32.next
   (self : Count) : Result ((Option Std.U32) × Count) := do
@@ -6829,7 +6829,7 @@ def Count.Insts.Nonpos_iteratorIteratorU32.next
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Iterator<u32> for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2200:0-2210:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2260:0-2270:1 -/
 @[reducible]
 def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
   := Iterator.mk
@@ -6974,7 +6974,7 @@ def Count.Insts.Nonpos_iteratorIteratorU32 : Iterator Count Std.U32
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::{impl nonpos_iterator::DoubleEndedIterator<u32> for nonpos_iterator::Count}::next_back]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2212:4-2214:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2272:4-2274:5
     Visibility: public -/
 def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back
   (self : Count) : Result ((Option Std.U32) × Count) := do
@@ -6982,7 +6982,7 @@ def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32.next_back
 
 set_option backward.proofsInPublic true in
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::DoubleEndedIterator<u32> for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2211:0-2215:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2271:0-2275:1 -/
 @[reducible]
 def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32 : DoubleEndedIterator
   Count Std.U32 := DoubleEndedIterator.mk
@@ -7000,7 +7000,7 @@ def Count.Insts.Nonpos_iteratorDoubleEndedIteratorU32 : DoubleEndedIterator
 partial_fixpoint monotonicity NonPos.Cont.monotone (by nonpos_cont 5000)
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::ExactSizeIterator<u32> for nonpos_iterator::Count}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2216:0-2216:35 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2276:0-2276:35 -/
 @[reducible]
 impl_def Count.Insts.Nonpos_iteratorExactSizeIteratorU32 : ExactSizeIterator
   Count Std.U32 := {
@@ -7012,7 +7012,7 @@ impl_def Count.Insts.Nonpos_iteratorExactSizeIteratorU32 : ExactSizeIterator
 }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2221:8-2223:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2281:8-2283:9
     Visibility: public -/
 @[rust_loop_body]
 def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
@@ -7029,7 +7029,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
 nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2221:8-2223:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2281:8-2283:9
     Visibility: public -/
 @[rust_loop]
 def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
@@ -7046,7 +7046,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
 nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}::from_iter]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2218:4-2225:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2278:4-2285:5
     Visibility: public -/
 def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
   {T : Type _} {Clause0_IntoIter : Type _}
@@ -7060,7 +7060,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
 nonpos_continuity U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::FromIterator<u32> for u32}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2217:0-2226:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2277:0-2286:1 -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorFromIteratorU32 : FromIterator Std.U32 Std.U32
   := {
@@ -7070,7 +7070,7 @@ def U32.Insts.Nonpos_iteratorFromIteratorU32 : FromIterator Std.U32 Std.U32
 }
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]: loop body 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2231:8-2233:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2291:8-2293:9
     Visibility: public -/
 @[rust_loop_body]
 def U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
@@ -7085,7 +7085,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
 nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum_loop.body
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]: loop 0:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2231:8-2233:9
+    Source: 'tests/src/nonpos-iterator.rs', lines 2291:8-2293:9
     Visibility: public -/
 @[rust_loop]
 def U32.Insts.Nonpos_iteratorSumU32.sum_loop
@@ -7099,7 +7099,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum_loop
 nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum_loop
 
 /-- [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}::sum]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2228:4-2235:5
+    Source: 'tests/src/nonpos-iterator.rs', lines 2288:4-2295:5
     Visibility: public -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorSumU32.sum
@@ -7110,7 +7110,7 @@ def U32.Insts.Nonpos_iteratorSumU32.sum
 nonpos_continuity U32.Insts.Nonpos_iteratorSumU32.sum
 
 /-- Trait implementation: [nonpos_iterator::{impl nonpos_iterator::Sum<u32> for u32}]
-    Source: 'tests/src/nonpos-iterator.rs', lines 2227:0-2236:1 -/
+    Source: 'tests/src/nonpos-iterator.rs', lines 2287:0-2296:1 -/
 @[reducible]
 def U32.Insts.Nonpos_iteratorSumU32 : Sum Std.U32 Std.U32 := Sum.mk
   (sum := fun {I : Type} (IteratorPU32Inst : Iterator I Std.U32) =>
@@ -7118,7 +7118,7 @@ def U32.Insts.Nonpos_iteratorSumU32 : Sum Std.U32 Std.U32 := Sum.mk
   (by nonpos_cont 5000)
 
 /-- [nonpos_iterator::use_collect]:
-    Source: 'tests/src/nonpos-iterator.rs', lines 2237:0-2240:1
+    Source: 'tests/src/nonpos-iterator.rs', lines 2297:0-2300:1
     Visibility: public -/
 def use_collect : Result Std.U32 := do
   U32.Insts.Nonpos_iteratorFromIteratorU32.from_iter (IntoIterator.Blanket

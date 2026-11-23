@@ -1357,10 +1357,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     ?(use_forall = false) ?(use_fun = false) ?(use_forall_use_sep = true)
     ?(use_arrows = false) ?(as_implicits : bool = false)
     ?(space : bool ref option = None) ?(poly_types : bool = true)
-    (origin : generic_origin)
-    (generics : generic_params) (explicit : explicit_info option)
-    (type_params : string list) (cg_params : string list)
-    (trait_clauses : string list) : unit =
+    (origin : generic_origin) (generics : generic_params)
+    (explicit : explicit_info option) (type_params : string list)
+    (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   [%cassert] span

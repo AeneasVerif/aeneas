@@ -88,11 +88,19 @@ pub fn default_item<B: ExampleNonpos>(_b: &B) -> B::Item {
 
 /// Mutual recursion taking a dictionary.
 pub fn even<B: ExampleNonpos>(b: &B, n: u32) -> u32 {
-    if n == 0 { b.to_num() } else { odd(b, n - 1) }
+    if n == 0 {
+        b.to_num()
+    } else {
+        odd(b, n - 1)
+    }
 }
 
 pub fn odd<B: ExampleNonpos>(b: &B, n: u32) -> u32 {
-    if n == 0 { 1 } else { even(b, n - 1) }
+    if n == 0 {
+        1
+    } else {
+        even(b, n - 1)
+    }
 }
 
 #[verify::test]

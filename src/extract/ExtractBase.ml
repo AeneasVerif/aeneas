@@ -600,8 +600,8 @@ type extraction_ctx = {
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
   rec_group_trait_decls : Pure.TraitDeclId.TreeSet.t;
-      (** Which traits belong to a mutual group.
-          Needed for the Lean backend's `nonpos_structure`s. *)
+      (** Which traits belong to a mutual group. Needed for the Lean backend's
+          `nonpos_structure`s. *)
   types_filter_type_args_map : bool list TypeDeclId.TreeMap.t;
       (** The map to filter the type arguments for the builtin type definitions.
 

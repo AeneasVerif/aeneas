@@ -274,7 +274,7 @@ nonpos_continuity default_item
 mutual
 
 /-- [nonpos_traits::even]:
-    Source: 'tests/src/nonpos-traits.rs', lines 90:0-92:1
+    Source: 'tests/src/nonpos-traits.rs', lines 90:0-96:1
     Visibility: public -/
 def even
   {B : Type _} {Clause0_Item : Type _} (ExampleNonposInst : ExampleNonpos B
@@ -288,7 +288,7 @@ def even
 partial_fixpoint
 
 /-- [nonpos_traits::odd]:
-    Source: 'tests/src/nonpos-traits.rs', lines 94:0-96:1
+    Source: 'tests/src/nonpos-traits.rs', lines 98:0-104:1
     Visibility: public -/
 def odd
   {B : Type _} {Clause0_Item : Type _} (ExampleNonposInst : ExampleNonpos B
@@ -306,7 +306,7 @@ nonpos_continuity even
 nonpos_continuity odd
 
 /-- [nonpos_traits::test_methods]:
-    Source: 'tests/src/nonpos-traits.rs', lines 99:0-103:1
+    Source: 'tests/src/nonpos-traits.rs', lines 107:0-111:1
     Visibility: public -/
 def test_methods : Result Unit := do
   let i ←
@@ -328,7 +328,7 @@ def test_methods : Result Unit := do
 #guard (test_methods).reducesTo ()
 
 /-- [nonpos_traits::test_self_referential]:
-    Source: 'tests/src/nonpos-traits.rs', lines 106:0-112:1
+    Source: 'tests/src/nonpos-traits.rs', lines 114:0-120:1
     Visibility: public -/
 def test_self_referential : Result Unit := do
   let i ←
@@ -354,7 +354,7 @@ def test_self_referential : Result Unit := do
 #guard (test_self_referential).reducesTo ()
 
 /-- [nonpos_traits::test_plain_fields]:
-    Source: 'tests/src/nonpos-traits.rs', lines 115:0-121:1
+    Source: 'tests/src/nonpos-traits.rs', lines 123:0-129:1
     Visibility: public -/
 def test_plain_fields : Result Unit := do
   let i ← base_of U32.Insts.Nonpos_traitsExampleNonposU32 3#u32
@@ -378,7 +378,7 @@ def test_plain_fields : Result Unit := do
 #guard (test_plain_fields).reducesTo ()
 
 /-- [nonpos_traits::test_recursion]:
-    Source: 'tests/src/nonpos-traits.rs', lines 124:0-127:1
+    Source: 'tests/src/nonpos-traits.rs', lines 132:0-135:1
     Visibility: public -/
 def test_recursion : Result Unit := do
   let i ← even U32.Insts.Nonpos_traitsExampleNonposU32 5#u32 3#u32

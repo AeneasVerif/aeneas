@@ -22,7 +22,13 @@
 //!
 //! A method that does not work is commented out (`/* … */`, so that its text is std's), with the
 //! reason; so is a method whose body calls one that is commented out.
-#![allow(dead_code, unused_variables, unused_mut, internal_features, unused_features)]
+#![allow(
+    dead_code,
+    unused_variables,
+    unused_mut,
+    internal_features,
+    unused_features
+)]
 #![feature(
     const_trait_impl,
     const_destruct,
@@ -1207,7 +1213,10 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        matches!(self.partial_cmp(other), Some(Ordering::Less | Ordering::Equal))
+        matches!(
+            self.partial_cmp(other),
+            Some(Ordering::Less | Ordering::Equal)
+        )
     }
 
     #[rustc_non_const_trait_method]
@@ -1227,7 +1236,10 @@ pub const trait Iterator {
         Self::Item: PartialOrd<I::Item>,
         Self: Sized,
     {
-        matches!(self.partial_cmp(other), Some(Ordering::Greater | Ordering::Equal))
+        matches!(
+            self.partial_cmp(other),
+            Some(Ordering::Greater | Ordering::Equal)
+        )
     }
 
     // NOT SUPPORTED: its body calls `is_sorted_by`, which is commented out.
@@ -1566,7 +1578,11 @@ pub struct StepBy<I> {
 impl<I> StepBy<I> {
     pub(crate) fn new(iter: I, step: usize) -> StepBy<I> {
         assert!(step != 0);
-        StepBy { iter, step_minus_one: step - 1, first_take: true }
+        StepBy {
+            iter,
+            step_minus_one: step - 1,
+            first_take: true,
+        }
     }
 }
 impl<I: Iterator> Iterator for StepBy<I> {
@@ -1594,7 +1610,10 @@ pub struct Chain<A, B> {
 // std's `new` (crate-private there), with the fields above.
 impl<A, B> Chain<A, B> {
     pub(crate) const fn new(a: A, b: B) -> Chain<A, B> {
-        Chain { a: Some(a), b: Some(b) }
+        Chain {
+            a: Some(a),
+            b: Some(b),
+        }
     }
 }
 impl<A: Iterator, B: Iterator<Item = A::Item>> Iterator for Chain<A, B> {
@@ -1653,7 +1672,12 @@ where
     I::Item: Clone,
 {
     pub(crate) const fn new(iter: I, separator: I::Item) -> Self {
-        Self { started: false, separator, next_item: None, iter }
+        Self {
+            started: false,
+            separator,
+            next_item: None,
+            iter,
+        }
     }
 }
 impl<I: Iterator> Iterator for Intersperse<I>
@@ -1696,7 +1720,12 @@ where
     G: FnMut() -> I::Item,
 {
     pub(crate) const fn new(iter: I, separator: G) -> Self {
-        Self { started: false, separator, next_item: None, iter }
+        Self {
+            started: false,
+            separator,
+            next_item: None,
+            iter,
+        }
     }
 }
 impl<I: Iterator, G: FnMut() -> I::Item> Iterator for IntersperseWith<I, G> {
@@ -1836,7 +1865,11 @@ pub struct SkipWhile<I, P> {
 // std's `new` (crate-private there), with the fields above.
 impl<I, P> SkipWhile<I, P> {
     pub(crate) const fn new(iter: I, predicate: P) -> SkipWhile<I, P> {
-        SkipWhile { iter, flag: false, predicate }
+        SkipWhile {
+            iter,
+            flag: false,
+            predicate,
+        }
     }
 }
 impl<I: Iterator, P: FnMut(&I::Item) -> bool> Iterator for SkipWhile<I, P> {
@@ -1860,7 +1893,11 @@ pub struct TakeWhile<I, P> {
 // std's `new` (crate-private there), with the fields above.
 impl<I, P> TakeWhile<I, P> {
     pub(crate) const fn new(iter: I, predicate: P) -> TakeWhile<I, P> {
-        TakeWhile { iter, flag: false, predicate }
+        TakeWhile {
+            iter,
+            flag: false,
+            predicate,
+        }
     }
 }
 impl<I: Iterator, P: FnMut(&I::Item) -> bool> Iterator for TakeWhile<I, P> {
@@ -1982,7 +2019,11 @@ pub struct FlatMap<I, U: IntoIterator, F> {
 // std's `new` (crate-private there), with the fields above.
 impl<I: Iterator, U: IntoIterator, F: FnMut(I::Item) -> U> FlatMap<I, U, F> {
     pub(crate) fn new(iter: I, f: F) -> FlatMap<I, U, F> {
-        FlatMap { iter, f, frontiter: None }
+        FlatMap {
+            iter,
+            f,
+            frontiter: None,
+        }
     }
 }
 impl<I: Iterator, U: IntoIterator, F: FnMut(I::Item) -> U> Iterator for FlatMap<I, U, F> {
@@ -2010,7 +2051,10 @@ pub struct Flatten<I: Iterator<Item: IntoIterator>> {
 // std's `new` (crate-private there), with the fields above.
 const impl<I: [const] Iterator<Item: IntoIterator>> Flatten<I> {
     pub(crate) fn new(iter: I) -> Flatten<I> {
-        Flatten { iter, frontiter: None }
+        Flatten {
+            iter,
+            frontiter: None,
+        }
     }
 }
 impl<I: Iterator<Item: IntoIterator>> Iterator for Flatten<I> {
@@ -2040,8 +2084,15 @@ pub struct MapWindows<I: Iterator, F, const N: usize> {
 // std's `new` (crate-private there), with the fields above.
 impl<I: Iterator, F, const N: usize> MapWindows<I, F, N> {
     pub(crate) const fn new(iter: I, f: F) -> Self {
-        assert!(N != 0, "array in `Iterator::map_windows` must contain more than 0 elements");
-        Self { iter: Some(iter), f, buffer: None }
+        assert!(
+            N != 0,
+            "array in `Iterator::map_windows` must contain more than 0 elements"
+        );
+        Self {
+            iter: Some(iter),
+            f,
+            buffer: None,
+        }
     }
 }
 
@@ -2155,7 +2206,10 @@ pub struct Cycle<I> {
 #[rustc_const_unstable(feature = "const_iter", issue = "92476")]
 const impl<I: [const] Clone> Cycle<I> {
     pub(crate) fn new(iter: I) -> Cycle<I> {
-        Cycle { orig: iter.clone(), iter }
+        Cycle {
+            orig: iter.clone(),
+            iter,
+        }
     }
 }
 impl<I: Clone + Iterator> Iterator for Cycle<I> {
@@ -2184,7 +2238,10 @@ where
     #[track_caller]
     pub(crate) const fn new(iter: I) -> Self {
         assert!(N != 0, "chunk size must be non-zero");
-        Self { iter, remainder: None }
+        Self {
+            iter,
+            remainder: None,
+        }
     }
 }
 
