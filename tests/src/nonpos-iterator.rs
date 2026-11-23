@@ -43,7 +43,7 @@ use core::iter::TrustedRandomAccessNoCoerce;
 use core::marker::Destruct;
 use core::ops::ControlFlow;
 // use core::num::NonZero;  // only used by `advance_by`/`advance_back_by`, not supported
-// Used by the methods that are commented out below (they mention `Try`, which is not supported):
+// Used by the methods that are commented out below (they mention `Try`; see `try_fold` for why):
 // use core::ops::{FromResidual, Residual, Try};
 //
 // /// `core::ops::ChangeOutputType`, which is crate-private in std; copied from
@@ -90,8 +90,8 @@ where
     unimplemented!()
 }
 
-// NOT SUPPORTED: its two `Iterator` clauses (`Self: Iterator` and `B: Iterator`) both become a Lean
-// field named `IteratorInst`, aeneas#1051; so `Iterator::eq_by`, which calls it, is commented out too.
+// NOT SUPPORTED: its two `Iterator` clauses both become a Lean field named `IteratorInst`,
+// aeneas#1051 (so `Iterator::eq_by`, which calls it, is too).
 // /// Stub for `core::iter::traits::iterator::SpecIterEq` (declaration copied verbatim), called by
 // /// `Iterator::eq_by`. std has a default impl for all iterators and a specialized one for
 // /// `TrustedLen`; the stub has only the first.
@@ -158,9 +158,7 @@ pub const trait Iterator {
         l
     }
 
-    // NOT SUPPORTED: `NonZero`: Aeneas extracts std's `NonZero` (and its `ZeroablePrimitive` trait) as
-    // declarations that do not type-check in Lean (`ZeroablePrimitive` gets a duplicate field
-    // `markerCopyInst`), so the return type of this method cannot be used.
+    // NOT SUPPORTED: `NonZero`'s trait `ZeroablePrimitive` gets two Lean fields named `markerCopyInst`.
     // fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
     // where
     //     Self::Item: [const] Destruct,
@@ -388,9 +386,7 @@ pub const trait Iterator {
         B::from_iter(self)
     }
 
-    // NOT SUPPORTED: Its body needs an iterator over the outputs (std's `GenericShunt`), implemented in this
-    // crate; that impl and this default method are mutually recursive, which Aeneas does not support
-    // ("mixed mutually recursive definitions", aeneas#1264).
+    // NOT SUPPORTED: needs `GenericShunt`, whose impl is mutually recursive with this method, aeneas#1264.
     // #[rustc_non_const_trait_method]
     // fn try_collect<B>(&mut self) -> ChangeOutputType<Self::Item, B>
     // where
@@ -436,8 +432,8 @@ pub const trait Iterator {
         (left, right)
     }
 
-    // NOT SUPPORTED: R1: the where-clause fixes `Self::Item` (`DoubleEndedIterator<Item = &'a mut T>` on
-    // `Self`); Aeneas crashes on such a method (`SymbolicToPureTypes.translate_fun_sigs`), aeneas#1493.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
+    // (`DoubleEndedIterator<Item = &'a mut T>`), aeneas#1493; the body also uses `continue 'outer`.
     // #[rustc_non_const_trait_method]
     // fn partition_in_place<'a, T: 'a, P>(mut self, ref mut predicate: P) -> usize
     // where
@@ -495,9 +491,8 @@ pub const trait Iterator {
         true
     }
 
-    // NOT SUPPORTED: `Try`: Aeneas's built-in model of `core::ops::Try` does not match this std (Aeneas: "Invalid
-    // builtin information for trait decl: core::ops::try_trait::Try; expected 2 parent clauses, found
-    // 1"), so no signature mentioning `Try` can be translated.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
+    // aeneas#1493.
     // fn try_fold<B, F, R>(&mut self, init: B, mut f: F) -> R
     // where
     //     Self: Sized,
@@ -514,9 +509,8 @@ pub const trait Iterator {
     //     Try::from_output(accum)
     // }
 
-    // NOT SUPPORTED: `Try`: Aeneas's built-in model of `core::ops::Try` does not match this std (Aeneas: "Invalid
-    // builtin information for trait decl: core::ops::try_trait::Try; expected 2 parent clauses, found
-    // 1"), so no signature mentioning `Try` can be translated.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
+    // aeneas#1493.
     // #[rustc_non_const_trait_method]
     // fn try_for_each<F, R>(&mut self, f: F) -> R
     // where
@@ -558,9 +552,8 @@ pub const trait Iterator {
         Some(self.fold(first, f))
     }
 
-    // NOT SUPPORTED: `Try`: Aeneas's built-in model of `core::ops::Try` does not match this std (Aeneas: "Invalid
-    // builtin information for trait decl: core::ops::try_trait::Try; expected 2 parent clauses, found
-    // 1"), so no signature mentioning `Try` can be translated.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
+    // aeneas#1493.
     // fn try_reduce<R>(
     //     &mut self,
     //     f: impl [const] FnMut(Self::Item, Self::Item) -> R + [const] Destruct,
@@ -640,9 +633,8 @@ pub const trait Iterator {
         None
     }
 
-    // NOT SUPPORTED: `Try`: Aeneas's built-in model of `core::ops::Try` does not match this std (Aeneas: "Invalid
-    // builtin information for trait decl: core::ops::try_trait::Try; expected 2 parent clauses, found
-    // 1"), so no signature mentioning `Try` can be translated.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
+    // aeneas#1493.
     // #[rustc_non_const_trait_method]
     // fn try_find<R>(
     //     &mut self,
@@ -680,10 +672,8 @@ pub const trait Iterator {
         None
     }
 
-    // NOT SUPPORTED: R2: the body calls `next_back` through the where-clause `Self: DoubleEndedIterator`,
-    // and Aeneas gives that `DoubleEndedIterator`'s `Item` a new, unrelated name, so the body does
-    // not type-check and is dropped ("New value doesn't have the same type as its destination"),
-    // charon#1580.
+    // NOT SUPPORTED: `next_back`, through `Self: DoubleEndedIterator`, gets an `Item` unrelated to
+    // `Self::Item`, charon#1580.
     // #[rustc_non_const_trait_method]
     // fn rposition<P>(&mut self, predicate: P) -> Option<usize>
     // where
@@ -840,8 +830,8 @@ pub const trait Iterator {
         Rev::new(self)
     }
 
-    // NOT SUPPORTED: R1: the where-clause fixes `Self::Item` (`Iterator<Item = …>` on `Self`); Aeneas crashes on
-    // such a method (internal error in `SymbolicToPureTypes.translate_fun_sigs`), aeneas#1493/#1491.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
+    // (`Self: Iterator<Item = …>`), aeneas#1493, #1491.
     // #[rustc_non_const_trait_method]
     // fn unzip<A, B, FromA, FromB>(self) -> (FromA, FromB)
     // where
@@ -859,8 +849,8 @@ pub const trait Iterator {
     //     (a, b)
     // }
 
-    // NOT SUPPORTED: R1: the where-clause fixes `Self::Item` (`Iterator<Item = …>` on `Self`); Aeneas crashes on
-    // such a method (internal error in `SymbolicToPureTypes.translate_fun_sigs`), aeneas#1493/#1491.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
+    // (`Self: Iterator<Item = …>`), aeneas#1493, #1491.
     // fn copied<'a, T>(self) -> Copied<Self>
     // where
     //     T: Copy + 'a,
@@ -869,8 +859,8 @@ pub const trait Iterator {
     //     Copied { it: self }
     // }
 
-    // NOT SUPPORTED: R1: the where-clause fixes `Self::Item` (`Iterator<Item = …>` on `Self`); Aeneas crashes on
-    // such a method (internal error in `SymbolicToPureTypes.translate_fun_sigs`), aeneas#1493/#1491.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type
+    // (`Self: Iterator<Item = …>`), aeneas#1493, #1491.
     // fn cloned<'a, T>(self) -> Cloned<Self>
     // where
     //     T: Clone + 'a,
@@ -1042,10 +1032,8 @@ pub const trait Iterator {
         }
     }
 
-    // NOT SUPPORTED: std's body calls the crate-private trait `SpecIterEq` (stubbed at the top of the
-    // file, also commented out), whose two `Iterator` clauses (`Self: Iterator` and `B: Iterator`) both
-    // become a Lean field named `IteratorInst` ("Field `IteratorInst` has already been declared"),
-    // aeneas#1051.
+    // NOT SUPPORTED: calls `SpecIterEq` (stubbed at the top of the file), whose two `Iterator`
+    // clauses both become a Lean field named `IteratorInst`, aeneas#1051.
     // #[rustc_non_const_trait_method]
     // fn eq_by<I, F>(self, other: I, eq: F) -> bool
     // where
@@ -1217,9 +1205,7 @@ pub const trait DoubleEndedIterator: [const] Iterator {
         crate::array::iter_next_chunk_back(self)
     }
 
-    // NOT SUPPORTED: `NonZero`: Aeneas extracts std's `NonZero` (and its `ZeroablePrimitive` trait) as
-    // declarations that do not type-check in Lean (`ZeroablePrimitive` gets a duplicate field
-    // `markerCopyInst`), so the return type of this method cannot be used.
+    // NOT SUPPORTED: `NonZero`'s trait `ZeroablePrimitive` gets two Lean fields named `markerCopyInst`.
     // fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
     // where
     //     Self::Item: [const] Destruct,
@@ -1250,9 +1236,8 @@ pub const trait DoubleEndedIterator: [const] Iterator {
         self.next_back()
     }
 
-    // NOT SUPPORTED: `Try`: Aeneas's built-in model of `core::ops::Try` does not match this std (Aeneas: "Invalid
-    // builtin information for trait decl: core::ops::try_trait::Try; expected 2 parent clauses, found
-    // 1"), so no signature mentioning `Try` can be translated.
+    // NOT SUPPORTED: Aeneas crashes on a where-clause fixing an associated type (`R: Try<Output = …>`),
+    // aeneas#1493.
     // fn try_rfold<B, F, R>(&mut self, init: B, mut f: F) -> R
     // where
     //     Self: Sized,
@@ -1821,9 +1806,8 @@ impl<I, St, F> Scan<I, St, F> {
         Scan { iter, state, f }
     }
 }
-// NOT SUPPORTED: the impl's `next` calls the closure, whose argument type contains `&mut St`;
-// Aeneas models `&mut` inside the generic `Args` of `FnMut` as a plain value, so `call_mut` cannot
-// return the updated state that the body needs (aeneas#961, #1215). (`Iterator::scan` itself is fine.)
+// NOT SUPPORTED: the closure takes `&mut St`, which `FnMut::call_mut` cannot hand back, aeneas#961,
+// #1215. (`Iterator::scan` itself is fine.)
 // impl<B, I: Iterator, St, F: FnMut(&mut St, I::Item) -> Option<B>> Iterator for Scan<I, St, F> {
 //     type Item = B;
 //     fn next(&mut self) -> Option<B> {
