@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/external_names_parent_clauses.llbc
+[[91mError[39m] Invalid external information for trait decl: core::iter::traits::marker::FusedIterator; expected 1 parent clauses, found 2
+Source: '/rustc/library/core/src/iter/traits/marker.rs', lines 32:0-32:33
+Compiler source: extract/Extract.ml, line 2725
+

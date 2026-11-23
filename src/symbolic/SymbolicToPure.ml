@@ -103,16 +103,16 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
 
   (* Assemble the declaration *)
   let backend_attributes = { reducible = false } in
-  (* Check if the function is builtin *)
-  let builtin_info =
-    let funs_map = ExtractBuiltin.builtin_funs_map () in
+  (* Check if the function is external *)
+  let external_info =
+    let funs_map = ExternalNames.external_funs_map () in
     match_name_find_opt ctx.decls_ctx def.item_meta.name funs_map
   in
   let def : fun_decl =
     {
       def_id;
       item_meta = def.item_meta;
-      builtin_info;
+      external_info;
       src = def.src;
       backend_attributes;
       num_loops;
@@ -214,12 +214,18 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let parent_clauses =
     List.map (translate_trait_clause opt_span) llbc_parent_clauses
   in
-  (* Lookup the builtin information, if there is *)
-  let builtin_info =
+  (* Lookup the external information, if there is *)
+  let external_info =
     match_name_find_opt ctx trait_decl.item_meta.name
-      (ExtractBuiltin.builtin_trait_decls_map ())
+      (ExternalNames.external_trait_decls_map ())
   in
-  if (not (T.AssocTypeId.Map.is_empty types)) && builtin_info = None then
+  (* Check if the trait is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This trait declaration"
+    ~opaque:None ~foreign_too:false trait_decl.item_meta
+    (Option.map
+       (fun (i : external_trait_decl_info) -> i.extract_name)
+       external_info);
+  if (not (T.AssocTypeId.Map.is_empty types)) && external_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
     [%warn] span
       ("Found an associated type in a trait declaration; trait associated \
@@ -261,7 +267,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     def_id;
     name;
     item_meta;
-    builtin_info;
+    external_info;
     generics;
     explicit_info;
     llbc_generics;
@@ -336,8 +342,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
           translate_binder span (translate_fun_decl_ref span translate_ty) m ))
       (TraitMethodId.Map.to_list methods)
   in
-  (* Lookup the builtin information, if there is *)
-  let builtin_info =
+  (* Lookup the external information, if there is *)
+  let external_info =
     let decl_id = trait_impl.impl_trait.id in
     let trait_decl =
       [%silent_unwrap_opt_span] span
@@ -345,13 +351,19 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     in
     match_name_with_generics_find_opt ctx trait_decl.item_meta.name
       llbc_impl_trait.generics
-      (ExtractBuiltin.builtin_trait_impls_map ())
+      (ExternalNames.external_trait_impls_map ())
   in
+  (* Check if the impl is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This trait implementation"
+    ~opaque:None ~foreign_too:false item_meta
+    (Option.map
+       (fun (i : external_trait_impl_info) -> i.extract_name)
+       external_info);
   {
     def_id;
     name;
     item_meta;
-    builtin_info;
+    external_info;
     impl_trait;
     llbc_impl_trait;
     generics;
@@ -378,12 +390,24 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
   in
   let explicit_info = compute_explicit_info generics [] in
   let output_ty = translate_fwd_ty (Some decl.item_meta.span) ctx ty in
-  let builtin_info =
+  let external_info =
     match_name_find_opt ctx item_meta.name
-      (ExtractBuiltin.builtin_globals_map ())
+      (ExternalNames.external_globals_map ())
   in
+  (* Check if the global is mapped to an external name *)
+  LlbcAstUtils.check_not_external ctx.crate "This global" ~foreign_too:true
+    ~opaque:
+      (Some
+         (match FunDeclId.Map.find_opt body_id ctx.crate.fun_decls with
+         | Some (d : LlbcAst.fun_decl) ->
+             not (LlbcAstUtils.body_is_known d.body)
+         | None -> true))
+    item_meta
+    (Option.map
+       (fun (i : external_global_info) -> i.extract_name)
+       external_info);
   let can_fail =
-    match builtin_info with
+    match external_info with
     | Some info -> info.can_fail
     | None -> (
         match
@@ -397,7 +421,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     span = item_meta.span;
     def_id;
     item_meta;
-    builtin_info;
+    external_info;
     name;
     llbc_generics;
     generics;

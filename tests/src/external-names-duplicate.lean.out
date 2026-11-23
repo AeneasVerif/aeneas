@@ -1,0 +1,1 @@
+[[91mError[39m] two entries claim the pattern 'external_names_duplicate::f' ('ExternalNamesModel.f' and 'ExternalNamesModel.g'). A pattern may be mapped only once. Note that definitions which differ only by their target share one pattern.

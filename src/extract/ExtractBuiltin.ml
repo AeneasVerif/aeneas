@@ -11,9 +11,9 @@ include ExtractName (* TODO: only open? *)
 
 let log = Logging.builtin_log
 
-let builtin_globals () : Pure.builtin_global_info list =
-  let mk_int_global (ty : string) (name : string) : Pure.builtin_global_info =
-    let rust_name = "core::num::{" ^ ty ^ "}::" ^ name in
+let builtin_globals () : Pure.external_global_info list =
+  let mk_int_global (ty : string) (name : string) : Pure.external_global_info =
+    let rust_name = parse_pattern ("core::num::{" ^ ty ^ "}::" ^ name) in
     let extract_name =
       let sep = if backend () = Lean then "." else "_" in
       "core" ^ sep ^ "num" ^ sep
@@ -25,9 +25,9 @@ let builtin_globals () : Pure.builtin_global_info list =
   let mk_ints_globals name =
     List.map (fun ty -> mk_int_global ty name) all_int_names
   in
-  let unit_metadata : Pure.builtin_global_info =
+  let unit_metadata : Pure.external_global_info =
     {
-      rust_name = "UNIT_METADATA";
+      rust_name = parse_pattern "UNIT_METADATA";
       extract_name = "UNIT_METADATA";
       can_fail = false;
     }
@@ -45,31 +45,22 @@ let builtin_globals () : Pure.builtin_global_info list =
      ]
     @ mk_lean_only lean_builtin_consts)
 
-let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
-  NameMatcherMap.of_list
-    (List.map
-       (fun (info : Pure.builtin_global_info) ->
-         (parse_pattern info.rust_name, info))
-       (builtin_globals ()))
-
-let builtin_globals_map = mk_memoized mk_builtin_globals_map
-
 (** The assumed types.
 
     The optional list of booleans is filtering information for the type
     parameters. For instance, in the case of the `Vec` functions, there is a
     type parameter for the allocator to use, which we want to filter. *)
-let builtin_types () : Pure.builtin_type_info list =
+let builtin_types () : Pure.external_type_info list =
   (let mk_type (rust_name : string) ?(custom_name : string option = None)
        ?(keep_params : bool list option = None) ?(mut_regions : int list = [])
-       ?(kind : type_variant_kind = KOpaque) () : Pure.builtin_type_info =
+       ?(kind : type_variant_kind = KOpaque) () : Pure.external_type_info =
      let rust_name = parse_pattern rust_name in
      let extract_name =
        match custom_name with
        | None -> flatten_name (pattern_to_type_extract_name rust_name)
        | Some name -> flatten_name (split_on_separator name)
      in
-     let body_info : Pure.builtin_type_body_info option =
+     let body_info : Pure.external_type_body_info option =
        match kind with
        | KOpaque -> None
        | KStruct fields ->
@@ -109,12 +100,18 @@ let builtin_types () : Pure.builtin_type_info list =
                     extract_variant_name;
                     fields = None;
                   }
-                   : Pure.builtin_enum_variant_info))
+                   : Pure.external_enum_variant_info))
                variants
            in
            Some (Enum variants)
      in
-     { rust_name; extract_name; keep_params; mut_regions; body_info }
+     {
+       rust_name;
+       extract_name;
+       keep_params;
+       mut_regions = Some mut_regions;
+       body_info;
+     }
    in
    []
    @ mk_not_lean
@@ -144,7 +141,7 @@ let builtin_types () : Pure.builtin_type_info list =
              | Lean -> "Option"
              | Coq | FStar | HOL4 -> "option");
            keep_params = None;
-           mut_regions = [];
+           mut_regions = Some [];
            body_info =
              Some
                (Enum
@@ -171,14 +168,6 @@ let builtin_types () : Pure.builtin_type_info list =
          };
        ])
   @ mk_lean_only lean_builtin_types
-
-let mk_builtin_types_map () =
-  NameMatcherMap.of_list
-    (List.map
-       (fun (info : Pure.builtin_type_info) -> (info.rust_name, info))
-       (builtin_types ()))
-
-let builtin_types_map = mk_memoized mk_builtin_types_map
 
 let int_and_smaller_list : (string * string) list =
   let uint_names = List.rev [ "u8"; "u16"; "u32"; "u64"; "u128" ] in
@@ -207,7 +196,7 @@ let builtin_trait_decls_info () =
       ?(parent_clauses : string list = []) ?(types : string list = [])
       ?(methods : string list = []) ?(default_methods : string list = [])
       ?(methods_with_extract : (string * string) list option = None) () :
-      Pure.builtin_trait_decl_info =
+      Pure.external_trait_decl_info =
     let rust_name = parse_pattern rust_name in
     let extract_name =
       match extract_name with
@@ -246,7 +235,7 @@ let builtin_trait_decls_info () =
               if !record_fields_short_names then item_name
               else extract_name ^ "_" ^ item_name
             in
-            let fwd : Pure.builtin_fun_info =
+            let fwd : Pure.external_fun_info =
               {
                 keep_params = None;
                 keep_trait_clauses = None;
@@ -274,7 +263,7 @@ let builtin_trait_decls_info () =
                    lift = true;
                    has_default = false;
                  }
-                  : Pure.builtin_fun_info) ))
+                  : Pure.external_fun_info) ))
             methods
     in
     {
@@ -285,6 +274,7 @@ let builtin_trait_decls_info () =
       consts;
       types;
       methods;
+      packaged = true;
     }
   in
   mk_not_lean
@@ -323,19 +313,11 @@ let builtin_trait_decls_info () =
     ]
   @ mk_lean_only lean_builtin_trait_decls
 
-let mk_builtin_trait_decls_map () =
-  NameMatcherMap.of_list
-    (List.map
-       (fun (info : Pure.builtin_trait_decl_info) -> (info.rust_name, info))
-       (builtin_trait_decls_info ()))
-
-let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
-
-let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
+let builtin_trait_impls_info () : (pattern * Pure.external_trait_impl_info) list
     =
   let fmt (rust_name : string) ?(extract_name : string option = None)
       ?(keep_params : bool list option = None) () :
-      pattern * Pure.builtin_trait_impl_info =
+      pattern * Pure.external_trait_impl_info =
     let rust_name = parse_pattern rust_name in
     let name =
       let name =
@@ -493,24 +475,17 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       (fun ty -> fmt ("core::default::Default<" ^ ty ^ ">") ())
       all_int_names
 
-let mk_builtin_trait_impls_map () =
-  let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
-  [%ltrace NameMatcherMap.to_string (fun _ -> "...") m];
-  m
-
-let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
-
 (** The builtin functions.
 
     The optional list of booleans is filtering information for the type
     parameters. For instance, in the case of the `Vec` functions, there is a
     type parameter for the allocator to use, which we want to filter. *)
-let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
+let mk_builtin_funs () : (pattern * Pure.external_fun_info) list =
   (* Small utility. *)
   let mk_fun (rust_name : string) ?(keep_params : bool list option = None)
       ?(keep_trait_clauses : bool list option = None) ?(can_fail = true)
       ?(stateful = false) ?(lift = true) ?(extract_name : string option = None)
-      () : pattern * Pure.builtin_fun_info =
+      () : pattern * Pure.external_fun_info =
     let rust_name =
       [%ldebug "About to parse pattern: " ^ rust_name];
       try
@@ -526,7 +501,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       | Some name -> split_on_separator name
     in
     let basename = flatten_name extract_name in
-    let f : Pure.builtin_fun_info =
+    let f : Pure.external_fun_info =
       {
         keep_params;
         keep_trait_clauses;
@@ -540,7 +515,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
     (rust_name, f)
   in
   let mk_funs (rust_name : string -> string) (extract_name : string -> string)
-      (funs : (bool * string) list) : (pattern * Pure.builtin_fun_info) list =
+      (funs : (bool * string) list) : (pattern * Pure.external_fun_info) list =
     List.map
       (fun (can_fail, name) ->
         let extract_name = Some (extract_name name) in
@@ -549,7 +524,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   in
   let mk_scalar_fun (rust_name : string -> string)
       (extract_name : string -> string) ?(can_fail = true) () :
-      (pattern * Pure.builtin_fun_info) list =
+      (pattern * Pure.external_fun_info) list =
     List.map
       (fun ty ->
         mk_fun (rust_name ty)
@@ -559,7 +534,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   in
   let mk_scalar_funs (rust_name : string -> string -> string)
       (extract_name : string -> string -> string) (funs : (bool * string) list)
-      : (pattern * Pure.builtin_fun_info) list =
+      : (pattern * Pure.external_fun_info) list =
     List.flatten
       (List.map
          (fun ty ->
@@ -878,76 +853,3 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
                  ])
              all_int_names)
       @ lean_builtin_funs)
-
-let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
-  (* We need to take into account the default trait methods *)
-  let mk () =
-    let funs = mk_builtin_funs () in
-    let trait_decls = builtin_trait_decls_info () in
-    let default_methods =
-      List.map
-        (fun (d : Pure.builtin_trait_decl_info) ->
-          List.filter_map
-            (fun ((fpat, f) : string * Pure.builtin_fun_info) ->
-              if f.has_default then
-                let sep =
-                  match backend () with
-                  | Lean -> "."
-                  | _ -> "_"
-                in
-                let pattern = d.rust_name @ [ PIdent (fpat, 0, []) ] in
-                let info =
-                  {
-                    f with
-                    extract_name =
-                      d.extract_name ^ sep ^ f.extract_name ^ sep ^ "default";
-                  }
-                in
-                Some (pattern, info)
-              else None)
-            d.methods)
-        trait_decls
-    in
-    funs @ List.concat default_methods
-  in
-  mk_memoized mk
-
-let name_matcher_map_of_list (ls : (pattern * 'a) list) : 'a NameMatcherMap.t =
-  let config : print_config = { tgt = TkPattern } in
-  List.fold_left
-    (fun m (pat, info) ->
-      [%ldebug "About to add pattern: " ^ pattern_to_string config pat];
-      (* [replace] inserts and checks whether we replaced a pattern *)
-      let m, old = NameMatcherMap.replace pat info m in
-      [%cassert_opt_span] None (old = None)
-        ("Pattern registered twice for a builtin definition: "
-        ^ pattern_to_string config pat);
-      m)
-    NameMatcherMap.empty ls
-
-let mk_builtin_funs_map () =
-  [%ldebug "Builting the builtin funs map"];
-  let m =
-    name_matcher_map_of_list
-      (List.map (fun (name, info) -> (name, info)) (builtin_funs ()))
-  in
-  [%ltrace NameMatcherMap.to_string (fun _ -> "...") m];
-  m
-
-let builtin_funs_map = mk_memoized mk_builtin_funs_map
-
-type effect_info = { can_fail : bool }
-
-let mk_builtin_fun_effects () : (pattern * effect_info) list =
-  let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
-  List.map
-    (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
-      let info = { can_fail = info.can_fail } in
-      (pattern, info))
-    builtin_funs
-
-let mk_builtin_fun_effects_map () =
-  [%ldebug "Builting the builtin funs effects map"];
-  name_matcher_map_of_list (if_backend mk_builtin_fun_effects [])
-
-let builtin_fun_effects_map = mk_memoized mk_builtin_fun_effects_map

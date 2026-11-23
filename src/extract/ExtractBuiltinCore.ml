@@ -83,14 +83,14 @@ let mk_fun ?(keep_params : bool list option = None)
     ?(keep_trait_clauses : bool list option = None) ?(can_fail = true)
     ?(stateful = false) ?(lift = true) ?(has_default = false)
     (rust_name : string) (extract_name : string) :
-    pattern * Pure.builtin_fun_info =
+    pattern * Pure.external_fun_info =
   [%ldebug "About to parse pattern: " ^ rust_name];
   let rust_name =
     try parse_pattern rust_name
     with Failure _ ->
       raise (Failure ("Could not parse pattern: " ^ rust_name))
   in
-  let f : Pure.builtin_fun_info =
+  let f : Pure.external_fun_info =
     {
       keep_params;
       keep_trait_clauses;
@@ -106,9 +106,9 @@ let mk_fun ?(keep_params : bool list option = None)
 let mk_type ?(keep_params : bool list option = None)
     ?(kind : type_variant_kind = KOpaque) ?(mut_regions : int list = [])
     ?(prefix_variant_names : bool = true) (rust_name : string)
-    (extract_name : string) : Pure.builtin_type_info =
+    (extract_name : string) : Pure.external_type_info =
   let pattern = parse_pattern rust_name in
-  let body_info : Pure.builtin_type_body_info option =
+  let body_info : Pure.external_type_body_info option =
     match kind with
     | KOpaque -> None
     | KStruct fields ->
@@ -144,19 +144,25 @@ let mk_type ?(keep_params : bool list option = None)
                  extract_variant_name;
                  fields = None;
                }
-                : Pure.builtin_enum_variant_info))
+                : Pure.external_enum_variant_info))
             variants
         in
         Some (Enum variants)
   in
-  { rust_name = pattern; extract_name; keep_params; mut_regions; body_info }
+  {
+    rust_name = pattern;
+    extract_name;
+    keep_params;
+    mut_regions = Some mut_regions;
+    body_info;
+  }
 
 let mk_trait_decl ?(parent_clauses : string list = [])
     ?(consts : (string * string) list = [])
     ?(types : (string * string) list = [])
     ?(methods : (string * string) list = [])
     ?(default_methods : string list = []) (rust_name : string)
-    (extract_name : string) : Pure.builtin_trait_decl_info =
+    (extract_name : string) : Pure.external_trait_decl_info =
   let rust_name = parse_pattern rust_name in
   let constructor = mk_lean_struct_constructor extract_name in
   let default_methods = Collections.StringSet.of_list default_methods in
@@ -173,7 +179,7 @@ let mk_trait_decl ?(parent_clauses : string list = [])
              lift = true;
              has_default = Collections.StringSet.mem lname default_methods;
            }
-            : Pure.builtin_fun_info) ))
+            : Pure.external_fun_info) ))
       methods
   in
   {
@@ -184,10 +190,11 @@ let mk_trait_decl ?(parent_clauses : string list = [])
     consts;
     types;
     methods;
+    packaged = true;
   }
 
 let mk_trait_impl ?(keep_params : bool list option = None)
     ?(keep_trait_clauses : bool list option = None) (rust_name : string)
-    (extract_name : string) : pattern * Pure.builtin_trait_impl_info =
+    (extract_name : string) : pattern * Pure.external_trait_impl_info =
   let rust_name = parse_pattern rust_name in
   (rust_name, { extract_name; keep_params; keep_trait_clauses })

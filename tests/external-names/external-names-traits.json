@@ -1,0 +1,9 @@
+{
+  "trait_decls": [
+    {
+      "rust_pattern": "core::fmt::Write",
+      "lean_name": "ExternalNamesModel.Write",
+      "methods": [{ "rust": "write_str", "extract": "write_str" }]
+    }
+  ]
+}

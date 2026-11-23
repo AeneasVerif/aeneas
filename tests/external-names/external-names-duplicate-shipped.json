@@ -1,0 +1,5 @@
+{
+  "functions": [
+    { "rust_pattern": "core::mem::swap", "lean_name": "ExternalNamesModel.swap" }
+  ]
+}

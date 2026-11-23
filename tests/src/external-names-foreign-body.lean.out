@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/external_names_foreign_body.llbc
+[[91mError[39m] This function has a body, but an external name (user-provided or built-in) maps it to the model 'core.mem.swap', which would silently replace it. Remove that entry, or make the definition opaque for Charon (--opaque 'core::mem::swap').
+Source: '/rustc/library/core/src/mem/mod.rs', lines 830:0-830:42
+Compiler source: Translate.ml, line 132
+
