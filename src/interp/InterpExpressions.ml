@@ -1012,9 +1012,11 @@ let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
     (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
-  match config.mode with
-  | ConcreteMode -> eval_unary_op_concrete config span unop op ctx
-  | SymbolicMode -> eval_unary_op_symbolic config span unop op ctx
+  match (unop, config.mode) with
+  | VTableLookup _, _ ->
+      [%craise] span "Dynamic trait method calls are not supported yet"
+  | _, ConcreteMode -> eval_unary_op_concrete config span unop op ctx
+  | _, SymbolicMode -> eval_unary_op_symbolic config span unop op ctx
 
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated *)
