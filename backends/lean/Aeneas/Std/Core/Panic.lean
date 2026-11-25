@@ -29,4 +29,18 @@ def core.panicking.assert_failed {T U : Type _} (_ : core.fmt.Debug T) (_ : core
   (_ : core.panicking.AssertKind) (_ : T) (_ : U) (_ : Option core.fmt.Arguments) :
   Result Never := .fail .panic
 
+/-! What `panic!()`, `unreachable!()`, `unimplemented!()` and `todo!()` without arguments call. -/
+
+@[expose, rust_fun "core::panicking::panic_default_msg"]
+def core.panicking.panic_default_msg : Result Never := .fail .panic
+
+@[expose, rust_fun "core::panicking::unreachable_default_msg"]
+def core.panicking.unreachable_default_msg : Result Never := .fail .panic
+
+@[expose, rust_fun "core::panicking::unimplemented_default_msg"]
+def core.panicking.unimplemented_default_msg : Result Never := .fail .panic
+
+@[expose, rust_fun "core::panicking::todo_default_msg"]
+def core.panicking.todo_default_msg : Result Never := .fail .panic
+
 end Aeneas.Std

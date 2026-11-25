@@ -197,6 +197,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     types;
     methods = _;
     is_unsafe = _;
+    impl_restriction = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl

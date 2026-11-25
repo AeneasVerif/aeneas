@@ -389,9 +389,9 @@ def mul_add_as_plus_e
   := do
   let i ← 4#usize * N
   let i1 ← i * 2#usize
-  let a_row_temp ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i1
+  let a_row_temp ← alloc.vec.from_elem_global core.clone.CloneU8 0#u8 i1
   let i2 ← i * 2#usize
-  let _ ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i2
+  let _ ← alloc.vec.from_elem_global core.clone.CloneU8 0#u8 i2
   let iter1 ←
     core.iter.traits.iterator.Iterator.step_by.trait_default
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)

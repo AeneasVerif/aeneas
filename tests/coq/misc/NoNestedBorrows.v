@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module NoNestedBorrows.
 
 (** [core::fmt::Arguments]
-    Source: '/rustc/library/core/src/fmt/mod.rs', lines 716:0-716:24
+    Source: '/rustc/library/core/src/fmt/mod.rs', lines 783:0-783:24
     Name pattern: [core::fmt::Arguments]
     Visibility: public *)
 Axiom core_fmt_Arguments_t : Type.
@@ -27,9 +27,21 @@ Axiom core_panicking_panic_fmt : core_fmt_Arguments_t -> result Never.
 Axiom core_panicking_panic : str -> result Never.
 
 (** [core::panicking::panic_in_cleanup]:
-    Source: '/rustc/library/core/src/panicking.rs', lines 364:0-364:26
+    Source: '/rustc/library/core/src/panicking.rs', lines 367:0-367:26
     Name pattern: [core::panicking::panic_in_cleanup] *)
 Axiom core_panicking_panic_in_cleanup : result Never.
+
+(** [core::panicking::panic_default_msg]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 467:0-467:37
+    Name pattern: [core::panicking::panic_default_msg]
+    Visibility: public *)
+Axiom core_panicking_panic_default_msg : result Never.
+
+(** [core::panicking::unreachable_default_msg]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 475:0-475:43
+    Name pattern: [core::panicking::unreachable_default_msg]
+    Visibility: public *)
+Axiom core_panicking_unreachable_default_msg : result Never.
 
 (** [no_nested_borrows::Pair]
     Source: 'tests/src/no_nested_borrows.rs', lines 7:0-10:1

@@ -9,13 +9,13 @@ Local Open Scope Primitives_scope.
 Module Demo.
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2718:8-2718:58; this code is generated from a macro invocation at: '/rustc/library/core/src/num/mod.rs', lines 1292:4-1316:5
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2783:8-2783:58; this code is generated from a macro invocation at: '/rustc/library/core/src/num/mod.rs', lines 1299:4-1323:5
     Name pattern: [core::num::{u32}::wrapping_sub]
     Visibility: public *)
 Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2681:8-2681:58; this code is generated from a macro invocation at: '/rustc/library/core/src/num/mod.rs', lines 1292:4-1316:5
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2746:8-2746:58; this code is generated from a macro invocation at: '/rustc/library/core/src/num/mod.rs', lines 1299:4-1323:5
     Name pattern: [core::num::{u32}::wrapping_add]
     Visibility: public *)
 Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
@@ -25,6 +25,12 @@ Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
     Name pattern: [core::panicking::panic]
     Visibility: public *)
 Axiom core_panicking_panic : str -> result Never.
+
+(** [core::panicking::panic_default_msg]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 467:0-467:37
+    Name pattern: [core::panicking::panic_default_msg]
+    Visibility: public *)
+Axiom core_panicking_panic_default_msg : result Never.
 
 (** [demo::choose]:
     Source: 'tests/src/demo.rs', lines 8:0-14:1

@@ -24,7 +24,7 @@ noncomputable section
 namespace vec_iter
 
 /-- [alloc::vec::{impl core::iter::traits::collect::IntoIterator<&'a T, core::slice::iter::Iter<'a, T>> for &'a alloc::vec::Vec<T>}::into_iter]:
-    Source: '/rustc/library/alloc/src/vec/mod.rs', lines 4088:4-4088:40
+    Source: '/rustc/library/alloc/src/vec/mod.rs', lines 4285:4-4285:40
     Name pattern: [alloc::vec::{core::iter::traits::collect::IntoIterator<&'a alloc::vec::Vec<@T>, &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter]
     Visibility: public -/
 @[rust_fun

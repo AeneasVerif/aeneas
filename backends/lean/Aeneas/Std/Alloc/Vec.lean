@@ -402,6 +402,21 @@ theorem alloc.vec.from_elem_spec {T : Type _} (cloneInst : core.clone.Clone T)
   intro l hl
   simp [hl]
 
+/-- What `vec![x; n]` expands to. -/
+@[expose, rust_fun "alloc::vec::from_elem_global"]
+def alloc.vec.from_elem_global
+  {T : Type _} (cloneInst : core.clone.Clone T)
+  (x : T) (n : Usize) : Result (alloc.vec.Vec T) :=
+  alloc.vec.from_elem cloneInst x n
+
+@[step]
+theorem alloc.vec.from_elem_global_spec {T : Type _} (cloneInst : core.clone.Clone T)
+  (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
+  alloc.vec.from_elem_global cloneInst x n ⦃ v =>
+  v.val = List.replicate n.val x ∧
+  v.length = n.val ⦄ :=
+  alloc.vec.from_elem_spec cloneInst x n h
+
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
 def alloc.vec.Vec.with_capacity (T : Type _) (_ : Usize) : alloc.vec.Vec T := Vec.new T
 
