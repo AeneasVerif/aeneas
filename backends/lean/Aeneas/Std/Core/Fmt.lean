@@ -122,59 +122,52 @@ def core.result.Result.expect {T : Type _} {E : Type _} (_DebugInst : core.fmt.D
     /- TODO: this is a simplistic model -/
     .fail .panic
 
+/-! `derive(Debug)` helpers. `names` holds the type and field names, separated by spaces. -/
+
 @[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish", simp]
-def core.fmt.Formatter.debug_struct_field1_finish
-  (fmt : core.fmt.Formatter) (_ : Str) (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
+def core.fmt.Formatter.debug_struct_field1_finish (fmt : core.fmt.Formatter) (_names : Str) :
+  Dyn (fun dyn => core.fmt.Debug dyn) →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model that actually uses the `Debug` instance
-  .ok (.Ok (), fmt)
+  fun _ => .ok (.Ok (), fmt)
 
 @[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish", simp]
-def core.fmt.Formatter.debug_struct_field2_finish (fmt : core.fmt.Formatter) (_ : Str)
-  (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn))
-  (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
+def core.fmt.Formatter.debug_struct_field2_finish (fmt : core.fmt.Formatter) (_names : Str) :
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model that actually uses the `Debug` instance
-  .ok (.Ok (), fmt)
+  fun _ _ => .ok (.Ok (), fmt)
 
 @[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field3_finish", simp]
-def core.fmt.Formatter.debug_struct_field3_finish (fmt : core.fmt.Formatter) (_ : Str) :
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+def core.fmt.Formatter.debug_struct_field3_finish (fmt : core.fmt.Formatter) (_names : Str) :
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model that actually uses the `Debug` instance
-  fun _ _ _ _ _ _ =>
-  .ok (.Ok (), fmt)
+  fun _ _ _ => .ok (.Ok (), fmt)
 
 @[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish", simp]
-def core.fmt.Formatter.debug_struct_field4_finish (fmt : core.fmt.Formatter) (_ : Str) :
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+def core.fmt.Formatter.debug_struct_field4_finish (fmt : core.fmt.Formatter) (_names : Str) :
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model that actually uses the `Debug` instance
-  fun _ _ _ _ _ _ _ _ =>
-  .ok (.Ok (), fmt)
+  fun _ _ _ _ => .ok (.Ok (), fmt)
 
 @[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish", simp]
-def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_ : Str) :
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_names : Str) :
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
+  Dyn (fun dyn => core.fmt.Debug dyn) →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
-  fun _ _ _ _ _ _ _ _ _ _ => .ok (.Ok (), fmt)
-
-@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish", simp]
-def core.fmt.Formatter.debug_tuple_field1_finish :
-  core.fmt.Formatter → Str → Dyn (fun dyn => core.fmt.Debug dyn) →
-    Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model that actually uses the `Debug` instance
-  fun fmt _ _ =>
-  .ok (.Ok (), fmt)
+  fun _ _ _ _ _ => .ok (.Ok (), fmt)
 
 @[expose, reducible, rust_trait_impl "core::fmt::Debug<&'0 @T>"]
 def core.fmt.DebugShared {T : Type _} (DebugInst : core.fmt.Debug T) :

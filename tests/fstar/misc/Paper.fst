@@ -12,9 +12,15 @@ open Primitives
 assume val core_panicking_panic : str -> result never
 
 (** [core::panicking::panic_in_cleanup]:
-    Source: '/rustc/library/core/src/panicking.rs', lines 364:0-364:26
+    Source: '/rustc/library/core/src/panicking.rs', lines 367:0-367:26
     Name pattern: [core::panicking::panic_in_cleanup] *)
 assume val core_panicking_panic_in_cleanup : result never
+
+(** [core::panicking::panic_default_msg]:
+    Source: '/rustc/library/core/src/panicking.rs', lines 467:0-467:37
+    Name pattern: [core::panicking::panic_default_msg]
+    Visibility: public *)
+assume val core_panicking_panic_default_msg : result never
 
 (** [paper::ref_incr]:
     Source: 'tests/src/paper.rs', lines 7:0-9:1

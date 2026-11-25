@@ -24,14 +24,14 @@ noncomputable section
 namespace derive
 
 /-- [core::cmp::impls::{impl core::cmp::PartialEq<bool> for bool}::ne]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 2188:16-2188:50; this code is generated from a macro invocation at: '/rustc/library/core/src/cmp.rs', lines 2193:4-2195:5
+    Source: '/rustc/library/core/src/cmp.rs', lines 2166:16-2166:50; this code is generated from a macro invocation at: '/rustc/library/core/src/cmp.rs', lines 2171:4-2173:5
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
 axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 
 /-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
-    Source: '/rustc/library/alloc/src/boxed.rs', lines 2185:4-2185:38
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2318:4-2318:38
     Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
     Visibility: public -/
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
@@ -119,7 +119,7 @@ def CopyEnumOneVariant.Insts.CoreFmtDebug.fmt
   := do
   let ⟨ __self_0 ⟩ := self
   let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
-  core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant") __self_01
+  core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant") __self_01
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:37-3:42 -/
@@ -348,13 +348,16 @@ def CopyEnum.Insts.CoreFmtDebug.fmt
   | CopyEnum.Variant1 __self_0 =>
     let __self_01 :=
       Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant1") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant1")
+      __self_01
   | CopyEnum.Variant2 __self_0 =>
     let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant2") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant2")
+      __self_01
   | CopyEnum.Variant3 __self_0 =>
     let __self_01 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant3") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant3")
+      __self_01
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:37-16:42 -/
@@ -503,18 +506,22 @@ def Enum.Insts.CoreFmtDebug.fmt
   | Enum.Variant1 __self_0 =>
     let __self_01 :=
       Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant1") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant1")
+      __self_01
   | Enum.Variant2 __self_0 =>
     let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant2") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant2")
+      __self_01
   | Enum.Variant3 __self_0 =>
     let __self_01 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant3") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant3")
+      __self_01
   | Enum.Variant4 __self_0 =>
     let __self_01 :=
       Dyn.mk _ (core.fmt.DebugShared (core.fmt.DebugVec corefmtDebugInst))
         __self_0
-    core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant4") __self_01
+    core.fmt.Formatter.debug_struct_field1_finish f (toStr "Variant4")
+      __self_01
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:31-24:36 -/
@@ -727,8 +734,8 @@ def CopyStruct.Insts.CoreFmtDebug.fmt
   let dyn1 := Dyn.mk _ core.fmt.DebugBool self.f1
   let dyn2 := Dyn.mk _ core.fmt.DebugU32 self.f2
   let dyn3 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) self.f3
-  core.fmt.Formatter.debug_struct_field4_finish f (toStr "CopyStruct") (toStr
-    "f0") dyn (toStr "f1") dyn1 (toStr "f2") dyn2 (toStr "f3") dyn3
+  core.fmt.Formatter.debug_struct_field4_finish f (toStr
+    "CopyStruct f0 f1 f2 f3") dyn dyn1 dyn2 dyn3
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:37-41:42 -/
@@ -819,8 +826,7 @@ def Struct.Insts.CoreFmtDebug.fmt
   := do
   let dyn :=
     Dyn.mk _ (core.fmt.DebugShared (core.fmt.DebugVec corefmtDebugInst)) self.f
-  core.fmt.Formatter.debug_struct_field1_finish f (toStr "Struct") (toStr "f")
-    dyn
+  core.fmt.Formatter.debug_struct_field1_finish f (toStr "Struct f") dyn
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:31-49:36 -/
@@ -926,15 +932,10 @@ def Struct6Fields.Insts.CoreFmtDebug.fmt
   let dyn3 := Dyn.mk _ core.fmt.DebugU32 self.d
   let dyn4 := Dyn.mk _ core.fmt.DebugU32 self.e
   let dyn5 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) self.f
-  let values :=
+  let s :=
     Array.to_slice (Array.make 6#usize [ dyn, dyn1, dyn2, dyn3, dyn4, dyn5 ])
-  let s ←
-    lift (Array.to_slice
-      (Array.make 6#usize [
-        toStr "a", toStr "b", toStr "c", toStr "d", toStr "e", toStr "f"
-        ]))
-  core.fmt.Formatter.debug_struct_fields_finish f (toStr "Struct6Fields") s
-    values
+  core.fmt.Formatter.debug_struct_fields_finish f (toStr
+    "Struct6Fields a b c d e f") s
 
 /-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:31-54:36 -/
