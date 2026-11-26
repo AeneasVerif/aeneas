@@ -119,6 +119,19 @@ example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
 
 **Note:** Conversions require proof obligations (e.g., `a < 2^n` for `BitVec.ofNat n a`).
 
+**`bvify ... by`:** When `bvify` gets stuck because it can not discharge such a proof obligation, `bvify n (at h)? by tac` lifts the goal (or the hypothesis `h`) anyway, and asks `tac` to prove that the lifted proposition is equivalent to the original one:
+```lean
+example (x y z : U8) (h0 : y.val * y.val ≤ x.val * x.val) (h : x.val - y.val = z.val) :
+    x.bv - y.bv = z.bv := by
+  -- `bvify 8 at h` gets stuck on `h : BitVec.ofNat 8 (x.val - y.val) = z.bv`
+  bvify 8 at h by
+    -- Goal: `x.val - y.val = z.val ↔ x.bv - y.bv = z.bv`
+    have : y.val ≤ x.val := Nat.mul_self_le_mul_self_iff.mp h0
+    natify; simp_scalar
+  exact h
+```
+Tag a lifting lemma with `@[bvify_assume]` to have `bvify ... by` assume its preconditions.
+
 ### `bv_tac`
 Bit-vector decision procedure. Often used after `bvify` or directly on bit-vector goals.
 

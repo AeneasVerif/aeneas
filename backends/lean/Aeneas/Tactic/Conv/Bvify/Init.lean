@@ -23,4 +23,9 @@ register_simp_attr' bvifySimpExt bvifySimprocExt bvify
 assumptions during its preprocessing phase -/
 register_simp_attr' bvifyHypsSimpExt bvifyHypsSimprocExt bvify_hyps_simps
 
+/-- The `bvify_assume` attribute registers the lifting lemmas whose preconditions `bvify ... by`
+assumes rather than proves: the user then proves that the lifted proposition is equivalent to
+the original one. -/
+register_simp_attr' bvifyAssumeSimpExt bvifyAssumeSimprocExt bvify_assume
+
 end Aeneas.Bvify

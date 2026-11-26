@@ -203,12 +203,12 @@ theorem BitVec.ofNat_mod (n : Nat) (a b : Nat) (ha : a < 2^n) (hb : b < 2^n) :
     have : (a % b) % 2^n  = a % b:= by apply Nat.mod_eq_of_lt; omega
     simp only [*]
 
-@[bvify]
+@[bvify, bvify_assume]
 theorem BitVec.ofNat_mod' (n a b : Nat) (h : a < 2^n ∧ b < 2^n) :
   BitVec.ofNat n (a % b) = BitVec.ofNat n a % BitVec.ofNat n b := by
   apply BitVec.ofNat_mod <;> simp [*]
 
-@[bvify]
+@[bvify, bvify_assume]
 theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
   BitVec.ofNat n (a - b) = BitVec.ofNat n a - BitVec.ofNat n b := by
   simp [BitVec.toNat_eq]
@@ -232,7 +232,7 @@ theorem BitVec.ofNat_mul (n a b : Nat) :
   BitVec.ofNat n (a * b) = BitVec.ofNat n a * BitVec.ofNat n b := by
   simp
 
-@[bvify]
+@[bvify, bvify_assume]
 theorem BitVec.ofNat_div (n a b : Nat)
   (h : a < 2^n ∧ b < 2^n) :
   BitVec.ofNat n (a / b) = BitVec.ofNat n a / BitVec.ofNat n b := by
@@ -394,6 +394,145 @@ meta def parseBvify : TSyntax ``bvify -> TacticM (Config × Expr × Utils.Locati
 elab stx:bvify : tactic => do
   let (config, n, loc) ← parseBvify stx
   bvifyTac config n loc
+
+/-! # `bvify ... by` -/
+
+/-- A discharger which accepts every precondition without proving it. We only use it to compute
+the proposition `bvify ... by` lifts to: the proof built this way is thrown away. -/
+meta def bvifyAssumeDischarge : Simp.Discharge := fun e => do
+  pure (some (← mkSorry e (synthetic := true)))
+
+/-- Compute the proposition that `hyp` (or the goal, if `hyp` is `none`) lifts to when the
+preconditions of the lifting lemmas are assumed. This doesn't modify the goal. -/
+meta def bvifyAssumeLift (config : Config) (n : Expr) (hyp : Option FVarId) : TacticM Expr := do
+  let saved ← saveState
+  try
+    Elab.Tactic.focus do
+    let hypsArgs : ScalarTac.CondSimpArgs := {
+        simpThms := #[← bvifyHypsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems]
+        simprocs := #[← bvifyHypsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs]
+      }
+    let args : ScalarTac.CondSimpArgs := {
+        simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
+        simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
+      }
+    let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
+    let closed {α} : TacticM α :=
+      throwError "bvify: the proposition was proved or simplified away, there is nothing to lift"
+    let some res ← ScalarTac.condSimpTacPreprocess config hypsArgs args (bvifyAddSimpThms n)
+      | closed
+    /- We have to keep track of the hypothesis, as simplifying it replaces its free variable -/
+    let next (loc : Utils.Location) (fvars : Option (Array FVarId)) : TacticM Utils.Location := do
+      match loc, fvars with
+      | _, none => closed
+      | .targets #[_] false, some #[h] => pure (.targets #[h] false)
+      | .targets #[_] false, some _ => closed
+      | _, some _ => pure loc
+    /- What `bvify` does: simplify, with `scalar_tac` as a discharger -/
+    let bvifySimp (loc : Utils.Location) : TacticM Utils.Location := do
+      let loc ← next loc (← ScalarTac.condSimpTacSimp bvifySimpConfig res.args loc
+        (toClear := res.toClear) (additionalHypsToUse := res.additionalSimpThms) none)
+      next loc (← ScalarTac.condSimpTacSimp bvifySimpConfig res.args loc
+        (toClear := res.toClear) (additionalHypsToUse := res.additionalSimpThms)
+        (some (res.state, res.newAsms)))
+    let loc : Utils.Location := match hyp with
+      | none => .targets #[] true
+      | some h => .targets #[h] false
+    let loc ← bvifySimp loc
+    /- Lift what remains by assuming the preconditions of the lifting lemmas -/
+    let assumeArgs : Simp.SimpArgs := {
+        simpThms := #[← bvifyAssumeSimpExt.getTheorems]
+        simprocs := #[← bvifyAssumeSimprocExt.getSimprocs]
+        hypsToUse := res.additionalSimpThms }
+    let loc ← withMainContext do
+      let (ctx, simprocs) ← Simp.mkSimpCtx true bvifySimpConfig .simp assumeArgs
+      next loc (← Simp.customSimpLocation ctx simprocs (some bvifyAssumeDischarge) loc).fst
+    /- Simplify again: the lifting above introduces terms like `BitVec.ofNat n x.val` -/
+    let loc ← bvifySimp loc
+    withMainContext do
+    match loc with
+    | .targets #[h] false => instantiateMVars (← h.getType)
+    | _ => instantiateMVars (← getMainTarget)
+  finally
+    saved.restore
+
+/-- Lift `hyp` (or the goal, if `hyp` is `none`) to bit-vectors, and use `tac` to prove that the
+lifted proposition is equivalent to the original one. -/
+meta def bvifyByTac (config : Config) (n : Expr) (hyp : Option FVarId)
+  (tac : TSyntax ``Parser.Tactic.tacticSeq) : TacticM Unit := do
+  Elab.Tactic.focus do
+  withMainContext do
+  let goal ← getMainGoal
+  let prop ← instantiateMVars (← match hyp with
+    | none => goal.getType
+    | some h => h.getType)
+  let lifted ← bvifyAssumeLift config n hyp
+  let lctx ← getLCtx
+  if lifted.hasSorry then
+    throwError "bvify: the lifted proposition depends on the preconditions which were assumed"
+  if (collectFVars {} lifted).fvarIds.any (!lctx.contains ·) then
+    throwError "bvify: can not state the lifted proposition in the current context:{indentExpr lifted}"
+  if lifted == prop then
+    throwError "bvify: could not lift{indentExpr prop}"
+  /- Let the user prove the equivalence -/
+  let equiv ← mkFreshExprSyntheticOpaqueMVar (mkIff prop lifted)
+  setGoals [equiv.mvarId!]
+  withRef tac do
+    evalTactic tac
+    let goals ← getUnsolvedGoals
+    unless goals.isEmpty do
+      throwError "bvify: the tactic did not prove that the lifted proposition is equivalent to \
+        the original one:\n{Lean.Elab.goalsToMessageData goals}"
+  /- Replace the proposition with the lifted one -/
+  let eq ← mkPropExt equiv
+  match hyp with
+  | none => setGoals [← goal.replaceTargetEq lifted eq]
+  | some h => setGoals [(← goal.replaceLocalDecl h lifted eq).mvarId]
+
+/--
+`bvify <n> [at <h>] by <tac>` lifts the goal (or the assumption `h`) to bit-vectors like `bvify`,
+but assumes the preconditions of the lifting lemmas which `bvify` can not discharge instead of
+getting stuck on them. In exchange, the tactic `tac` has to prove that the lifted proposition is
+equivalent to the original one (a typical proof is `natify; simp_scalar`).
+
+**Example:**
+```lean
+example (x y z : U8) (h0 : y.val * y.val ≤ x.val * x.val) (h : x.val - y.val = z.val) :
+    x.bv - y.bv = z.bv := by
+  -- `bvify 8 at h` gets stuck on `h : BitVec.ofNat 8 (x.val - y.val) = z.bv`, because
+  -- `scalar_tac` can not prove `y.val ≤ x.val`
+  bvify 8 at h by
+    -- The goal is: `x.val - y.val = z.val ↔ x.bv - y.bv = z.bv`
+    have : y.val ≤ x.val := Nat.mul_self_le_mul_self_iff.mp h0
+    natify; simp_scalar
+  -- We now have `h : x.bv - y.bv = z.bv`
+  exact h
+```
+
+The lemmas whose preconditions get assumed are the ones lifting `=`, `≤` and `<`, and the ones
+marked with the attribute `@[bvify_assume]`.
+-/
+syntax (name := bvifyBy)
+  "bvify " colGt Parser.Tactic.optConfig term (location)? " by " Parser.Tactic.tacticSeq : tactic
+
+meta def parseBvifyBy :
+  TSyntax ``bvifyBy -> TacticM (Config × Expr × Option FVarId × TSyntax ``Parser.Tactic.tacticSeq)
+| `(tactic| bvify $config $n:term $[$loc:location]? by $tac:tacticSeq) => do
+  let config ← elabConfig config
+  let n ← Elab.Term.elabTerm n (Expr.const ``Nat [])
+  let hyp ← do
+    match loc with
+    | none => pure none
+    | some loc =>
+      match expandLocation loc with
+      | .targets #[h] false => pure (some (← getFVarId h))
+      | _ => throwErrorAt loc "`bvify ... by` lifts a single proposition: expected `at h`"
+  pure (config, n, hyp, tac)
+| _ => Lean.Elab.throwUnsupportedSyntax
+
+elab stx:bvifyBy : tactic => do
+  let (config, n, hyp, tac) ← parseBvifyBy stx
+  bvifyByTac config n hyp tac
 
 /-! # Bit-vector atoms
 
