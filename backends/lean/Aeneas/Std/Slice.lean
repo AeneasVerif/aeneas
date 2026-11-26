@@ -669,7 +669,12 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.index {T : Type _}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Slice T) :=
   if r.start.val ≤ s.length then
     ok (s.drop r.start)
-  else fail .undef
+  else fail .panic
+
+theorem _SliceIndexRangeFromUsizeSlice.index.test {T} (s : Slice T) (r : core.ops.range.RangeFrom Usize) (h : s.length < r.start) :
+  core.slice.index.SliceIndexRangeFromUsizeSlice.index r s = fail .panic := by
+  unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index
+  simp only [show ¬ r.start.val ≤ s.length by scalar_tac, ↓reduceIte]
 
 @[expose, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type _}
