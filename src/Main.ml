@@ -144,6 +144,10 @@ let () =
       ( "-emit-json",
         Arg.Set emit_json,
         " Emit a translation.json file alongside the Lean files (Lean only)" );
+      ( "-emit-json-no-version",
+        Arg.Set emit_json_no_version,
+        " Don't record the version of Aeneas in translation.json (for \
+         reproducible outputs)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,
@@ -481,6 +485,8 @@ let () =
       "The -max-recdepth option is valid only for the Lean backend";
   if !emit_json && not (backend () = Lean) then
     fail_with_error "The -emit-json option is valid only for the Lean backend";
+  check_arg_implies !emit_json_no_version "-emit-json-no-version" !emit_json
+    "-emit-json";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";

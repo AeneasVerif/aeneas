@@ -231,6 +231,10 @@ let lean_gen_lakefile = ref false
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
 
+(** Don't record the version of Aeneas in translation.json, so that it doesn't
+    change from one build to the next (e.g. for test outputs). *)
+let emit_json_no_version = ref false
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic. *)
