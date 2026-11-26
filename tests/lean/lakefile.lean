@@ -27,6 +27,7 @@ package «tests» {}
 @[default_target] lean_lib BuiltinAuto
 @[default_target] lean_lib CastSigned
 @[default_target] lean_lib ChunksExact
+@[default_target] lean_lib CloneTuples
 @[default_target] lean_lib Closures
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean

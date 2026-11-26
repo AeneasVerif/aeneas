@@ -642,7 +642,7 @@ def CopyStruct.Insts.CoreCloneClone.clone
   :
   Result (CopyStruct T)
   := do
-  (BuiltinClone Unit).clone ()
+  core.clone.CloneUnit.clone ()
   let b ← lift (core.clone.impls.CloneBool.clone self.f1)
   let i ← lift (core.clone.impls.CloneU32.clone self.f2)
   let t ← corecloneCloneInst.clone self.f3

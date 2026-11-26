@@ -421,6 +421,27 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 124 *)
+    mk_fun "core::clone::{core::clone::Clone<()>}::clone"
+      "core.clone.CloneUnit.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 132 *)
+    mk_fun "core::clone::{core::clone::Clone<(@A)>}::clone"
+      "core.clone.CloneTuple1.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 146 *)
+    mk_fun "core::clone::{core::clone::Clone<(@A, @B)>}::clone"
+      "core.clone.CloneTuple2.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 164 *)
+    mk_fun "core::clone::{core::clone::Clone<(@A, @B, @C)>}::clone"
+      "core.clone.CloneTuple3.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 187 *)
+    mk_fun "core::clone::{core::clone::Clone<(@A, @B, @C, @D)>}::clone"
+      "core.clone.CloneTuple4.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 213 *)
+    mk_fun "core::clone::{core::clone::Clone<(@A, @B, @C, @D, @E)>}::clone"
+      "core.clone.CloneTuple5.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 242 *)
+    mk_fun "core::clone::{core::clone::Clone<(@A, @B, @C, @D, @E, @F)>}::clone"
+      "core.clone.CloneTuple6.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 23 *)
     mk_fun "core::cmp::Eq::assert_fields_are_eq"
       "core.cmp.Eq.assert_fields_are_eq.default";
@@ -1595,6 +1616,23 @@ let lean_builtin_trait_impls =
   [
     (* file: "Aeneas/Std/Core/Borrow.lean", line: 27 *)
     mk_trait_impl "core::borrow::Borrow<@T, @T>" "core.borrow.Borrow.Blanket";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 127 *)
+    mk_trait_impl "core::clone::Clone<()>" "core.clone.CloneUnit";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 138 *)
+    mk_trait_impl "core::clone::Clone<(@A)>" "core.clone.CloneTuple1";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 156 *)
+    mk_trait_impl "core::clone::Clone<(@A, @B)>" "core.clone.CloneTuple2";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 177 *)
+    mk_trait_impl "core::clone::Clone<(@A, @B, @C)>" "core.clone.CloneTuple3";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 202 *)
+    mk_trait_impl "core::clone::Clone<(@A, @B, @C, @D)>"
+      "core.clone.CloneTuple4";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 230 *)
+    mk_trait_impl "core::clone::Clone<(@A, @B, @C, @D, @E)>"
+      "core.clone.CloneTuple5";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 261 *)
+    mk_trait_impl "core::clone::Clone<(@A, @B, @C, @D, @E, @F)>"
+      "core.clone.CloneTuple6";
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 48 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
