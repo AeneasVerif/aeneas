@@ -636,6 +636,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let dest = mk_tpat_from_fvar dest_mplace dest in
         (ctx, Unop (Cast kind), effect_info, args, [], dest)
       end
+    | S.Unop (E.VTableLookup _) ->
+        (* We shouldn't get there: the interpreter fails on vtable lookups *)
+        [%internal_error] ctx.span
     | S.Binop binop -> (
         [%ldebug
           "- binop: " ^ binop_to_string binop ^ "\n- args:\n"
