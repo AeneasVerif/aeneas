@@ -17,6 +17,34 @@ type fun_and_loops = {
 type pure_fun_translation_no_loops = Pure.fun_decl
 type pure_fun_translation = fun_and_loops
 
+type translated_crate = {
+  type_decls : Pure.type_decl list;
+  fun_decls : pure_fun_translation list;
+  global_decls : Pure.global_decl list;
+  trait_decls : Pure.trait_decl list;
+  trait_impls : Pure.trait_impl list;
+}
+
+(** The recursive functions and loops of a translated crate: the definitions
+    which may need a decreases clause. *)
+let translated_crate_rec_functions (trans_crate : translated_crate) :
+    PureUtils.FunLoopIdSet.t =
+  PureUtils.FunLoopIdSet.of_list
+    (List.concat_map
+       (fun (trans : pure_fun_translation) ->
+         let f =
+           if trans.f.Pure.signature.fwd_info.effect_info.is_rec then
+             [ (trans.f.def_id, None) ]
+           else []
+         in
+         let loops =
+           List.map
+             (fun (def : Pure.fun_decl) -> (def.def_id, def.loop_id))
+             trans.loops
+         in
+         f @ loops)
+       trans_crate.fun_decls)
+
 let trans_ctx_to_fmt_env (ctx : trans_ctx) : Print.fmt_env =
   Print.Contexts.decls_ctx_to_fmt_env ctx
 

@@ -60,6 +60,10 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FileLayout
+  FileLayoutByKind
+  FileLayoutRegistry
+  FileLayoutSingle
   FormatCompat
   FunsAnalysis
   GitVersion
