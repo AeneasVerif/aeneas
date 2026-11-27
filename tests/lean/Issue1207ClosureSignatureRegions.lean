@@ -66,7 +66,7 @@ def make.closure := Std.U8
 def make (x : Std.U8) : Result make.closure := do
   ok x
 
-/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call]:
+/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'a, '_1>}::call]:
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
 def make.closure.Insts.CoreOpsFunctionFnTupleU8.call
   (c : make.closure) (_ : Unit) : Result Std.U8 := do
@@ -77,7 +77,7 @@ def make.closure.Insts.CoreOpsFunctionFnTupleU8.call
 @[reducible]
 def iter_of.closure := Std.U8
 
-/-- [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnMut<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0>}::call_mut]:
+/-- [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnMut<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0, '_1>}::call_mut]:
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
 def iter_of.closure.Insts.CoreOpsFunctionFnMutTupleI32U8.call_mut
   (c : iter_of.closure) (tupled_args : Std.I32) :
@@ -85,7 +85,7 @@ def iter_of.closure.Insts.CoreOpsFunctionFnMutTupleI32U8.call_mut
   := do
   ok (c, c)
 
-/-- [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnOnce<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0>}::call_once]:
+/-- [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnOnce<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0, '_1>}::call_once]:
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
 def iter_of.closure.Insts.CoreOpsFunctionFnOnceTupleI32U8.call_once
   (c : iter_of.closure) (i : Std.I32) : Result Std.U8 := do
@@ -93,7 +93,7 @@ def iter_of.closure.Insts.CoreOpsFunctionFnOnceTupleI32U8.call_once
     iter_of.closure.Insts.CoreOpsFunctionFnMutTupleI32U8.call_mut c i
   ok i1
 
-/-- Trait implementation: [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnOnce<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0>}]
+/-- Trait implementation: [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnOnce<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0, '_1>}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
 @[reducible]
 def iter_of.closure.Insts.CoreOpsFunctionFnOnceTupleI32U8 :
@@ -101,7 +101,7 @@ def iter_of.closure.Insts.CoreOpsFunctionFnOnceTupleI32U8 :
   call_once := iter_of.closure.Insts.CoreOpsFunctionFnOnceTupleI32U8.call_once
 }
 
-/-- Trait implementation: [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnMut<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0>}]
+/-- Trait implementation: [issue_1207_closure_signature_regions::iter_of::{impl core::ops::function::FnMut<(i32,), u8> for issue_1207_closure_signature_regions::iter_of::{closure}<'_0, '_1>}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
 @[reducible]
 def iter_of.closure.Insts.CoreOpsFunctionFnMutTupleI32U8 :
@@ -147,7 +147,7 @@ def nested.closure := Std.U8
 def nested (x : Std.U8) : Result (Holder nested.closure) := do
   ok x
 
-/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call]:
+/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0, '_1>}::call]:
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
 def nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
   (c : nested.closure) (_ : Unit) : Result Std.U8 := do
