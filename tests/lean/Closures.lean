@@ -56,7 +56,7 @@ def call_fn_no_state (i : Std.U32) : Result Std.U32 := do
 @[reducible]
 def call_fn_shared.closure := Slice Std.U8
 
-/-- [closures::call_fn_shared::{impl core::ops::function::Fn<(usize,), u8> for closures::call_fn_shared::{closure}<'_0>}::call]:
+/-- [closures::call_fn_shared::{impl core::ops::function::Fn<(usize,), u8> for closures::call_fn_shared::{closure}<'_0, '_1>}::call]:
     Source: 'tests/src/closures.rs', lines 9:15-9:40 -/
 def call_fn_shared.closure.Insts.CoreOpsFunctionFnTupleUsizeU8.call
   (c : call_fn_shared.closure) (tupled_args : Std.Usize) : Result Std.U8 := do
