@@ -1218,7 +1218,7 @@ let lean_builtin_funs =
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::index"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.index";
-    (* file: "Aeneas/Std/Slice.lean", line: 674 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 679 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::index_mut"
@@ -1349,7 +1349,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Slice.lean", line: 629 *)
     mk_fun "core::slice::{[@T]}::copy_from_slice"
       "core.slice.Slice.copy_from_slice";
-    (* file: "Aeneas/Std/Slice.lean", line: 1055 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 1060 *)
     mk_fun "core::slice::{[@T]}::fill" "core.slice.Slice.fill";
     (* file: "Aeneas/Std/Slice.lean", line: 361 *)
     mk_fun "core::slice::{[@T]}::get" "core.slice.Slice.get";
@@ -1368,11 +1368,11 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Slice.lean", line: 342 *)
     mk_fun "core::slice::{[@T]}::reverse" "core.slice.Slice.reverse"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Slice.lean", line: 728 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 733 *)
     mk_fun "core::slice::{[@T]}::split_at" "core.slice.Slice.split_at";
-    (* file: "Aeneas/Std/Slice.lean", line: 739 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 744 *)
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 799 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 804 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
     (* file: "Aeneas/Std/StringIter.lean", line: 18 *)
     mk_fun
@@ -1844,7 +1844,7 @@ let lean_builtin_trait_impls =
       "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
        [@T]>"
       "core.slice.index.SliceIndexRangeUsizeSlice";
-    (* file: "Aeneas/Std/Slice.lean", line: 695 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 700 *)
     mk_trait_impl
       "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>"
