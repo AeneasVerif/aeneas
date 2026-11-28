@@ -76,6 +76,8 @@ package «tests» {}
 @[default_target] lean_lib Iterators
 @[default_target] lean_lib IteratorsArray
 @[default_target] lean_lib IteratorsScalar
+@[default_target] lean_lib IterSliceAny
+@[default_target] lean_lib IterSliceAnySpecs
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
 @[default_target] lean_lib LeanKeywords
